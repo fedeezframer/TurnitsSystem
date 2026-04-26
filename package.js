@@ -14,7 +14,8 @@
     "googleapis": "^126.0.0",
     "mercadopago": "^2.0.8",
     "node-fetch": "^3.3.2",
-    "resend": "^3.2.0"
+    "resend": "^3.2.0",
+    "stripe": "^14.21.0"
   },
   "engines": {
     "node": ">=18.0.0"
