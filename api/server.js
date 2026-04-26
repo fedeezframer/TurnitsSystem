@@ -7,37 +7,17 @@ import Stripe from "stripe";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
-
-const app = express();
+import rateLimit from "express-rate-limit";
 
 // ─── CONFIGURACIÓN GLOBAL ────────────────────────────────────────────────────
+const app = express();
 const MASTER_SHEET_ID = "1CYF1IJFEKibbkXTKco-o13ZbMo6KpkT5oJj35Z3q4hg";
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzvcaYhHuyD-Xu63Aw9WpWrpcr5xmrgHW_IffXkmC90bs0pTzhWP1d8rWBaBuhG5Icx/exec";
 const BCRYPT_ROUNDS = 10;
-
-app.use(
-  cors({
-    origin: [
-      "https://negosocio.framer.website",
-      "https://framerturnero.onrender.com",
-    ],
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-app.use(express.json());
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
-
-// ─── CACHÉ EN MEMORIA ────────────────────────────────────────────────────────
-const globalCache = {};
 const CACHE_DURATION = 20000;
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// ─── UTILIDADES Y VALIDADORES ────────────────────────────────────────────────
 const getCleanSlug = (rawSlug) => {
   if (!rawSlug) return "";
   return rawSlug
@@ -49,7 +29,110 @@ const getCleanSlug = (rawSlug) => {
     .replace(/[^a-z0-9-]/g, "");
 };
 
+const validateEmail = (email) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const validatePassword = (pwd) => {
+  return pwd && pwd.length >= 8;
+};
+
+const validateSlug = (slug) => {
+  return /^[a-z0-9-]{3,50}$/.test(slug);
+};
+
+const validatePhone = (phone) => {
+  return /^[0-9\-\s\+]{5,20}$/.test(phone);
+};
+
+// ─── ERROR CLASSES ───────────────────────────────────────────────────────────
+class AppError extends Error {
+  constructor(message, statusCode = 500) {
+    super(message);
+    this.statusCode = statusCode;
+    this.isOperational = true;
+  }
+}
+
+class ValidationError extends AppError {
+  constructor(message) {
+    super(message, 400);
+  }
+}
+
+class AuthenticationError extends AppError {
+  constructor(message = "No autorizado") {
+    super(message, 401);
+  }
+}
+
+class NotFoundError extends AppError {
+  constructor(message = "Recurso no encontrado") {
+    super(message, 404);
+  }
+}
+
+class ConflictError extends AppError {
+  constructor(message = "Conflicto") {
+    super(message, 409);
+  }
+}
+
+// ─── CACHÉ EN MEMORIA ────────────────────────────────────────────────────────
+const globalCache = {};
+
+// ─── RATE LIMITING ───────────────────────────────────────────────────────────
+const limiterAuth = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 5, // 5 intentos
+  message: "Demasiados intentos de autenticación. Intenta más tarde.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const limiterBooking = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 10,
+  message: "Demasiadas reservas. Intenta más tarde.",
+});
+
+const limiterAPI = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+});
+
+// ─── CONFIGURACIÓN CORS ──────────────────────────────────────────────────────
+app.use(
+  cors({
+    origin: [
+      "https://negosocio.framer.website",
+      "https://framerturnero.onrender.com",
+      "http://localhost:3000", // desarrollo
+      "http://localhost:5173", // Vite dev
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
+
+// ─── APLICAR RATE LIMITERS GLOBALES ──────────────────────────────────────────
+app.use(limiterAPI);
+
+// ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
+
+// ─── HELPERS PARA GOOGLE ─────────────────────────────────────────────────────
 async function getGoogleAuth() {
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+    throw new AppError("Google credentials no configuradas", 500);
+  }
   return new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -66,21 +149,31 @@ async function getSheets() {
 }
 
 // ─── MIDDLEWARE DE AUTENTICACIÓN ─────────────────────────────────────────────
-// Verifica que el Authorization header contenga un session token válido
-// y que el slug del body/params coincida con el dueño del token.
-// Uso: agregar `requireAuth` como segundo argumento en las rutas protegidas.
 async function requireAuth(req, res, next) {
   try {
     const authHeader = req.headers["authorization"];
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "No autorizado: falta el token." });
+      return res.status(401).json({ 
+        success: false,
+        error: "No autorizado: falta el token." 
+      });
     }
 
     const token = authHeader.split(" ")[1];
     const slugFromBody = getCleanSlug(req.body?.slug || req.params?.slug || "");
 
     if (!token || !slugFromBody) {
-      return res.status(401).json({ error: "No autorizado: datos incompletos." });
+      return res.status(401).json({ 
+        success: false,
+        error: "No autorizado: datos incompletos." 
+      });
+    }
+
+    if (!validateSlug(slugFromBody)) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Slug inválido." 
+      });
     }
 
     const { data: user, error } = await supabase
@@ -90,34 +183,589 @@ async function requireAuth(req, res, next) {
       .single();
 
     if (error || !user) {
-      return res.status(401).json({ error: "No autorizado: usuario no encontrado." });
+      return res.status(401).json({ 
+        success: false,
+        error: "No autorizado: usuario no encontrado." 
+      });
     }
 
     if (!user.session_token || user.session_token !== token) {
-      return res.status(401).json({ error: "No autorizado: token inválido o expirado." });
+      return res.status(401).json({ 
+        success: false,
+        error: "No autorizado: token inválido o expirado." 
+      });
     }
 
     req.authenticatedSlug = user.slug;
     next();
   } catch (e) {
     console.error("Error en requireAuth:", e.message);
-    res.status(500).json({ error: "Error interno de autenticación." });
+    res.status(500).json({ 
+      success: false,
+      error: "Error interno de autenticación." 
+    });
   }
 }
 
+// ─── ERROR HANDLER GLOBAL ────────────────────────────────────────────────────
+const errorHandler = (err, req, res, next) => {
+  console.error("Error:", err.message);
+
+  if (err.isOperational) {
+    return res.status(err.statusCode).json({
+      success: false,
+      error: err.message,
+    });
+  }
+
+  // Error no esperado
+  return res.status(500).json({
+    success: false,
+    error: "Error interno del servidor",
+  });
+};
+
 // ─── RUTA RAÍZ ───────────────────────────────────────────────────────────────
 app.get("/", (req, res) => {
-  res.send("NegoSocio API — Online");
+  res.json({
+    status: "online",
+    message: "NegoSocio API v2.0 — Online",
+    version: "2.0.0",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// ─── PAGOS: MERCADO PAGO Y STRIPE ────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUTH & REGISTRO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// POST /api/request-verification
+// Paso 1 del registro: valida y envía código de verificación por email
+app.post("/api/request-verification", limiterAuth, async (req, res) => {
+  try {
+    const { email, business_name, password, precio, duracion_turno, horarios } =
+      req.body;
+
+    // Validaciones
+    if (!email || !business_name || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Faltan datos: email, negocio o contraseña.",
+      });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        error: "Email inválido.",
+      });
+    }
+
+    if (!validatePassword(password)) {
+      return res.status(400).json({
+        success: false,
+        error: "La contraseña debe tener al menos 8 caracteres.",
+      });
+    }
+
+    if (business_name.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: "El nombre del negocio debe tener al menos 3 caracteres.",
+      });
+    }
+
+    // Verificar que el email no esté registrado
+    const { data: existingUser } = await supabase
+      .from("usuarios")
+      .select("email")
+      .eq("email", email.trim().toLowerCase())
+      .single();
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: "Este email ya está registrado.",
+      });
+    }
+
+    const googleRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "sendCode",
+        email: email.trim().toLowerCase(),
+        usuario: business_name,
+        password,
+        precio: precio || 0,
+        duracion_turno: duracion_turno || 30,
+        horarios:
+          typeof horarios === "string" ? horarios : JSON.stringify(horarios),
+      }),
+    });
+
+    const text = await googleRes.text();
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    
+    if (start === -1 || end === -1) {
+      return res.status(500).json({
+        success: false,
+        error: "Respuesta inválida del servidor de correos.",
+      });
+    }
+
+    const result = JSON.parse(text.substring(start, end + 1));
+    
+    if (result.status === "success") {
+      res.json({ success: true, message: "Código de verificación enviado" });
+    } else {
+      res.status(500).json({ 
+        success: false,
+        error: result.message || "Error en Google Script." 
+      });
+    }
+  } catch (e) {
+    console.error("Error en /api/request-verification:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: "Error de conexión con el servicio de correos." 
+    });
+  }
+});
+
+// POST /api/verify-and-register
+// Paso 2 del registro: valida el código y crea el usuario
+app.post("/api/verify-and-register", limiterAuth, async (req, res) => {
+  try {
+    const {
+      email,
+      code,
+      business_name,
+      nombre_persona,
+      precio,
+      duracion_turno,
+      horarios,
+      telefono,
+    } = req.body;
+
+    // Validaciones
+    if (!email || !code || !business_name) {
+      return res.status(400).json({
+        success: false,
+        error: "Faltan datos requeridos.",
+      });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        error: "Email inválido.",
+      });
+    }
+
+    if (telefono && !validatePhone(telefono)) {
+      return res.status(400).json({
+        success: false,
+        error: "Teléfono inválido.",
+      });
+    }
+
+    const googleRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "verifyCode",
+        email: email.trim().toLowerCase(),
+        code: code.toString().trim(),
+      }),
+    });
+
+    const result = await googleRes.json();
+
+    if (result.status !== "valid") {
+      return res.status(400).json({
+        success: false,
+        error: "El código de verificación es incorrecto o expirado.",
+      });
+    }
+
+    const finalName = business_name || result.usuario || "Negocio";
+    const cleanSlug = getCleanSlug(finalName);
+
+    if (!validateSlug(cleanSlug)) {
+      return res.status(400).json({
+        success: false,
+        error: "El nombre del negocio genera un slug inválido.",
+      });
+    }
+
+    const magicToken = crypto.randomBytes(16).toString("hex");
+    const hashedPassword = await bcrypt.hash(String(result.password), BCRYPT_ROUNDS);
+
+    const { error } = await supabase.from("usuarios").insert([
+      {
+        slug: cleanSlug,
+        email: email.trim().toLowerCase(),
+        nombre_persona: nombre_persona?.trim() || "Dueño",
+        business_name: finalName.trim(),
+        password: hashedPassword,
+        sheet_id: MASTER_SHEET_ID,
+        precio: parseInt(precio) || 0,
+        duracion_turno: parseInt(duracion_turno) || 30,
+        horarios: horarios || {},
+        telefono: telefono || null,
+        metodo_pago: "none",
+        excepciones: [],
+        mp_access_token: null,
+        stripe_secret_key: null,
+        access_token: magicToken,
+        session_token: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ]);
+
+    if (error) {
+      if (error.code === "23505") {
+        return res.status(409).json({
+          success: false,
+          error: "El nombre de este negocio ya existe. Intentá con otro.",
+        });
+      }
+      throw error;
+    }
+
+    // Mail de bienvenida (no bloquea si falla)
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "welcomeEmail",
+        email: email.trim().toLowerCase(),
+        usuario: finalName.trim(),
+      }),
+    }).catch((e) => console.error("Error mail bienvenida:", e.message));
+
+    console.log(`Usuario registrado: ${cleanSlug}`);
+    res.status(201).json({
+      success: true,
+      slug: cleanSlug,
+      at: magicToken,
+      message: "Cuenta creada con éxito.",
+    });
+  } catch (e) {
+    console.error("Error en /api/verify-and-register:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: "No se pudo completar el registro." 
+    });
+  }
+});
+
+// POST /login
+// Login con slug + contraseña
+app.post("/login", limiterAuth, async (req, res) => {
+  try {
+    const { slug, password } = req.body;
+
+    if (!slug || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Faltan slug o contraseña.",
+      });
+    }
+
+    const cleanSlug = getCleanSlug(slug);
+
+    if (!validateSlug(cleanSlug)) {
+      return res.status(400).json({
+        success: false,
+        error: "Slug inválido.",
+      });
+    }
+
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("slug", cleanSlug)
+      .single();
+
+    if (error || !user) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "Credenciales incorrectas." 
+      });
+    }
+
+    // Validar contraseña con bcrypt
+    let passwordOk = false;
+    const isHashed = user.password?.startsWith("$2b$") || user.password?.startsWith("$2a$");
+
+    if (isHashed) {
+      passwordOk = await bcrypt.compare(String(password), user.password);
+    } else {
+      // Fallback para usuarios viejos con contraseña en texto plano
+      passwordOk = String(user.password) === String(password);
+      if (passwordOk) {
+        const newHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+        await supabase
+          .from("usuarios")
+          .update({ password: newHash })
+          .eq("slug", cleanSlug);
+        console.log(`Contraseña migrada a bcrypt para: ${cleanSlug}`);
+      }
+    }
+
+    if (!passwordOk) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "Credenciales incorrectas." 
+      });
+    }
+
+    // Generar session token
+    const sessionToken = crypto.randomBytes(32).toString("hex");
+    await supabase
+      .from("usuarios")
+      .update({ session_token: sessionToken })
+      .eq("slug", cleanSlug);
+
+    res.json({
+      success: true,
+      slug: user.slug,
+      session_token: sessionToken,
+      business_name: user.business_name,
+      email: user.email,
+    });
+  } catch (e) {
+    console.error("Error en /login:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
+  }
+});
+
+// GET /verify-session?u=slug&at=token
+// Valida magic token de un solo uso O session_token persistente
+app.get("/verify-session", async (req, res) => {
+  try {
+    const slug = getCleanSlug(req.query.u);
+    const magicToken = req.query.at;
+    const authHeader = req.headers["authorization"];
+    const sessionToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : null;
+
+    if (!slug) {
+      return res.json({ active: false, reason: "no_slug" });
+    }
+
+    if (!validateSlug(slug)) {
+      return res.json({ active: false, reason: "invalid_slug" });
+    }
+
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .select("slug, access_token, session_token, business_name, email")
+      .eq("slug", slug)
+      .single();
+
+    if (error || !user) {
+      return res.json({ active: false, reason: "user_not_found" });
+    }
+
+    // Magic login de un solo uso
+    if (magicToken && user.access_token === magicToken) {
+      const newSessionToken = crypto.randomBytes(32).toString("hex");
+      await supabase
+        .from("usuarios")
+        .update({ access_token: null, session_token: newSessionToken })
+        .eq("slug", slug);
+
+      return res.json({
+        active: true,
+        slug: user.slug,
+        business_name: user.business_name,
+        email: user.email,
+        session_token: newSessionToken,
+        magicLogin: true,
+      });
+    }
+
+    // Verificación con session token
+    if (sessionToken && user.session_token && user.session_token === sessionToken) {
+      return res.json({
+        active: true,
+        slug: user.slug,
+        business_name: user.business_name,
+        email: user.email,
+      });
+    }
+
+    return res.json({ active: false, reason: "invalid_token" });
+  } catch (e) {
+    console.error("Error en /verify-session:", e.message);
+    res.status(500).json({ active: false, error: e.message });
+  }
+});
+
+// POST /api/request-password-reset
+app.post("/api/request-password-reset", limiterAuth, async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Faltan datos." 
+      });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Email inválido." 
+      });
+    }
+
+    if (!validatePassword(newPassword)) {
+      return res.status(400).json({ 
+        success: false,
+        error: "La contraseña debe tener al menos 8 caracteres." 
+      });
+    }
+
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .select("slug")
+      .eq("email", email.trim().toLowerCase())
+      .single();
+
+    if (error || !user) {
+      // No revelar si el email existe
+      return res.json({ 
+        success: true,
+        message: "Si el email existe, recibirás un código de verificación." 
+      });
+    }
+
+    const googleRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "resetPassword",
+        email: email.trim().toLowerCase(),
+        newPassword,
+      }),
+    });
+
+    const text = await googleRes.text();
+    const result = JSON.parse(text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    
+    if (result.status === "success") {
+      res.json({ 
+        success: true,
+        message: "Si el email existe, recibirás un código de verificación." 
+      });
+    } else {
+      res.status(500).json({ 
+        success: false,
+        error: result.message 
+      });
+    }
+  } catch (e) {
+    console.error("Error en /api/request-password-reset:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
+  }
+});
+
+// POST /api/verify-and-reset-password
+app.post("/api/verify-and-reset-password", limiterAuth, async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        error: "Faltan email o código.",
+      });
+    }
+
+    const googleRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "verifyCode",
+        email: email.trim().toLowerCase(),
+        code: code.toString().trim(),
+      }),
+    });
+
+    const result = await googleRes.json();
+
+    if (result.status !== "valid") {
+      return res.status(400).json({
+        success: false,
+        error: "Código incorrecto o expirado.",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(String(result.password), BCRYPT_ROUNDS);
+    const { error } = await supabase
+      .from("usuarios")
+      .update({ password: hashedPassword })
+      .eq("email", email.trim().toLowerCase());
+
+    if (error) throw error;
+
+    res.json({ 
+      success: true,
+      message: "Contraseña actualizada con éxito." 
+    });
+  } catch (e) {
+    console.error("Error en /api/verify-and-reset-password:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PAGOS: MERCADO PAGO Y STRIPE
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // POST /api/create-preference
-// Crea una preferencia de pago (seña o total) con MP o Stripe según config del negocio.
-app.post("/api/create-preference", async (req, res) => {
+app.post("/api/create-preference", limiterBooking, async (req, res) => {
   try {
-    const { nombre, telefono, email, fecha, hora, slug, servicio_id } =
-      req.body;
+    const { nombre, telefono, email, fecha, hora, slug, servicio_id } = req.body;
+
+    if (!nombre || !telefono || !fecha || !hora || !slug) {
+      return res.status(400).json({
+        success: false,
+        error: "Faltan datos requeridos.",
+      });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        error: "Email inválido.",
+      });
+    }
+
+    if (!validatePhone(telefono.toString())) {
+      return res.status(400).json({
+        success: false,
+        error: "Teléfono inválido.",
+      });
+    }
+
     const cleanSlug = getCleanSlug(slug);
 
     const { data: user, error: userError } = await supabase
@@ -127,10 +775,13 @@ app.post("/api/create-preference", async (req, res) => {
       .single();
 
     if (userError || !user) {
-      return res.status(404).json({ error: "Negocio no encontrado." });
+      return res.status(404).json({ 
+        success: false,
+        error: "Negocio no encontrado." 
+      });
     }
 
-    // Precio y concepto: servicio específico tiene prioridad sobre precio global
+    // Precio y concepto
     let precioFinal = Number(user.precio || 0);
     let nombreServicio = "Reserva";
 
@@ -147,7 +798,6 @@ app.post("/api/create-preference", async (req, res) => {
       }
     }
 
-    // Si el método es seña, usamos monto_sena
     if (user.metodo_pago === "sena" && user.monto_sena) {
       precioFinal = Number(user.monto_sena);
     }
@@ -163,54 +813,23 @@ app.post("/api/create-preference", async (req, res) => {
 
     // ── STRIPE ──
     if (user.stripe_secret_key) {
-      const stripe = new Stripe(user.stripe_secret_key);
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: "ars",
-              product_data: {
-                name: `${nombreServicio} (${conceptoPago}): ${fecha} a las ${hora}hs`,
-              },
-              unit_amount: Math.round(precioFinal * 100),
-            },
-            quantity: 1,
-          },
-        ],
-        mode: "payment",
-        metadata: {
-          nombre,
-          telefono,
-          email: email || "",
-          fecha,
-          hora,
-          slug: cleanSlug,
-          servicio_id: servicio_id || "",
-          metodo_pago: metodo,
-        },
-        success_url: "https://negosocio.framer.website/success",
-        cancel_url: "https://negosocio.framer.website/error",
-      });
-      return res.json({ payment_url: session.url });
-    }
-
-    // ── MERCADO PAGO ──
-    if (user.mp_access_token) {
-      const client = new MercadoPagoConfig({
-        accessToken: user.mp_access_token,
-      });
-      const preference = new Preference(client);
-      const response = await preference.create({
-        body: {
-          items: [
+      try {
+        const stripe = new Stripe(user.stripe_secret_key);
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [
             {
-              title: `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`,
-              unit_price: precioFinal,
+              price_data: {
+                currency: "ars",
+                product_data: {
+                  name: `${nombreServicio} (${conceptoPago}): ${fecha} a las ${hora}hs`,
+                },
+                unit_amount: Math.round(precioFinal * 100),
+              },
               quantity: 1,
-              currency_id: "ARS",
             },
           ],
+          mode: "payment",
           metadata: {
             nombre,
             telefono,
@@ -219,34 +838,81 @@ app.post("/api/create-preference", async (req, res) => {
             hora,
             slug: cleanSlug,
             servicio_id: servicio_id || "",
-            tipo_pago: metodo,
+            metodo_pago: metodo,
           },
-          notification_url:
-            "https://framerturnero.onrender.com/webhook",
-          back_urls: {
-            success: "https://negosocio.framer.website/success",
-            failure: "https://negosocio.framer.website/error",
-            pending: "https://negosocio.framer.website/error",
-          },
-          auto_return: "approved",
-        },
-      });
-      return res.json({ payment_url: response.init_point });
+          success_url: "https://negosocio.framer.website/success",
+          cancel_url: "https://negosocio.framer.website/error",
+        });
+        return res.json({ payment_url: session.url });
+      } catch (stripeError) {
+        console.error("Error Stripe:", stripeError.message);
+        return res.status(500).json({
+          success: false,
+          error: "Error procesando pago con Stripe.",
+        });
+      }
     }
 
-    return res
-      .status(400)
-      .json({ error: "El negocio no tiene método de pago configurado." });
+    // ── MERCADO PAGO ──
+    if (user.mp_access_token) {
+      try {
+        const client = new MercadoPagoConfig({
+          accessToken: user.mp_access_token,
+        });
+        const preference = new Preference(client);
+        const response = await preference.create({
+          body: {
+            items: [
+              {
+                title: `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`,
+                unit_price: precioFinal,
+                quantity: 1,
+                currency_id: "ARS",
+              },
+            ],
+            metadata: {
+              nombre,
+              telefono,
+              email: email || "",
+              fecha,
+              hora,
+              slug: cleanSlug,
+              servicio_id: servicio_id || "",
+              tipo_pago: metodo,
+            },
+            notification_url: "https://framerturnero.onrender.com/webhook",
+            back_urls: {
+              success: "https://negosocio.framer.website/success",
+              failure: "https://negosocio.framer.website/error",
+              pending: "https://negosocio.framer.website/error",
+            },
+            auto_return: "approved",
+          },
+        });
+        return res.json({ payment_url: response.init_point });
+      } catch (mpError) {
+        console.error("Error MercadoPago:", mpError.message);
+        return res.status(500).json({
+          success: false,
+          error: "Error procesando pago con MercadoPago.",
+        });
+      }
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: "El negocio no tiene método de pago configurado.",
+    });
   } catch (e) {
     console.error("Error en /api/create-preference:", e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// ─── MERCADO PAGO: OAUTH ──────────────────────────────────────────────────────
-
 // GET /oauth-callback
-// Recibe el code de MP y guarda el access_token del negocio en Supabase.
 app.get("/oauth-callback", async (req, res) => {
   const { code, state: slug } = req.query;
 
@@ -255,6 +921,12 @@ app.get("/oauth-callback", async (req, res) => {
   }
 
   try {
+    const cleanSlug = getCleanSlug(slug);
+
+    if (!validateSlug(cleanSlug)) {
+      return res.status(400).send("Slug inválido.");
+    }
+
     const response = await fetch("https://api.mercadopago.com/oauth/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -273,22 +945,22 @@ app.get("/oauth-callback", async (req, res) => {
       const { error } = await supabase
         .from("usuarios")
         .update({ mp_access_token: data.access_token })
-        .eq("slug", slug);
+        .eq("slug", cleanSlug);
 
       if (error) {
         return res.redirect(
-          `https://negosocio.framer.website/dashboard?status=mp_error&u=${slug}`
+          `https://negosocio.framer.website/dashboard?status=mp_error&u=${cleanSlug}`
         );
       }
 
-      console.log(`MP vinculado para: ${slug}`);
+      console.log(`MP vinculado para: ${cleanSlug}`);
       return res.redirect(
-        `https://negosocio.framer.website/dashboard?status=mp_success&u=${slug}`
+        `https://negosocio.framer.website/dashboard?status=mp_success&u=${cleanSlug}`
       );
     }
 
     res.redirect(
-      `https://negosocio.framer.website/dashboard?status=mp_error&u=${slug}`
+      `https://negosocio.framer.website/dashboard?status=mp_error&u=${cleanSlug}`
     );
   } catch (e) {
     console.error("Error en OAuth MP:", e.message);
@@ -296,10 +968,7 @@ app.get("/oauth-callback", async (req, res) => {
   }
 });
 
-// ─── WEBHOOK: PAGOS APROBADOS ─────────────────────────────────────────────────
-
 // POST /webhook
-// Recibe notificaciones de MP. Si el pago es aprobado, guarda el turno en Sheets.
 app.post("/webhook", async (req, res) => {
   const { query, body } = req;
 
@@ -308,20 +977,19 @@ app.post("/webhook", async (req, res) => {
       const paymentId = query.id || body.data?.id;
 
       if (paymentId) {
-        // Primera consulta con token global para obtener el slug del metadata
         const paymentResponse = await fetch(
           `https://api.mercadopago.com/v1/payments/${paymentId}`,
-          { headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` } }
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
+            },
+          }
         );
         const paymentData = await paymentResponse.json();
 
-        if (
-          paymentData.status === "approved" &&
-          paymentData.metadata?.slug
-        ) {
+        if (paymentData.status === "approved" && paymentData.metadata?.slug) {
           const slug = getCleanSlug(paymentData.metadata.slug);
 
-          // Re-consultamos con el token real del negocio para obtener metadata correcta
           const { data: userNegocio } = await supabase
             .from("usuarios")
             .select("mp_access_token, email")
@@ -369,7 +1037,7 @@ app.post("/webhook", async (req, res) => {
             },
           });
 
-          // Notificación por mail al admin y al cliente
+          // Notificación por mail
           if (userNegocio?.email) {
             try {
               await fetch(APPS_SCRIPT_URL, {
@@ -401,34 +1069,70 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// ─── TURNOS ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// TURNOS Y DISPONIBILIDAD
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /get-occupied?slug=...
-// Devuelve los turnos ocupados de un negocio.
 app.get("/get-occupied", async (req, res) => {
   try {
     const slug = getCleanSlug(req.query.slug);
+
+    if (!validateSlug(slug)) {
+      return res.status(400).json({
+        success: false,
+        error: "Slug inválido.",
+      });
+    }
+
     const sheets = await getSheets();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: MASTER_SHEET_ID,
       range: "A:F",
     });
+
     const rows = response.data.values || [];
     const ocupados = rows
       .filter((row) => row[4] === slug)
       .map((row) => row[2]);
+
     res.json({ success: true, ocupados });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error("Error en /get-occupied:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
 // POST /create-booking
-// Crea un turno gratuito (sin pago). Si el negocio requiere pago, rechaza.
-app.post("/create-booking", async (req, res) => {
+app.post("/create-booking", limiterBooking, async (req, res) => {
   try {
     const { name, phone, email, fecha, hora, slug: rawSlug } = req.body;
+
+    if (!name || !phone || !fecha || !hora || !rawSlug) {
+      return res.status(400).json({
+        success: false,
+        error: "Faltan datos requeridos.",
+      });
+    }
+
+    if (!validatePhone(phone.toString())) {
+      return res.status(400).json({
+        success: false,
+        error: "Teléfono inválido.",
+      });
+    }
+
     const slug = getCleanSlug(rawSlug);
+
+    if (!validateSlug(slug)) {
+      return res.status(400).json({
+        success: false,
+        error: "Slug inválido.",
+      });
+    }
 
     const { data: user, error: userError } = await supabase
       .from("usuarios")
@@ -437,12 +1141,13 @@ app.post("/create-booking", async (req, res) => {
       .single();
 
     if (userError || !user) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Negocio no encontrado." });
+      return res.status(404).json({
+        success: false,
+        error: "Negocio no encontrado.",
+      });
     }
 
-    // Bloquear si el negocio requiere pago previo
+    // Validar si requiere pago
     const requierePago =
       user.mp_access_token &&
       (user.metodo_pago === "sena" || user.metodo_pago === "total");
@@ -455,7 +1160,7 @@ app.post("/create-booking", async (req, res) => {
 
     const sheets = await getSheets();
 
-    // Anti-duplicado: bloquea si ya tiene un turno futuro activo (por tel o email)
+    // Anti-duplicado
     const existingData = await sheets.spreadsheets.values.get({
       spreadsheetId: MASTER_SHEET_ID,
       range: "A:G",
@@ -478,15 +1183,17 @@ app.post("/create-booking", async (req, res) => {
 
       const partes = turnoFila.split(" - ");
       if (partes.length < 2) return false;
+
       const [dia, mes] = partes[0].split("/").map(Number);
-      const [hora, minuto] = partes[1].split(":").map(Number);
+      const [hora_part, minuto] = partes[1].split(":").map(Number);
       const fechaTurno = new Date(
         new Date().getFullYear(),
         mes - 1,
         dia,
-        hora,
+        hora_part,
         minuto
       );
+
       return fechaTurno > new Date();
     });
 
@@ -541,21 +1248,28 @@ app.post("/create-booking", async (req, res) => {
     }
 
     delete globalCache[slug];
-    res.json({ success: true });
+    res.json({ success: true, message: "Turno creado con éxito" });
   } catch (e) {
     console.error("Error en /create-booking:", e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// ─── SLOTS DISPONIBLES ────────────────────────────────────────────────────────
-
 // GET /slots-disponibles/:slug?fecha=YYYY-MM-DD&servicio_id=...
-// Devuelve los slots del día con cuántos lugares quedan.
 app.get("/slots-disponibles/:slug", async (req, res) => {
   try {
     const slug = getCleanSlug(req.params.slug);
     const { fecha, servicio_id } = req.query;
+
+    if (!validateSlug(slug)) {
+      return res.status(400).json({
+        success: false,
+        error: "Slug inválido.",
+      });
+    }
 
     const { data: user, error: userError } = await supabase
       .from("usuarios")
@@ -564,7 +1278,10 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       .single();
 
     if (userError || !user) {
-      return res.status(404).json({ error: "Negocio no encontrado." });
+      return res.status(404).json({ 
+        success: false,
+        error: "Negocio no encontrado." 
+      });
     }
 
     let duracion = user.duracion_turno || 30;
@@ -576,6 +1293,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
         .select("duracion, capacidad")
         .eq("id", servicio_id)
         .single();
+
       if (servicio) {
         duracion = servicio.duracion || duracion;
         capacidad = servicio.capacidad || capacidad;
@@ -608,6 +1326,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       const [h, m] = t.split(":").map(Number);
       return h * 60 + m;
     };
+
     const fromMinutes = (mins) => {
       const h = Math.floor(mins / 60).toString().padStart(2, "0");
       const m = (mins % 60).toString().padStart(2, "0");
@@ -623,6 +1342,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
 
     const slotsGenerados = [];
     let cursor = inicio;
+
     while (cursor + duracion <= fin) {
       const enDescanso = dIni && dFin && cursor >= dIni && cursor < dFin;
       if (!enDescanso) slotsGenerados.push(fromMinutes(cursor));
@@ -644,9 +1364,12 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       if (i === 0) return;
       const turnoFila = row[2]?.toString().trim();
       const slugFila = row[4]?.toString().toLowerCase().trim();
+
       if (slugFila !== slug || !turnoFila) return;
+
       const partes = turnoFila.split(" - ");
       if (partes.length < 2) return;
+
       if (partes[0].trim() === fechaFormateada) {
         const horaFila = partes[1].trim();
         reservasPorSlot[horaFila] = (reservasPorSlot[horaFila] || 0) + 1;
@@ -656,6 +1379,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     const slots = slotsGenerados.map((slot) => {
       const reservados = reservasPorSlot[slot] || 0;
       const disponibles = capacidad - reservados;
+
       return {
         hora: slot,
         disponibles: Math.max(0, disponibles),
@@ -666,24 +1390,38 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     res.json({ success: true, slots });
   } catch (e) {
     console.error("Error en /slots-disponibles:", e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// ─── SERVICIOS ────────────────────────────────────────────────────────────────
-// NOTA: la ruta /servicios/admin/:slug va ANTES de /servicios/:slug
-// para evitar que Express interprete "admin" como un slug.
+// ═══════════════════════════════════════════════════════════════════════════════
+// SERVICIOS
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// GET /servicios/admin/:slug — todos los servicios (para el dashboard) 🔒
+// GET /servicios/admin/:slug — todos los servicios (protegido)
 app.get("/servicios/admin/:slug", async (req, res) => {
   try {
-    // Validación de sesión para el dashboard
     const authHeader = req.headers["authorization"];
-    const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const token = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : null;
     const slug = getCleanSlug(req.params.slug);
 
     if (!token || !slug) {
-      return res.status(401).json({ error: "No autorizado." });
+      return res.status(401).json({ 
+        success: false,
+        error: "No autorizado." 
+      });
+    }
+
+    if (!validateSlug(slug)) {
+      return res.status(400).json({
+        success: false,
+        error: "Slug inválido.",
+      });
     }
 
     const { data: user, error: userError } = await supabase
@@ -693,7 +1431,10 @@ app.get("/servicios/admin/:slug", async (req, res) => {
       .single();
 
     if (userError || !user || user.session_token !== token) {
-      return res.status(401).json({ error: "No autorizado." });
+      return res.status(401).json({ 
+        success: false,
+        error: "No autorizado." 
+      });
     }
 
     const { data, error } = await supabase
@@ -701,40 +1442,68 @@ app.get("/servicios/admin/:slug", async (req, res) => {
       .select("*")
       .eq("slug", slug)
       .order("created_at", { ascending: true });
+
     if (error) throw error;
+
     res.json({ success: true, servicios: data || [] });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error("Error en /servicios/admin:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// GET /servicios/:slug — servicios activos (para el público)
+// GET /servicios/:slug — servicios públicos activos
 app.get("/servicios/:slug", async (req, res) => {
   try {
     const slug = getCleanSlug(req.params.slug);
+
+    if (!validateSlug(slug)) {
+      return res.status(400).json({
+        success: false,
+        error: "Slug inválido.",
+      });
+    }
+
     const { data, error } = await supabase
       .from("servicios")
-      .select("*")
+      .select("id, nombre, descripcion, duracion, precio, capacidad")
       .eq("slug", slug)
       .eq("activo", true)
       .order("created_at", { ascending: true });
+
     if (error) throw error;
+
     res.json({ success: true, servicios: data || [] });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error("Error en /servicios:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// POST /servicios/crear 🔒
+// POST /servicios/crear (protegido)
 app.post("/servicios/crear", requireAuth, async (req, res) => {
   try {
     const { slug, nombre, descripcion, duracion, precio, capacidad } = req.body;
     const cleanSlug = getCleanSlug(slug);
 
     if (!cleanSlug || !nombre || !duracion || precio === undefined) {
-      return res
-        .status(400)
-        .json({ error: "Faltan campos: slug, nombre, duracion, precio." });
+      return res.status(400).json({
+        success: false,
+        error: "Faltan campos: slug, nombre, duracion, precio.",
+      });
+    }
+
+    if (nombre.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: "El nombre del servicio debe tener al menos 3 caracteres.",
+      });
     }
 
     const { data, error } = await supabase
@@ -748,29 +1517,61 @@ app.post("/servicios/crear", requireAuth, async (req, res) => {
           precio: Number(precio),
           capacidad: parseInt(capacidad) || 1,
           activo: true,
+          created_at: new Date().toISOString(),
         },
       ])
       .select()
       .single();
 
     if (error) throw error;
+
     delete globalCache[cleanSlug];
-    res.json({ success: true, servicio: data });
+    res.status(201).json({ success: true, servicio: data });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error("Error en /servicios/crear:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// POST /servicios/editar 🔒
+// POST /servicios/editar (protegido)
 app.post("/servicios/editar", requireAuth, async (req, res) => {
   try {
-    const { id, slug, nombre, descripcion, duracion, precio, capacidad, activo } =
-      req.body;
+    const {
+      id,
+      slug,
+      nombre,
+      descripcion,
+      duracion,
+      precio,
+      capacidad,
+      activo,
+    } = req.body;
     const cleanSlug = getCleanSlug(slug);
-    if (!id) return res.status(400).json({ error: "Falta el id." });
 
-    const updateData = {};
-    if (nombre !== undefined) updateData.nombre = nombre.trim();
+    if (!id) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Falta el id." 
+      });
+    }
+
+    const updateData = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (nombre !== undefined) {
+      if (nombre.trim().length < 3) {
+        return res.status(400).json({
+          success: false,
+          error: "El nombre debe tener al menos 3 caracteres.",
+        });
+      }
+      updateData.nombre = nombre.trim();
+    }
+
     if (descripcion !== undefined) updateData.descripcion = descripcion.trim();
     if (duracion !== undefined) updateData.duracion = parseInt(duracion);
     if (precio !== undefined) updateData.precio = Number(precio);
@@ -786,19 +1587,30 @@ app.post("/servicios/editar", requireAuth, async (req, res) => {
       .single();
 
     if (error) throw error;
+
     delete globalCache[cleanSlug];
     res.json({ success: true, servicio: data });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error("Error en /servicios/editar:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// POST /servicios/eliminar 🔒
+// POST /servicios/eliminar (protegido)
 app.post("/servicios/eliminar", requireAuth, async (req, res) => {
   try {
     const { id, slug } = req.body;
     const cleanSlug = getCleanSlug(slug);
-    if (!id) return res.status(400).json({ error: "Falta el id." });
+
+    if (!id) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Falta el id." 
+      });
+    }
 
     const { error } = await supabase
       .from("servicios")
@@ -807,362 +1619,42 @@ app.post("/servicios/eliminar", requireAuth, async (req, res) => {
       .eq("slug", cleanSlug);
 
     if (error) throw error;
+
     delete globalCache[cleanSlug];
-    res.json({ success: true });
+    res.json({ success: true, message: "Servicio eliminado" });
   } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ─── AUTH Y REGISTRO ──────────────────────────────────────────────────────────
-
-// POST /api/request-verification
-// Paso 1 del registro: envía código de verificación por email vía Apps Script.
-app.post("/api/request-verification", async (req, res) => {
-  try {
-    const { email, business_name, password, precio, duracion_turno, horarios } =
-      req.body;
-
-    if (!email || !business_name || !password) {
-      return res
-        .status(400)
-        .json({ error: "Faltan datos: email, negocio o contraseña." });
-    }
-
-    const googleRes = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action: "sendCode",
-        email: email.trim().toLowerCase(),
-        usuario: business_name,
-        password,
-        precio: precio || 0,
-        duracion_turno: duracion_turno || 30,
-        horarios:
-          typeof horarios === "string" ? horarios : JSON.stringify(horarios),
-      }),
+    console.error("Error en /servicios/eliminar:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
     });
-
-    const text = await googleRes.text();
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start === -1 || end === -1) {
-      return res
-        .status(500)
-        .json({ error: "Respuesta inválida del servidor de correos." });
-    }
-
-    const result = JSON.parse(text.substring(start, end + 1));
-    if (result.status === "success") {
-      res.json({ success: true });
-    } else {
-      res.status(500).json({ error: result.message || "Error en Google Script." });
-    }
-  } catch (e) {
-    console.error("Error en /api/request-verification:", e.message);
-    res.status(500).json({ error: "Error de conexión con el servicio de correos." });
   }
 });
 
-// POST /api/verify-and-register
-// Paso 2 del registro: valida el código y crea el usuario en Supabase.
-// 🔒 Las contraseñas se hashean con bcrypt antes de guardarse.
-app.post("/api/verify-and-register", async (req, res) => {
-  try {
-    const {
-      email,
-      code,
-      business_name,
-      nombre_persona,
-      precio,
-      duracion_turno,
-      horarios,
-      telefono,
-    } = req.body;
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN Y CONFIG
+// ═══════════════════════════════════════════════════════════════════════════════
 
-    const googleRes = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action: "verifyCode",
-        email: email.trim().toLowerCase(),
-        code: code.toString().trim(),
-      }),
-    });
-
-    const result = await googleRes.json();
-
-    if (result.status !== "valid") {
-      return res
-        .status(400)
-        .json({ error: "El código de verificación es incorrecto." });
-    }
-
-    const finalName = business_name || result.usuario || "Negocio";
-    const cleanSlug = getCleanSlug(finalName);
-    const magicToken = crypto.randomBytes(16).toString("hex");
-
-    // 🔒 Hash de la contraseña antes de guardar
-    const hashedPassword = await bcrypt.hash(String(result.password), BCRYPT_ROUNDS);
-
-    const { error } = await supabase.from("usuarios").insert([
-      {
-        slug: cleanSlug,
-        email: email.trim().toLowerCase(),
-        nombre_persona: nombre_persona?.trim() || "Dueño",
-        business_name: finalName.trim(),
-        password: hashedPassword,
-        sheet_id: MASTER_SHEET_ID,
-        precio: parseInt(precio) || 0,
-        duracion_turno: parseInt(duracion_turno) || 30,
-        horarios: horarios || {},
-        telefono: telefono || null,
-        metodo_pago: "none",
-        excepciones: [],
-        mp_access_token: null,
-        access_token: magicToken,
-      },
-    ]);
-
-    if (error) {
-      if (error.code === "23505") {
-        return res.status(400).json({
-          error: "El nombre de este negocio ya existe. Intentá con otro.",
-        });
-      }
-      throw error;
-    }
-
-    // Mail de bienvenida (no bloquea la respuesta si falla)
-    fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action: "welcomeEmail",
-        email: email.trim().toLowerCase(),
-        usuario: finalName.trim(),
-      }),
-    }).catch((e) => console.error("Error mail bienvenida:", e.message));
-
-    console.log(`Usuario registrado: ${cleanSlug}`);
-    res.json({
-      success: true,
-      slug: cleanSlug,
-      at: magicToken,
-      message: "Cuenta creada con éxito.",
-    });
-  } catch (e) {
-    console.error("Error en /api/verify-and-register:", e.message);
-    res.status(500).json({ error: "No se pudo completar el registro." });
-  }
-});
-
-// POST /login
-// Login con slug + contraseña.
-// 🔒 Usa bcrypt.compare() para verificar la contraseña hasheada.
-// 🔒 Genera un session_token (en lugar de access_token efímero) para uso persistente.
-app.post("/login", async (req, res) => {
-  try {
-    const slug = getCleanSlug(req.body.slug);
-    const { password } = req.body;
-
-    const { data: user, error } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("slug", slug)
-      .single();
-
-    // Respuesta genérica para no revelar si el slug existe o no
-    if (error || !user) {
-      return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
-    }
-
-    // 🔒 Comparar con bcrypt. Si la contraseña todavía es texto plano (usuarios viejos),
-    // se hace fallback a comparación directa y se re-hashea al vuelo.
-    let passwordOk = false;
-    const isHashed = user.password?.startsWith("$2b$") || user.password?.startsWith("$2a$");
-
-    if (isHashed) {
-      passwordOk = await bcrypt.compare(String(password), user.password);
-    } else {
-      // Fallback para usuarios registrados antes de la migración a bcrypt
-      passwordOk = String(user.password) === String(password);
-      if (passwordOk) {
-        // Re-hashear la contraseña en texto plano al primer login exitoso
-        const newHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-        await supabase
-          .from("usuarios")
-          .update({ password: newHash })
-          .eq("slug", slug);
-        console.log(`Contraseña migrada a bcrypt para: ${slug}`);
-      }
-    }
-
-    if (!passwordOk) {
-      return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
-    }
-
-    // 🔒 Generar session_token persistente (distinto del magic token de un solo uso)
-    const sessionToken = crypto.randomBytes(32).toString("hex");
-    await supabase
-      .from("usuarios")
-      .update({ session_token: sessionToken })
-      .eq("slug", slug);
-
-    res.json({ success: true, slug: user.slug, session_token: sessionToken });
-  } catch (e) {
-    console.error("Error en /login:", e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// GET /verify-session?u=slug&at=token
-// 🔒 Ahora valida el magic token de un solo uso (at) O el session_token persistente.
-// Sin token válido, devuelve active: false.
-app.get("/verify-session", async (req, res) => {
-  try {
-    const slug = getCleanSlug(req.query.u);
-    const magicToken = req.query.at;
-    const authHeader = req.headers["authorization"];
-    const sessionToken = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
-
-    if (!slug) return res.json({ active: false, reason: "no_slug" });
-
-    const { data: user, error } = await supabase
-      .from("usuarios")
-      .select("slug, access_token, session_token, business_name, email")
-      .eq("slug", slug)
-      .single();
-
-    if (error || !user) {
-      return res.json({ active: false, reason: "user_not_found" });
-    }
-
-    // Magic login de un solo uso: consume el token y autentica
-    if (magicToken && user.access_token === magicToken) {
-      // Generar session_token persistente al consumir el magic token
-      const newSessionToken = crypto.randomBytes(32).toString("hex");
-      await supabase
-        .from("usuarios")
-        .update({ access_token: null, session_token: newSessionToken })
-        .eq("slug", slug);
-
-      return res.json({
-        active: true,
-        slug: user.slug,
-        business_name: user.business_name,
-        email: user.email,
-        session_token: newSessionToken,
-        magicLogin: true,
-      });
-    }
-
-    // 🔒 Verificación con session_token persistente
-    if (sessionToken && user.session_token && user.session_token === sessionToken) {
-      return res.json({
-        active: true,
-        slug: user.slug,
-        business_name: user.business_name,
-        email: user.email,
-      });
-    }
-
-    // Sin token válido: no autenticado
-    return res.json({ active: false, reason: "invalid_token" });
-  } catch (e) {
-    console.error("Error en /verify-session:", e.message);
-    res.status(500).json({ active: false, error: e.message });
-  }
-});
-
-// POST /api/request-password-reset
-// Paso 1 reset: envía código al email para cambio de contraseña.
-app.post("/api/request-password-reset", async (req, res) => {
-  try {
-    const { email, newPassword } = req.body;
-    if (!email || !newPassword) {
-      return res.status(400).json({ error: "Faltan datos." });
-    }
-
-    const { data: user, error } = await supabase
-      .from("usuarios")
-      .select("slug")
-      .eq("email", email.trim().toLowerCase())
-      .single();
-
-    if (error || !user) {
-      return res
-        .status(404)
-        .json({ error: "No existe una cuenta con ese correo." });
-    }
-
-    const googleRes = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action: "resetPassword",
-        email: email.trim().toLowerCase(),
-        newPassword,
-      }),
-    });
-
-    const text = await googleRes.text();
-    const result = JSON.parse(
-      text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1)
-    );
-    if (result.status === "success") res.json({ success: true });
-    else res.status(500).json({ error: result.message });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// POST /api/verify-and-reset-password
-// Paso 2 reset: valida código y actualiza la contraseña en Supabase.
-// 🔒 La nueva contraseña se hashea con bcrypt antes de guardarse.
-app.post("/api/verify-and-reset-password", async (req, res) => {
-  try {
-    const { email, code } = req.body;
-    const googleRes = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action: "verifyCode",
-        email: email.trim().toLowerCase(),
-        code: code.toString().trim(),
-      }),
-    });
-    const result = await googleRes.json();
-    if (result.status === "valid") {
-      // 🔒 Hash de la nueva contraseña antes de guardar
-      const hashedPassword = await bcrypt.hash(String(result.password), BCRYPT_ROUNDS);
-      const { error } = await supabase
-        .from("usuarios")
-        .update({ password: hashedPassword })
-        .eq("email", email.trim().toLowerCase());
-      if (error) throw error;
-      res.json({ success: true });
-    } else {
-      res.status(400).json({ error: "Código incorrecto o expirado." });
-    }
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ─── ADMIN Y CONFIG ───────────────────────────────────────────────────────────
-
-// GET /admin-stats/:slug 🔒
-// Devuelve estadísticas del negocio y lista de turnos para el dashboard.
+// GET /admin-stats/:slug (protegido)
 app.get("/admin-stats/:slug", async (req, res) => {
-  // Validación de sesión
   const authHeader = req.headers["authorization"];
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.split(" ")[1]
+    : null;
   const slug = getCleanSlug(req.params.slug);
 
   if (!token || !slug) {
-    return res.status(401).json({ error: "No autorizado." });
+    return res.status(401).json({ 
+      success: false,
+      error: "No autorizado." 
+    });
+  }
+
+  if (!validateSlug(slug)) {
+    return res.status(400).json({
+      success: false,
+      error: "Slug inválido.",
+    });
   }
 
   const { data: authUser, error: authError } = await supabase
@@ -1172,14 +1664,14 @@ app.get("/admin-stats/:slug", async (req, res) => {
     .single();
 
   if (authError || !authUser || authUser.session_token !== token) {
-    return res.status(401).json({ error: "No autorizado." });
+    return res.status(401).json({ 
+      success: false,
+      error: "No autorizado." 
+    });
   }
 
   const now = Date.now();
-  if (
-    globalCache[slug] &&
-    now - globalCache[slug].timestamp < CACHE_DURATION
-  ) {
+  if (globalCache[slug] && now - globalCache[slug].timestamp < CACHE_DURATION) {
     return res.json(globalCache[slug].data);
   }
 
@@ -1191,7 +1683,10 @@ app.get("/admin-stats/:slug", async (req, res) => {
       .single();
 
     if (userError || !user) {
-      return res.status(404).json({ error: "Usuario no encontrado." });
+      return res.status(404).json({ 
+        success: false,
+        error: "Usuario no encontrado." 
+      });
     }
 
     const sheets = await getSheets();
@@ -1210,6 +1705,7 @@ app.get("/admin-stats/:slug", async (req, res) => {
         timeZone: "America/Argentina/Buenos_Aires",
       })
     );
+
     const mesActual = ahoraArg.getMonth() + 1;
     const diaHoyNum = ahoraArg.getDate();
     const anioActual = ahoraArg.getFullYear();
@@ -1221,8 +1717,10 @@ app.get("/admin-stats/:slug", async (req, res) => {
 
     rows.forEach((r, i) => {
       if (i === 0 || !r[2]) return;
+
       const partes = r[2].toString().split(" - ");
       if (partes.length < 2) return;
+
       const [dia, mes] = partes[0].split("/").map(Number);
 
       let semanaIdx = 0;
@@ -1239,7 +1737,10 @@ app.get("/admin-stats/:slug", async (req, res) => {
       turnosLista.push({
         nombre: r[0],
         telefono: r[1],
-        fecha: `${anioActual}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`,
+        fecha: `${anioActual}-${String(mes).padStart(2, "0")}-${String(dia).padStart(
+          2,
+          "0"
+        )}`,
         hora: partes[1],
         semanaIdx,
         duracion: user.duracion_turno || 60,
@@ -1255,9 +1756,7 @@ app.get("/admin-stats/:slug", async (req, res) => {
         ingresosEstimados: turnosMesActual * (user.precio || 0),
         promedioDiario:
           diaHoyNum > 0
-            ? Math.round(
-                (turnosMesActual * (user.precio || 0)) / diaHoyNum
-              )
+            ? Math.round((turnosMesActual * (user.precio || 0)) / diaHoyNum)
             : 0,
         chartData: Object.keys(semanas).map((key) => ({
           label: key,
@@ -1281,12 +1780,14 @@ app.get("/admin-stats/:slug", async (req, res) => {
     res.json(finalData);
   } catch (e) {
     console.error("Error en /admin-stats:", e.message);
-    res.status(500).json({ error: "Error al procesar las estadísticas." });
+    res.status(500).json({ 
+      success: false,
+      error: "Error al procesar las estadísticas." 
+    });
   }
 });
 
-// POST /update-settings 🔒
-// Actualiza precio, horarios, duración y método de pago del negocio.
+// POST /update-settings (protegido)
 app.post("/update-settings", requireAuth, async (req, res) => {
   try {
     const {
@@ -1298,16 +1799,25 @@ app.post("/update-settings", requireAuth, async (req, res) => {
       monto_sena,
       metodo_pago,
     } = req.body;
+
     const cleanSlug = getCleanSlug(slug);
 
     const numPrecio = parseInt(precio) || 0;
     const numSena = parseInt(monto_sena) || 0;
+
+    if (numPrecio < 0) {
+      return res.status(400).json({
+        success: false,
+        error: "El precio no puede ser negativo.",
+      });
+    }
 
     const updateData = {
       precio: numPrecio,
       monto_sena: numSena,
       metodo_pago: metodo_pago || "none",
       duracion_turno: parseInt(duracion_turno) || 30,
+      updated_at: new Date().toISOString(),
     };
 
     if (horarios) updateData.horarios = horarios;
@@ -1319,20 +1829,30 @@ app.post("/update-settings", requireAuth, async (req, res) => {
       .eq("slug", cleanSlug);
 
     if (error) throw error;
+
     delete globalCache[cleanSlug];
-    res.json({ success: true });
+    res.json({ success: true, message: "Configuración actualizada" });
   } catch (e) {
     console.error("Error en /update-settings:", e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// POST /cancel-appointment 🔒
-// Elimina una fila de Sheets (cancela un turno).
+// POST /cancel-appointment (protegido)
 app.post("/cancel-appointment", requireAuth, async (req, res) => {
   try {
     const { slug, rawTurno } = req.body;
     const cleanSlug = getCleanSlug(slug);
+
+    if (!rawTurno) {
+      return res.status(400).json({
+        success: false,
+        error: "Falta el rawTurno.",
+      });
+    }
 
     const sheets = await getSheets();
     const response = await sheets.spreadsheets.values.get({
@@ -1346,14 +1866,17 @@ app.post("/cancel-appointment", requireAuth, async (req, res) => {
     );
 
     if (rowIndex === -1) {
-      return res.status(404).json({ error: "Turno no encontrado." });
+      return res.status(404).json({ 
+        success: false,
+        error: "Turno no encontrado." 
+      });
     }
 
     const spreadsheet = await sheets.spreadsheets.get({
       spreadsheetId: MASTER_SHEET_ID,
     });
-    const sheetIdReal =
-      spreadsheet.data.sheets[0].properties.sheetId;
+
+    const sheetIdReal = spreadsheet.data.sheets[0].properties.sheetId;
 
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: MASTER_SHEET_ID,
@@ -1374,14 +1897,51 @@ app.post("/cancel-appointment", requireAuth, async (req, res) => {
     });
 
     delete globalCache[cleanSlug];
-    res.json({ success: true });
+    res.json({ success: true, message: "Turno cancelado" });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error("Error en /cancel-appointment:", e.message);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 
-// ─── ARRANQUE ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// HEALTH CHECK
+// ══════���════════════════════════════════════════════════════════════════════════
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ERROR HANDLING Y 404
+// ═══════════════════════════════════════════════════════════════════════════════
+
+app.use("*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: "Ruta no encontrada",
+    path: req.originalUrl,
+  });
+});
+
+app.use(errorHandler);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INICIAR SERVIDOR
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () =>
-  console.log(`NegoSocio API corriendo en puerto ${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`
+  ╔════════════════════════════════════════════╗
+  ║   NegoSocio API v2.0 - Online             ║
+  ║   Port: ${PORT}                             ║
+  ║   Environment: ${process.env.NODE_ENV || "development"}             ║
+  ╚════════════════════════════════════════════╝
+  `);
+});
+
+export default app;
