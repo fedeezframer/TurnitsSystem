@@ -17,7 +17,7 @@ const APPS_SCRIPT_URL =
 const BCRYPT_ROUNDS = 10;
 const CACHE_DURATION = 20000;
 
-// ─── UTILIDADES Y VALIDADORES ────────────────────────────────────────────────
+// ─── VALIDADORES ───────────────��────────────────────────────────────────────
 const getCleanSlug = (rawSlug) => {
   if (!rawSlug) return "";
   return rawSlug
@@ -27,6 +27,11 @@ const getCleanSlug = (rawSlug) => {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "");
+};
+
+const getCleanDomain = (rawDomain) => {
+  if (!rawDomain) return "";
+  return rawDomain.toLowerCase().trim();
 };
 
 const validateEmail = (email) => {
@@ -39,6 +44,10 @@ const validatePassword = (pwd) => {
 
 const validateSlug = (slug) => {
   return /^[a-z0-9-]{3,50}$/.test(slug);
+};
+
+const validateDomain = (domain) => {
+  return /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]*[a-z0-9])?\.[a-z]{2,}$/.test(domain);
 };
 
 const validatePhone = (phone) => {
@@ -72,12 +81,6 @@ class NotFoundError extends AppError {
   }
 }
 
-class ConflictError extends AppError {
-  constructor(message = "Conflicto") {
-    super(message, 409);
-  }
-}
-
 // ─── CACHÉ EN MEMORIA ────────────────────────────────────────────────────────
 const globalCache = {};
 
@@ -107,8 +110,8 @@ app.use(
     origin: [
       "https://negosocio.framer.website",
       "https://framerturnero.onrender.com",
-      "http://localhost:3000", // desarrollo
-      "http://localhost:5173", // Vite dev
+      "http://localhost:3000",
+      "http://localhost:5173",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -118,8 +121,6 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
-
-// ─── APLICAR RATE LIMITERS GLOBALES ──────────────────────────────────────────
 app.use(limiterAPI);
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
@@ -149,6 +150,7 @@ async function getSheets() {
 }
 
 // ─── MIDDLEWARE DE AUTENTICACIÓN ─────────────────────────────────────────────
+// Ahora autenticar por DOMAIN (no por slug)
 async function requireAuth(req, res, next) {
   try {
     const authHeader = req.headers["authorization"];
@@ -160,26 +162,26 @@ async function requireAuth(req, res, next) {
     }
 
     const token = authHeader.split(" ")[1];
-    const slugFromBody = getCleanSlug(req.body?.slug || req.params?.slug || "");
+    const domainFromBody = getCleanDomain(req.body?.domain || req.params?.domain || "");
 
-    if (!token || !slugFromBody) {
+    if (!token || !domainFromBody) {
       return res.status(401).json({ 
         success: false,
         error: "No autorizado: datos incompletos." 
       });
     }
 
-    if (!validateSlug(slugFromBody)) {
+    if (!validateDomain(domainFromBody)) {
       return res.status(400).json({ 
         success: false,
-        error: "Slug inválido." 
+        error: "Domain inválido." 
       });
     }
 
     const { data: user, error } = await supabase
       .from("usuarios")
-      .select("slug, session_token")
-      .eq("slug", slugFromBody)
+      .select("domain, access_token")
+      .eq("domain", domainFromBody)
       .single();
 
     if (error || !user) {
@@ -189,14 +191,14 @@ async function requireAuth(req, res, next) {
       });
     }
 
-    if (!user.session_token || user.session_token !== token) {
+    if (!user.access_token || user.access_token !== token) {
       return res.status(401).json({ 
         success: false,
         error: "No autorizado: token inválido o expirado." 
       });
     }
 
-    req.authenticatedSlug = user.slug;
+    req.authenticatedDomain = user.domain;
     next();
   } catch (e) {
     console.error("Error en requireAuth:", e.message);
@@ -218,7 +220,6 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Error no esperado
   return res.status(500).json({
     success: false,
     error: "Error interno del servidor",
@@ -231,6 +232,7 @@ app.get("/", (req, res) => {
     status: "online",
     message: "NegoSocio API v2.0 — Online",
     version: "2.0.0",
+    model: "Domain-based SaaS",
     timestamp: new Date().toISOString(),
   });
 });
@@ -240,17 +242,16 @@ app.get("/", (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // POST /api/request-verification
-// Paso 1 del registro: valida y envía código de verificación por email
 app.post("/api/request-verification", limiterAuth, async (req, res) => {
   try {
-    const { email, business_name, password, precio, duracion_turno, horarios } =
+    const { email, business_name, password, domain, precio, duracion_turno, horarios } =
       req.body;
 
     // Validaciones
-    if (!email || !business_name || !password) {
+    if (!email || !business_name || !password || !domain) {
       return res.status(400).json({
         success: false,
-        error: "Faltan datos: email, negocio o contraseña.",
+        error: "Faltan datos: email, negocio, dominio o contraseña.",
       });
     }
 
@@ -258,6 +259,13 @@ app.post("/api/request-verification", limiterAuth, async (req, res) => {
       return res.status(400).json({
         success: false,
         error: "Email inválido.",
+      });
+    }
+
+    if (!validateDomain(domain)) {
+      return res.status(400).json({
+        success: false,
+        error: "Domain inválido.",
       });
     }
 
@@ -275,18 +283,27 @@ app.post("/api/request-verification", limiterAuth, async (req, res) => {
       });
     }
 
-    // Verificar que el email no esté registrado
+    // Verificar que email y domain no estén registrados
+    const cleanDomain = getCleanDomain(domain);
     const { data: existingUser } = await supabase
       .from("usuarios")
-      .select("email")
-      .eq("email", email.trim().toLowerCase())
+      .select("email, domain")
+      .or(`email.eq.${email.trim().toLowerCase()},domain.eq.${cleanDomain}`)
       .single();
 
     if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        error: "Este email ya está registrado.",
-      });
+      if (existingUser.email === email.trim().toLowerCase()) {
+        return res.status(409).json({
+          success: false,
+          error: "Este email ya está registrado.",
+        });
+      }
+      if (existingUser.domain === cleanDomain) {
+        return res.status(409).json({
+          success: false,
+          error: "Este domain ya está registrado.",
+        });
+      }
     }
 
     const googleRes = await fetch(APPS_SCRIPT_URL, {
@@ -335,13 +352,13 @@ app.post("/api/request-verification", limiterAuth, async (req, res) => {
 });
 
 // POST /api/verify-and-register
-// Paso 2 del registro: valida el código y crea el usuario
 app.post("/api/verify-and-register", limiterAuth, async (req, res) => {
   try {
     const {
       email,
       code,
       business_name,
+      domain,
       nombre_persona,
       precio,
       duracion_turno,
@@ -350,7 +367,7 @@ app.post("/api/verify-and-register", limiterAuth, async (req, res) => {
     } = req.body;
 
     // Validaciones
-    if (!email || !code || !business_name) {
+    if (!email || !code || !business_name || !domain) {
       return res.status(400).json({
         success: false,
         error: "Faltan datos requeridos.",
@@ -361,6 +378,13 @@ app.post("/api/verify-and-register", limiterAuth, async (req, res) => {
       return res.status(400).json({
         success: false,
         error: "Email inválido.",
+      });
+    }
+
+    if (!validateDomain(domain)) {
+      return res.status(400).json({
+        success: false,
+        error: "Domain inválido.",
       });
     }
 
@@ -390,39 +414,30 @@ app.post("/api/verify-and-register", limiterAuth, async (req, res) => {
       });
     }
 
-    const finalName = business_name || result.usuario || "Negocio";
-    const cleanSlug = getCleanSlug(finalName);
-
-    if (!validateSlug(cleanSlug)) {
-      return res.status(400).json({
-        success: false,
-        error: "El nombre del negocio genera un slug inválido.",
-      });
-    }
-
-    const magicToken = crypto.randomBytes(16).toString("hex");
+    const cleanDomain = getCleanDomain(domain);
+    const cleanSlug = getCleanSlug(business_name);
+    const accessToken = crypto.randomBytes(16).toString("hex");
     const hashedPassword = await bcrypt.hash(String(result.password), BCRYPT_ROUNDS);
 
     const { error } = await supabase.from("usuarios").insert([
       {
-        slug: cleanSlug,
         email: email.trim().toLowerCase(),
-        nombre_persona: nombre_persona?.trim() || "Dueño",
-        business_name: finalName.trim(),
         password: hashedPassword,
+        slug: cleanSlug,
+        domain: cleanDomain,
+        nombre_persona: nombre_persona?.trim() || "Dueño",
+        business_name: business_name.trim(),
+        telefono: telefono || null,
         sheet_id: MASTER_SHEET_ID,
         precio: parseInt(precio) || 0,
         duracion_turno: parseInt(duracion_turno) || 30,
         horarios: horarios || {},
-        telefono: telefono || null,
         metodo_pago: "none",
         excepciones: [],
         mp_access_token: null,
         stripe_secret_key: null,
-        access_token: magicToken,
-        session_token: null,
+        access_token: accessToken,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       },
     ]);
 
@@ -430,7 +445,7 @@ app.post("/api/verify-and-register", limiterAuth, async (req, res) => {
       if (error.code === "23505") {
         return res.status(409).json({
           success: false,
-          error: "El nombre de este negocio ya existe. Intentá con otro.",
+          error: "Este email o domain ya está registrado.",
         });
       }
       throw error;
@@ -443,15 +458,15 @@ app.post("/api/verify-and-register", limiterAuth, async (req, res) => {
       body: JSON.stringify({
         action: "welcomeEmail",
         email: email.trim().toLowerCase(),
-        usuario: finalName.trim(),
+        usuario: business_name.trim(),
       }),
     }).catch((e) => console.error("Error mail bienvenida:", e.message));
 
-    console.log(`Usuario registrado: ${cleanSlug}`);
+    console.log(`Usuario registrado: ${cleanDomain}`);
     res.status(201).json({
       success: true,
-      slug: cleanSlug,
-      at: magicToken,
+      domain: cleanDomain,
+      access_token: accessToken,
       message: "Cuenta creada con éxito.",
     });
   } catch (e) {
@@ -464,31 +479,28 @@ app.post("/api/verify-and-register", limiterAuth, async (req, res) => {
 });
 
 // POST /login
-// Login con slug + contraseña
 app.post("/login", limiterAuth, async (req, res) => {
   try {
-    const { slug, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!slug || !password) {
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
-        error: "Faltan slug o contraseña.",
+        error: "Faltan email o contraseña.",
       });
     }
 
-    const cleanSlug = getCleanSlug(slug);
-
-    if (!validateSlug(cleanSlug)) {
+    if (!validateEmail(email)) {
       return res.status(400).json({
         success: false,
-        error: "Slug inválido.",
+        error: "Email inválido.",
       });
     }
 
     const { data: user, error } = await supabase
       .from("usuarios")
       .select("*")
-      .eq("slug", cleanSlug)
+      .eq("email", email.trim().toLowerCase())
       .single();
 
     if (error || !user) {
@@ -512,8 +524,8 @@ app.post("/login", limiterAuth, async (req, res) => {
         await supabase
           .from("usuarios")
           .update({ password: newHash })
-          .eq("slug", cleanSlug);
-        console.log(`Contraseña migrada a bcrypt para: ${cleanSlug}`);
+          .eq("email", email.trim().toLowerCase());
+        console.log(`Contraseña migrada a bcrypt para: ${user.domain}`);
       }
     }
 
@@ -524,17 +536,17 @@ app.post("/login", limiterAuth, async (req, res) => {
       });
     }
 
-    // Generar session token
-    const sessionToken = crypto.randomBytes(32).toString("hex");
+    // Generar nuevo access token
+    const newAccessToken = crypto.randomBytes(32).toString("hex");
     await supabase
       .from("usuarios")
-      .update({ session_token: sessionToken })
-      .eq("slug", cleanSlug);
+      .update({ access_token: newAccessToken })
+      .eq("email", email.trim().toLowerCase());
 
     res.json({
       success: true,
-      slug: user.slug,
-      session_token: sessionToken,
+      domain: user.domain,
+      access_token: newAccessToken,
       business_name: user.business_name,
       email: user.email,
     });
@@ -547,58 +559,38 @@ app.post("/login", limiterAuth, async (req, res) => {
   }
 });
 
-// GET /verify-session?u=slug&at=token
-// Valida magic token de un solo uso O session_token persistente
+// GET /verify-session?domain=negosocio.framer.website
 app.get("/verify-session", async (req, res) => {
   try {
-    const slug = getCleanSlug(req.query.u);
-    const magicToken = req.query.at;
+    const domain = getCleanDomain(req.query.domain);
     const authHeader = req.headers["authorization"];
-    const sessionToken = authHeader?.startsWith("Bearer ")
+    const accessToken = authHeader?.startsWith("Bearer ")
       ? authHeader.split(" ")[1]
       : null;
 
-    if (!slug) {
-      return res.json({ active: false, reason: "no_slug" });
+    if (!domain) {
+      return res.json({ active: false, reason: "no_domain" });
     }
 
-    if (!validateSlug(slug)) {
-      return res.json({ active: false, reason: "invalid_slug" });
+    if (!validateDomain(domain)) {
+      return res.json({ active: false, reason: "invalid_domain" });
     }
 
     const { data: user, error } = await supabase
       .from("usuarios")
-      .select("slug, access_token, session_token, business_name, email")
-      .eq("slug", slug)
+      .select("domain, access_token, business_name, email")
+      .eq("domain", domain)
       .single();
 
     if (error || !user) {
       return res.json({ active: false, reason: "user_not_found" });
     }
 
-    // Magic login de un solo uso
-    if (magicToken && user.access_token === magicToken) {
-      const newSessionToken = crypto.randomBytes(32).toString("hex");
-      await supabase
-        .from("usuarios")
-        .update({ access_token: null, session_token: newSessionToken })
-        .eq("slug", slug);
-
+    // Verificación con access token
+    if (accessToken && user.access_token && user.access_token === accessToken) {
       return res.json({
         active: true,
-        slug: user.slug,
-        business_name: user.business_name,
-        email: user.email,
-        session_token: newSessionToken,
-        magicLogin: true,
-      });
-    }
-
-    // Verificación con session token
-    if (sessionToken && user.session_token && user.session_token === sessionToken) {
-      return res.json({
-        active: true,
-        slug: user.slug,
+        domain: user.domain,
         business_name: user.business_name,
         email: user.email,
       });
@@ -637,14 +629,14 @@ app.post("/api/request-password-reset", limiterAuth, async (req, res) => {
       });
     }
 
-    const { data: user, error } = await supabase
+    const { data: user } = await supabase
       .from("usuarios")
-      .select("slug")
+      .select("domain")
       .eq("email", email.trim().toLowerCase())
       .single();
 
-    if (error || !user) {
-      // No revelar si el email existe
+    // No revelar si el email existe
+    if (!user) {
       return res.json({ 
         success: true,
         message: "Si el email existe, recibirás un código de verificación." 
@@ -743,9 +735,9 @@ app.post("/api/verify-and-reset-password", limiterAuth, async (req, res) => {
 // POST /api/create-preference
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   try {
-    const { nombre, telefono, email, fecha, hora, slug, servicio_id } = req.body;
+    const { nombre, telefono, email, fecha, hora, domain, servicio_id } = req.body;
 
-    if (!nombre || !telefono || !fecha || !hora || !slug) {
+    if (!nombre || !telefono || !fecha || !hora || !domain) {
       return res.status(400).json({
         success: false,
         error: "Faltan datos requeridos.",
@@ -766,12 +758,12 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       });
     }
 
-    const cleanSlug = getCleanSlug(slug);
+    const cleanDomain = getCleanDomain(domain);
 
     const { data: user, error: userError } = await supabase
       .from("usuarios")
       .select("*")
-      .eq("slug", cleanSlug)
+      .eq("domain", cleanDomain)
       .single();
 
     if (userError || !user) {
@@ -790,6 +782,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
         .from("servicios")
         .select("*")
         .eq("id", servicio_id)
+        .eq("domain", cleanDomain)
         .single();
 
       if (servicio) {
@@ -836,7 +829,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
             email: email || "",
             fecha,
             hora,
-            slug: cleanSlug,
+            domain: cleanDomain,
             servicio_id: servicio_id || "",
             metodo_pago: metodo,
           },
@@ -876,7 +869,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
               email: email || "",
               fecha,
               hora,
-              slug: cleanSlug,
+              domain: cleanDomain,
               servicio_id: servicio_id || "",
               tipo_pago: metodo,
             },
@@ -914,17 +907,17 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
 // GET /oauth-callback
 app.get("/oauth-callback", async (req, res) => {
-  const { code, state: slug } = req.query;
+  const { code, state: domain } = req.query;
 
-  if (!code || !slug) {
+  if (!code || !domain) {
     return res.status(400).send("Parámetros inválidos.");
   }
 
   try {
-    const cleanSlug = getCleanSlug(slug);
+    const cleanDomain = getCleanDomain(domain);
 
-    if (!validateSlug(cleanSlug)) {
-      return res.status(400).send("Slug inválido.");
+    if (!validateDomain(cleanDomain)) {
+      return res.status(400).send("Domain inválido.");
     }
 
     const response = await fetch("https://api.mercadopago.com/oauth/token", {
@@ -945,22 +938,22 @@ app.get("/oauth-callback", async (req, res) => {
       const { error } = await supabase
         .from("usuarios")
         .update({ mp_access_token: data.access_token })
-        .eq("slug", cleanSlug);
+        .eq("domain", cleanDomain);
 
       if (error) {
         return res.redirect(
-          `https://negosocio.framer.website/dashboard?status=mp_error&u=${cleanSlug}`
+          `https://negosocio.framer.website/dashboard?status=mp_error&domain=${cleanDomain}`
         );
       }
 
-      console.log(`MP vinculado para: ${cleanSlug}`);
+      console.log(`MP vinculado para: ${cleanDomain}`);
       return res.redirect(
-        `https://negosocio.framer.website/dashboard?status=mp_success&u=${cleanSlug}`
+        `https://negosocio.framer.website/dashboard?status=mp_success&domain=${cleanDomain}`
       );
     }
 
     res.redirect(
-      `https://negosocio.framer.website/dashboard?status=mp_error&u=${cleanSlug}`
+      `https://negosocio.framer.website/dashboard?status=mp_error&domain=${cleanDomain}`
     );
   } catch (e) {
     console.error("Error en OAuth MP:", e.message);
@@ -987,13 +980,13 @@ app.post("/webhook", async (req, res) => {
         );
         const paymentData = await paymentResponse.json();
 
-        if (paymentData.status === "approved" && paymentData.metadata?.slug) {
-          const slug = getCleanSlug(paymentData.metadata.slug);
+        if (paymentData.status === "approved" && paymentData.metadata?.domain) {
+          const domain = getCleanDomain(paymentData.metadata.domain);
 
           const { data: userNegocio } = await supabase
             .from("usuarios")
             .select("mp_access_token, email")
-            .eq("slug", slug)
+            .eq("domain", domain)
             .single();
 
           let metadataFinal = paymentData.metadata;
@@ -1029,7 +1022,7 @@ app.post("/webhook", async (req, res) => {
                   telefono?.toString().trim() || "N/A",
                   textoTurno,
                   fechaHoy,
-                  slug,
+                  domain,
                   "PENDIENTE",
                   email?.trim() || "",
                 ],
@@ -1056,8 +1049,8 @@ app.post("/webhook", async (req, res) => {
             }
           }
 
-          delete globalCache[slug];
-          console.log(`Turno agendado vía pago para: ${slug}`);
+          delete globalCache[domain];
+          console.log(`Turno agendado vía pago para: ${domain}`);
         }
       }
     }
@@ -1073,15 +1066,15 @@ app.post("/webhook", async (req, res) => {
 // TURNOS Y DISPONIBILIDAD
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// GET /get-occupied?slug=...
+// GET /get-occupied?domain=...
 app.get("/get-occupied", async (req, res) => {
   try {
-    const slug = getCleanSlug(req.query.slug);
+    const domain = getCleanDomain(req.query.domain);
 
-    if (!validateSlug(slug)) {
+    if (!validateDomain(domain)) {
       return res.status(400).json({
         success: false,
-        error: "Slug inválido.",
+        error: "Domain inválido.",
       });
     }
 
@@ -1093,7 +1086,7 @@ app.get("/get-occupied", async (req, res) => {
 
     const rows = response.data.values || [];
     const ocupados = rows
-      .filter((row) => row[4] === slug)
+      .filter((row) => row[4] === domain)
       .map((row) => row[2]);
 
     res.json({ success: true, ocupados });
@@ -1109,9 +1102,9 @@ app.get("/get-occupied", async (req, res) => {
 // POST /create-booking
 app.post("/create-booking", limiterBooking, async (req, res) => {
   try {
-    const { name, phone, email, fecha, hora, slug: rawSlug } = req.body;
+    const { name, phone, email, fecha, hora, domain } = req.body;
 
-    if (!name || !phone || !fecha || !hora || !rawSlug) {
+    if (!name || !phone || !fecha || !hora || !domain) {
       return res.status(400).json({
         success: false,
         error: "Faltan datos requeridos.",
@@ -1125,19 +1118,19 @@ app.post("/create-booking", limiterBooking, async (req, res) => {
       });
     }
 
-    const slug = getCleanSlug(rawSlug);
+    const cleanDomain = getCleanDomain(domain);
 
-    if (!validateSlug(slug)) {
+    if (!validateDomain(cleanDomain)) {
       return res.status(400).json({
         success: false,
-        error: "Slug inválido.",
+        error: "Domain inválido.",
       });
     }
 
     const { data: user, error: userError } = await supabase
       .from("usuarios")
       .select("*")
-      .eq("slug", slug)
+      .eq("domain", cleanDomain)
       .single();
 
     if (userError || !user) {
@@ -1169,16 +1162,16 @@ app.post("/create-booking", limiterBooking, async (req, res) => {
 
     const yaExiste = existingRows.some((row) => {
       const phoneFila = row[1]?.toString().trim();
-      const slugFila = row[4]?.toString().toLowerCase().trim();
+      const domainFila = row[4]?.toString().toLowerCase().trim();
       const emailFila = row[6]?.toString().toLowerCase().trim();
       const turnoFila = row[2]?.toString().trim();
 
-      const mismoSlug = slugFila === slug;
+      const mismoDomain = domainFila === cleanDomain;
       const mismoTelefono = phoneFila === phone.toString().trim();
       const mismoEmail =
         email && emailFila && emailFila === email.trim().toLowerCase();
 
-      if (!mismoSlug || (!mismoTelefono && !mismoEmail)) return false;
+      if (!mismoDomain || (!mismoTelefono && !mismoEmail)) return false;
       if (!turnoFila || !turnoFila.includes("/")) return false;
 
       const partes = turnoFila.split(" - ");
@@ -1222,7 +1215,7 @@ app.post("/create-booking", limiterBooking, async (req, res) => {
             phone.toString().trim(),
             textoTurno,
             fechaHoy,
-            slug,
+            cleanDomain,
             "PENDIENTE",
             email?.trim() || "",
           ],
@@ -1247,7 +1240,7 @@ app.post("/create-booking", limiterBooking, async (req, res) => {
       console.error("Error notificando mail:", mailErr.message);
     }
 
-    delete globalCache[slug];
+    delete globalCache[cleanDomain];
     res.json({ success: true, message: "Turno creado con éxito" });
   } catch (e) {
     console.error("Error en /create-booking:", e.message);
@@ -1258,23 +1251,23 @@ app.post("/create-booking", limiterBooking, async (req, res) => {
   }
 });
 
-// GET /slots-disponibles/:slug?fecha=YYYY-MM-DD&servicio_id=...
-app.get("/slots-disponibles/:slug", async (req, res) => {
+// GET /slots-disponibles/:domain?fecha=YYYY-MM-DD&servicio_id=...
+app.get("/slots-disponibles/:domain", async (req, res) => {
   try {
-    const slug = getCleanSlug(req.params.slug);
+    const domain = getCleanDomain(req.params.domain);
     const { fecha, servicio_id } = req.query;
 
-    if (!validateSlug(slug)) {
+    if (!validateDomain(domain)) {
       return res.status(400).json({
         success: false,
-        error: "Slug inválido.",
+        error: "Domain inválido.",
       });
     }
 
     const { data: user, error: userError } = await supabase
       .from("usuarios")
       .select("horarios, duracion_turno, capacidad_por_turno, excepciones")
-      .eq("slug", slug)
+      .eq("domain", domain)
       .single();
 
     if (userError || !user) {
@@ -1292,6 +1285,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
         .from("servicios")
         .select("duracion, capacidad")
         .eq("id", servicio_id)
+        .eq("domain", domain)
         .single();
 
       if (servicio) {
@@ -1363,9 +1357,9 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     allRows.forEach((row, i) => {
       if (i === 0) return;
       const turnoFila = row[2]?.toString().trim();
-      const slugFila = row[4]?.toString().toLowerCase().trim();
+      const domainFila = row[4]?.toString().toLowerCase().trim();
 
-      if (slugFila !== slug || !turnoFila) return;
+      if (domainFila !== domain || !turnoFila) return;
 
       const partes = turnoFila.split(" - ");
       if (partes.length < 2) return;
@@ -1401,36 +1395,36 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
 // SERVICIOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// GET /servicios/admin/:slug — todos los servicios (protegido)
-app.get("/servicios/admin/:slug", async (req, res) => {
+// GET /servicios/admin/:domain — todos los servicios (protegido)
+app.get("/servicios/admin/:domain", async (req, res) => {
   try {
     const authHeader = req.headers["authorization"];
     const token = authHeader?.startsWith("Bearer ")
       ? authHeader.split(" ")[1]
       : null;
-    const slug = getCleanSlug(req.params.slug);
+    const domain = getCleanDomain(req.params.domain);
 
-    if (!token || !slug) {
+    if (!token || !domain) {
       return res.status(401).json({ 
         success: false,
         error: "No autorizado." 
       });
     }
 
-    if (!validateSlug(slug)) {
+    if (!validateDomain(domain)) {
       return res.status(400).json({
         success: false,
-        error: "Slug inválido.",
+        error: "Domain inválido.",
       });
     }
 
     const { data: user, error: userError } = await supabase
       .from("usuarios")
-      .select("slug, session_token")
-      .eq("slug", slug)
+      .select("domain, access_token")
+      .eq("domain", domain)
       .single();
 
-    if (userError || !user || user.session_token !== token) {
+    if (userError || !user || user.access_token !== token) {
       return res.status(401).json({ 
         success: false,
         error: "No autorizado." 
@@ -1440,7 +1434,7 @@ app.get("/servicios/admin/:slug", async (req, res) => {
     const { data, error } = await supabase
       .from("servicios")
       .select("*")
-      .eq("slug", slug)
+      .eq("domain", domain)
       .order("created_at", { ascending: true });
 
     if (error) throw error;
@@ -1455,22 +1449,22 @@ app.get("/servicios/admin/:slug", async (req, res) => {
   }
 });
 
-// GET /servicios/:slug — servicios públicos activos
-app.get("/servicios/:slug", async (req, res) => {
+// GET /servicios/:domain — servicios públicos activos
+app.get("/servicios/:domain", async (req, res) => {
   try {
-    const slug = getCleanSlug(req.params.slug);
+    const domain = getCleanDomain(req.params.domain);
 
-    if (!validateSlug(slug)) {
+    if (!validateDomain(domain)) {
       return res.status(400).json({
         success: false,
-        error: "Slug inválido.",
+        error: "Domain inválido.",
       });
     }
 
     const { data, error } = await supabase
       .from("servicios")
       .select("id, nombre, descripcion, duracion, precio, capacidad")
-      .eq("slug", slug)
+      .eq("domain", domain)
       .eq("activo", true)
       .order("created_at", { ascending: true });
 
@@ -1489,13 +1483,13 @@ app.get("/servicios/:slug", async (req, res) => {
 // POST /servicios/crear (protegido)
 app.post("/servicios/crear", requireAuth, async (req, res) => {
   try {
-    const { slug, nombre, descripcion, duracion, precio, capacidad } = req.body;
-    const cleanSlug = getCleanSlug(slug);
+    const { domain, nombre, descripcion, duracion, precio, capacidad } = req.body;
+    const cleanDomain = getCleanDomain(domain);
 
-    if (!cleanSlug || !nombre || !duracion || precio === undefined) {
+    if (!cleanDomain || !nombre || !duracion || precio === undefined) {
       return res.status(400).json({
         success: false,
-        error: "Faltan campos: slug, nombre, duracion, precio.",
+        error: "Faltan campos: domain, nombre, duracion, precio.",
       });
     }
 
@@ -1510,7 +1504,7 @@ app.post("/servicios/crear", requireAuth, async (req, res) => {
       .from("servicios")
       .insert([
         {
-          slug: cleanSlug,
+          domain: cleanDomain,
           nombre: nombre.trim(),
           descripcion: descripcion?.trim() || "",
           duracion: parseInt(duracion),
@@ -1525,7 +1519,7 @@ app.post("/servicios/crear", requireAuth, async (req, res) => {
 
     if (error) throw error;
 
-    delete globalCache[cleanSlug];
+    delete globalCache[cleanDomain];
     res.status(201).json({ success: true, servicio: data });
   } catch (e) {
     console.error("Error en /servicios/crear:", e.message);
@@ -1541,7 +1535,7 @@ app.post("/servicios/editar", requireAuth, async (req, res) => {
   try {
     const {
       id,
-      slug,
+      domain,
       nombre,
       descripcion,
       duracion,
@@ -1549,7 +1543,7 @@ app.post("/servicios/editar", requireAuth, async (req, res) => {
       capacidad,
       activo,
     } = req.body;
-    const cleanSlug = getCleanSlug(slug);
+    const cleanDomain = getCleanDomain(domain);
 
     if (!id) {
       return res.status(400).json({ 
@@ -1582,13 +1576,13 @@ app.post("/servicios/editar", requireAuth, async (req, res) => {
       .from("servicios")
       .update(updateData)
       .eq("id", id)
-      .eq("slug", cleanSlug)
+      .eq("domain", cleanDomain)
       .select()
       .single();
 
     if (error) throw error;
 
-    delete globalCache[cleanSlug];
+    delete globalCache[cleanDomain];
     res.json({ success: true, servicio: data });
   } catch (e) {
     console.error("Error en /servicios/editar:", e.message);
@@ -1602,8 +1596,8 @@ app.post("/servicios/editar", requireAuth, async (req, res) => {
 // POST /servicios/eliminar (protegido)
 app.post("/servicios/eliminar", requireAuth, async (req, res) => {
   try {
-    const { id, slug } = req.body;
-    const cleanSlug = getCleanSlug(slug);
+    const { id, domain } = req.body;
+    const cleanDomain = getCleanDomain(domain);
 
     if (!id) {
       return res.status(400).json({ 
@@ -1616,11 +1610,11 @@ app.post("/servicios/eliminar", requireAuth, async (req, res) => {
       .from("servicios")
       .delete()
       .eq("id", id)
-      .eq("slug", cleanSlug);
+      .eq("domain", cleanDomain);
 
     if (error) throw error;
 
-    delete globalCache[cleanSlug];
+    delete globalCache[cleanDomain];
     res.json({ success: true, message: "Servicio eliminado" });
   } catch (e) {
     console.error("Error en /servicios/eliminar:", e.message);
@@ -1635,35 +1629,35 @@ app.post("/servicios/eliminar", requireAuth, async (req, res) => {
 // ADMIN Y CONFIG
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// GET /admin-stats/:slug (protegido)
-app.get("/admin-stats/:slug", async (req, res) => {
+// GET /admin-stats/:domain (protegido)
+app.get("/admin-stats/:domain", async (req, res) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.split(" ")[1]
     : null;
-  const slug = getCleanSlug(req.params.slug);
+  const domain = getCleanDomain(req.params.domain);
 
-  if (!token || !slug) {
+  if (!token || !domain) {
     return res.status(401).json({ 
       success: false,
       error: "No autorizado." 
     });
   }
 
-  if (!validateSlug(slug)) {
+  if (!validateDomain(domain)) {
     return res.status(400).json({
       success: false,
-      error: "Slug inválido.",
+      error: "Domain inválido.",
     });
   }
 
   const { data: authUser, error: authError } = await supabase
     .from("usuarios")
-    .select("slug, session_token")
-    .eq("slug", slug)
+    .select("domain, access_token")
+    .eq("domain", domain)
     .single();
 
-  if (authError || !authUser || authUser.session_token !== token) {
+  if (authError || !authUser || authUser.access_token !== token) {
     return res.status(401).json({ 
       success: false,
       error: "No autorizado." 
@@ -1671,15 +1665,15 @@ app.get("/admin-stats/:slug", async (req, res) => {
   }
 
   const now = Date.now();
-  if (globalCache[slug] && now - globalCache[slug].timestamp < CACHE_DURATION) {
-    return res.json(globalCache[slug].data);
+  if (globalCache[domain] && now - globalCache[domain].timestamp < CACHE_DURATION) {
+    return res.json(globalCache[domain].data);
   }
 
   try {
     const { data: user, error: userError } = await supabase
       .from("usuarios")
       .select("*")
-      .eq("slug", slug)
+      .eq("domain", domain)
       .single();
 
     if (userError || !user) {
@@ -1697,7 +1691,7 @@ app.get("/admin-stats/:slug", async (req, res) => {
 
     const allRows = response.data.values || [];
     const rows = allRows.filter(
-      (r, i) => i === 0 || (r[4] && getCleanSlug(r[4]) === slug)
+      (r, i) => i === 0 || (r[4] && getCleanDomain(r[4]) === domain)
     );
 
     const ahoraArg = new Date(
@@ -1776,7 +1770,7 @@ app.get("/admin-stats/:slug", async (req, res) => {
       },
     };
 
-    globalCache[slug] = { timestamp: now, data: finalData };
+    globalCache[domain] = { timestamp: now, data: finalData };
     res.json(finalData);
   } catch (e) {
     console.error("Error en /admin-stats:", e.message);
@@ -1791,7 +1785,7 @@ app.get("/admin-stats/:slug", async (req, res) => {
 app.post("/update-settings", requireAuth, async (req, res) => {
   try {
     const {
-      slug,
+      domain,
       precio,
       horarios,
       duracion_turno,
@@ -1800,7 +1794,7 @@ app.post("/update-settings", requireAuth, async (req, res) => {
       metodo_pago,
     } = req.body;
 
-    const cleanSlug = getCleanSlug(slug);
+    const cleanDomain = getCleanDomain(domain);
 
     const numPrecio = parseInt(precio) || 0;
     const numSena = parseInt(monto_sena) || 0;
@@ -1826,11 +1820,11 @@ app.post("/update-settings", requireAuth, async (req, res) => {
     const { error } = await supabase
       .from("usuarios")
       .update(updateData)
-      .eq("slug", cleanSlug);
+      .eq("domain", cleanDomain);
 
     if (error) throw error;
 
-    delete globalCache[cleanSlug];
+    delete globalCache[cleanDomain];
     res.json({ success: true, message: "Configuración actualizada" });
   } catch (e) {
     console.error("Error en /update-settings:", e.message);
@@ -1844,8 +1838,8 @@ app.post("/update-settings", requireAuth, async (req, res) => {
 // POST /cancel-appointment (protegido)
 app.post("/cancel-appointment", requireAuth, async (req, res) => {
   try {
-    const { slug, rawTurno } = req.body;
-    const cleanSlug = getCleanSlug(slug);
+    const { domain, rawTurno } = req.body;
+    const cleanDomain = getCleanDomain(domain);
 
     if (!rawTurno) {
       return res.status(400).json({
@@ -1862,7 +1856,7 @@ app.post("/cancel-appointment", requireAuth, async (req, res) => {
 
     const rows = response.data.values || [];
     const rowIndex = rows.findIndex(
-      (r) => r[2] === rawTurno && r[4] === cleanSlug
+      (r) => r[2] === rawTurno && r[4] === cleanDomain
     );
 
     if (rowIndex === -1) {
@@ -1896,7 +1890,7 @@ app.post("/cancel-appointment", requireAuth, async (req, res) => {
       },
     });
 
-    delete globalCache[cleanSlug];
+    delete globalCache[cleanDomain];
     res.json({ success: true, message: "Turno cancelado" });
   } catch (e) {
     console.error("Error en /cancel-appointment:", e.message);
@@ -1909,7 +1903,7 @@ app.post("/cancel-appointment", requireAuth, async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HEALTH CHECK
-// ══════���════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -1939,6 +1933,7 @@ app.listen(PORT, () => {
   ╔════════════════════════════════════════════╗
   ║   NegoSocio API v2.0 - Online             ║
   ║   Port: ${PORT}                             ║
+  ║   Model: Domain-based SaaS                ║
   ║   Environment: ${process.env.NODE_ENV || "development"}             ║
   ╚════════════════════════════════════════════╝
   `);
