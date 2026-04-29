@@ -1015,21 +1015,22 @@ app.post("/servicios/eliminar", requireAuth, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// ADMIN STATS (panel del profesional) — VERSIÓN PÚBLICA
+// ADMIN STATS (panel del profesional) — CON SOPORTE MODO PÚBLICO
 // ═══════════════════════════════════════════════════════════════════
 
-// GET /admin-stats/:slug?public=true — Lectura PÚBLICA para obtener config e info básica
-// Uso: Framer component puede consultar la config sin necesidad de token
+// GET /admin-stats/:slug?public=true
+// Modo público: SIN necesidad de token para leer config básica
+// Modo privado: Requiere Bearer token para ver panel completo
 app.get("/admin-stats/:slug", async (req, res) => {
   try {
-    const slug    = getCleanSlug(req.params.slug);
+    const slug     = getCleanSlug(req.params.slug);
     const isPublic = req.query.public === "true";
-    const token   = req.headers["authorization"]?.split(" ")[1];
+    const token    = req.headers["authorization"]?.split(" ")[1];
 
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
-    // ── MODO PÚBLICO (Framer) ──
-    // Solo retorna config básica para mostrar precio y metodo de pago
+    // ── MODO PÚBLICO (Framer Component) ──
+    // Solo retorna config mínima sin necesidad de autenticación
     if (isPublic) {
       const { data: user, error } = await supabase
         .from("usuarios")
@@ -1044,7 +1045,7 @@ app.get("/admin-stats/:slug", async (req, res) => {
       return res.json({
         stats: {
           config: {
-            precio:        user.precio,
+            precio:        user.precio || 0,
             monto_sena:    user.monto_sena || 0,
             metodo_pago:   user.metodo_pago || "none",
             mp_status:     user.mp_access_token ? "Conectado" : "Desconectado",
@@ -1054,7 +1055,8 @@ app.get("/admin-stats/:slug", async (req, res) => {
       });
     }
 
-    // ── MODO PRIVADO (Panel con token) ──
+    // ── MODO PRIVADO (Panel Dashboard) ──
+    // Requiere Bearer token válido
     if (!token) {
       return res.status(401).json({ success: false, error: "No autorizado." });
     }
