@@ -18,7 +18,7 @@ const CACHE_DURATION   = 20000;   // ms
 const PLATAFORMA_FEE   = 0.025;   // 2.5% sobre precio total del servicio
 const API_URL          = "https://negosocio.onrender.com";
 
-// ─── VALIDADORES ─────────────────────────────────────────────────────────────
+// ─── VALIDADORES ─────────────────────────────────────────────────────────[...]
 const getCleanSlug = (raw) => {
   if (!raw) return "";
   return raw.toLowerCase().trim()
@@ -33,17 +33,17 @@ const validatePhone    = (p) => /^[0-9\-\s\+]{5,20}$/.test(p);
 // ─── CACHÉ (keyed por slug) ───────────────────────────────────────────────────
 const globalCache = {};
 
-// ─── RATE LIMITING ───────────────────────────────────────────────────────────
+// ─── RATE LIMITING ────────────────────────────────────────────────────────[...]
 const limiterAuth    = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: "Demasiados intentos.", standardHeaders: true, legacyHeaders: false });
 const limiterBooking = rateLimit({ windowMs: 60 * 1000, max: 20, message: "Demasiadas reservas." });
 const limiterAPI     = rateLimit({ windowMs: 60 * 1000, max: 200 });
 
-// ─── CORS ────────────────────────────────────────────────────────────────────
+// ─── CORS ───────────────────────────────────────────────────────────[...]
 app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization", "x-api-key"] }));
 app.use(express.json({ limit: "10mb" }));
 app.use(limiterAPI);
 
-// ─── SUPABASE ────────────────────────────────────────────────────────────────
+// ─── SUPABASE ──────────────────────────────────────────────────────────[...]
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 // ─── MIDDLEWARE: BEARER TOKEN (por slug) ─────────────────────────────────────
@@ -154,16 +154,16 @@ function agruparVentas(ventas, hoyISO) {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // RUTAS BASE
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 app.get("/", (req, res) => res.json({ status: "online", message: "NegoSocio API v4.0 — slug-based", timestamp: new Date().toISOString() }));
 app.get("/health", (req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ADMIN: CREAR CLIENTE
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 // POST /admin/crear-cliente
 // Headers: { "x-api-key": ADMIN_SECRET }
@@ -208,9 +208,9 @@ app.post("/admin/crear-cliente", requireAdminKey, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // AUTH
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 // POST /login — Body: { slug, password }
 app.post("/login", limiterAuth, async (req, res) => {
@@ -318,9 +318,9 @@ app.post("/api/verify-and-reset-password", limiterAuth, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // PAGOS — Mercado Pago + Mobbex
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 // POST /api/create-preference
 // Body: { nombre, telefono, email, fecha, hora, slug, servicio_id? }
@@ -516,9 +516,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // OAUTH — Mercado Pago
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 // GET /oauth-callback?code=...&state=slug
 app.get("/oauth-callback", async (req, res) => {
@@ -552,9 +552,9 @@ app.get("/oauth-callback", async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // WEBHOOKS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 // ── Helper compartido: guardar turno + venta en Supabase ──
 async function procesarPagoConfirmado({ slug, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, service_fee, metodo_pago, payment_id, estado }) {
@@ -710,9 +710,9 @@ app.post("/webhook/mobbex", async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // TURNOS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 // GET /get-occupied?slug=...&fecha=YYYY-MM-DD
 app.get("/get-occupied", async (req, res) => {
@@ -842,9 +842,9 @@ app.post("/cancel-appointment", requireAuth, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // SLOTS DISPONIBLES
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 // GET /slots-disponibles/:slug?fecha=YYYY-MM-DD&servicio_id=...
 app.get("/slots-disponibles/:slug", async (req, res) => {
@@ -910,9 +910,9 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // SERVICIOS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 // GET /servicios/:slug — activos (web pública)
 app.get("/servicios/:slug", async (req, res) => {
@@ -1014,32 +1014,63 @@ app.post("/servicios/eliminar", requireAuth, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ADMIN STATS (panel del profesional)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// ADMIN STATS (panel del profesional) — VERSIÓN PÚBLICA
+// ═══════════════════════════════════════════════════════════════════
 
-// GET /admin-stats/:slug
-// Headers: { Authorization: "Bearer <token>" }  ← token completo (panel)
-//          O read_token en query string          ← token de solo lectura (Framer canvas)
+// GET /admin-stats/:slug?public=true — Lectura PÚBLICA para obtener config e info básica
+// Uso: Framer component puede consultar la config sin necesidad de token
 app.get("/admin-stats/:slug", async (req, res) => {
-  const slug  = getCleanSlug(req.params.slug);
-  const token = req.headers["authorization"]?.split(" ")[1] || req.query.read_token;
-
-  if (!token || !slug) return res.status(401).json({ success: false, error: "No autorizado." });
-
-  // Aceptar tanto access_token como read_token
-  const { data: authUser } = await supabase
-    .from("usuarios").select("access_token, read_token").eq("slug", slug).single();
-
-  const tokenValido = authUser && (authUser.access_token === token || authUser.read_token === token);
-  if (!tokenValido) return res.status(401).json({ success: false, error: "No autorizado." });
-
-  const now = Date.now();
-  if (globalCache[slug] && now - globalCache[slug].timestamp < CACHE_DURATION) {
-    return res.json(globalCache[slug].data);
-  }
-
   try {
+    const slug    = getCleanSlug(req.params.slug);
+    const isPublic = req.query.public === "true";
+    const token   = req.headers["authorization"]?.split(" ")[1];
+
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+
+    // ── MODO PÚBLICO (Framer) ──
+    // Solo retorna config básica para mostrar precio y metodo de pago
+    if (isPublic) {
+      const { data: user, error } = await supabase
+        .from("usuarios")
+        .select("slug, precio, monto_sena, metodo_pago, mp_access_token, mobbex_api_key")
+        .eq("slug", slug)
+        .single();
+
+      if (error || !user) {
+        return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+      }
+
+      return res.json({
+        stats: {
+          config: {
+            precio:        user.precio,
+            monto_sena:    user.monto_sena || 0,
+            metodo_pago:   user.metodo_pago || "none",
+            mp_status:     user.mp_access_token ? "Conectado" : "Desconectado",
+            mobbex_status: user.mobbex_api_key ? "Conectado" : "Desconectado",
+          },
+        },
+      });
+    }
+
+    // ── MODO PRIVADO (Panel con token) ──
+    if (!token) {
+      return res.status(401).json({ success: false, error: "No autorizado." });
+    }
+
+    const { data: authUser } = await supabase
+      .from("usuarios").select("access_token").eq("slug", slug).single();
+
+    if (!authUser || authUser.access_token !== token) {
+      return res.status(401).json({ success: false, error: "No autorizado." });
+    }
+
+    const now = Date.now();
+    if (globalCache[slug] && now - globalCache[slug].timestamp < CACHE_DURATION) {
+      return res.json(globalCache[slug].data);
+    }
+
     const { data: user, error: userError } = await supabase.from("usuarios").select("*").eq("slug", slug).single();
     if (userError || !user) return res.status(404).json({ success: false, error: "Usuario no encontrado." });
 
@@ -1130,7 +1161,7 @@ app.get("/admin-stats/:slug", async (req, res) => {
           cantidadHoy:    ventasHoy.cantidad,
           cantidadMes:    ventasMes.cantidad || 0,
           clientesNuevos: metricas.clientesNuevos,
-          feeTotal,       // ← cuánto generó la plataforma en el período
+          feeTotal,
           estados: {
             aprobado:  metricas.porEstado.aprobado  || 0,
             pendiente: metricas.porEstado.pendiente || 0,
@@ -1164,9 +1195,9 @@ app.get("/admin-stats/:slug", async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // SETTINGS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 
 // POST /update-settings (protegido)
 // Body: { slug, precio?, horarios?, duracion_turno?, ocupados?, monto_sena?, metodo_pago? }
@@ -1198,9 +1229,9 @@ app.post("/update-settings", requireAuth, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // 404 Y ERROR HANDLER
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 
 app.use("*", (req, res) => {
   res.status(404).json({ success: false, error: "Ruta no encontrada.", path: req.originalUrl });
@@ -1211,9 +1242,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error: "Error interno del servidor." });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // ARRANQUE
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
