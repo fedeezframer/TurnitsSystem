@@ -1023,9 +1023,11 @@ app.get("/admin-stats/:slug", async (req, res) => {
     if (!token) return res.status(401).json({ success: false, error: "No autorizado." });
 
     const { data: authUser } = await supabase
-      .from("usuarios").select("access_token").eq("slug", slug).single();
+      .from("usuarios").select("access_token, read_token").eq("slug", slug).single();
 
-    if (!authUser || authUser.access_token !== token) {
+    // Acepta access_token (sesión activa) O read_token (solo lectura, para canvas de Framer)
+    const tokenValido = authUser && (authUser.access_token === token || authUser.read_token === token);
+    if (!tokenValido) {
       return res.status(401).json({ success: false, error: "No autorizado." });
     }
 
