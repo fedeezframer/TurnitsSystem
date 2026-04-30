@@ -84,7 +84,7 @@ const requireAdminKey = (req, res, next) => {
   next();
 };
 
-// ─── HELPER: COMISIÓN ────────────────────────────────────────────��──────────[...]
+// ─── HELPER: COMISIÓN ────────────────────────────────────────────────────────[...]
 // SIEMPRE sobre el precio total del servicio, nunca sobre la seña
 function calcularServiceFee(precioTotalServicio) {
   return Math.round(Number(precioTotalServicio) * PLATAFORMA_FEE);
@@ -766,11 +766,10 @@ app.post("/cancel-appointment", requireAuth, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════[...]
-// SLOTS DISPONIBLES
+// SLOTS DISPONIBLES — ✅ FIXED: Lee turnos activos de la BD
 // ════════════════════════════════════════════════════════════════[...]
 
 // GET /slots-disponibles/:slug?fecha=YYYY-MM-DD&servicio_id=...
-// ✅ FIXED: Ahora verifica correctamente los turnos existentes en la BD
 app.get("/slots-disponibles/:slug", async (req, res) => {
   try {
     const slug              = getCleanSlug(req.params.slug);
@@ -811,13 +810,13 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       cursor += duracion;
     }
 
-    // ✅ FIX: Consulta correcta — filtra por slug, fecha Y estado activo
+    // ✅ FIXED: Consulta correcta a la BD
     const { data: turnosDia } = await supabase
       .from("turnos")
       .select("hora, estado")
       .eq("slug", slug)
       .eq("fecha", fecha)
-      .in("estado", ["confirmado", "pendiente"]); // ✅ Solo cuenta turnos activos
+      .in("estado", ["confirmado", "pendiente"]); // Solo turnos activos
 
     const reservasPorSlot = {};
     (turnosDia || []).forEach((t) => {
@@ -842,10 +841,9 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
 // ════════════════════════════════════════════════════════════════[...]
 // SERVICIOS
 // IMPORTANTE: /servicios/admin/:slug va ANTES de /servicios/:slug
-// para que Express no interprete "admin" como un slug.
 // ════════════════════════════════════════════════════════════════[...]
 
-// GET /servicios/admin/:slug — todos los servicios (panel, protegido)
+// GET /servicios/admin/:slug — todos (panel, protegido)
 app.get("/servicios/admin/:slug", async (req, res) => {
   try {
     const token = req.headers["authorization"]?.split(" ")[1];
@@ -863,7 +861,7 @@ app.get("/servicios/admin/:slug", async (req, res) => {
   }
 });
 
-// GET /servicios/:slug — servicios activos (web pública)
+// GET /servicios/:slug — activos (público)
 app.get("/servicios/:slug", async (req, res) => {
   try {
     const slug = getCleanSlug(req.params.slug);
@@ -881,7 +879,6 @@ app.get("/servicios/:slug", async (req, res) => {
 });
 
 // POST /servicios/crear (protegido)
-// Body: { slug, nombre, descripcion?, duracion, precio, capacidad? }
 app.post("/servicios/crear", requireAuth, async (req, res) => {
   try {
     const { slug, nombre, descripcion, duracion, precio, capacidad } = req.body;
@@ -890,13 +887,8 @@ app.post("/servicios/crear", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Faltan campos." });
     }
     const { data, error } = await supabase.from("servicios").insert([{
-      slug:        cleanSlug,
-      nombre:      nombre.trim(),
-      descripcion: descripcion?.trim() || "",
-      duracion:    parseInt(duracion),
-      precio:      Number(precio),
-      capacidad:   parseInt(capacidad) || 1,
-      activo:      true,
+      slug: cleanSlug, nombre: nombre.trim(), descripcion: descripcion?.trim() || "",
+      duracion: parseInt(duracion), precio: Number(precio), capacidad: parseInt(capacidad) || 1, activo: true,
     }]).select().single();
     if (error) throw error;
     delete globalCache[cleanSlug];
@@ -907,7 +899,6 @@ app.post("/servicios/crear", requireAuth, async (req, res) => {
 });
 
 // POST /servicios/editar (protegido)
-// Body: { slug, id, nombre?, descripcion?, duracion?, precio?, capacidad?, activo? }
 app.post("/servicios/editar", requireAuth, async (req, res) => {
   try {
     const { id, slug, nombre, descripcion, duracion, precio, capacidad, activo } = req.body;
@@ -931,11 +922,11 @@ app.post("/servicios/editar", requireAuth, async (req, res) => {
   }
 });
 
-// POST /servicios/eliminar (protegido) — Body: { slug, id }
+// POST /servicios/eliminar (protegido)
 app.post("/servicios/eliminar", requireAuth, async (req, res) => {
   try {
     const { id, slug } = req.body;
-    const cleanSlug    = getCleanSlug(slug);
+    const cleanSlug = getCleanSlug(slug);
     if (!id) return res.status(400).json({ success: false, error: "Falta el id." });
 
     const { error } = await supabase.from("servicios").delete().eq("id", id).eq("slug", cleanSlug);
@@ -949,13 +940,11 @@ app.post("/servicios/eliminar", requireAuth, async (req, res) => {
 
 // ════════════════════════════════════════════════════════════════[...]
 // ADMIN STATS — Panel del profesional
-// GET /admin-stats/:slug
-// Modo privado (Bearer token): panel completo con turnos y métricas
 // ════════════════════════════════════════════════════════════════[...]
 app.get("/admin-stats/:slug", async (req, res) => {
   try {
-    const slug     = getCleanSlug(req.params.slug);
-    const token    = req.headers["authorization"]?.split(" ")[1];
+    const slug  = getCleanSlug(req.params.slug);
+    const token = req.headers["authorization"]?.split(" ")[1];
 
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
     if (!token) return res.status(401).json({ success: false, error: "No autorizado." });
@@ -963,11 +952,9 @@ app.get("/admin-stats/:slug", async (req, res) => {
     const { data: authUser } = await supabase
       .from("usuarios").select("access_token, read_token").eq("slug", slug).single();
 
-    // Acepta access_token (sesión activa) O read_token (solo lectura)
+    // Acepta access_token (sesión) o read_token (solo lectura)
     const tokenValido = authUser && (authUser.access_token === token || authUser.read_token === token);
-    if (!tokenValido) {
-      return res.status(401).json({ success: false, error: "No autorizado." });
-    }
+    if (!tokenValido) return res.status(401).json({ success: false, error: "No autorizado." });
 
     const now = Date.now();
     if (globalCache[slug] && now - globalCache[slug].timestamp < CACHE_DURATION) {
@@ -1006,19 +993,12 @@ app.get("/admin-stats/:slug", async (req, res) => {
     });
 
     const turnosLista = turnosData.map((t) => ({
-      id:       t.id,
-      nombre:   t.nombre,
-      telefono: t.telefono,
-      email:    t.email,
-      fecha:    t.fecha,
-      hora:     t.hora.slice(0, 5),
-      servicio: t.servicio_nombre,
-      estado:   t.estado,
-      duracion: user.duracion_turno || 60,
+      id: t.id, nombre: t.nombre, telefono: t.telefono, email: t.email,
+      fecha: t.fecha, hora: t.hora.slice(0, 5), servicio: t.servicio_nombre, estado: t.estado, duracion: user.duracion_turno || 60,
     })).reverse();
 
-    const desde90    = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
-    const hasta7     = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
+    const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
+    const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
     const desde90ISO = desde90.toISOString().split("T")[0];
     const hasta7ISO  = hasta7.toISOString().split("T")[0];
 
@@ -1029,10 +1009,10 @@ app.get("/admin-stats/:slug", async (req, res) => {
       .lte("fecha_turno", hasta7ISO)
       .order("fecha_pago", { ascending: true });
 
-    const metricas     = agruparVentas(ventas || [], hoyISO);
-    const mesKey       = `${anioActual}-${String(mesActual).padStart(2, "0")}`;
-    const ventasHoy    = metricas.porDia[hoyISO] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
-    const ventasMes    = metricas.porMes.find((m) => m.label === mesKey) || { volumen: 0, cantidad: 0 };
+    const metricas = agruparVentas(ventas || [], hoyISO);
+    const mesKey = `${anioActual}-${String(mesActual).padStart(2, "0")}`;
+    const ventasHoy = metricas.porDia[hoyISO] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
+    const ventasMes = metricas.porMes.find((m) => m.label === mesKey) || { volumen: 0, cantidad: 0 };
     const proximosDias = generarRangoDias(hoyISO, 7).map((fecha) => ({
       fecha,
       ...(metricas.porDia[fecha] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 }),
@@ -1048,43 +1028,35 @@ app.get("/admin-stats/:slug", async (req, res) => {
         businessName:   user.business_name,
         slug:           user.slug,
         agenda_url:     `${API_URL}/agenda?u=${user.slug}`,
-
         turnosHoy,
-        turnosMes:   turnosMesTotal,
-        chartData:   Object.keys(semanas).map((k) => ({ label: k, turnos: semanas[k] })),
+        turnosMes: turnosMesTotal,
+        chartData: Object.keys(semanas).map((k) => ({ label: k, turnos: semanas[k] })),
         turnosLista,
-
         ventas: {
-          volumenTotal:   metricas.volumenTotal,
-          volumenHoy:     ventasHoy.volumen,
-          volumenMes:     ventasMes.volumen || 0,
+          volumenTotal: metricas.volumenTotal,
+          volumenHoy: ventasHoy.volumen,
+          volumenMes: ventasMes.volumen || 0,
           ticketPromedio: metricas.ticketPromedio,
-          cantidadTotal:  metricas.cantidadTotal,
-          cantidadHoy:    ventasHoy.cantidad,
-          cantidadMes:    ventasMes.cantidad || 0,
+          cantidadTotal: metricas.cantidadTotal,
+          cantidadHoy: ventasHoy.cantidad,
+          cantidadMes: ventasMes.cantidad || 0,
           clientesNuevos: metricas.clientesNuevos,
           feeTotal,
-          estados: {
-            aprobado:  metricas.porEstado.aprobado  || 0,
-            pendiente: metricas.porEstado.pendiente || 0,
-            rechazado: metricas.porEstado.rechazado || 0,
-          },
+          estados: { aprobado: metricas.porEstado.aprobado || 0, pendiente: metricas.porEstado.pendiente || 0, rechazado: metricas.porEstado.rechazado || 0 },
         },
-
         ventasPorDia: metricas.porDia,
         ventasPorSem: metricas.porSemana,
         ventasPorMes: metricas.porMes,
         proximosDias,
-
         horarios: user.horarios,
         config: {
-          duracion:      user.duracion_turno,
-          precio:        user.precio,
-          monto_sena:    user.monto_sena  || 0,
-          metodo_pago:   user.metodo_pago || "none",
-          mp_status:     user.mp_access_token ? "Conectado" : "Desconectado",
-          mobbex_status: user.mobbex_api_key  ? "Conectado" : "Desconectado",
-          excepciones:   user.excepciones || [],
+          duracion: user.duracion_turno,
+          precio: user.precio,
+          monto_sena: user.monto_sena || 0,
+          metodo_pago: user.metodo_pago || "none",
+          mp_status: user.mp_access_token ? "Conectado" : "Desconectado",
+          mobbex_status: user.mobbex_api_key ? "Conectado" : "Desconectado",
+          excepciones: user.excepciones || [],
         },
       },
     };
@@ -1102,7 +1074,6 @@ app.get("/admin-stats/:slug", async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 
 // POST /update-settings (protegido)
-// Body: { slug, precio?, horarios?, duracion_turno?, ocupados?, monto_sena?, metodo_pago? }
 app.post("/update-settings", requireAuth, async (req, res) => {
   try {
     const { slug, precio, horarios, duracion_turno, ocupados, monto_sena, metodo_pago } = req.body;
@@ -1113,12 +1084,12 @@ app.post("/update-settings", requireAuth, async (req, res) => {
     if (numPrecio < 0) return res.status(400).json({ success: false, error: "El precio no puede ser negativo." });
 
     const u = {
-      precio:         numPrecio,
-      monto_sena:     numSena,
-      metodo_pago:    metodo_pago || "none",
+      precio: numPrecio,
+      monto_sena: numSena,
+      metodo_pago: metodo_pago || "none",
       duracion_turno: parseInt(duracion_turno) || 30,
     };
-    if (horarios) u.horarios    = horarios;
+    if (horarios) u.horarios = horarios;
     if (ocupados) u.excepciones = ocupados;
 
     const { error } = await supabase.from("usuarios").update(u).eq("slug", cleanSlug);
@@ -1163,4 +1134,3 @@ app.listen(PORT, () => {
 });
 
 export default app;
-
