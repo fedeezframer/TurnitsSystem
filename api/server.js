@@ -766,6 +766,48 @@ app.post("/cancel-appointment", requireAuth, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════[...]
+// NEGOCIO PÚBLICO — config sin token, para componentes de Framer
+// ════════════════════════════════════════════════════════════════[...]
+
+// GET /negocio/:slug
+// Devuelve config pública del negocio: horarios, excepciones, metodo_pago, etc.
+// NO requiere token — lo usan CalendarGrid, TimeSlots y BookingTrigger
+app.get("/negocio/:slug", async (req, res) => {
+  try {
+    const slug = getCleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .select("slug, business_name, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, monto_sena, precio, mp_access_token, mobbex_api_key")
+      .eq("slug", slug)
+      .single();
+
+    if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    res.json({
+      success: true,
+      negocio: {
+        slug:               user.slug,
+        business_name:      user.business_name,
+        horarios:           user.horarios || {},
+        excepciones:        user.excepciones || [],
+        duracion_turno:     user.duracion_turno || 30,
+        capacidad_por_turno:user.capacidad_por_turno || 1,
+        metodo_pago:        user.metodo_pago || "none",
+        monto_sena:         user.monto_sena || 0,
+        precio:             user.precio || 0,
+        tiene_mp:           !!user.mp_access_token,
+        tiene_mobbex:       !!user.mobbex_api_key,
+      },
+    });
+  } catch (e) {
+    console.error("Error en /negocio/:slug:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════[...]
 // SLOTS DISPONIBLES — ✅ FIXED: Lee turnos activos de la BD
 // ════════════════════════════════════════════════════════════════[...]
 
