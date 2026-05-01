@@ -980,10 +980,6 @@ app.post("/servicios/eliminar", requireAuth, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// REGISTRO PÚBLICO
-// ═══════════════════════════════════════════════════════════════════════════════
-
 app.post("/register", async (req, res) => {
   try {
     const {
@@ -998,6 +994,7 @@ app.post("/register", async (req, res) => {
       ...rest
     } = req.body
 
+    // ── Validaciones básicas ──────────────────────────────────────────────────
     if (!nombre || !email || !password || !nombre_negocio) {
       return res.status(400).json({
         error: "Faltan campos obligatorios: nombre, email, password, nombre_negocio.",
@@ -1012,12 +1009,14 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres." })
     }
 
-    // ── Generar slug desde business_name ─────────────────────────────────────
+    // ── Generar slug en minúsculas con guiones (igual que getCleanSlug) ───────
     const slug = nombre_negocio
-      .toUpperCase()
+      .toLowerCase()
+      .trim()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^A-Z0-9]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
       .slice(0, 30)
 
     if (!slug || slug.length < 2) {
@@ -1026,12 +1025,12 @@ app.post("/register", async (req, res) => {
       })
     }
 
-    // ── Verificar slug duplicado ──────────────────────────────────────────────
+    // ── Verificar duplicados ──────────────────────────────────────────────────
     const { data: slugExistente } = await supabase
       .from("usuarios")
       .select("slug")
       .eq("slug", slug)
-      .single()
+      .maybeSingle()
 
     if (slugExistente) {
       return res.status(409).json({
@@ -1039,19 +1038,17 @@ app.post("/register", async (req, res) => {
       })
     }
 
-    // ── Verificar email duplicado ─────────────────────────────────────────────
     const { data: emailExistente } = await supabase
       .from("usuarios")
       .select("email")
       .eq("email", email.toLowerCase().trim())
-      .single()
+      .maybeSingle()
 
     if (emailExistente) {
       return res.status(409).json({ error: "Este email ya está registrado." })
     }
 
-    // ── Estructurar horarios desde FlujoHorariosEngine ────────────────────────
-    // Llegan como: lunes_inicio, lunes_fin, martes_inicio, etc.
+    // ── Estructurar horarios desde los campos del form ────────────────────────
     const dias = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
     const horariosDB = {}
 
@@ -1067,33 +1064,10 @@ app.post("/register", async (req, res) => {
       }
     })
 
-    // ── Hashear password ──────────────────────────────────────────────────────
+    // ── Hashear password con bcrypt (igual que el login) ─────────────────────
     const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS)
 
-    // ── Crear usuario en Supabase Auth ────────────────────────────────────────
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email:    email.toLowerCase().trim(),
-      password: String(password),
-      options: {
-        data: {
-          nombre_persona: nombre.trim(),
-          last_name:      apellido?.trim() || "",
-          business_name:  nombre_negocio.trim(),
-          slug,
-        },
-        emailRedirectTo: `https://negosocio.framer.website/login?verified=true&slug=${slug}`,
-      },
-    })
-
-    if (authError) {
-      console.error("❌ Error en Supabase Auth:", authError.message)
-      if (authError.message.toLowerCase().includes("already registered")) {
-        return res.status(409).json({ error: "Este email ya está registrado." })
-      }
-      return res.status(500).json({ error: authError.message })
-    }
-
-    // ── Guardar datos adicionales en public.usuarios ──────────────────────────
+    // ── Insertar en public.usuarios ───────────────────────────────────────────
     const { error: insertError } = await supabase
       .from("usuarios")
       .insert([{
@@ -1101,7 +1075,6 @@ app.post("/register", async (req, res) => {
         password:       hashedPassword,
         slug,
         nombre_persona: nombre.trim(),
-        last_name:      apellido?.trim() || "",
         business_name:  nombre_negocio.trim(),
         telefono:       telefono?.trim() || "",
         precio:         Number(precio) || 0,
@@ -1112,11 +1085,14 @@ app.post("/register", async (req, res) => {
       }])
 
     if (insertError) {
-      console.error("❌ Error al insertar en public.usuarios:", insertError.message)
+      console.error("Error al insertar usuario:", insertError.message)
+      if (insertError.code === "23505") {
+        return res.status(409).json({ error: "El slug o email ya existe." })
+      }
       return res.status(500).json({ error: "Error al guardar los datos del negocio." })
     }
 
-    // ── Mail de bienvenida via Apps Script ────────────────────────────────────
+    // ── Mail de bienvenida ────────────────────────────────────────────────────
     fetch(APPS_SCRIPT_URL, {
       method:  "POST",
       headers: { "Content-Type": "text/plain" },
@@ -1126,18 +1102,18 @@ app.post("/register", async (req, res) => {
         usuario:       slug,
         business_name: nombre_negocio.trim(),
       }),
-    }).catch((e) => console.error("⚠️ Error mail bienvenida:", e.message))
+    }).catch((e) => console.error("Error mail bienvenida:", e.message))
 
-    console.log(`✅ Nuevo negocio registrado: ${slug} (${email})`)
+    console.log(`Nuevo negocio registrado: ${slug} (${email})`)
 
     res.json({
       success: true,
       slug,
-      message: "Registro exitoso. Revisá tu email para verificar tu cuenta.",
+      message: "Registro exitoso.",
     })
 
   } catch (e) {
-    console.error("❌ Error en /register:", e.message)
+    console.error("Error en /register:", e.message)
     res.status(500).json({ error: "Error interno al registrar." })
   }
 })
