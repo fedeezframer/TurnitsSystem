@@ -229,33 +229,27 @@ app.post("/register", async (req, res) => {
       password,
       precio,
       duracion_turno,
-      horarios, // ← IMPORTANTE
+      horarios,
     } = req.body;
 
-    // ── VALIDACIONES ─────────────────────────────────────
+    // ── VALIDACIONES ──
     if (!nombre || !email || !password || !nombre_negocio) {
-      return res.status(400).json({
-        error: "Faltan campos obligatorios: nombre, email, password, nombre_negocio.",
-      });
+      return res.status(400).json({ error: "Campos obligatorios faltantes" });
     }
 
     if (!validateEmail(email)) {
-      return res.status(400).json({ error: "Email inválido." });
+      return res.status(400).json({ error: "Email inválido" });
     }
 
     if (!validatePassword(password)) {
-      return res.status(400).json({
-        error: "La contraseña debe tener al menos 6 caracteres.",
-      });
+      return res.status(400).json({ error: "Password débil" });
     }
 
     if (!horarios || typeof horarios !== "object") {
-      return res.status(400).json({
-        error: "Horarios inválidos o faltantes.",
-      });
+      return res.status(400).json({ error: "Horarios inválidos" });
     }
 
-    // ── SLUG (MINÚSCULAS) ────────────────────────────────
+    // ── SLUG ──
     const slug = nombre_negocio
       .toLowerCase()
       .trim()
@@ -264,25 +258,7 @@ app.post("/register", async (req, res) => {
       .replace(/[^a-z0-9]/g, "")
       .slice(0, 30);
 
-    if (!slug || slug.length < 2) {
-      return res.status(400).json({
-        error: "El nombre del negocio no es válido.",
-      });
-    }
-
-    // ── DUPLICADOS ───────────────────────────────────────
-    const { data: slugExistente } = await supabase
-      .from("usuarios")
-      .select("slug")
-      .eq("slug", slug)
-      .maybeSingle();
-
-    if (slugExistente) {
-      return res.status(409).json({
-        error: `El nombre "${nombre_negocio}" ya está en uso.`,
-      });
-    }
-
+    // ── DUPLICADOS ──
     const { data: emailExistente } = await supabase
       .from("usuarios")
       .select("email")
@@ -290,43 +266,17 @@ app.post("/register", async (req, res) => {
       .maybeSingle();
 
     if (emailExistente) {
-      return res.status(409).json({
-        error: "Este email ya está registrado.",
-      });
+      return res.status(409).json({ error: "Email ya registrado" });
     }
 
-    // ── PASSWORD ─────────────────────────────────────────
-    const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+    // ── PASSWORD ──
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    // ── SUPABASE AUTH ────────────────────────────────────
-    const { error: authError } = await supabase.auth.signUp({
-      email: email.toLowerCase().trim(),
-      password: String(password),
-      options: {
-        data: {
-          nombre_persona: nombre.trim(),
-          last_name: apellido?.trim() || "",
-          business_name: nombre_negocio.trim(),
-          slug,
-        },
-        emailRedirectTo: `https://negosocio.framer.website/login?verified=true&slug=${slug}`,
-      },
-    });
+    // ── GENERAR CÓDIGO ──
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
 
-    if (authError) {
-      console.error("❌ Supabase Auth:", authError.message);
-
-      if (authError.message.toLowerCase().includes("already registered")) {
-        return res.status(409).json({
-          error: "Este email ya está registrado.",
-        });
-      }
-
-      return res.status(500).json({ error: authError.message });
-    }
-
-    // ── INSERT DB ────────────────────────────────────────
-    const { error: insertError } = await supabase.from("usuarios").insert([
+    // ── INSERT ──
+    const { error } = await supabase.from("usuarios").insert([
       {
         email: email.toLowerCase().trim(),
         password: hashedPassword,
@@ -338,43 +288,37 @@ app.post("/register", async (req, res) => {
         precio: Number(precio) || 0,
         duracion_turno: Number(duracion_turno) || 30,
         metodo_pago: "none",
-        horarios: horarios, // ← YA VIENE BIEN FORMATEADO
+        horarios,
         excepciones: [],
         quien_asume_comision: "cliente",
+
+        verified: false,
+        verification_code: codigo,
       },
     ]);
 
-    if (insertError) {
-      console.error("❌ Insert:", insertError.message);
-      return res.status(500).json({
-        error: "Error al guardar los datos del negocio.",
-      });
+    if (error) {
+      return res.status(500).json({ error: "Error guardando usuario" });
     }
 
-    // ── EMAIL ────────────────────────────────────────────
-    fetch(APPS_SCRIPT_URL, {
+    // ── ENVIAR EMAIL ──
+    await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
-        action: "welcomeEmail",
-        email: email.toLowerCase().trim(),
-        usuario: slug,
-        business_name: nombre_negocio.trim(),
+        action: "sendCode",
+        email,
+        code: codigo,
       }),
-    }).catch((e) =>
-      console.error("⚠️ Error mail bienvenida:", e.message)
-    );
-
-    console.log(`✅ Nuevo negocio: ${slug} (${email})`);
+    });
 
     res.json({
       success: true,
-      slug,
-      message: "Registro exitoso. Revisá tu email.",
+      message: "Te enviamos un código de verificación",
     });
   } catch (e) {
-    console.error("❌ Error en /register:", e.message);
-    res.status(500).json({ error: "Error interno." });
+    console.error(e);
+    res.status(500).json({ error: "Error interno" });
   }
 });
 
