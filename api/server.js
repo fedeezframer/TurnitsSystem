@@ -314,6 +314,7 @@ app.post("/register", async (req, res) => {
 
     res.json({
       success: true,
+      slug,
       message: "Te enviamos un código de verificación",
     });
   } catch (e) {
