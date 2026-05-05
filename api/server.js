@@ -220,104 +220,161 @@ app.post("/admin/crear-cliente", requireAdminKey, async (req, res) => {
 
 app.post("/register", async (req, res) => {
   try {
-    const { nombre, apellido, email, telefono, nombre_negocio, password, precio, duracion_turno, ...rest } = req.body;
+    const {
+      nombre,
+      apellido,
+      email,
+      telefono,
+      nombre_negocio,
+      password,
+      precio,
+      duracion_turno,
+      horarios, // ← IMPORTANTE
+    } = req.body;
 
+    // ── VALIDACIONES ─────────────────────────────────────
     if (!nombre || !email || !password || !nombre_negocio) {
-      return res.status(400).json({ error: "Faltan campos obligatorios: nombre, email, password, nombre_negocio." });
+      return res.status(400).json({
+        error: "Faltan campos obligatorios: nombre, email, password, nombre_negocio.",
+      });
     }
-    if (!validateEmail(email))    return res.status(400).json({ error: "Email inválido." });
-    if (!validatePassword(password)) return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres." });
 
-    // Generar slug en MAYUSCULAS sin caracteres especiales
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: "Email inválido." });
+    }
+
+    if (!validatePassword(password)) {
+      return res.status(400).json({
+        error: "La contraseña debe tener al menos 6 caracteres.",
+      });
+    }
+
+    if (!horarios || typeof horarios !== "object") {
+      return res.status(400).json({
+        error: "Horarios inválidos o faltantes.",
+      });
+    }
+
+    // ── SLUG (MINÚSCULAS) ────────────────────────────────
     const slug = nombre_negocio
-      .toUpperCase()
+      .toLowerCase()
+      .trim()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^A-Z0-9]/g, "")
+      .replace(/[^a-z0-9]/g, "")
       .slice(0, 30);
 
     if (!slug || slug.length < 2) {
-      return res.status(400).json({ error: "El nombre del negocio no es válido. Usá letras y números." });
+      return res.status(400).json({
+        error: "El nombre del negocio no es válido.",
+      });
     }
 
-    // Verificar duplicados
-    const { data: slugExistente } = await supabase.from("usuarios").select("slug").eq("slug", slug).single();
+    // ── DUPLICADOS ───────────────────────────────────────
+    const { data: slugExistente } = await supabase
+      .from("usuarios")
+      .select("slug")
+      .eq("slug", slug)
+      .maybeSingle();
+
     if (slugExistente) {
-      return res.status(409).json({ error: `El nombre "${nombre_negocio}" ya está en uso. Elegí otro nombre.` });
+      return res.status(409).json({
+        error: `El nombre "${nombre_negocio}" ya está en uso.`,
+      });
     }
 
-    const { data: emailExistente } = await supabase.from("usuarios").select("email").eq("email", email.toLowerCase().trim()).single();
+    const { data: emailExistente } = await supabase
+      .from("usuarios")
+      .select("email")
+      .eq("email", email.toLowerCase().trim())
+      .maybeSingle();
+
     if (emailExistente) {
-      return res.status(409).json({ error: "Este email ya está registrado." });
+      return res.status(409).json({
+        error: "Este email ya está registrado.",
+      });
     }
 
-    // Estructurar horarios desde FlujoHorariosEngine (lunes_inicio, lunes_fin, etc.)
-    const dias = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
-    const horariosDB = {};
-    dias.forEach((dia) => {
-      const inicio = rest[`${dia}_inicio`] || "";
-      const fin    = rest[`${dia}_fin`]    || "";
-      const activo = inicio.length >= 5 && fin.length >= 5;
-      horariosDB[dia] = {
-        activo,
-        jornada:  activo ? [inicio, fin] : [null, null],
-        descanso: [null, null],
-      };
-    });
-
+    // ── PASSWORD ─────────────────────────────────────────
     const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
 
-    // Crear en Supabase Auth (manda email de verificación automático)
+    // ── SUPABASE AUTH ────────────────────────────────────
     const { error: authError } = await supabase.auth.signUp({
-      email:    email.toLowerCase().trim(),
+      email: email.toLowerCase().trim(),
       password: String(password),
       options: {
-        data: { nombre_persona: nombre.trim(), last_name: apellido?.trim() || "", business_name: nombre_negocio.trim(), slug },
+        data: {
+          nombre_persona: nombre.trim(),
+          last_name: apellido?.trim() || "",
+          business_name: nombre_negocio.trim(),
+          slug,
+        },
         emailRedirectTo: `https://negosocio.framer.website/login?verified=true&slug=${slug}`,
       },
     });
 
     if (authError) {
       console.error("❌ Supabase Auth:", authError.message);
+
       if (authError.message.toLowerCase().includes("already registered")) {
-        return res.status(409).json({ error: "Este email ya está registrado." });
+        return res.status(409).json({
+          error: "Este email ya está registrado.",
+        });
       }
+
       return res.status(500).json({ error: authError.message });
     }
 
-    // Guardar en public.usuarios
-    const { error: insertError } = await supabase.from("usuarios").insert([{
-      email:          email.toLowerCase().trim(),
-      password:       hashedPassword,
-      slug,
-      nombre_persona: nombre.trim(),
-      last_name:      apellido?.trim() || "",
-      business_name:  nombre_negocio.trim(),
-      telefono:       telefono?.trim() || "",
-      precio:         Number(precio) || 0,
-      duracion_turno: Number(duracion_turno) || 30,
-      metodo_pago:    "none",
-      horarios:       horariosDB,
-      excepciones:    [],
-      quien_asume_comision: "cliente",
-    }]);
+    // ── INSERT DB ────────────────────────────────────────
+    const { error: insertError } = await supabase.from("usuarios").insert([
+      {
+        email: email.toLowerCase().trim(),
+        password: hashedPassword,
+        slug,
+        nombre_persona: nombre.trim(),
+        last_name: apellido?.trim() || "",
+        business_name: nombre_negocio.trim(),
+        telefono: telefono?.trim() || "",
+        precio: Number(precio) || 0,
+        duracion_turno: Number(duracion_turno) || 30,
+        metodo_pago: "none",
+        horarios: horarios, // ← YA VIENE BIEN FORMATEADO
+        excepciones: [],
+        quien_asume_comision: "cliente",
+      },
+    ]);
 
     if (insertError) {
-      console.error("❌ Insert public.usuarios:", insertError.message);
-      return res.status(500).json({ error: "Error al guardar los datos del negocio." });
+      console.error("❌ Insert:", insertError.message);
+      return res.status(500).json({
+        error: "Error al guardar los datos del negocio.",
+      });
     }
 
-    // Mail de bienvenida
+    // ── EMAIL ────────────────────────────────────────────
     fetch(APPS_SCRIPT_URL, {
-      method: "POST", headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ action: "welcomeEmail", email: email.toLowerCase().trim(), usuario: slug, business_name: nombre_negocio.trim() }),
-    }).catch((e) => console.error("⚠️ Error mail bienvenida:", e.message));
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "welcomeEmail",
+        email: email.toLowerCase().trim(),
+        usuario: slug,
+        business_name: nombre_negocio.trim(),
+      }),
+    }).catch((e) =>
+      console.error("⚠️ Error mail bienvenida:", e.message)
+    );
 
-    console.log(`✅ Nuevo negocio registrado: ${slug} (${email})`);
-    res.json({ success: true, slug, message: "Registro exitoso. Revisá tu email para verificar tu cuenta." });
+    console.log(`✅ Nuevo negocio: ${slug} (${email})`);
+
+    res.json({
+      success: true,
+      slug,
+      message: "Registro exitoso. Revisá tu email.",
+    });
   } catch (e) {
     console.error("❌ Error en /register:", e.message);
-    res.status(500).json({ error: "Error interno al registrar." });
+    res.status(500).json({ error: "Error interno." });
   }
 });
 
