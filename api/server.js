@@ -15,7 +15,8 @@ const APPS_SCRIPT_URL =
 
 const BCRYPT_ROUNDS  = 10;
 const CACHE_DURATION = 20000;
-const PLATAFORMA_FEE = 0.025;
+// Comisiones por plan (sobre precio TOTAL del servicio, no sobre la seña)
+const FEE_POR_PLAN = { free: 0.025, basic: 0.010, premium: 0.005 };
 const API_URL        = "https://negosocio.onrender.com";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -83,9 +84,12 @@ const requireAdminKey = (req, res, next) => {
   next();
 };
 
-// ─── HELPER: COMISIÓN ─────────────────────────────────────────────────────────
-function calcularServiceFee(precioTotalServicio) {
-  return Math.round(Number(precioTotalServicio) * PLATAFORMA_FEE);
+// ─── HELPER: COMISIÓN POR PLAN ───────────────────────────────────────────────
+// Calcula siempre sobre el precio TOTAL del servicio (no la seña),
+// así nunca cobramos menos de lo que corresponde.
+function calcularServiceFee(precioTotalServicio, planType = "free") {
+  const tasa = FEE_POR_PLAN[planType] ?? FEE_POR_PLAN.free;
+  return Math.round(Number(precioTotalServicio) * tasa);
 }
 
 // ─── HELPERS DE MÉTRICAS ──────────────────────────────────────────────────────
@@ -220,106 +224,104 @@ app.post("/admin/crear-cliente", requireAdminKey, async (req, res) => {
 
 app.post("/register", async (req, res) => {
   try {
-    const {
-      nombre,
-      apellido,
-      email,
-      telefono,
-      nombre_negocio,
-      password,
-      precio,
-      duracion_turno,
-      horarios,
-    } = req.body;
+    const { nombre, apellido, email, telefono, nombre_negocio, password, precio, duracion_turno, ...rest } = req.body;
 
-    // ── VALIDACIONES ──
     if (!nombre || !email || !password || !nombre_negocio) {
-      return res.status(400).json({ error: "Campos obligatorios faltantes" });
+      return res.status(400).json({ error: "Faltan campos obligatorios: nombre, email, password, nombre_negocio." });
     }
+    if (!validateEmail(email))    return res.status(400).json({ error: "Email inválido." });
+    if (!validatePassword(password)) return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres." });
 
-    if (!validateEmail(email)) {
-      return res.status(400).json({ error: "Email inválido" });
-    }
-
-    if (!validatePassword(password)) {
-      return res.status(400).json({ error: "Password débil" });
-    }
-
-    if (!horarios || typeof horarios !== "object") {
-      return res.status(400).json({ error: "Horarios inválidos" });
-    }
-
-    // ── SLUG ──
+    // Generar slug en MAYUSCULAS sin caracteres especiales
     const slug = nombre_negocio
-      .toLowerCase()
-      .trim()
+      .toUpperCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]/g, "")
+      .replace(/[^A-Z0-9]/g, "")
       .slice(0, 30);
 
-    // ── DUPLICADOS ──
-    const { data: emailExistente } = await supabase
-      .from("usuarios")
-      .select("email")
-      .eq("email", email.toLowerCase().trim())
-      .maybeSingle();
+    if (!slug || slug.length < 2) {
+      return res.status(400).json({ error: "El nombre del negocio no es válido. Usá letras y números." });
+    }
 
+    // Verificar duplicados
+    const { data: slugExistente } = await supabase.from("usuarios").select("slug").eq("slug", slug).single();
+    if (slugExistente) {
+      return res.status(409).json({ error: `El nombre "${nombre_negocio}" ya está en uso. Elegí otro nombre.` });
+    }
+
+    const { data: emailExistente } = await supabase.from("usuarios").select("email").eq("email", email.toLowerCase().trim()).single();
     if (emailExistente) {
-      return res.status(409).json({ error: "Email ya registrado" });
+      return res.status(409).json({ error: "Este email ya está registrado." });
     }
 
-    // ── PASSWORD ──
-    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    // Estructurar horarios desde FlujoHorariosEngine (lunes_inicio, lunes_fin, etc.)
+    const dias = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
+    const horariosDB = {};
+    dias.forEach((dia) => {
+      const inicio = rest[`${dia}_inicio`] || "";
+      const fin    = rest[`${dia}_fin`]    || "";
+      const activo = inicio.length >= 5 && fin.length >= 5;
+      horariosDB[dia] = {
+        activo,
+        jornada:  activo ? [inicio, fin] : [null, null],
+        descanso: [null, null],
+      };
+    });
 
-    // ── GENERAR CÓDIGO ──
-    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
 
-    // ── INSERT ──
-    const { error } = await supabase.from("usuarios").insert([
-      {
-        email: email.toLowerCase().trim(),
-        password: hashedPassword,
-        slug,
-        nombre_persona: nombre.trim(),
-        last_name: apellido?.trim() || "",
-        business_name: nombre_negocio.trim(),
-        telefono: telefono?.trim() || "",
-        precio: Number(precio) || 0,
-        duracion_turno: Number(duracion_turno) || 30,
-        metodo_pago: "none",
-        horarios,
-        excepciones: [],
-        quien_asume_comision: "cliente",
-
-        verified: false,
-        verification_code: codigo,
+    // Crear en Supabase Auth (manda email de verificación automático)
+    const { error: authError } = await supabase.auth.signUp({
+      email:    email.toLowerCase().trim(),
+      password: String(password),
+      options: {
+        data: { nombre_persona: nombre.trim(), last_name: apellido?.trim() || "", business_name: nombre_negocio.trim(), slug },
+        emailRedirectTo: `https://negosocio.framer.website/login?verified=true&slug=${slug}`,
       },
-    ]);
+    });
 
-    if (error) {
-      return res.status(500).json({ error: "Error guardando usuario" });
+    if (authError) {
+      console.error("❌ Supabase Auth:", authError.message);
+      if (authError.message.toLowerCase().includes("already registered")) {
+        return res.status(409).json({ error: "Este email ya está registrado." });
+      }
+      return res.status(500).json({ error: authError.message });
     }
 
-    // ── ENVIAR EMAIL ──
-    await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action: "sendCode",
-        email,
-        code: codigo,
-      }),
-    });
-
-    res.json({
-      success: true,
+    // Guardar en public.usuarios
+    const { error: insertError } = await supabase.from("usuarios").insert([{
+      email:          email.toLowerCase().trim(),
+      password:       hashedPassword,
       slug,
-      message: "Te enviamos un código de verificación",
-    });
+      nombre_persona: nombre.trim(),
+      last_name:      apellido?.trim() || "",
+      business_name:  nombre_negocio.trim(),
+      telefono:       telefono?.trim() || "",
+      precio:         Number(precio) || 0,
+      duracion_turno: Number(duracion_turno) || 30,
+      metodo_pago:    "none",
+      horarios:       horariosDB,
+      excepciones:    [],
+      quien_asume_comision: "cliente",
+    }]);
+
+    if (insertError) {
+      console.error("❌ Insert public.usuarios:", insertError.message);
+      return res.status(500).json({ error: "Error al guardar los datos del negocio." });
+    }
+
+    // Mail de bienvenida
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST", headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "welcomeEmail", email: email.toLowerCase().trim(), usuario: slug, business_name: nombre_negocio.trim() }),
+    }).catch((e) => console.error("⚠️ Error mail bienvenida:", e.message));
+
+    console.log(`✅ Nuevo negocio registrado: ${slug} (${email})`);
+    res.json({ success: true, slug, message: "Registro exitoso. Revisá tu email para verificar tu cuenta." });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Error interno" });
+    console.error("❌ Error en /register:", e.message);
+    res.status(500).json({ error: "Error interno al registrar." });
   }
 });
 
@@ -469,7 +471,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     // Si el negocio asume la comisión, no se suma al cliente
     const quienAsume = user.quien_asume_comision || "cliente";
-    const serviceFee   = calcularServiceFee(precioTotalServicio);
+    const planType     = user.plan_type || "free";
+    const serviceFee   = calcularServiceFee(precioTotalServicio, planType);
+    console.log(`📊 Plan: ${planType} | Tasa: ${FEE_POR_PLAN[planType] * 100}%`);
     const totalCobrado = quienAsume === "cliente" ? montoServicio + serviceFee : montoServicio;
     const conceptoPago = metodo === "sena" ? "Seña" : "Total";
 
