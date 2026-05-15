@@ -213,6 +213,54 @@ function calcularFrecuencia(cantidadTurnos) {
 app.get("/",       (_, res) => res.json({ status: "online", version: "6.0", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
+app.get("/resolve-domain", async (req, res) => {
+  try {
+    // Limpiar el host que llega: quitar protocolo, www., puerto y path
+    const raw = (req.query.host || "").toString().toLowerCase().trim();
+    if (!raw) {
+      return res.status(400).json({ success: false, error: "Falta el parámetro host." });
+    }
+ 
+    // Normalizar: sacar protocolo y path por si acaso
+    const host = raw
+      .replace(/^https?:\/\//, "")   // quitar protocolo
+      .replace(/\/.*$/, "")          // quitar path
+      .replace(/:.*$/, "")           // quitar puerto
+      .replace(/^www\./, "");        // quitar www.
+ 
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .select("slug, business_name, nombre_persona, last_name, activo")
+      .eq("dominio", host)
+      .single();
+ 
+    if (error || !user) {
+      return res.status(404).json({
+        success: false,
+        error: "No se encontró un negocio para este dominio.",
+        host,
+      });
+    }
+ 
+    if (!user.activo) {
+      return res.status(403).json({
+        success: false,
+        error: "Este negocio está desactivado.",
+      });
+    }
+ 
+    res.json({
+      success:        true,
+      slug:           user.slug,
+      business_name:  user.business_name,
+      nombre_persona: user.nombre_persona,
+      last_name:      user.last_name || "",
+    });
+  } catch (e) {
+    console.error("Error en /resolve-domain:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
 
 // ══════════════════════════════════════════════════════════════
 // SUPERADMIN — CRUD DE NEGOCIOS
