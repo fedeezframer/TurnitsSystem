@@ -7,7 +7,7 @@
   "author": "fedeezframer",
   "license": "MIT",
   "scripts": {
-    "start": "node server.js",
+    "start": "node api/server.js",
     "dev": "node --watch server.js"
   },
   "dependencies": {
