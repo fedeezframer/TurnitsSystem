@@ -3,7 +3,6 @@ import cors           from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Preference } from "mercadopago";
 import fetch          from "node-fetch";
-import crypto         from "crypto";
 import bcrypt         from "bcrypt";
 import jwt            from "jsonwebtoken";
 import rateLimit      from "express-rate-limit";
@@ -213,54 +212,6 @@ function calcularFrecuencia(cantidadTurnos) {
 app.get("/",       (_, res) => res.json({ status: "online", version: "6.0", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
-app.get("/resolve-domain", async (req, res) => {
-  try {
-    // Limpiar el host que llega: quitar protocolo, www., puerto y path
-    const raw = (req.query.host || "").toString().toLowerCase().trim();
-    if (!raw) {
-      return res.status(400).json({ success: false, error: "Falta el parámetro host." });
-    }
- 
-    // Normalizar: sacar protocolo y path por si acaso
-    const host = raw
-      .replace(/^https?:\/\//, "")   // quitar protocolo
-      .replace(/\/.*$/, "")          // quitar path
-      .replace(/:.*$/, "")           // quitar puerto
-      .replace(/^www\./, "");        // quitar www.
- 
-    const { data: user, error } = await supabase
-      .from("usuarios")
-      .select("slug, business_name, nombre_persona, last_name, activo")
-      .eq("dominio", host)
-      .single();
- 
-    if (error || !user) {
-      return res.status(404).json({
-        success: false,
-        error: "No se encontró un negocio para este dominio.",
-        host,
-      });
-    }
- 
-    if (!user.activo) {
-      return res.status(403).json({
-        success: false,
-        error: "Este negocio está desactivado.",
-      });
-    }
- 
-    res.json({
-      success:        true,
-      slug:           user.slug,
-      business_name:  user.business_name,
-      nombre_persona: user.nombre_persona,
-      last_name:      user.last_name || "",
-    });
-  } catch (e) {
-    console.error("Error en /resolve-domain:", e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
 
 // ══════════════════════════════════════════════════════════════
 // SUPERADMIN — CRUD DE NEGOCIOS
@@ -945,9 +896,102 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
   }
 });
 
-// Aliases de compatibilidad con v5
-app.post("/servicios/crear",    requireAuth, (req, res) => { req.body.slug = req.body.slug; return app._router.handle({ ...req, url: "/admin/servicios", method: "POST" }, res, () => {}); });
-// (Para compatibilidad real, mantené las rutas viejas o hacé un redirect 301)
+// ─── Aliases de compatibilidad con v5 ────────────────────────
+// Estas rutas siguen funcionando para no romper componentes Framer existentes
+
+app.post("/servicios/crear", requireAuth, async (req, res) => {
+  try {
+    const { slug, nombre, descripcion, duracion, precio, capacidad, orden } = req.body;
+    const cleanSlug = getCleanSlug(slug || req.auth.slug);
+    if (!cleanSlug || !nombre || !duracion || precio === undefined) {
+      return res.status(400).json({ success: false, error: "Faltan campos: nombre, duracion, precio." });
+    }
+    const { data, error } = await supabase.from("servicios").insert([{
+      slug: cleanSlug, nombre: nombre.trim(),
+      descripcion: descripcion?.trim() || "",
+      duracion: parseInt(duracion), precio: Number(precio),
+      capacidad: parseInt(capacidad) || 1, orden: parseInt(orden) || 0, activo: true,
+    }]).select().single();
+    if (error) throw error;
+    invalidateCache(cleanSlug);
+    res.status(201).json({ success: true, servicio: data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post("/servicios/editar", requireAuth, async (req, res) => {
+  try {
+    const { id, slug, nombre, descripcion, duracion, precio, capacidad, activo } = req.body;
+    const cleanSlug = getCleanSlug(slug || req.auth.slug);
+    if (!id) return res.status(400).json({ success: false, error: "Falta el id." });
+    const u = {};
+    if (nombre      !== undefined) u.nombre      = nombre.trim();
+    if (descripcion !== undefined) u.descripcion = descripcion.trim();
+    if (duracion    !== undefined) u.duracion    = parseInt(duracion);
+    if (precio      !== undefined) u.precio      = Number(precio);
+    if (capacidad   !== undefined) u.capacidad   = parseInt(capacidad);
+    if (activo      !== undefined) u.activo      = activo;
+    const { data, error } = await supabase.from("servicios").update(u).eq("id", id).eq("slug", cleanSlug).select().single();
+    if (error) throw error;
+    invalidateCache(cleanSlug);
+    res.json({ success: true, servicio: data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post("/servicios/eliminar", requireAuth, async (req, res) => {
+  try {
+    const { id, slug } = req.body;
+    const cleanSlug = getCleanSlug(slug || req.auth.slug);
+    if (!id) return res.status(400).json({ success: false, error: "Falta el id." });
+    const { error } = await supabase.from("servicios").delete().eq("id", id).eq("slug", cleanSlug);
+    if (error) throw error;
+    invalidateCache(cleanSlug);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Alias v5: /servicios/admin/:slug → /admin/servicios/:slug
+app.get("/servicios/admin/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = getCleanSlug(req.params.slug);
+    const { data, error } = await supabase.from("servicios").select("*").eq("slug", slug)
+      .order("orden", { ascending: true }).order("created_at", { ascending: true });
+    if (error) throw error;
+    res.json({ success: true, servicios: data || [] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Alias v5: /get-occupied → /turnos/ocupados
+app.get("/get-occupied", async (req, res) => {
+  try {
+    const slug  = getCleanSlug(req.query.slug);
+    const fecha = req.query.fecha;
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+    let q = supabase.from("turnos").select("hora").eq("slug", slug).neq("estado", "cancelado");
+    if (fecha) q = q.eq("fecha", fecha);
+    const { data, error } = await q;
+    if (error) throw error;
+    res.json({ success: true, ocupados: (data || []).map((t) => t.hora.slice(0, 5)) });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Alias v5: /create-booking → /turnos/reservar
+app.post("/create-booking", limiterBooking, async (req, res) => {
+  // Normaliza el campo "name" que en v5 venía como "name"
+  req.body.name = req.body.name || req.body.nombre;
+  req.body.phone = req.body.phone || req.body.telefono;
+  // Re-enruta internamente (simple, sin app._router)
+  return res.redirect(307, "/turnos/reservar");
+});
 
 
 // ══════════════════════════════════════════════════════════════
