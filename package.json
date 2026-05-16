@@ -2,17 +2,17 @@
   "name": "negosocio",
   "version": "6.0.0",
   "type": "module",
-  "main": "server.js",
+  "main": "api/server.js",
   "description": "NegoSocio API — Sistema de gestión de turnos multi-negocio",
   "author": "fedeezframer",
   "license": "MIT",
   "scripts": {
     "start": "node api/server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch api/server.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
