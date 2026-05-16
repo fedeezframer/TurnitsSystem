@@ -3,7 +3,7 @@ import cors           from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Preference } from "mercadopago";
 import fetch          from "node-fetch";
-import bcrypt         from "bcrypt";
+import bcrypt         from "bcryptjs";
 import jwt            from "jsonwebtoken";
 import rateLimit      from "express-rate-limit";
 
