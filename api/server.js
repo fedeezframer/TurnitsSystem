@@ -20,12 +20,24 @@ const CACHE_DURATION = 20_000;       // ms — caché de admin-stats
 const JWT_EXPIRY     = "7d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 
+// ─── Configuración del SaaS (Associe) ────────────────────────
+// DIAS_PRUEBA: cuántos días gratis al registrarse
+const DIAS_PRUEBA          = parseInt(process.env.DIAS_PRUEBA || "15");
+// PRECIO_SUSCRIPCION: monto mensual en ARS
+const PRECIO_SUSCRIPCION   = parseInt(process.env.PRECIO_SUSCRIPCION || "21000");
+// MP_PLATFORM_TOKEN: el access token de la cuenta PROPIA de Associe (no el del cliente)
+const MP_PLATFORM_TOKEN    = process.env.MP_PLATFORM_TOKEN || "";
+// PANEL_URL: URL del panel de control del dueño
+const PANEL_URL            = process.env.PANEL_URL || "https://negosocio.framer.website/panel";
+// SUCCESS_URL / CANCEL_URL: redirecciones de checkout de suscripción
+const SUSCRIPCION_SUCCESS  = process.env.SUSCRIPCION_SUCCESS_URL || `${PANEL_URL}?status=suscripcion_ok`;
+const SUSCRIPCION_CANCEL   = process.env.SUSCRIPCION_CANCEL_URL  || `${PANEL_URL}?status=suscripcion_cancel`;
+
 // ══════════════════════════════════════════════════════════════
 // HELPERS GENERALES
 // ══════════════════════════════════════════════════════════════
 
 // Normaliza un dominio: minúsculas, sin protocolo ni trailing slash
-// "Https://MiTurno.com/" → "miturno.com"
 const cleanDominio = (raw) => {
   if (!raw) return "";
   return raw.toLowerCase().trim()
@@ -38,6 +50,20 @@ const validateEmail    = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const validatePassword = (p) => p && p.length >= 6;
 const validatePhone    = (p) => /^[0-9]{7,15}$/.test(p.toString().replace(/\s/g, ""));
 const cleanPhone       = (p) => p.toString().replace(/\s/g, "").trim();
+
+// Calcula fecha de vencimiento sumando N días a partir de hoy (UTC-3 Argentina)
+const calcularVencimiento = (diasExtra = 30, baseISO = null) => {
+  const base = baseISO ? new Date(baseISO + "T12:00:00-03:00") : new Date();
+  base.setDate(base.getDate() + diasExtra);
+  return base.toISOString().split("T")[0];
+};
+
+// Días restantes hasta vencimiento (puede ser negativo si ya venció)
+const diasHastaVencer = (fechaVencimientoISO) => {
+  const hoy    = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+  const vence  = new Date(fechaVencimientoISO + "T23:59:59-03:00");
+  return Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
+};
 
 // ══════════════════════════════════════════════════════════════
 // CACHÉ EN MEMORIA
@@ -196,7 +222,7 @@ function calcularFrecuencia(cantidadTurnos) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "7.0", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "7.1", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 
@@ -209,9 +235,9 @@ app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date(
  * POST /superadmin/negocios
  * Registra un negocio nuevo. Solo accesible con x-api-key.
  * Body: {
- *   nombre_persona, apellido, email, telefono,   ← datos del propietario
- *   business_name, dominio,                       ← datos del negocio
- *   password, rubro?                              ← acceso y clasificación
+ *   nombre_persona, apellido, email, telefono,
+ *   business_name, dominio,
+ *   password, rubro?
  * }
  */
 app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
@@ -223,7 +249,6 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       rubro = "generico",
     } = req.body;
 
-    // Validaciones obligatorias
     if (!nombre_persona || !email || !password || !business_name || !dominio) {
       return res.status(400).json({
         success: false,
@@ -239,20 +264,25 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
     const dominioClean   = cleanDominio(dominio);
     const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
 
+    // Fecha de vencimiento = hoy + días de prueba configurados
+    const fechaVencimiento = calcularVencimiento(DIAS_PRUEBA);
+
     const { data, error } = await supabase.from("usuarios").insert([{
-      nombre_persona:  nombre_persona.trim(),
-      apellido:        apellido?.trim() || "",
-      email:           email.trim().toLowerCase(),
-      telefono:        telefono ? cleanPhone(telefono) : null,
-      business_name:   business_name.trim(),
-      dominio:         dominioClean,
-      password:        hashedPassword,
+      nombre_persona:       nombre_persona.trim(),
+      apellido:             apellido?.trim() || "",
+      email:                email.trim().toLowerCase(),
+      telefono:             telefono ? cleanPhone(telefono) : null,
+      business_name:        business_name.trim(),
+      dominio:              dominioClean,
+      password:             hashedPassword,
       rubro,
-      metodo_pago:     "none",
-      porcentaje_sena: 30,
-      excepciones:     [],
-      activo:          true,
-    }]).select("id, dominio, business_name, rubro, email, nombre_persona, apellido").single();
+      metodo_pago:          "none",
+      porcentaje_sena:      30,
+      excepciones:          [],
+      activo:               true,
+      estado_suscripcion:   "trial",
+      fecha_vencimiento:    fechaVencimiento,
+    }]).select("id, dominio, business_name, rubro, email, nombre_persona, apellido, estado_suscripcion, fecha_vencimiento").single();
 
     if (error) {
       if (error.code === "23505") {
@@ -261,11 +291,11 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       throw error;
     }
 
-    console.log(`✅ Negocio creado: ${dominioClean} (${rubro})`);
+    console.log(`✅ Negocio creado: ${dominioClean} (${rubro}) — vence: ${fechaVencimiento}`);
     res.status(201).json({
-      success:    true,
-      negocio:    data,
-      panel_url:  `${process.env.PANEL_URL || "https://negosocio.framer.website/panel"}?u=${dominioClean}`,
+      success:   true,
+      negocio:   data,
+      panel_url: `${PANEL_URL}?u=${dominioClean}`,
     });
   } catch (e) {
     console.error("Error en POST /superadmin/negocios:", e.message);
@@ -281,25 +311,28 @@ app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("usuarios")
-      .select("id, dominio, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, mp_access_token, mobbex_api_key, created_at")
+      .select("id, dominio, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
       .order("business_name", { ascending: true });
 
     if (error) throw error;
 
     const negocios = (data || []).map((u) => ({
-      id:             u.id,
-      dominio:        u.dominio,
-      business_name:  u.business_name,
-      rubro:          u.rubro,
-      nombre_persona: u.nombre_persona,
-      apellido:       u.apellido,
-      email:          u.email,
-      telefono:       u.telefono,
-      activo:         u.activo,
-      metodo_pago:    u.metodo_pago,
-      tiene_mp:       !!u.mp_access_token,
-      tiene_mobbex:   !!u.mobbex_api_key,
-      creado:         u.created_at,
+      id:                  u.id,
+      dominio:             u.dominio,
+      business_name:       u.business_name,
+      rubro:               u.rubro,
+      nombre_persona:      u.nombre_persona,
+      apellido:            u.apellido,
+      email:               u.email,
+      telefono:            u.telefono,
+      activo:              u.activo,
+      metodo_pago:         u.metodo_pago,
+      tiene_mp:            !!u.mp_access_token,
+      tiene_mobbex:        !!u.mobbex_api_key,
+      estado_suscripcion:  u.estado_suscripcion || "trial",
+      fecha_vencimiento:   u.fecha_vencimiento,
+      dias_restantes:      u.fecha_vencimiento ? diasHastaVencer(u.fecha_vencimiento) : null,
+      creado:              u.created_at,
     }));
 
     res.json({ success: true, negocios, total: negocios.length });
@@ -310,19 +343,18 @@ app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
 
 /**
  * GET /superadmin/negocios/:dominio
- * Detalle completo de un negocio (para el panel superadmin).
+ * Detalle completo de un negocio.
  */
 app.get("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
   try {
     const dominio = cleanDominio(req.params.dominio);
     const { data: negocio, error } = await supabase
       .from("usuarios")
-      .select("id, dominio, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, porcentaje_sena, quien_asume_comision, duracion_turno, capacidad_por_turno, horarios, excepciones, notas_internas, mp_access_token, mobbex_api_key, created_at")
+      .select("id, dominio, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, porcentaje_sena, quien_asume_comision, duracion_turno, capacidad_por_turno, horarios, excepciones, notas_internas, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
       .eq("dominio", dominio).single();
 
     if (error || !negocio) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    // Servicios del negocio
     const { data: servicios } = await supabase
       .from("servicios").select("id, nombre, descripcion, precio, duracion, capacidad, activo, orden")
       .eq("dominio", dominio).order("orden", { ascending: true });
@@ -331,12 +363,12 @@ app.get("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
       success: true,
       negocio: {
         ...negocio,
-        tiene_mp:     !!negocio.mp_access_token,
-        tiene_mobbex: !!negocio.mobbex_api_key,
-        // No devolver tokens reales
-        mp_access_token:      undefined,
-        mobbex_api_key:       undefined,
-        mobbex_access_token:  undefined,
+        tiene_mp:            !!negocio.mp_access_token,
+        tiene_mobbex:        !!negocio.mobbex_api_key,
+        dias_restantes:      negocio.fecha_vencimiento ? diasHastaVencer(negocio.fecha_vencimiento) : null,
+        mp_access_token:     undefined,
+        mobbex_api_key:      undefined,
+        mobbex_access_token: undefined,
       },
       servicios: servicios || [],
     });
@@ -356,6 +388,7 @@ app.put("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
       "nombre_persona", "apellido", "email", "telefono",
       "business_name", "rubro", "activo", "notas_internas",
       "duracion_turno", "capacidad_por_turno",
+      "estado_suscripcion", "fecha_vencimiento",
     ];
     const update = {};
 
@@ -363,13 +396,22 @@ app.put("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
       if (req.body[key] !== undefined) update[key] = req.body[key];
     });
 
-    // Si cambia el dominio (con cuidado)
     if (req.body.nuevo_dominio) {
       update.dominio = cleanDominio(req.body.nuevo_dominio);
     }
 
     if (req.body.password) {
       update.password = await bcrypt.hash(String(req.body.password), BCRYPT_ROUNDS);
+    }
+
+    // Superadmin puede sumar días manualmente
+    if (req.body.sumar_dias && !isNaN(parseInt(req.body.sumar_dias))) {
+      const { data: actual } = await supabase.from("usuarios").select("fecha_vencimiento").eq("dominio", dominio).single();
+      const base = actual?.fecha_vencimiento && new Date(actual.fecha_vencimiento) > new Date()
+        ? actual.fecha_vencimiento
+        : null;
+      update.fecha_vencimiento  = calcularVencimiento(parseInt(req.body.sumar_dias), base);
+      update.estado_suscripcion = "activo";
     }
 
     const { error } = await supabase.from("usuarios").update(update).eq("dominio", dominio);
@@ -406,11 +448,10 @@ app.delete("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) =>
 /**
  * POST /login
  * Body: { dominio, password }
- * El dueño del negocio se loguea con su dominio y contraseña.
  */
 app.post("/login", limiterAuth, async (req, res) => {
   try {
-    const dominio  = cleanDominio(req.body.dominio || req.body.slug); // slug como alias temporal
+    const dominio  = cleanDominio(req.body.dominio || req.body.slug);
     const password = req.body.password;
 
     if (!dominio || !password) {
@@ -419,7 +460,7 @@ app.post("/login", limiterAuth, async (req, res) => {
 
     const { data: user, error } = await supabase
       .from("usuarios")
-      .select("id, dominio, password, business_name, nombre_persona, apellido, email, rubro, activo")
+      .select("id, dominio, password, business_name, nombre_persona, apellido, email, rubro, activo, estado_suscripcion, fecha_vencimiento")
       .eq("dominio", dominio)
       .single();
 
@@ -450,15 +491,28 @@ app.post("/login", limiterAuth, async (req, res) => {
       { expiresIn: JWT_EXPIRY }
     );
 
+    // Info de suscripción para el frontend
+    const diasRestantes       = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estadoSuscripcion   = user.estado_suscripcion || "trial";
+    const alertaVencimiento   = diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0;
+    const suscripcionVencida  = diasRestantes !== null && diasRestantes <= 0;
+
     res.json({
-      success:        true,
+      success:            true,
       token,
-      dominio:        user.dominio,
-      business_name:  user.business_name,
-      nombre_persona: user.nombre_persona,
-      apellido:       user.apellido || "",
-      email:          user.email,
-      rubro:          user.rubro,
+      dominio:            user.dominio,
+      business_name:      user.business_name,
+      nombre_persona:     user.nombre_persona,
+      apellido:           user.apellido || "",
+      email:              user.email,
+      rubro:              user.rubro,
+      suscripcion: {
+        estado:           estadoSuscripcion,
+        fecha_vencimiento: user.fecha_vencimiento,
+        dias_restantes:   diasRestantes,
+        alerta:           alertaVencimiento,
+        vencida:          suscripcionVencida,
+      },
     });
   } catch (e) {
     console.error("Error en /login:", e.message);
@@ -468,16 +522,29 @@ app.post("/login", limiterAuth, async (req, res) => {
 
 /**
  * GET /verify-session
+ * Verifica token JWT y devuelve estado de suscripción actualizado.
  */
 app.get("/verify-session", requireAuth, async (req, res) => {
   try {
     const { data: user } = await supabase
       .from("usuarios")
-      .select("dominio, business_name, email, nombre_persona, apellido, rubro, activo")
+      .select("dominio, business_name, email, nombre_persona, apellido, rubro, activo, estado_suscripcion, fecha_vencimiento")
       .eq("dominio", req.auth.dominio)
       .single();
 
     if (!user || !user.activo) return res.json({ active: false, reason: "not_found" });
+
+    const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estadoSuscripcion  = user.estado_suscripcion || "trial";
+    const alertaVencimiento  = diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0;
+    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
+
+    // Si venció pero el estado aún no se actualizó en DB, lo sincronizamos aquí
+    if (suscripcionVencida && estadoSuscripcion !== "suspendido") {
+      await supabase.from("usuarios")
+        .update({ estado_suscripcion: "suspendido" })
+        .eq("dominio", req.auth.dominio);
+    }
 
     res.json({
       active:         true,
@@ -487,6 +554,13 @@ app.get("/verify-session", requireAuth, async (req, res) => {
       nombre_persona: user.nombre_persona,
       apellido:       user.apellido || "",
       rubro:          user.rubro,
+      suscripcion: {
+        estado:            suscripcionVencida ? "suspendido" : estadoSuscripcion,
+        fecha_vencimiento: user.fecha_vencimiento,
+        dias_restantes:    diasRestantes,
+        alerta:            alertaVencimiento,
+        vencida:           suscripcionVencida,
+      },
     });
   } catch (e) {
     res.status(500).json({ active: false, error: e.message });
@@ -546,7 +620,8 @@ app.post("/api/verify-and-reset-password", limiterAuth, async (req, res) => {
 /**
  * GET /negocio/:dominio
  * Devuelve datos públicos del negocio para la landing.
- * El frontend puede llamar con el dominio de la URL (window.location.hostname).
+ * Si el negocio está SUSPENDIDO devuelve { suspendido: true } para que
+ * el frontend muestre el cartel "Servicio pausado temporalmente".
  */
 app.get("/negocio/:dominio", async (req, res) => {
   try {
@@ -555,12 +630,32 @@ app.get("/negocio/:dominio", async (req, res) => {
 
     const { data: user, error } = await supabase
       .from("usuarios")
-      .select("dominio, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, mobbex_api_key, quien_asume_comision, activo")
+      .select("dominio, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, mobbex_api_key, quien_asume_comision, activo, estado_suscripcion, fecha_vencimiento")
       .eq("dominio", dominio)
       .single();
 
     if (error || !user)  return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!user.activo)    return res.status(404).json({ success: false, error: "Negocio no disponible." });
+
+    // Verificar vencimiento en tiempo real
+    const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estaSuspendido = (user.estado_suscripcion === "suspendido") || (diasRestantes !== null && diasRestantes <= 0);
+
+    if (estaSuspendido) {
+      // Sincronizar estado en DB si hace falta
+      if (user.estado_suscripcion !== "suspendido") {
+        supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).eq("dominio", dominio).then(() => {});
+      }
+      return res.json({
+        success:    true,
+        suspendido: true,
+        negocio: {
+          dominio:       user.dominio,
+          business_name: user.business_name,
+          rubro:         user.rubro,
+        },
+      });
+    }
 
     res.json({
       success: true,
@@ -591,7 +686,6 @@ app.get("/negocio/:dominio", async (req, res) => {
 
 /**
  * GET /slots-disponibles/:dominio?fecha=YYYY-MM-DD&servicio_id=...
- * Si se pasa servicio_id, usa la duración y capacidad de ese servicio.
  */
 app.get("/slots-disponibles/:dominio", async (req, res) => {
   try {
@@ -602,7 +696,7 @@ app.get("/slots-disponibles/:dominio", async (req, res) => {
 
     const { data: user, error: userError } = await supabase
       .from("usuarios")
-      .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo")
+      .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo, estado_suscripcion, fecha_vencimiento")
       .eq("dominio", dominio)
       .single();
 
@@ -610,11 +704,14 @@ app.get("/slots-disponibles/:dominio", async (req, res) => {
       return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     }
 
-    // Por defecto toma la configuración global del negocio
+    // Bloquear slots si el negocio está suspendido
+    const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estaSuspendido = (user.estado_suscripcion === "suspendido") || (diasRestantes !== null && diasRestantes <= 0);
+    if (estaSuspendido) return res.json({ success: true, slots: [], suspendido: true });
+
     let duracion  = user.duracion_turno       || 30;
     let capacidad = user.capacidad_por_turno  || 1;
 
-    // Si se especificó un servicio, usar SU duración y capacidad
     if (servicio_id) {
       const { data: srv } = await supabase
         .from("servicios")
@@ -628,7 +725,6 @@ app.get("/slots-disponibles/:dominio", async (req, res) => {
       }
     }
 
-    // Excepciones: día completamente bloqueado
     const excepcionesArr = user.excepciones || [];
     const estaExceptuado = Array.isArray(excepcionesArr)
       ? excepcionesArr.some((e) =>
@@ -709,7 +805,6 @@ app.get("/turnos/ocupados", async (req, res) => {
 /**
  * POST /turnos/reservar
  * El cliente reserva desde la landing (sin login).
- * Body: { dominio, name, phone, email?, fecha, hora, servicio_id? }
  */
 app.post("/turnos/reservar", limiterBooking, async (req, res) => {
   try {
@@ -733,6 +828,13 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     if (userError || !user)  return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!user.activo)        return res.status(404).json({ success: false, error: "Negocio no disponible." });
 
+    // Bloquear si la suscripción venció
+    const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estaSuspendido = (user.estado_suscripcion === "suspendido") || (diasRestantes !== null && diasRestantes <= 0);
+    if (estaSuspendido) {
+      return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
+    }
+
     // Si requiere pago previo, rechazar reserva directa
     const requierePago = (user.mp_access_token || user.mobbex_api_key)
       && (user.metodo_pago === "sena" || user.metodo_pago === "total");
@@ -752,7 +854,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     }
 
     // Capacidad
-    let capacidad = user.capacidad_por_turno || 1;
+    let capacidad      = user.capacidad_por_turno || 1;
     let servicioNombre = null;
     let precioCobrado  = 0;
 
@@ -791,7 +893,6 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 
     if (turnoError) throw turnoError;
 
-    // Notificación email al dueño
     fetch(APPS_SCRIPT_URL, {
       method: "POST", headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
@@ -1114,10 +1215,12 @@ app.get("/settings/:dominio", requireAuth, async (req, res) => {
     const dominio = cleanDominio(req.params.dominio);
     const { data: user, error } = await supabase
       .from("usuarios")
-      .select("dominio, business_name, rubro, nombre_persona, apellido, email, telefono, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, quien_asume_comision, horarios, excepciones, mp_access_token, mobbex_api_key, notas_internas")
+      .select("dominio, business_name, rubro, nombre_persona, apellido, email, telefono, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, quien_asume_comision, horarios, excepciones, mp_access_token, mobbex_api_key, notas_internas, estado_suscripcion, fecha_vencimiento")
       .eq("dominio", dominio).single();
 
     if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
 
     res.json({
       success: true,
@@ -1128,6 +1231,8 @@ app.get("/settings/:dominio", requireAuth, async (req, res) => {
         mp_access_token:     undefined,
         mobbex_api_key:      undefined,
         mobbex_access_token: undefined,
+        dias_restantes:      diasRestantes,
+        alerta_vencimiento:  diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
       },
     });
   } catch (e) {
@@ -1197,7 +1302,6 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
     const hoyISO     = `${anioActual}-${String(mesActual).padStart(2, "0")}-${String(diaHoyNum).padStart(2, "0")}`;
     const inicioMes  = `${anioActual}-${String(mesActual).padStart(2, "0")}-01`;
 
-    // Turnos del mes
     const { data: turnosMes } = await supabase
       .from("turnos").select("*")
       .eq("dominio", dominio).gte("fecha", inicioMes).neq("estado", "cancelado")
@@ -1207,7 +1311,6 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
     const turnosHoy      = turnosData.filter((t) => t.fecha === hoyISO).length;
     const turnosMesTotal = turnosData.length;
 
-    // Chart semanal
     const semanas = { "Sem 1": 0, "Sem 2": 0, "Sem 3": 0, "Sem 4": 0 };
     turnosData.forEach((t) => {
       const dia = parseInt(t.fecha.split("-")[2]);
@@ -1242,7 +1345,6 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
         estado:  t.estado,
       }));
 
-    // Ventas (últimos 90 días)
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
     const { data: ventasData } = await supabase
@@ -1261,7 +1363,6 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
       ...(metricas.porDia[fecha] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 }),
     }));
 
-    // Clientes únicos totales
     const { data: todosLosTurnos } = await supabase
       .from("turnos").select("telefono, email, created_at")
       .eq("dominio", dominio).neq("estado", "cancelado");
@@ -1278,11 +1379,16 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
       }
     });
 
-    // Ventajas por día del mes hasta hoy
     const ventasPorDia = {};
     generarRangoDias(inicioMes, diaHoyNum).forEach((d) => {
       ventasPorDia[d] = metricas.porDia[d] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
     });
+
+    // Info de suscripción para el dashboard
+    const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estadoSuscripcion  = user.estado_suscripcion || "trial";
+    const alertaVencimiento  = diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0;
+    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
 
     const finalData = {
       turnosHoy,
@@ -1327,6 +1433,16 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
         excepciones:          user.excepciones     || [],
       },
 
+      // Suscripción — usado por el Dashboard para mostrar banners
+      suscripcion: {
+        estado:            suscripcionVencida ? "suspendido" : estadoSuscripcion,
+        fecha_vencimiento: user.fecha_vencimiento,
+        dias_restantes:    diasRestantes,
+        alerta:            alertaVencimiento,
+        vencida:           suscripcionVencida,
+        precio_renovacion: PRECIO_SUSCRIPCION,
+      },
+
       businessName:   user.business_name,
       nombre_persona: user.nombre_persona,
       apellido:       user.apellido || "",
@@ -1344,9 +1460,7 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// PAGOS — Mercado Pago + Mobbex
-// El precio siempre viene del servicio seleccionado.
-// No hay comisión de plataforma (service_fee = 0 siempre).
+// PAGOS — Mercado Pago + Mobbex (pagos de turnos del cliente)
 // ══════════════════════════════════════════════════════════════
 
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
@@ -1365,7 +1479,13 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       .from("usuarios").select("*").eq("dominio", dominioClean).single();
     if (userError || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    // Precio: obligatoriamente del servicio
+    // Bloquear si suscripción vencida
+    const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estaSuspendido = (user.estado_suscripcion === "suspendido") || (diasRestantes !== null && diasRestantes <= 0);
+    if (estaSuspendido) {
+      return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
+    }
+
     let precioServicio = 0;
     let nombreServicio = "Reserva";
 
@@ -1383,7 +1503,6 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const debePagar = metodo === "sena" || metodo === "total";
     if (!debePagar || precioServicio <= 0) return res.json({ isFree: true });
 
-    // Seña: porcentaje del precio del servicio
     const montoACobrar = metodo === "sena"
       ? Math.round(precioServicio * (user.porcentaje_sena || 30) / 100)
       : precioServicio;
@@ -1414,7 +1533,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
         const mobbexRes = await fetch("https://api.mobbex.com/p/sessions", {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":   "application/json",
             "x-api-key":      user.mobbex_api_key,
             "x-access-token": user.mobbex_access_token,
           },
@@ -1454,9 +1573,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
         const response = await pref.create({
           body: {
             items: [{
-              title:      `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`,
-              unit_price: montoACobrar,
-              quantity:   1,
+              title:       `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`,
+              unit_price:  montoACobrar,
+              quantity:    1,
               currency_id: "ARS",
             }],
             metadata:         { ...metaMeta, tipo_pago: metodo },
@@ -1481,7 +1600,109 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// OAUTH — Mercado Pago
+// SUSCRIPCIÓN — Checkout de renovación mensual de Associe
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/suscripcion/checkout
+ * Genera una preference de MercadoPago con el token PROPIO de Associe
+ * (MP_PLATFORM_TOKEN) para cobrar la mensualidad al dueño del negocio.
+ *
+ * Headers: Authorization: Bearer <token JWT del owner>
+ * Body: { dominio }
+ */
+app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
+  try {
+    const dominio = cleanDominio(req.body.dominio || req.auth.dominio);
+
+    if (!MP_PLATFORM_TOKEN) {
+      return res.status(500).json({ success: false, error: "Pasarela de suscripción no configurada. Contactá soporte." });
+    }
+
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .select("id, email, nombre_persona, apellido, business_name, fecha_vencimiento, estado_suscripcion")
+      .eq("dominio", dominio).single();
+
+    if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const client = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
+    const pref   = new Preference(client);
+
+    const response = await pref.create({
+      body: {
+        items: [{
+          title:       `Associe — Suscripción mensual (${user.business_name})`,
+          unit_price:  PRECIO_SUSCRIPCION,
+          quantity:    1,
+          currency_id: "ARS",
+        }],
+        payer: {
+          email: user.email,
+          name:  `${user.nombre_persona || ""} ${user.apellido || ""}`.trim(),
+        },
+        metadata: {
+          tipo:    "suscripcion_associe",
+          dominio: dominio,
+          user_id: user.id,
+        },
+        notification_url: `${API_URL}/webhook/suscripcion`,
+        back_urls: {
+          success: SUSCRIPCION_SUCCESS,
+          failure: SUSCRIPCION_CANCEL,
+          pending: SUSCRIPCION_CANCEL,
+        },
+        auto_return: "approved",
+      },
+    });
+
+    res.json({
+      success:     true,
+      payment_url: response.init_point,
+      monto:       PRECIO_SUSCRIPCION,
+    });
+  } catch (e) {
+    console.error("Error en /api/suscripcion/checkout:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/**
+ * GET /api/suscripcion/estado
+ * Devuelve el estado de suscripción del negocio autenticado.
+ */
+app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
+  try {
+    const dominio = cleanDominio(req.query.dominio || req.auth.dominio);
+
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .select("estado_suscripcion, fecha_vencimiento")
+      .eq("dominio", dominio).single();
+
+    if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
+    const estadoReal         = suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "trial");
+
+    res.json({
+      success: true,
+      estado:            estadoReal,
+      fecha_vencimiento: user.fecha_vencimiento,
+      dias_restantes:    diasRestantes,
+      alerta:            diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
+      vencida:           suscripcionVencida,
+      precio_renovacion: PRECIO_SUSCRIPCION,
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+// ══════════════════════════════════════════════════════════════
+// OAUTH — Mercado Pago (vinculación del negocio cliente)
 // ══════════════════════════════════════════════════════════════
 
 app.get("/oauth-callback", async (req, res) => {
@@ -1500,15 +1721,14 @@ app.get("/oauth-callback", async (req, res) => {
         redirect_uri:  `${API_URL}/oauth-callback`,
       }),
     });
-    const data     = await response.json();
-    const panelUrl = process.env.PANEL_URL || "https://negosocio.framer.website/panel";
+    const data = await response.json();
 
     if (data.access_token) {
       await supabase.from("usuarios").update({ mp_access_token: data.access_token }).eq("dominio", dominioClean);
       invalidateCache(dominioClean);
-      return res.redirect(`${panelUrl}?status=mp_success&u=${dominioClean}`);
+      return res.redirect(`${PANEL_URL}?status=mp_success&u=${dominioClean}`);
     }
-    res.redirect(`${panelUrl}?status=mp_error&u=${dominioClean}`);
+    res.redirect(`${PANEL_URL}?status=mp_error&u=${dominioClean}`);
   } catch (e) {
     res.status(500).send("Error al vincular Mercado Pago.");
   }
@@ -1516,15 +1736,13 @@ app.get("/oauth-callback", async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// WEBHOOKS
+// WEBHOOKS — Pagos de turnos (MP + Mobbex)
 // ══════════════════════════════════════════════════════════════
 
 async function procesarPagoConfirmado({ dominio, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, payment_id, estado }) {
   let turnoId = null;
 
   if (estado === "aprobado") {
-    let precioCobrado = monto;
-
     const { data: turnoInsertado } = await supabase.from("turnos").insert([{
       dominio,
       nombre:          nombre?.trim() || "Cliente",
@@ -1534,7 +1752,7 @@ async function procesarPagoConfirmado({ dominio, nombre, telefono, email, fecha,
       hora,
       servicio_id:     servicio_id || null,
       servicio_nombre: servicio_nombre || null,
-      precio_cobrado:  precioCobrado,
+      precio_cobrado:  monto,
       estado:          "confirmado",
       metodo_pago,
       payment_id:      String(payment_id),
@@ -1588,6 +1806,15 @@ app.post("/webhook/mp", async (req, res) => {
         headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
       });
       const payData = await payRes.json();
+
+      // Detectar si es un pago de suscripción de Associe
+      const tipoPago = payData.metadata?.tipo || "";
+      if (tipoPago === "suscripcion_associe") {
+        // Delegar al handler de suscripción y salir
+        await procesarPagoSuscripcion(payData);
+        return res.sendStatus(200);
+      }
+
       const dominio = cleanDominio(payData.metadata?.dominio || payData.metadata?.slug || "");
       if (!dominio) return res.sendStatus(200);
 
@@ -1661,6 +1888,164 @@ app.post("/webhook/mobbex", async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
+// WEBHOOK — Pago de suscripción de Associe
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Procesa el pago de la mensualidad de Associe.
+ * Suma 30 días al vencimiento y activa la suscripción.
+ * Puede ser llamado desde /webhook/mp (detección por metadata.tipo)
+ * o directamente desde /webhook/suscripcion.
+ */
+async function procesarPagoSuscripcion(payData) {
+  const estado  = payData.status === "approved" ? "aprobado" : "rechazado";
+  if (estado !== "aprobado") return; // solo procesamos pagos aprobados
+
+  const dominio = cleanDominio(payData.metadata?.dominio || "");
+  if (!dominio) {
+    console.error("⚠️ Webhook suscripción: dominio no encontrado en metadata.");
+    return;
+  }
+
+  const { data: user, error } = await supabase
+    .from("usuarios")
+    .select("id, email, nombre_persona, fecha_vencimiento, estado_suscripcion")
+    .eq("dominio", dominio).single();
+
+  if (error || !user) {
+    console.error(`⚠️ Webhook suscripción: negocio no encontrado (${dominio}).`);
+    return;
+  }
+
+  // Calcular nueva fecha: si ya tiene fecha futura, sumar desde ahí; si venció, desde hoy
+  const fechaBase = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date()
+    ? user.fecha_vencimiento
+    : null;
+  const nuevaFecha = calcularVencimiento(30, fechaBase);
+
+  await supabase.from("usuarios").update({
+    fecha_vencimiento:  nuevaFecha,
+    estado_suscripcion: "activo",
+  }).eq("dominio", dominio);
+
+  invalidateCache(dominio);
+
+  console.log(`✅ Suscripción renovada: ${dominio} → vence ${nuevaFecha}`);
+
+  // Email de confirmación al dueño (opcional)
+  if (user.email) {
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST", headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action:     "suscripcionRenovada",
+        adminEmail: user.email,
+        nombre:     user.nombre_persona || "Cliente",
+        dominio,
+        nuevaFecha,
+      }),
+    }).catch((e) => console.error("Error mail suscripción:", e.message));
+  }
+}
+
+/**
+ * POST /webhook/suscripcion
+ * Endpoint dedicado para el IPN/webhook del checkout de suscripción.
+ * MercadoPago llama a esta URL cuando hay un pago nuevo.
+ */
+app.post("/webhook/suscripcion", async (req, res) => {
+  const { query, body } = req;
+  try {
+    if (query.topic === "payment" || body.type === "payment") {
+      const paymentId = query.id || body.data?.id;
+      if (!paymentId) return res.sendStatus(200);
+
+      const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` },
+      });
+      const payData = await payRes.json();
+
+      await procesarPagoSuscripcion(payData);
+    }
+    res.sendStatus(200);
+  } catch (e) {
+    console.error("Error en /webhook/suscripcion:", e.message);
+    res.sendStatus(200);
+  }
+});
+
+
+// ══════════════════════════════════════════════════════════════
+// CRON — Verificación de vencimientos
+// Llamar periódicamente desde un servicio externo (cron.job.io,
+// Render Cron Jobs, o cualquier scheduler).
+// Protegido por x-api-key.
+//
+// Ejemplo de llamada:
+//   GET https://negosocio.onrender.com/cron/check-vencimientos
+//   Header: x-api-key: <ADMIN_SECRET>
+// ══════════════════════════════════════════════════════════════
+
+app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
+  try {
+    const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }))
+      .toISOString().split("T")[0];
+
+    // Buscar negocios activos cuyo vencimiento ya pasó y no están marcados como suspendidos
+    const { data: vencidos, error } = await supabase
+      .from("usuarios")
+      .select("id, dominio, business_name, email, fecha_vencimiento")
+      .eq("activo", true)
+      .neq("estado_suscripcion", "suspendido")
+      .lt("fecha_vencimiento", hoyISO);
+
+    if (error) throw error;
+
+    const dominios = (vencidos || []).map((u) => u.dominio);
+
+    if (dominios.length > 0) {
+      await supabase.from("usuarios")
+        .update({ estado_suscripcion: "suspendido" })
+        .in("dominio", dominios);
+
+      dominios.forEach((d) => invalidateCache(d));
+
+      console.log(`🔒 Suspendidos (${hoyISO}):`, dominios.join(", "));
+    }
+
+    // También activar los que pagaron pero aún estaban marcados como suspendidos
+    const { data: reactivables } = await supabase
+      .from("usuarios")
+      .select("id, dominio")
+      .eq("activo", true)
+      .eq("estado_suscripcion", "suspendido")
+      .gte("fecha_vencimiento", hoyISO);
+
+    const dominiosReactivar = (reactivables || []).map((u) => u.dominio);
+    if (dominiosReactivar.length > 0) {
+      await supabase.from("usuarios")
+        .update({ estado_suscripcion: "activo" })
+        .in("dominio", dominiosReactivar);
+
+      dominiosReactivar.forEach((d) => invalidateCache(d));
+      console.log(`✅ Reactivados:`, dominiosReactivar.join(", "));
+    }
+
+    res.json({
+      success:       true,
+      fecha:         hoyISO,
+      suspendidos:   dominios,
+      reactivados:   dominiosReactivar,
+      total_suspendidos: dominios.length,
+      total_reactivados: dominiosReactivar.length,
+    });
+  } catch (e) {
+    console.error("Error en /cron/check-vencimientos:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+// ══════════════════════════════════════════════════════════════
 // 404 Y ERROR HANDLER
 // ══════════════════════════════════════════════════════════════
 app.use("*", (req, res) => {
@@ -1680,10 +2065,9 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   NegoSocio API v7.0                         ║
-  ║   Identificador: dominio web del cliente     ║
-  ║   Precio: por servicio                       ║
-  ║   Sin comisiones de plataforma               ║
+  ║   Associe API v7.1                           ║
+  ║   Multi-tenant · Suscripción semi-manual     ║
+  ║   Control de vencimientos activado           ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
