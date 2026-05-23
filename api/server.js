@@ -313,7 +313,7 @@ app.post("/registro", limiterAuth, async (req, res) => {
     const slug = await generarSlugUnico(business_name.trim());
 
     // ── Hash de contraseña ────────────────────────────────────
-    const hashedPassword   = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+const hashedPassword = String(password);
     const fechaVencimiento = calcularVencimiento(DIAS_PRUEBA);
 
     // ── Insertar en DB ────────────────────────────────────────
@@ -659,17 +659,17 @@ app.post("/login", limiterAuth, async (req, res) => {
     if (error || !user) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
     if (!user.activo)   return res.status(403).json({ success: false, error: "Este negocio está desactivado." });
 
-    const isHashed = user.password?.startsWith("$2b$") || user.password?.startsWith("$2a$");
-    let passwordOk = false;
-    if (isHashed) {
-      passwordOk = await bcrypt.compare(String(password), user.password);
-    } else {
-      passwordOk = String(user.password) === String(password);
-      if (passwordOk) {
-        const newHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-        await supabase.from("usuarios").update({ password: newHash }).eq("slug", user.slug);
-      }
-    }
+const isHashed = user.password?.startsWith("$2b$") || user.password?.startsWith("$2a$");
+let passwordOk = false;
+if (isHashed) {
+  passwordOk = await bcrypt.compare(String(password), user.password);
+} else {
+  passwordOk = String(user.password) === String(password);
+  if (passwordOk) {
+    const newHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+    await supabase.from("usuarios").update({ password: newHash }).eq("slug", user.slug);
+  }
+}
 
     if (!passwordOk) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
 
