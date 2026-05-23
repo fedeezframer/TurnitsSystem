@@ -647,7 +647,6 @@ app.post("/login", limiterAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Faltan slug (o email) y contraseña." });
     }
 
-    // Buscar por slug o por email
     let query = supabase
       .from("usuarios")
       .select("id, slug, password, business_name, nombre_persona, apellido, email, rubro, activo, estado_suscripcion, fecha_vencimiento");
@@ -659,17 +658,7 @@ app.post("/login", limiterAuth, async (req, res) => {
     if (error || !user) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
     if (!user.activo)   return res.status(403).json({ success: false, error: "Este negocio está desactivado." });
 
-const isHashed = user.password?.startsWith("$2b$") || user.password?.startsWith("$2a$");
-let passwordOk = false;
-if (isHashed) {
-  passwordOk = await bcrypt.compare(String(password), user.password);
-} else {
-  passwordOk = String(user.password) === String(password);
-  if (passwordOk) {
-    const newHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-    await supabase.from("usuarios").update({ password: newHash }).eq("slug", user.slug);
-  }
-}
+    const passwordOk = String(user.password) === String(password);
 
     if (!passwordOk) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
 
