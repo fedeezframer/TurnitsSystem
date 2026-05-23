@@ -637,7 +637,7 @@ app.delete("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
  * POST /login
  * Body: { slug, password }  (también acepta "email" como alternativa al slug)
  */
-app.post("/login", limiterAuth, async (req, res) => {
+app.post("/login", async (req, res) => {
   try {
     const rawSlug  = cleanSlug(req.body.slug || req.body.dominio || "");
     const email    = req.body.email?.trim().toLowerCase() || "";
