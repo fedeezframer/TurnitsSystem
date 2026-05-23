@@ -21,15 +21,10 @@ const JWT_EXPIRY     = "7d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 
 // ─── Configuración del SaaS (Associe) ────────────────────────
-// DIAS_PRUEBA: cuántos días gratis al registrarse
 const DIAS_PRUEBA          = parseInt(process.env.DIAS_PRUEBA || "15");
-// PRECIO_SUSCRIPCION: monto mensual en ARS
 const PRECIO_SUSCRIPCION   = parseInt(process.env.PRECIO_SUSCRIPCION || "21000");
-// MP_PLATFORM_TOKEN: el access token de la cuenta PROPIA de Associe (no el del cliente)
 const MP_PLATFORM_TOKEN    = process.env.MP_PLATFORM_TOKEN || "";
-// PANEL_URL: URL del panel de control del dueño
 const PANEL_URL            = process.env.PANEL_URL || "https://negosocio.framer.website/panel";
-// SUCCESS_URL / CANCEL_URL: redirecciones de checkout de suscripción
 const SUSCRIPCION_SUCCESS  = process.env.SUSCRIPCION_SUCCESS_URL || `${PANEL_URL}?status=suscripcion_ok`;
 const SUSCRIPCION_CANCEL   = process.env.SUSCRIPCION_CANCEL_URL  || `${PANEL_URL}?status=suscripcion_cancel`;
 
@@ -37,31 +32,60 @@ const SUSCRIPCION_CANCEL   = process.env.SUSCRIPCION_CANCEL_URL  || `${PANEL_URL
 // HELPERS GENERALES
 // ══════════════════════════════════════════════════════════════
 
-// Normaliza un dominio: minúsculas, sin protocolo ni trailing slash
-const cleanDominio = (raw) => {
+/**
+ * Normaliza un slug: minúsculas, sin espacios ni caracteres especiales.
+ * Equivalente JS al generar_slug_base() de PostgreSQL.
+ * Ejemplo: "Mi Peluquería & Co." → "mi-peluqueria-co"
+ */
+const cleanSlug = (raw) => {
   if (!raw) return "";
-  return raw.toLowerCase().trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "")
-    .trim();
+  return raw
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")   // quitar tildes
+    .replace(/[^a-z0-9]+/g, "-")       // todo lo no alfanumérico → guión
+    .replace(/^-+|-+$/g, "");          // quitar guiones al inicio/fin
 };
+
+/**
+ * Genera un slug único a partir del business_name consultando la DB.
+ * Si "mi-negocio" ya existe, prueba "mi-negocio-2", etc.
+ */
+async function generarSlugUnico(businessName) {
+  const base = cleanSlug(businessName);
+  let   slug = base;
+  let   n    = 2;
+
+  while (true) {
+    const { data } = await supabase
+      .from("usuarios")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (!data) break;        // slug disponible
+    slug = `${base}-${n}`;
+    n++;
+  }
+
+  return slug;
+}
 
 const validateEmail    = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const validatePassword = (p) => p && p.length >= 6;
 const validatePhone    = (p) => /^[0-9]{7,15}$/.test(p.toString().replace(/\s/g, ""));
 const cleanPhone       = (p) => p.toString().replace(/\s/g, "").trim();
 
-// Calcula fecha de vencimiento sumando N días a partir de hoy (UTC-3 Argentina)
 const calcularVencimiento = (diasExtra = 30, baseISO = null) => {
   const base = baseISO ? new Date(baseISO + "T12:00:00-03:00") : new Date();
   base.setDate(base.getDate() + diasExtra);
   return base.toISOString().split("T")[0];
 };
 
-// Días restantes hasta vencimiento (puede ser negativo si ya venció)
 const diasHastaVencer = (fechaVencimientoISO) => {
-  const hoy    = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
-  const vence  = new Date(fechaVencimientoISO + "T23:59:59-03:00");
+  const hoy   = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+  const vence = new Date(fechaVencimientoISO + "T23:59:59-03:00");
   return Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
 };
 
@@ -69,7 +93,7 @@ const diasHastaVencer = (fechaVencimientoISO) => {
 // CACHÉ EN MEMORIA
 // ══════════════════════════════════════════════════════════════
 const globalCache = {};
-const invalidateCache = (dominio) => { delete globalCache[dominio]; };
+const invalidateCache = (slug) => { delete globalCache[slug]; };
 
 // ══════════════════════════════════════════════════════════════
 // RATE LIMITING
@@ -97,7 +121,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // ══════════════════════════════════════════════════════════════
 // MIDDLEWARE: JWT AUTH
 // ══════════════════════════════════════════════════════════════
-// JWT contiene: { dominio, negocioId, rol: "owner" | "superadmin" }
+// JWT contiene: { slug, negocioId, rol: "owner" | "superadmin" }
 function requireAuth(req, res, next) {
   try {
     const header = req.headers["authorization"];
@@ -117,12 +141,12 @@ function requireAuth(req, res, next) {
       return next();
     }
 
-    // Owner: el dominio del JWT debe coincidir con el dominio de la ruta/body
-    const dominioRuta = cleanDominio(
-      req.params.dominio || req.body?.dominio || req.query?.dominio || ""
+    // Owner: el slug del JWT debe coincidir con el slug de la ruta/body
+    const slugRuta = cleanSlug(
+      req.params.slug || req.body?.slug || req.query?.slug || ""
     );
 
-    if (dominioRuta && payload.dominio !== dominioRuta) {
+    if (slugRuta && payload.slug !== slugRuta) {
       return res.status(403).json({ success: false, error: "No autorizado para este negocio." });
     }
 
@@ -137,7 +161,7 @@ function requireAuth(req, res, next) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MIDDLEWARE: SUPERADMIN KEY (x-api-key header)
+// MIDDLEWARE: SUPERADMIN KEY
 // ══════════════════════════════════════════════════════════════
 const requireAdminKey = (req, res, next) => {
   const key = req.headers["x-api-key"];
@@ -222,37 +246,200 @@ function calcularFrecuencia(cantidadTurnos) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "7.1", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "8.0", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 
 // ══════════════════════════════════════════════════════════════
+// REGISTRO PÚBLICO — Auto-registro de negocios
+// POST /registro
+// El cliente completa un formulario en Framer y se registra solo.
+// El slug se genera automáticamente a partir del business_name.
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * POST /registro
+ * Body: {
+ *   nombre_persona, apellido?, email, telefono?,
+ *   business_name, password, rubro?
+ * }
+ * Responde: { success, slug, panel_url, token, dias_prueba }
+ */
+app.post("/registro", limiterAuth, async (req, res) => {
+  try {
+    const {
+      nombre_persona,
+      apellido,
+      email,
+      telefono,
+      business_name,
+      password,
+      rubro = "generico",
+    } = req.body;
+
+    // ── Validaciones ──────────────────────────────────────────
+    if (!nombre_persona || !email || !password || !business_name) {
+      return res.status(400).json({
+        success: false,
+        error: "Faltan campos obligatorios: nombre_persona, email, password, business_name.",
+      });
+    }
+    if (!validateEmail(email)) {
+      return res.status(400).json({ success: false, error: "Email inválido." });
+    }
+    if (!validatePassword(password)) {
+      return res.status(400).json({ success: false, error: "La contraseña debe tener al menos 6 caracteres." });
+    }
+    if (telefono && !validatePhone(cleanPhone(telefono))) {
+      return res.status(400).json({ success: false, error: "Teléfono inválido (7-15 dígitos)." });
+    }
+    if (business_name.trim().length < 2) {
+      return res.status(400).json({ success: false, error: "El nombre del negocio es demasiado corto." });
+    }
+
+    // ── Verificar email único ─────────────────────────────────
+    const { data: emailExiste } = await supabase
+      .from("usuarios")
+      .select("id")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
+
+    if (emailExiste) {
+      return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
+    }
+
+    // ── Generar slug único ────────────────────────────────────
+    const slug = await generarSlugUnico(business_name.trim());
+
+    // ── Hash de contraseña ────────────────────────────────────
+    const hashedPassword   = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+    const fechaVencimiento = calcularVencimiento(DIAS_PRUEBA);
+
+    // ── Insertar en DB ────────────────────────────────────────
+    const { data: nuevoUsuario, error } = await supabase
+      .from("usuarios")
+      .insert([{
+        nombre_persona:     nombre_persona.trim(),
+        apellido:           apellido?.trim() || "",
+        email:              email.trim().toLowerCase(),
+        telefono:           telefono ? cleanPhone(telefono) : null,
+        business_name:      business_name.trim(),
+        slug,                   // ya calculado, el trigger lo respeta si viene no vacío
+        password:           hashedPassword,
+        rubro,
+        metodo_pago:        "none",
+        porcentaje_sena:    30,
+        excepciones:        [],
+        activo:             true,
+        estado_suscripcion: "trial",
+        fecha_vencimiento:  fechaVencimiento,
+      }])
+      .select("id, slug, business_name, email, nombre_persona, apellido, rubro, estado_suscripcion, fecha_vencimiento")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        return res.status(409).json({ success: false, error: "El email ya está registrado." });
+      }
+      throw error;
+    }
+
+    // ── Generar JWT para login automático ─────────────────────
+    const secret = process.env.JWT_SECRET;
+    let token    = null;
+    if (secret) {
+      token = jwt.sign(
+        { slug: nuevoUsuario.slug, negocioId: nuevoUsuario.id, rol: "owner" },
+        secret,
+        { expiresIn: JWT_EXPIRY }
+      );
+    }
+
+    // ── Email de bienvenida (no bloqueante) ───────────────────
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action:     "bienvenida",
+        adminEmail: nuevoUsuario.email,
+        nombre:     nuevoUsuario.nombre_persona,
+        slug:       nuevoUsuario.slug,
+        panel_url:  `${PANEL_URL}?u=${nuevoUsuario.slug}`,
+        dias_prueba: DIAS_PRUEBA,
+      }),
+    }).catch((e) => console.error("Error mail bienvenida:", e.message));
+
+    console.log(`✅ Registro: ${slug} (${business_name}) — trial hasta ${fechaVencimiento}`);
+
+    res.status(201).json({
+      success:     true,
+      slug:        nuevoUsuario.slug,
+      business_name: nuevoUsuario.business_name,
+      panel_url:   `${PANEL_URL}?u=${nuevoUsuario.slug}`,
+      token,
+      dias_prueba: DIAS_PRUEBA,
+      fecha_vencimiento: fechaVencimiento,
+    });
+  } catch (e) {
+    console.error("Error en POST /registro:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/**
+ * GET /registro/check-slug?business_name=...
+ * Permite al frontend mostrar en tiempo real el slug que se asignaría,
+ * y si ya está disponible.
+ */
+app.get("/registro/check-slug", async (req, res) => {
+  try {
+    const { business_name } = req.query;
+    if (!business_name) {
+      return res.status(400).json({ success: false, error: "Falta business_name." });
+    }
+
+    const base = cleanSlug(business_name);
+    if (!base) {
+      return res.status(400).json({ success: false, error: "Nombre de negocio inválido para generar slug." });
+    }
+
+    const slugSugerido = await generarSlugUnico(business_name);
+
+    res.json({
+      success:        true,
+      slug_sugerido:  slugSugerido,
+      slug_base:      base,
+      disponible:     slugSugerido === base,   // false si ya se tuvo que agregar sufijo
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+// ══════════════════════════════════════════════════════════════
 // SUPERADMIN — CRUD DE NEGOCIOS
-// Protegido por x-api-key (ADMIN_SECRET en .env)
 // ══════════════════════════════════════════════════════════════
 
 /**
  * POST /superadmin/negocios
- * Registra un negocio nuevo. Solo accesible con x-api-key.
- * Body: {
- *   nombre_persona, apellido, email, telefono,
- *   business_name, dominio,
- *   password, rubro?
- * }
+ * Registra un negocio manualmente (admin). El slug se genera igual que
+ * en el registro público, a partir del business_name.
+ * Body: { nombre_persona, apellido, email, telefono, business_name, password, rubro? }
  */
 app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
   try {
     const {
       nombre_persona, apellido, email, telefono,
-      business_name, dominio,
+      business_name,
       password,
       rubro = "generico",
     } = req.body;
 
-    if (!nombre_persona || !email || !password || !business_name || !dominio) {
+    if (!nombre_persona || !email || !password || !business_name) {
       return res.status(400).json({
         success: false,
-        error: "Faltan campos obligatorios: nombre_persona, email, password, business_name, dominio.",
+        error: "Faltan campos obligatorios: nombre_persona, email, password, business_name.",
       });
     }
     if (!validateEmail(email))        return res.status(400).json({ success: false, error: "Email inválido." });
@@ -261,41 +448,39 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       return res.status(400).json({ success: false, error: "Teléfono inválido." });
     }
 
-    const dominioClean   = cleanDominio(dominio);
+    const slug           = await generarSlugUnico(business_name.trim());
     const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-
-    // Fecha de vencimiento = hoy + días de prueba configurados
     const fechaVencimiento = calcularVencimiento(DIAS_PRUEBA);
 
     const { data, error } = await supabase.from("usuarios").insert([{
-      nombre_persona:       nombre_persona.trim(),
-      apellido:             apellido?.trim() || "",
-      email:                email.trim().toLowerCase(),
-      telefono:             telefono ? cleanPhone(telefono) : null,
-      business_name:        business_name.trim(),
-      dominio:              dominioClean,
-      password:             hashedPassword,
+      nombre_persona:     nombre_persona.trim(),
+      apellido:           apellido?.trim() || "",
+      email:              email.trim().toLowerCase(),
+      telefono:           telefono ? cleanPhone(telefono) : null,
+      business_name:      business_name.trim(),
+      slug,
+      password:           hashedPassword,
       rubro,
-      metodo_pago:          "none",
-      porcentaje_sena:      30,
-      excepciones:          [],
-      activo:               true,
-      estado_suscripcion:   "trial",
-      fecha_vencimiento:    fechaVencimiento,
-    }]).select("id, dominio, business_name, rubro, email, nombre_persona, apellido, estado_suscripcion, fecha_vencimiento").single();
+      metodo_pago:        "none",
+      porcentaje_sena:    30,
+      excepciones:        [],
+      activo:             true,
+      estado_suscripcion: "trial",
+      fecha_vencimiento:  fechaVencimiento,
+    }]).select("id, slug, business_name, rubro, email, nombre_persona, apellido, estado_suscripcion, fecha_vencimiento").single();
 
     if (error) {
       if (error.code === "23505") {
-        return res.status(409).json({ success: false, error: "El dominio o email ya están registrados." });
+        return res.status(409).json({ success: false, error: "El email ya está registrado." });
       }
       throw error;
     }
 
-    console.log(`✅ Negocio creado: ${dominioClean} (${rubro}) — vence: ${fechaVencimiento}`);
+    console.log(`✅ Negocio creado (admin): ${slug} (${rubro}) — vence: ${fechaVencimiento}`);
     res.status(201).json({
       success:   true,
       negocio:   data,
-      panel_url: `${PANEL_URL}?u=${dominioClean}`,
+      panel_url: `${PANEL_URL}?u=${slug}`,
     });
   } catch (e) {
     console.error("Error en POST /superadmin/negocios:", e.message);
@@ -305,34 +490,33 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
 
 /**
  * GET /superadmin/negocios
- * Lista todos los negocios con resumen.
  */
 app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("usuarios")
-      .select("id, dominio, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
+      .select("id, slug, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
       .order("business_name", { ascending: true });
 
     if (error) throw error;
 
     const negocios = (data || []).map((u) => ({
-      id:                  u.id,
-      dominio:             u.dominio,
-      business_name:       u.business_name,
-      rubro:               u.rubro,
-      nombre_persona:      u.nombre_persona,
-      apellido:            u.apellido,
-      email:               u.email,
-      telefono:            u.telefono,
-      activo:              u.activo,
-      metodo_pago:         u.metodo_pago,
-      tiene_mp:            !!u.mp_access_token,
-      tiene_mobbex:        !!u.mobbex_api_key,
-      estado_suscripcion:  u.estado_suscripcion || "trial",
-      fecha_vencimiento:   u.fecha_vencimiento,
-      dias_restantes:      u.fecha_vencimiento ? diasHastaVencer(u.fecha_vencimiento) : null,
-      creado:              u.created_at,
+      id:                 u.id,
+      slug:               u.slug,
+      business_name:      u.business_name,
+      rubro:              u.rubro,
+      nombre_persona:     u.nombre_persona,
+      apellido:           u.apellido,
+      email:              u.email,
+      telefono:           u.telefono,
+      activo:             u.activo,
+      metodo_pago:        u.metodo_pago,
+      tiene_mp:           !!u.mp_access_token,
+      tiene_mobbex:       !!u.mobbex_api_key,
+      estado_suscripcion: u.estado_suscripcion || "trial",
+      fecha_vencimiento:  u.fecha_vencimiento,
+      dias_restantes:     u.fecha_vencimiento ? diasHastaVencer(u.fecha_vencimiento) : null,
+      creado:             u.created_at,
     }));
 
     res.json({ success: true, negocios, total: negocios.length });
@@ -342,22 +526,21 @@ app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
 });
 
 /**
- * GET /superadmin/negocios/:dominio
- * Detalle completo de un negocio.
+ * GET /superadmin/negocios/:slug
  */
-app.get("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
+app.get("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
+    const slug = cleanSlug(req.params.slug);
     const { data: negocio, error } = await supabase
       .from("usuarios")
-      .select("id, dominio, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, porcentaje_sena, quien_asume_comision, duracion_turno, capacidad_por_turno, horarios, excepciones, notas_internas, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
-      .eq("dominio", dominio).single();
+      .select("id, slug, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, porcentaje_sena, quien_asume_comision, duracion_turno, capacidad_por_turno, horarios, excepciones, notas_internas, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
+      .eq("slug", slug).single();
 
     if (error || !negocio) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     const { data: servicios } = await supabase
       .from("servicios").select("id, nombre, descripcion, precio, duracion, capacidad, activo, orden")
-      .eq("dominio", dominio).order("orden", { ascending: true });
+      .eq("slug", slug).order("orden", { ascending: true });
 
     res.json({
       success: true,
@@ -378,12 +561,11 @@ app.get("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
 });
 
 /**
- * PUT /superadmin/negocios/:dominio
- * Edita datos de un negocio existente.
+ * PUT /superadmin/negocios/:slug
  */
-app.put("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
+app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
+    const slug    = cleanSlug(req.params.slug);
     const allowed = [
       "nombre_persona", "apellido", "email", "telefono",
       "business_name", "rubro", "activo", "notas_internas",
@@ -396,17 +578,17 @@ app.put("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
       if (req.body[key] !== undefined) update[key] = req.body[key];
     });
 
-    if (req.body.nuevo_dominio) {
-      update.dominio = cleanDominio(req.body.nuevo_dominio);
+    // Superadmin puede cambiar el slug manualmente
+    if (req.body.nuevo_slug) {
+      update.slug = cleanSlug(req.body.nuevo_slug);
     }
 
     if (req.body.password) {
       update.password = await bcrypt.hash(String(req.body.password), BCRYPT_ROUNDS);
     }
 
-    // Superadmin puede sumar días manualmente
     if (req.body.sumar_dias && !isNaN(parseInt(req.body.sumar_dias))) {
-      const { data: actual } = await supabase.from("usuarios").select("fecha_vencimiento").eq("dominio", dominio).single();
+      const { data: actual } = await supabase.from("usuarios").select("fecha_vencimiento").eq("slug", slug).single();
       const base = actual?.fecha_vencimiento && new Date(actual.fecha_vencimiento) > new Date()
         ? actual.fecha_vencimiento
         : null;
@@ -414,9 +596,9 @@ app.put("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
       update.estado_suscripcion = "activo";
     }
 
-    const { error } = await supabase.from("usuarios").update(update).eq("dominio", dominio);
+    const { error } = await supabase.from("usuarios").update(update).eq("slug", slug);
     if (error) throw error;
-    invalidateCache(dominio);
+    invalidateCache(slug);
 
     res.json({ success: true });
   } catch (e) {
@@ -425,16 +607,15 @@ app.put("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
 });
 
 /**
- * DELETE /superadmin/negocios/:dominio
- * Desactiva (soft delete) un negocio.
+ * DELETE /superadmin/negocios/:slug — soft delete
  */
-app.delete("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) => {
+app.delete("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
-    const { error } = await supabase.from("usuarios").update({ activo: false }).eq("dominio", dominio);
+    const slug = cleanSlug(req.params.slug);
+    const { error } = await supabase.from("usuarios").update({ activo: false }).eq("slug", slug);
     if (error) throw error;
-    invalidateCache(dominio);
-    res.json({ success: true, message: `Negocio ${dominio} desactivado.` });
+    invalidateCache(slug);
+    res.json({ success: true, message: `Negocio ${slug} desactivado.` });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -447,27 +628,30 @@ app.delete("/superadmin/negocios/:dominio", requireAdminKey, async (req, res) =>
 
 /**
  * POST /login
- * Body: { dominio, password }
+ * Body: { slug, password }  (también acepta "email" como alternativa al slug)
  */
 app.post("/login", limiterAuth, async (req, res) => {
   try {
-    const dominio  = cleanDominio(req.body.dominio || req.body.slug);
+    const rawSlug  = cleanSlug(req.body.slug || req.body.dominio || "");
+    const email    = req.body.email?.trim().toLowerCase() || "";
     const password = req.body.password;
 
-    if (!dominio || !password) {
-      return res.status(400).json({ success: false, error: "Faltan dominio y contraseña." });
+    if ((!rawSlug && !email) || !password) {
+      return res.status(400).json({ success: false, error: "Faltan slug (o email) y contraseña." });
     }
 
-    const { data: user, error } = await supabase
+    // Buscar por slug o por email
+    let query = supabase
       .from("usuarios")
-      .select("id, dominio, password, business_name, nombre_persona, apellido, email, rubro, activo, estado_suscripcion, fecha_vencimiento")
-      .eq("dominio", dominio)
-      .single();
+      .select("id, slug, password, business_name, nombre_persona, apellido, email, rubro, activo, estado_suscripcion, fecha_vencimiento");
+
+    query = rawSlug ? query.eq("slug", rawSlug) : query.eq("email", email);
+
+    const { data: user, error } = await query.single();
 
     if (error || !user) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
     if (!user.activo)   return res.status(403).json({ success: false, error: "Este negocio está desactivado." });
 
-    // Soporte para contraseñas viejas sin hash (migración progresiva)
     const isHashed = user.password?.startsWith("$2b$") || user.password?.startsWith("$2a$");
     let passwordOk = false;
     if (isHashed) {
@@ -476,7 +660,7 @@ app.post("/login", limiterAuth, async (req, res) => {
       passwordOk = String(user.password) === String(password);
       if (passwordOk) {
         const newHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-        await supabase.from("usuarios").update({ password: newHash }).eq("dominio", dominio);
+        await supabase.from("usuarios").update({ password: newHash }).eq("slug", user.slug);
       }
     }
 
@@ -486,32 +670,31 @@ app.post("/login", limiterAuth, async (req, res) => {
     if (!secret)  return res.status(500).json({ success: false, error: "JWT_SECRET no configurado." });
 
     const token = jwt.sign(
-      { dominio: user.dominio, negocioId: user.id, rol: "owner" },
+      { slug: user.slug, negocioId: user.id, rol: "owner" },
       secret,
       { expiresIn: JWT_EXPIRY }
     );
 
-    // Info de suscripción para el frontend
-    const diasRestantes       = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
-    const estadoSuscripcion   = user.estado_suscripcion || "trial";
-    const alertaVencimiento   = diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0;
-    const suscripcionVencida  = diasRestantes !== null && diasRestantes <= 0;
+    const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estadoSuscripcion  = user.estado_suscripcion || "trial";
+    const alertaVencimiento  = diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0;
+    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
 
     res.json({
-      success:            true,
+      success:        true,
       token,
-      dominio:            user.dominio,
-      business_name:      user.business_name,
-      nombre_persona:     user.nombre_persona,
-      apellido:           user.apellido || "",
-      email:              user.email,
-      rubro:              user.rubro,
+      slug:           user.slug,
+      business_name:  user.business_name,
+      nombre_persona: user.nombre_persona,
+      apellido:       user.apellido || "",
+      email:          user.email,
+      rubro:          user.rubro,
       suscripcion: {
-        estado:           estadoSuscripcion,
+        estado:            estadoSuscripcion,
         fecha_vencimiento: user.fecha_vencimiento,
-        dias_restantes:   diasRestantes,
-        alerta:           alertaVencimiento,
-        vencida:          suscripcionVencida,
+        dias_restantes:    diasRestantes,
+        alerta:            alertaVencimiento,
+        vencida:           suscripcionVencida,
       },
     });
   } catch (e) {
@@ -522,14 +705,13 @@ app.post("/login", limiterAuth, async (req, res) => {
 
 /**
  * GET /verify-session
- * Verifica token JWT y devuelve estado de suscripción actualizado.
  */
 app.get("/verify-session", requireAuth, async (req, res) => {
   try {
     const { data: user } = await supabase
       .from("usuarios")
-      .select("dominio, business_name, email, nombre_persona, apellido, rubro, activo, estado_suscripcion, fecha_vencimiento")
-      .eq("dominio", req.auth.dominio)
+      .select("slug, business_name, email, nombre_persona, apellido, rubro, activo, estado_suscripcion, fecha_vencimiento")
+      .eq("slug", req.auth.slug)
       .single();
 
     if (!user || !user.activo) return res.json({ active: false, reason: "not_found" });
@@ -539,16 +721,15 @@ app.get("/verify-session", requireAuth, async (req, res) => {
     const alertaVencimiento  = diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0;
     const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
 
-    // Si venció pero el estado aún no se actualizó en DB, lo sincronizamos aquí
     if (suscripcionVencida && estadoSuscripcion !== "suspendido") {
       await supabase.from("usuarios")
         .update({ estado_suscripcion: "suspendido" })
-        .eq("dominio", req.auth.dominio);
+        .eq("slug", req.auth.slug);
     }
 
     res.json({
       active:         true,
-      dominio:        user.dominio,
+      slug:           user.slug,
       business_name:  user.business_name,
       email:          user.email,
       nombre_persona: user.nombre_persona,
@@ -576,7 +757,7 @@ app.post("/api/request-password-reset", limiterAuth, async (req, res) => {
     if (!email || !newPassword)         return res.status(400).json({ success: false, error: "Faltan datos." });
     if (!validatePassword(newPassword)) return res.status(400).json({ success: false, error: "Mínimo 6 caracteres." });
 
-    const { data: user } = await supabase.from("usuarios").select("dominio").eq("email", email.trim().toLowerCase()).single();
+    const { data: user } = await supabase.from("usuarios").select("slug").eq("email", email.trim().toLowerCase()).single();
     if (!user) return res.json({ success: true }); // silencioso por seguridad
 
     const googleRes = await fetch(APPS_SCRIPT_URL, {
@@ -618,39 +799,34 @@ app.post("/api/verify-and-reset-password", limiterAuth, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * GET /negocio/:dominio
- * Devuelve datos públicos del negocio para la landing.
- * Si el negocio está SUSPENDIDO devuelve { suspendido: true } para que
- * el frontend muestre el cartel "Servicio pausado temporalmente".
+ * GET /negocio/:slug
  */
-app.get("/negocio/:dominio", async (req, res) => {
+app.get("/negocio/:slug", async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
-    if (!dominio) return res.status(400).json({ success: false, error: "Dominio inválido." });
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
     const { data: user, error } = await supabase
       .from("usuarios")
-      .select("dominio, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, mobbex_api_key, quien_asume_comision, activo, estado_suscripcion, fecha_vencimiento")
-      .eq("dominio", dominio)
+      .select("slug, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, mobbex_api_key, quien_asume_comision, activo, estado_suscripcion, fecha_vencimiento")
+      .eq("slug", slug)
       .single();
 
     if (error || !user)  return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!user.activo)    return res.status(404).json({ success: false, error: "Negocio no disponible." });
 
-    // Verificar vencimiento en tiempo real
-    const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = (user.estado_suscripcion === "suspendido") || (diasRestantes !== null && diasRestantes <= 0);
 
     if (estaSuspendido) {
-      // Sincronizar estado en DB si hace falta
       if (user.estado_suscripcion !== "suspendido") {
-        supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).eq("dominio", dominio).then(() => {});
+        supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).eq("slug", slug).then(() => {});
       }
       return res.json({
         success:    true,
         suspendido: true,
         negocio: {
-          dominio:       user.dominio,
+          slug:          user.slug,
           business_name: user.business_name,
           rubro:         user.rubro,
         },
@@ -660,7 +836,7 @@ app.get("/negocio/:dominio", async (req, res) => {
     res.json({
       success: true,
       negocio: {
-        dominio:              user.dominio,
+        slug:                 user.slug,
         business_name:        user.business_name,
         rubro:                user.rubro,
         horarios:             user.horarios || {},
@@ -685,26 +861,25 @@ app.get("/negocio/:dominio", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * GET /slots-disponibles/:dominio?fecha=YYYY-MM-DD&servicio_id=...
+ * GET /slots-disponibles/:slug?fecha=YYYY-MM-DD&servicio_id=...
  */
-app.get("/slots-disponibles/:dominio", async (req, res) => {
+app.get("/slots-disponibles/:slug", async (req, res) => {
   try {
-    const dominio                = cleanDominio(req.params.dominio);
+    const slug                   = cleanSlug(req.params.slug);
     const { fecha, servicio_id } = req.query;
 
-    if (!dominio || !fecha) return res.status(400).json({ success: false, error: "Faltan dominio o fecha." });
+    if (!slug || !fecha) return res.status(400).json({ success: false, error: "Faltan slug o fecha." });
 
     const { data: user, error: userError } = await supabase
       .from("usuarios")
       .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo, estado_suscripcion, fecha_vencimiento")
-      .eq("dominio", dominio)
+      .eq("slug", slug)
       .single();
 
     if (userError || !user || !user.activo) {
       return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     }
 
-    // Bloquear slots si el negocio está suspendido
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = (user.estado_suscripcion === "suspendido") || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.json({ success: true, slots: [], suspendido: true });
@@ -717,7 +892,7 @@ app.get("/slots-disponibles/:dominio", async (req, res) => {
         .from("servicios")
         .select("duracion, capacidad")
         .eq("id", servicio_id)
-        .eq("dominio", dominio)
+        .eq("slug", slug)
         .single();
       if (srv) {
         duracion  = srv.duracion  || duracion;
@@ -755,7 +930,7 @@ app.get("/slots-disponibles/:dominio", async (req, res) => {
     const { data: turnosDia } = await supabase
       .from("turnos")
       .select("hora, estado")
-      .eq("dominio", dominio).eq("fecha", fecha)
+      .eq("slug", slug).eq("fecha", fecha)
       .in("estado", ["confirmado", "pendiente"]);
 
     const reservasPorSlot = {};
@@ -782,15 +957,15 @@ app.get("/slots-disponibles/:dominio", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * GET /turnos/ocupados?dominio=...&fecha=...
+ * GET /turnos/ocupados?slug=...&fecha=...
  */
 app.get("/turnos/ocupados", async (req, res) => {
   try {
-    const dominio = cleanDominio(req.query.dominio || req.query.slug);
-    const fecha   = req.query.fecha;
-    if (!dominio) return res.status(400).json({ success: false, error: "Dominio inválido." });
+    const slug  = cleanSlug(req.query.slug || req.query.dominio || "");
+    const fecha = req.query.fecha;
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
-    let q = supabase.from("turnos").select("hora").eq("dominio", dominio).neq("estado", "cancelado");
+    let q = supabase.from("turnos").select("hora").eq("slug", slug).neq("estado", "cancelado");
     if (fecha) q = q.eq("fecha", fecha);
 
     const { data, error } = await q;
@@ -804,13 +979,13 @@ app.get("/turnos/ocupados", async (req, res) => {
 
 /**
  * POST /turnos/reservar
- * El cliente reserva desde la landing (sin login).
  */
 app.post("/turnos/reservar", limiterBooking, async (req, res) => {
   try {
-    const { name, phone, email, fecha, hora, dominio, servicio_id } = req.body;
+    const { name, phone, email, fecha, hora, slug, dominio, servicio_id } = req.body;
+    const slugClean = cleanSlug(slug || dominio || "");
 
-    if (!name || !phone || !fecha || !hora || !dominio) {
+    if (!name || !phone || !fecha || !hora || !slugClean) {
       return res.status(400).json({ success: false, error: "Faltan datos requeridos." });
     }
 
@@ -822,38 +997,33 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
       return res.status(400).json({ success: false, error: "Email inválido." });
     }
 
-    const dominioClean = cleanDominio(dominio);
     const { data: user, error: userError } = await supabase
-      .from("usuarios").select("*").eq("dominio", dominioClean).single();
+      .from("usuarios").select("*").eq("slug", slugClean).single();
     if (userError || !user)  return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!user.activo)        return res.status(404).json({ success: false, error: "Negocio no disponible." });
 
-    // Bloquear si la suscripción venció
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = (user.estado_suscripcion === "suspendido") || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) {
       return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
     }
 
-    // Si requiere pago previo, rechazar reserva directa
     const requierePago = (user.mp_access_token || user.mobbex_api_key)
       && (user.metodo_pago === "sena" || user.metodo_pago === "total");
     if (requierePago) {
       return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
     }
 
-    // Anti-duplicado
     const hoy = new Date().toISOString().split("T")[0];
     const { data: turnosExistentes } = await supabase
       .from("turnos").select("id")
-      .eq("dominio", dominioClean).gte("fecha", hoy).neq("estado", "cancelado")
+      .eq("slug", slugClean).gte("fecha", hoy).neq("estado", "cancelado")
       .or(`telefono.eq.${phoneClean}${email ? `,email.eq.${email.trim().toLowerCase()}` : ""}`);
 
     if (turnosExistentes?.length > 0) {
       return res.status(400).json({ success: false, error: "Ya tenés un turno agendado activo." });
     }
 
-    // Capacidad
     let capacidad      = user.capacidad_por_turno || 1;
     let servicioNombre = null;
     let precioCobrado  = 0;
@@ -871,14 +1041,14 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 
     const { count } = await supabase.from("turnos")
       .select("id", { count: "exact" })
-      .eq("dominio", dominioClean).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
+      .eq("slug", slugClean).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
 
     if (count >= capacidad) {
       return res.status(400).json({ success: false, error: "Este turno ya está lleno." });
     }
 
     const { data: turno, error: turnoError } = await supabase.from("turnos").insert([{
-      dominio:         dominioClean,
+      slug:            slugClean,
       nombre:          name.trim(),
       telefono:        phoneClean,
       email:           email?.trim().toLowerCase() || null,
@@ -904,7 +1074,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
       }),
     }).catch((e) => console.error("Error mail booking:", e.message));
 
-    invalidateCache(dominioClean);
+    invalidateCache(slugClean);
     res.json({ success: true, turno_id: turno.id, message: "Turno creado con éxito." });
   } catch (e) {
     console.error("Error en /turnos/reservar:", e.message);
@@ -913,14 +1083,13 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 });
 
 /**
- * PUT /turnos/:id
- * El dueño actualiza estado o notas de un turno.
+ * PUT /turnos/:id — dueño actualiza estado o notas
  */
 app.put("/turnos/:id", requireAuth, async (req, res) => {
   try {
-    const { id }     = req.params;
-    const { estado, notas, dominio } = req.body;
-    const dominioClean = cleanDominio(dominio || req.auth.dominio);
+    const { id }       = req.params;
+    const { estado, notas, slug, dominio } = req.body;
+    const slugClean    = cleanSlug(slug || dominio || req.auth.slug);
 
     const estadosValidos = ["confirmado", "pendiente", "cancelado", "completado", "no_asistio"];
     if (estado && !estadosValidos.includes(estado)) {
@@ -932,10 +1101,10 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
     if (notas  !== undefined) update.notas  = notas;
 
     const { data, error } = await supabase
-      .from("turnos").update(update).eq("id", id).eq("dominio", dominioClean).select().single();
+      .from("turnos").update(update).eq("id", id).eq("slug", slugClean).select().single();
 
     if (error) throw error;
-    invalidateCache(dominioClean);
+    invalidateCache(slugClean);
     res.json({ success: true, turno: data });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -947,16 +1116,16 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 // SERVICIOS
 // ══════════════════════════════════════════════════════════════
 
-/** GET /servicios/:dominio — público, para la landing */
-app.get("/servicios/:dominio", async (req, res) => {
+/** GET /servicios/:slug — público */
+app.get("/servicios/:slug", async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
-    if (!dominio) return res.status(400).json({ success: false, error: "Dominio inválido." });
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
     const { data, error } = await supabase
       .from("servicios")
       .select("id, nombre, descripcion, duracion, precio, capacidad")
-      .eq("dominio", dominio).eq("activo", true)
+      .eq("slug", slug).eq("activo", true)
       .order("orden", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -967,12 +1136,12 @@ app.get("/servicios/:dominio", async (req, res) => {
   }
 });
 
-/** GET /admin/servicios/:dominio — lista completa (con inactivos) */
-app.get("/admin/servicios/:dominio", requireAuth, async (req, res) => {
+/** GET /admin/servicios/:slug — lista completa (con inactivos) */
+app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
+    const slug = cleanSlug(req.params.slug);
     const { data, error } = await supabase
-      .from("servicios").select("*").eq("dominio", dominio)
+      .from("servicios").select("*").eq("slug", slug)
       .order("orden", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -986,15 +1155,15 @@ app.get("/admin/servicios/:dominio", requireAuth, async (req, res) => {
 /** POST /admin/servicios — crear */
 app.post("/admin/servicios", requireAuth, async (req, res) => {
   try {
-    const { dominio, nombre, descripcion, duracion, precio, capacidad, orden } = req.body;
-    const dominioClean = cleanDominio(dominio || req.auth.dominio);
+    const { slug, dominio, nombre, descripcion, duracion, precio, capacidad, orden } = req.body;
+    const slugClean = cleanSlug(slug || dominio || req.auth.slug);
 
-    if (!dominioClean || !nombre || !duracion || precio === undefined) {
+    if (!slugClean || !nombre || !duracion || precio === undefined) {
       return res.status(400).json({ success: false, error: "Faltan campos: nombre, duracion, precio." });
     }
 
     const { data, error } = await supabase.from("servicios").insert([{
-      dominio:     dominioClean,
+      slug:        slugClean,
       nombre:      nombre.trim(),
       descripcion: descripcion?.trim() || "",
       duracion:    parseInt(duracion),
@@ -1005,7 +1174,7 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
     }]).select().single();
 
     if (error) throw error;
-    invalidateCache(dominioClean);
+    invalidateCache(slugClean);
     res.status(201).json({ success: true, servicio: data });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -1015,8 +1184,8 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
 /** PUT /admin/servicios/:id — editar */
 app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
   try {
-    const { id }        = req.params;
-    const dominioClean  = cleanDominio(req.body.dominio || req.auth.dominio);
+    const { id }       = req.params;
+    const slugClean    = cleanSlug(req.body.slug || req.body.dominio || req.auth.slug);
     const { nombre, descripcion, duracion, precio, capacidad, activo, orden } = req.body;
 
     const u = {};
@@ -1029,10 +1198,10 @@ app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
     if (orden       !== undefined) u.orden       = parseInt(orden);
 
     const { data, error } = await supabase
-      .from("servicios").update(u).eq("id", id).eq("dominio", dominioClean).select().single();
+      .from("servicios").update(u).eq("id", id).eq("slug", slugClean).select().single();
 
     if (error) throw error;
-    invalidateCache(dominioClean);
+    invalidateCache(slugClean);
     res.json({ success: true, servicio: data });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -1042,12 +1211,12 @@ app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
 /** DELETE /admin/servicios/:id — eliminar */
 app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
   try {
-    const { id }       = req.params;
-    const dominioClean = cleanDominio(req.body?.dominio || req.query?.dominio || req.auth.dominio);
+    const { id }    = req.params;
+    const slugClean = cleanSlug(req.body?.slug || req.query?.slug || req.body?.dominio || req.query?.dominio || req.auth.slug);
 
-    const { error } = await supabase.from("servicios").delete().eq("id", id).eq("dominio", dominioClean);
+    const { error } = await supabase.from("servicios").delete().eq("id", id).eq("slug", slugClean);
     if (error) throw error;
-    invalidateCache(dominioClean);
+    invalidateCache(slugClean);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -1059,9 +1228,9 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
 // AGENDA — Vista agrupada por fecha (próximos 30 días)
 // ══════════════════════════════════════════════════════════════
 
-app.get("/agenda/:dominio", requireAuth, async (req, res) => {
+app.get("/agenda/:slug", requireAuth, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
+    const slug = cleanSlug(req.params.slug);
 
     const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
     const hoyISO   = ahoraArg.toISOString().split("T")[0];
@@ -1071,7 +1240,7 @@ app.get("/agenda/:dominio", requireAuth, async (req, res) => {
 
     const { data: turnos, error } = await supabase
       .from("turnos").select("*")
-      .eq("dominio", dominio)
+      .eq("slug", slug)
       .gte("fecha", hoyISO).lte("fecha", hastaISO)
       .neq("estado", "cancelado")
       .order("fecha", { ascending: true })
@@ -1103,7 +1272,7 @@ app.get("/agenda/:dominio", requireAuth, async (req, res) => {
 
     res.json({ success: true, hoy: hoyISO, dias });
   } catch (e) {
-    console.error("Error en /agenda/:dominio:", e.message);
+    console.error("Error en /agenda/:slug:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -1113,15 +1282,15 @@ app.get("/agenda/:dominio", requireAuth, async (req, res) => {
 // COBROS — Lista de ventas del negocio
 // ══════════════════════════════════════════════════════════════
 
-app.get("/cobros/:dominio", requireAuth, async (req, res) => {
+app.get("/cobros/:slug", requireAuth, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
-    const limite  = parseInt(req.query.limite) || 20;
-    const offset  = parseInt(req.query.offset) || 0;
+    const slug   = cleanSlug(req.params.slug);
+    const limite = parseInt(req.query.limite) || 20;
+    const offset = parseInt(req.query.offset) || 0;
 
     const { data: ventas, error, count } = await supabase
       .from("ventas").select("*", { count: "exact" })
-      .eq("dominio", dominio)
+      .eq("slug", slug)
       .order("fecha_pago", { ascending: false })
       .range(offset, offset + limite - 1);
 
@@ -1153,15 +1322,15 @@ app.get("/cobros/:dominio", requireAuth, async (req, res) => {
 // CLIENTES — CRM básico
 // ══════════════════════════════════════════════════════════════
 
-app.get("/clientes/:dominio", requireAuth, async (req, res) => {
+app.get("/clientes/:slug", requireAuth, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
-    const limite  = parseInt(req.query.limite) || 20;
-    const offset  = parseInt(req.query.offset) || 0;
+    const slug   = cleanSlug(req.params.slug);
+    const limite = parseInt(req.query.limite) || 20;
+    const offset = parseInt(req.query.offset) || 0;
 
     const { data: turnos, error } = await supabase
       .from("turnos").select("nombre, email, telefono, fecha, created_at")
-      .eq("dominio", dominio).neq("estado", "cancelado")
+      .eq("slug", slug).neq("estado", "cancelado")
       .order("created_at", { ascending: false });
 
     if (error) throw error;
@@ -1207,16 +1376,16 @@ app.get("/clientes/:dominio", requireAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// SETTINGS — Configuración del negocio (panel del dueño)
+// SETTINGS — Configuración del negocio
 // ══════════════════════════════════════════════════════════════
 
-app.get("/settings/:dominio", requireAuth, async (req, res) => {
+app.get("/settings/:slug", requireAuth, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
+    const slug = cleanSlug(req.params.slug);
     const { data: user, error } = await supabase
       .from("usuarios")
-      .select("dominio, business_name, rubro, nombre_persona, apellido, email, telefono, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, quien_asume_comision, horarios, excepciones, mp_access_token, mobbex_api_key, notas_internas, estado_suscripcion, fecha_vencimiento")
-      .eq("dominio", dominio).single();
+      .select("slug, business_name, rubro, nombre_persona, apellido, email, telefono, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, quien_asume_comision, horarios, excepciones, mp_access_token, mobbex_api_key, notas_internas, estado_suscripcion, fecha_vencimiento")
+      .eq("slug", slug).single();
 
     if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
@@ -1242,7 +1411,7 @@ app.get("/settings/:dominio", requireAuth, async (req, res) => {
 
 const handleUpdateSettings = async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio || req.body.dominio);
+    const slug = cleanSlug(req.params.slug || req.body.slug || req.body.dominio);
     const {
       horarios, duracion_turno, excepciones,
       porcentaje_sena, metodo_pago, quien_asume_comision,
@@ -1263,36 +1432,35 @@ const handleUpdateSettings = async (req, res) => {
     if (telefono)                  u.telefono            = telefono.trim();
     if (rubro)                     u.rubro               = rubro;
 
-    const { error } = await supabase.from("usuarios").update(u).eq("dominio", dominio);
+    const { error } = await supabase.from("usuarios").update(u).eq("slug", slug);
     if (error) throw error;
-    invalidateCache(dominio);
+    invalidateCache(slug);
     res.json({ success: true, message: "Configuración actualizada." });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 };
 
-app.post("/settings/:dominio", requireAuth, handleUpdateSettings);
-app.put("/settings/:dominio",  requireAuth, handleUpdateSettings);
+app.post("/settings/:slug", requireAuth, handleUpdateSettings);
+app.put("/settings/:slug",  requireAuth, handleUpdateSettings);
 
 
 // ══════════════════════════════════════════════════════════════
 // ADMIN STATS — Dashboard principal del dueño
 // ══════════════════════════════════════════════════════════════
 
-app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
+app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.params.dominio);
-    if (!dominio) return res.status(400).json({ success: false, error: "Dominio inválido." });
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
-    // Caché de 20 segundos
     const now = Date.now();
-    if (globalCache[dominio] && now - globalCache[dominio].timestamp < CACHE_DURATION) {
-      return res.json(globalCache[dominio].data);
+    if (globalCache[slug] && now - globalCache[slug].timestamp < CACHE_DURATION) {
+      return res.json(globalCache[slug].data);
     }
 
     const { data: user, error: userError } = await supabase
-      .from("usuarios").select("*").eq("dominio", dominio).single();
+      .from("usuarios").select("*").eq("slug", slug).single();
     if (userError || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     const ahoraArg   = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
@@ -1304,7 +1472,7 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
 
     const { data: turnosMes } = await supabase
       .from("turnos").select("*")
-      .eq("dominio", dominio).gte("fecha", inicioMes).neq("estado", "cancelado")
+      .eq("slug", slug).gte("fecha", inicioMes).neq("estado", "cancelado")
       .order("fecha", { ascending: true }).order("hora", { ascending: true });
 
     const turnosData     = turnosMes || [];
@@ -1348,7 +1516,7 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
     const { data: ventasData } = await supabase
-      .from("ventas").select("*").eq("dominio", dominio)
+      .from("ventas").select("*").eq("slug", slug)
       .gte("fecha_turno", desde90.toISOString().split("T")[0])
       .lte("fecha_turno", hasta7.toISOString().split("T")[0])
       .order("fecha_pago", { ascending: true });
@@ -1365,7 +1533,7 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
 
     const { data: todosLosTurnos } = await supabase
       .from("turnos").select("telefono, email, created_at")
-      .eq("dominio", dominio).neq("estado", "cancelado");
+      .eq("slug", slug).neq("estado", "cancelado");
 
     const clientesUnicos = new Set();
     const clientesMesSet = new Set();
@@ -1384,7 +1552,6 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
       ventasPorDia[d] = metricas.porDia[d] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
     });
 
-    // Info de suscripción para el dashboard
     const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estadoSuscripcion  = user.estado_suscripcion || "trial";
     const alertaVencimiento  = diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0;
@@ -1433,7 +1600,6 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
         excepciones:          user.excepciones     || [],
       },
 
-      // Suscripción — usado por el Dashboard para mostrar banners
       suscripcion: {
         estado:            suscripcionVencida ? "suspendido" : estadoSuscripcion,
         fecha_vencimiento: user.fecha_vencimiento,
@@ -1446,11 +1612,11 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
       businessName:   user.business_name,
       nombre_persona: user.nombre_persona,
       apellido:       user.apellido || "",
-      dominio:        user.dominio,
+      slug:           user.slug,
       rubro:          user.rubro || "generico",
     };
 
-    globalCache[dominio] = { timestamp: now, data: finalData };
+    globalCache[slug] = { timestamp: now, data: finalData };
     res.json(finalData);
   } catch (e) {
     console.error("Error en /admin-stats:", e.message);
@@ -1465,21 +1631,20 @@ app.get("/admin-stats/:dominio", requireAuth, async (req, res) => {
 
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   try {
-    const { nombre, telefono, email, fecha, hora, dominio, servicio_id } = req.body;
+    const { nombre, telefono, email, fecha, hora, slug, dominio, servicio_id } = req.body;
+    const slugClean = cleanSlug(slug || dominio || "");
 
-    if (!nombre || !telefono || !fecha || !hora || !dominio) {
+    if (!nombre || !telefono || !fecha || !hora || !slugClean) {
       return res.status(400).json({ success: false, error: "Faltan datos requeridos." });
     }
     if (email && !validateEmail(email)) {
       return res.status(400).json({ success: false, error: "Email inválido." });
     }
 
-    const dominioClean = cleanDominio(dominio);
     const { data: user, error: userError } = await supabase
-      .from("usuarios").select("*").eq("dominio", dominioClean).single();
+      .from("usuarios").select("*").eq("slug", slugClean).single();
     if (userError || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    // Bloquear si suscripción vencida
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = (user.estado_suscripcion === "suspendido") || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) {
@@ -1492,7 +1657,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     if (servicio_id) {
       const { data: srv } = await supabase
         .from("servicios").select("nombre, precio")
-        .eq("id", servicio_id).eq("dominio", dominioClean).single();
+        .eq("id", servicio_id).eq("slug", slugClean).single();
       if (srv) {
         precioServicio = Number(srv.precio || 0);
         nombreServicio = srv.nombre;
@@ -1517,7 +1682,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       email:           email || "",
       fecha,
       hora,
-      dominio:         dominioClean,
+      slug:            slugClean,
       servicio_id:     servicio_id || "",
       servicio_nombre: nombreServicio,
       metodo_pago:     metodo,
@@ -1541,7 +1706,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
             total:       montoACobrar,
             currency:    "ARS",
             description: `${nombreServicio} (${conceptoPago}): ${fecha} ${hora}hs`,
-            reference:   `${dominioClean}-${fecha}-${hora}`.replace(/[:.]/g, ""),
+            reference:   `${slugClean}-${fecha}-${hora}`.replace(/[:.]/g, ""),
             webhook:     `${API_URL}/webhook/mobbex`,
             return_url:  successUrl,
             items: [{
@@ -1603,17 +1768,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 // SUSCRIPCIÓN — Checkout de renovación mensual de Associe
 // ══════════════════════════════════════════════════════════════
 
-/**
- * POST /api/suscripcion/checkout
- * Genera una preference de MercadoPago con el token PROPIO de Associe
- * (MP_PLATFORM_TOKEN) para cobrar la mensualidad al dueño del negocio.
- *
- * Headers: Authorization: Bearer <token JWT del owner>
- * Body: { dominio }
- */
 app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.body.dominio || req.auth.dominio);
+    const slug = cleanSlug(req.body.slug || req.body.dominio || req.auth.slug);
 
     if (!MP_PLATFORM_TOKEN) {
       return res.status(500).json({ success: false, error: "Pasarela de suscripción no configurada. Contactá soporte." });
@@ -1622,7 +1779,7 @@ app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
     const { data: user, error } = await supabase
       .from("usuarios")
       .select("id, email, nombre_persona, apellido, business_name, fecha_vencimiento, estado_suscripcion")
-      .eq("dominio", dominio).single();
+      .eq("slug", slug).single();
 
     if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
@@ -1643,7 +1800,7 @@ app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
         },
         metadata: {
           tipo:    "suscripcion_associe",
-          dominio: dominio,
+          slug:    slug,
           user_id: user.id,
         },
         notification_url: `${API_URL}/webhook/suscripcion`,
@@ -1669,16 +1826,15 @@ app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
 
 /**
  * GET /api/suscripcion/estado
- * Devuelve el estado de suscripción del negocio autenticado.
  */
 app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
   try {
-    const dominio = cleanDominio(req.query.dominio || req.auth.dominio);
+    const slug = cleanSlug(req.query.slug || req.query.dominio || req.auth.slug);
 
     const { data: user, error } = await supabase
       .from("usuarios")
       .select("estado_suscripcion, fecha_vencimiento")
-      .eq("dominio", dominio).single();
+      .eq("slug", slug).single();
 
     if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
@@ -1687,7 +1843,7 @@ app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
     const estadoReal         = suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "trial");
 
     res.json({
-      success: true,
+      success:           true,
       estado:            estadoReal,
       fecha_vencimiento: user.fecha_vencimiento,
       dias_restantes:    diasRestantes,
@@ -1706,12 +1862,12 @@ app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 
 app.get("/oauth-callback", async (req, res) => {
-  const { code, state: dominio } = req.query;
-  if (!code || !dominio) return res.status(400).send("Parámetros inválidos.");
+  const { code, state: slug } = req.query;
+  if (!code || !slug) return res.status(400).send("Parámetros inválidos.");
 
   try {
-    const dominioClean = cleanDominio(dominio);
-    const response = await fetch("https://api.mercadopago.com/oauth/token", {
+    const slugClean = cleanSlug(slug);
+    const response  = await fetch("https://api.mercadopago.com/oauth/token", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         client_id:     process.env.MP_TURNERO_CLIENT_ID,
@@ -1724,11 +1880,11 @@ app.get("/oauth-callback", async (req, res) => {
     const data = await response.json();
 
     if (data.access_token) {
-      await supabase.from("usuarios").update({ mp_access_token: data.access_token }).eq("dominio", dominioClean);
-      invalidateCache(dominioClean);
-      return res.redirect(`${PANEL_URL}?status=mp_success&u=${dominioClean}`);
+      await supabase.from("usuarios").update({ mp_access_token: data.access_token }).eq("slug", slugClean);
+      invalidateCache(slugClean);
+      return res.redirect(`${PANEL_URL}?status=mp_success&u=${slugClean}`);
     }
-    res.redirect(`${PANEL_URL}?status=mp_error&u=${dominioClean}`);
+    res.redirect(`${PANEL_URL}?status=mp_error&u=${slugClean}`);
   } catch (e) {
     res.status(500).send("Error al vincular Mercado Pago.");
   }
@@ -1739,12 +1895,12 @@ app.get("/oauth-callback", async (req, res) => {
 // WEBHOOKS — Pagos de turnos (MP + Mobbex)
 // ══════════════════════════════════════════════════════════════
 
-async function procesarPagoConfirmado({ dominio, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, payment_id, estado }) {
+async function procesarPagoConfirmado({ slug, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, payment_id, estado }) {
   let turnoId = null;
 
   if (estado === "aprobado") {
     const { data: turnoInsertado } = await supabase.from("turnos").insert([{
-      dominio,
+      slug,
       nombre:          nombre?.trim() || "Cliente",
       telefono:        cleanPhone(telefono?.toString() || "0"),
       email:           email?.trim().toLowerCase() || null,
@@ -1760,7 +1916,7 @@ async function procesarPagoConfirmado({ dominio, nombre, telefono, email, fecha,
 
     turnoId = turnoInsertado?.id || null;
 
-    const { data: userNegocio } = await supabase.from("usuarios").select("email").eq("dominio", dominio).single();
+    const { data: userNegocio } = await supabase.from("usuarios").select("email").eq("slug", slug).single();
     if (userNegocio?.email) {
       fetch(APPS_SCRIPT_URL, {
         method: "POST", headers: { "Content-Type": "text/plain" },
@@ -1776,7 +1932,7 @@ async function procesarPagoConfirmado({ dominio, nombre, telefono, email, fecha,
   }
 
   await supabase.from("ventas").insert([{
-    dominio,
+    slug,
     turno_id:         turnoId,
     fecha_turno:      fecha,
     fecha_pago:       new Date().toISOString(),
@@ -1792,7 +1948,7 @@ async function procesarPagoConfirmado({ dominio, nombre, telefono, email, fecha,
     payment_id:       String(payment_id),
   }]);
 
-  invalidateCache(dominio);
+  invalidateCache(slug);
 }
 
 app.post("/webhook/mp", async (req, res) => {
@@ -1807,18 +1963,16 @@ app.post("/webhook/mp", async (req, res) => {
       });
       const payData = await payRes.json();
 
-      // Detectar si es un pago de suscripción de Associe
       const tipoPago = payData.metadata?.tipo || "";
       if (tipoPago === "suscripcion_associe") {
-        // Delegar al handler de suscripción y salir
         await procesarPagoSuscripcion(payData);
         return res.sendStatus(200);
       }
 
-      const dominio = cleanDominio(payData.metadata?.dominio || payData.metadata?.slug || "");
-      if (!dominio) return res.sendStatus(200);
+      const slug = cleanSlug(payData.metadata?.slug || payData.metadata?.dominio || "");
+      if (!slug) return res.sendStatus(200);
 
-      const { data: userNegocio } = await supabase.from("usuarios").select("mp_access_token").eq("dominio", dominio).single();
+      const { data: userNegocio } = await supabase.from("usuarios").select("mp_access_token").eq("slug", slug).single();
       let meta = payData.metadata;
       if (userNegocio?.mp_access_token) {
         const real = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
@@ -1829,7 +1983,7 @@ app.post("/webhook/mp", async (req, res) => {
 
       const estado = payData.status === "approved" ? "aprobado" : payData.status === "pending" ? "pendiente" : "rechazado";
       await procesarPagoConfirmado({
-        dominio,
+        slug,
         nombre:          meta.nombre,
         telefono:        meta.telefono,
         email:           meta.email,
@@ -1857,14 +2011,14 @@ app.post("/webhook/mobbex", async (req, res) => {
     const statusCode = Number(body.status?.code || 0);
     const estado     = statusCode === 200 ? "aprobado" : statusCode >= 300 && statusCode < 400 ? "pendiente" : "rechazado";
     const meta       = body.metadata || {};
-    const dominio    = cleanDominio(meta.dominio || meta.slug || "");
+    const slug       = cleanSlug(meta.slug || meta.dominio || "");
     const monto      = Number(body.total || 0);
     const paymentId  = body.id || body.payment?.id || "mobbex-" + Date.now();
 
-    if (!dominio) return res.sendStatus(200);
+    if (!slug) return res.sendStatus(200);
 
     await procesarPagoConfirmado({
-      dominio,
+      slug,
       nombre:          meta.nombre,
       telefono:        meta.telefono,
       email:           meta.email,
@@ -1891,34 +2045,27 @@ app.post("/webhook/mobbex", async (req, res) => {
 // WEBHOOK — Pago de suscripción de Associe
 // ══════════════════════════════════════════════════════════════
 
-/**
- * Procesa el pago de la mensualidad de Associe.
- * Suma 30 días al vencimiento y activa la suscripción.
- * Puede ser llamado desde /webhook/mp (detección por metadata.tipo)
- * o directamente desde /webhook/suscripcion.
- */
 async function procesarPagoSuscripcion(payData) {
-  const estado  = payData.status === "approved" ? "aprobado" : "rechazado";
-  if (estado !== "aprobado") return; // solo procesamos pagos aprobados
+  const estado = payData.status === "approved" ? "aprobado" : "rechazado";
+  if (estado !== "aprobado") return;
 
-  const dominio = cleanDominio(payData.metadata?.dominio || "");
-  if (!dominio) {
-    console.error("⚠️ Webhook suscripción: dominio no encontrado en metadata.");
+  const slug = cleanSlug(payData.metadata?.slug || payData.metadata?.dominio || "");
+  if (!slug) {
+    console.error("⚠️ Webhook suscripción: slug no encontrado en metadata.");
     return;
   }
 
   const { data: user, error } = await supabase
     .from("usuarios")
     .select("id, email, nombre_persona, fecha_vencimiento, estado_suscripcion")
-    .eq("dominio", dominio).single();
+    .eq("slug", slug).single();
 
   if (error || !user) {
-    console.error(`⚠️ Webhook suscripción: negocio no encontrado (${dominio}).`);
+    console.error(`⚠️ Webhook suscripción: negocio no encontrado (${slug}).`);
     return;
   }
 
-  // Calcular nueva fecha: si ya tiene fecha futura, sumar desde ahí; si venció, desde hoy
-  const fechaBase = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date()
+  const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date()
     ? user.fecha_vencimiento
     : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
@@ -1926,13 +2073,11 @@ async function procesarPagoSuscripcion(payData) {
   await supabase.from("usuarios").update({
     fecha_vencimiento:  nuevaFecha,
     estado_suscripcion: "activo",
-  }).eq("dominio", dominio);
+  }).eq("slug", slug);
 
-  invalidateCache(dominio);
+  invalidateCache(slug);
+  console.log(`✅ Suscripción renovada: ${slug} → vence ${nuevaFecha}`);
 
-  console.log(`✅ Suscripción renovada: ${dominio} → vence ${nuevaFecha}`);
-
-  // Email de confirmación al dueño (opcional)
   if (user.email) {
     fetch(APPS_SCRIPT_URL, {
       method: "POST", headers: { "Content-Type": "text/plain" },
@@ -1940,18 +2085,13 @@ async function procesarPagoSuscripcion(payData) {
         action:     "suscripcionRenovada",
         adminEmail: user.email,
         nombre:     user.nombre_persona || "Cliente",
-        dominio,
+        slug,
         nuevaFecha,
       }),
     }).catch((e) => console.error("Error mail suscripción:", e.message));
   }
 }
 
-/**
- * POST /webhook/suscripcion
- * Endpoint dedicado para el IPN/webhook del checkout de suscripción.
- * MercadoPago llama a esta URL cuando hay un pago nuevo.
- */
 app.post("/webhook/suscripcion", async (req, res) => {
   const { query, body } = req;
   try {
@@ -1963,7 +2103,6 @@ app.post("/webhook/suscripcion", async (req, res) => {
         headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` },
       });
       const payData = await payRes.json();
-
       await procesarPagoSuscripcion(payData);
     }
     res.sendStatus(200);
@@ -1976,13 +2115,7 @@ app.post("/webhook/suscripcion", async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // CRON — Verificación de vencimientos
-// Llamar periódicamente desde un servicio externo (cron.job.io,
-// Render Cron Jobs, o cualquier scheduler).
-// Protegido por x-api-key.
-//
-// Ejemplo de llamada:
-//   GET https://negosocio.onrender.com/cron/check-vencimientos
-//   Header: x-api-key: <ADMIN_SECRET>
+// GET /cron/check-vencimientos  (protegido con x-api-key)
 // ══════════════════════════════════════════════════════════════
 
 app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
@@ -1990,53 +2123,50 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
     const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }))
       .toISOString().split("T")[0];
 
-    // Buscar negocios activos cuyo vencimiento ya pasó y no están marcados como suspendidos
     const { data: vencidos, error } = await supabase
       .from("usuarios")
-      .select("id, dominio, business_name, email, fecha_vencimiento")
+      .select("id, slug, business_name, email, fecha_vencimiento")
       .eq("activo", true)
       .neq("estado_suscripcion", "suspendido")
       .lt("fecha_vencimiento", hoyISO);
 
     if (error) throw error;
 
-    const dominios = (vencidos || []).map((u) => u.dominio);
+    const slugs = (vencidos || []).map((u) => u.slug);
 
-    if (dominios.length > 0) {
+    if (slugs.length > 0) {
       await supabase.from("usuarios")
         .update({ estado_suscripcion: "suspendido" })
-        .in("dominio", dominios);
+        .in("slug", slugs);
 
-      dominios.forEach((d) => invalidateCache(d));
-
-      console.log(`🔒 Suspendidos (${hoyISO}):`, dominios.join(", "));
+      slugs.forEach((s) => invalidateCache(s));
+      console.log(`🔒 Suspendidos (${hoyISO}):`, slugs.join(", "));
     }
 
-    // También activar los que pagaron pero aún estaban marcados como suspendidos
     const { data: reactivables } = await supabase
       .from("usuarios")
-      .select("id, dominio")
+      .select("id, slug")
       .eq("activo", true)
       .eq("estado_suscripcion", "suspendido")
       .gte("fecha_vencimiento", hoyISO);
 
-    const dominiosReactivar = (reactivables || []).map((u) => u.dominio);
-    if (dominiosReactivar.length > 0) {
+    const slugsReactivar = (reactivables || []).map((u) => u.slug);
+    if (slugsReactivar.length > 0) {
       await supabase.from("usuarios")
         .update({ estado_suscripcion: "activo" })
-        .in("dominio", dominiosReactivar);
+        .in("slug", slugsReactivar);
 
-      dominiosReactivar.forEach((d) => invalidateCache(d));
-      console.log(`✅ Reactivados:`, dominiosReactivar.join(", "));
+      slugsReactivar.forEach((s) => invalidateCache(s));
+      console.log(`✅ Reactivados:`, slugsReactivar.join(", "));
     }
 
     res.json({
-      success:       true,
-      fecha:         hoyISO,
-      suspendidos:   dominios,
-      reactivados:   dominiosReactivar,
-      total_suspendidos: dominios.length,
-      total_reactivados: dominiosReactivar.length,
+      success:            true,
+      fecha:              hoyISO,
+      suspendidos:        slugs,
+      reactivados:        slugsReactivar,
+      total_suspendidos:  slugs.length,
+      total_reactivados:  slugsReactivar.length,
     });
   } catch (e) {
     console.error("Error en /cron/check-vencimientos:", e.message);
@@ -2065,9 +2195,9 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v7.1                           ║
-  ║   Multi-tenant · Suscripción semi-manual     ║
-  ║   Control de vencimientos activado           ║
+  ║   Associe API v8.0                           ║
+  ║   Multi-tenant · Slug auto-generado          ║
+  ║   Registro público activado                  ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
