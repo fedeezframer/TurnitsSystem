@@ -269,12 +269,12 @@ app.post("/registro", limiterAuth, async (req, res) => {
   try {
     const {
       nombre_persona,
-      apellido,
       email,
       telefono,
       business_name,
       password,
-      rubro = "generico",
+      horarios,
+      duracion_turno,
     } = req.body;
 
     // ── Validaciones ──────────────────────────────────────────
@@ -316,25 +316,30 @@ app.post("/registro", limiterAuth, async (req, res) => {
     const fechaVencimiento = calcularVencimiento(DIAS_PRUEBA);
 
     // ── Insertar en DB ────────────────────────────────────────
+    const insertData = {
+      nombre_persona:     nombre_persona.trim(),
+      email:              email.trim().toLowerCase(),
+      telefono:           telefono ? cleanPhone(telefono) : null,
+      business_name:      business_name.trim(),
+      slug,
+      password:           hashedPassword,
+      metodo_pago:        "none",
+      porcentaje_sena:    30,
+      excepciones:        [],
+      activo:             true,
+      estado_suscripcion: "trial",
+      fecha_vencimiento:  fechaVencimiento,
+    };
+
+    // Solo sobreescribir horarios si el front los mandó
+    if (horarios && typeof horarios === "object") insertData.horarios = horarios;
+    // Solo sobreescribir duración si el front la mandó
+    if (duracion_turno) insertData.duracion_turno = parseInt(duracion_turno) || 30;
+
     const { data: nuevoUsuario, error } = await supabase
       .from("usuarios")
-      .insert([{
-        nombre_persona:     nombre_persona.trim(),
-        apellido:           apellido?.trim() || "",
-        email:              email.trim().toLowerCase(),
-        telefono:           telefono ? cleanPhone(telefono) : null,
-        business_name:      business_name.trim(),
-        slug,                   // ya calculado, el trigger lo respeta si viene no vacío
-        password:           hashedPassword,
-        rubro,
-        metodo_pago:        "none",
-        porcentaje_sena:    30,
-        excepciones:        [],
-        activo:             true,
-        estado_suscripcion: "trial",
-        fecha_vencimiento:  fechaVencimiento,
-      }])
-      .select("id, slug, business_name, email, nombre_persona, apellido, rubro, estado_suscripcion, fecha_vencimiento")
+      .insert([insertData])
+      .select("id, slug, business_name, email, nombre_persona, estado_suscripcion, fecha_vencimiento")
       .single();
 
     if (error) {
