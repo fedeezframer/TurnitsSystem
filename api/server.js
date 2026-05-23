@@ -269,6 +269,7 @@ app.post("/registro", limiterAuth, async (req, res) => {
   try {
     const {
       nombre_persona,
+      apellido,
       email,
       telefono,
       business_name,
@@ -318,6 +319,7 @@ app.post("/registro", limiterAuth, async (req, res) => {
     // ── Insertar en DB ────────────────────────────────────────
     const insertData = {
       nombre_persona:     nombre_persona.trim(),
+      apellido:           apellido?.trim() || null,
       email:              email.trim().toLowerCase(),
       telefono:           telefono ? cleanPhone(telefono) : null,
       business_name:      business_name.trim(),
