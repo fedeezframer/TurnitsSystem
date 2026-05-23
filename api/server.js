@@ -744,6 +744,23 @@ app.get("/verify-session", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/debug-login", async (req, res) => {
+  const { email, password } = req.body;
+  const { data: user } = await supabase
+    .from("usuarios")
+    .select("email, password, activo")
+    .eq("email", email)
+    .single();
+  
+  res.json({
+    user_encontrado: !!user,
+    activo: user?.activo,
+    password_en_db: user?.password,
+    password_recibido: password,
+    son_iguales: String(user?.password) === String(password)
+  });
+});
+
 /**
  * POST /api/request-password-reset
  */
