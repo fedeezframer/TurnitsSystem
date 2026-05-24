@@ -702,45 +702,25 @@ app.post("/login", async (req, res) => {
 /**
  * GET /verify-session
  */
-app.get("/verify-session", requireAuth, async (req, res) => {
+app.get("/verify-session", async (req, res) => {
   try {
+    const token = req.headers["authorization"]?.split(" ")[1] || req.query.token;
+    if (!token) return res.json({ active: false, reason: "no_token" });
+
+    const secret = process.env.JWT_SECRET;
+    const payload = jwt.verify(token, secret);
+
     const { data: user } = await supabase
       .from("usuarios")
-      .select("slug, business_name, email, nombre_persona, apellido, rubro, activo, estado_suscripcion, fecha_vencimiento")
-      .eq("slug", req.auth.slug)
+      .select("slug, business_name, email, nombre_persona, activo, estado_suscripcion, fecha_vencimiento")
+      .eq("slug", payload.slug)
       .single();
 
     if (!user || !user.activo) return res.json({ active: false, reason: "not_found" });
 
-    const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
-    const estadoSuscripcion  = user.estado_suscripcion || "trial";
-    const alertaVencimiento  = diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0;
-    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
-
-    if (suscripcionVencida && estadoSuscripcion !== "suspendido") {
-      await supabase.from("usuarios")
-        .update({ estado_suscripcion: "suspendido" })
-        .eq("slug", req.auth.slug);
-    }
-
-    res.json({
-      active:         true,
-      slug:           user.slug,
-      business_name:  user.business_name,
-      email:          user.email,
-      nombre_persona: user.nombre_persona,
-      apellido:       user.apellido || "",
-      rubro:          user.rubro,
-      suscripcion: {
-        estado:            suscripcionVencida ? "suspendido" : estadoSuscripcion,
-        fecha_vencimiento: user.fecha_vencimiento,
-        dias_restantes:    diasRestantes,
-        alerta:            alertaVencimiento,
-        vencida:           suscripcionVencida,
-      },
-    });
+    res.json({ active: true, slug: user.slug, business_name: user.business_name, email: user.email });
   } catch (e) {
-    res.status(500).json({ active: false, error: e.message });
+    res.json({ active: false, reason: "invalid_token" });
   }
 });
 
