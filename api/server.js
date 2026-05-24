@@ -16,11 +16,11 @@ const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzvcaYhHuyD-Xu63Aw9WpWrpcr5xmrgHW_IffXkmC90bs0pTzhWP1d8rWBaBuhG5Icx/exec";
 
 const BCRYPT_ROUNDS  = 10;
-const CACHE_DURATION = 20_000;       // ms — caché de admin-stats
+const CACHE_DURATION = 20_000;
 const JWT_EXPIRY     = "7d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 
-// ─── Configuración del SaaS (Associe) ────────────────────────
+// ─── Configuración del SaaS ───────────────────────────────────
 const DIAS_PRUEBA          = parseInt(process.env.DIAS_PRUEBA || "15");
 const PRECIO_SUSCRIPCION   = parseInt(process.env.PRECIO_SUSCRIPCION || "21000");
 const MP_PLATFORM_TOKEN    = process.env.MP_PLATFORM_TOKEN || "";
@@ -31,44 +31,31 @@ const SUSCRIPCION_CANCEL   = process.env.SUSCRIPCION_CANCEL_URL  || `${PANEL_URL
 // ══════════════════════════════════════════════════════════════
 // HELPERS GENERALES
 // ══════════════════════════════════════════════════════════════
-
-/**
- * Normaliza un slug: minúsculas, sin espacios ni caracteres especiales.
- * Equivalente JS al generar_slug_base() de PostgreSQL.
- * Ejemplo: "Mi Peluquería & Co." → "mi-peluqueria-co"
- */
 const cleanSlug = (raw) => {
   if (!raw) return "";
   return raw
     .toLowerCase()
     .trim()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")   // quitar tildes
-    .replace(/[^a-z0-9]+/g, "-")       // todo lo no alfanumérico → guión
-    .replace(/^-+|-+$/g, "");          // quitar guiones al inicio/fin
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 };
 
-/**
- * Genera un slug único a partir del business_name consultando la DB.
- * Si "mi-negocio" ya existe, prueba "mi-negocio-2", etc.
- */
 async function generarSlugUnico(businessName) {
   const base = cleanSlug(businessName);
   let   slug = base;
   let   n    = 2;
-
   while (true) {
     const { data } = await supabase
       .from("usuarios")
       .select("id")
       .eq("slug", slug)
       .maybeSingle();
-
-    if (!data) break;        // slug disponible
+    if (!data) break;
     slug = `${base}-${n}`;
     n++;
   }
-
   return slug;
 }
 
@@ -121,31 +108,26 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // ══════════════════════════════════════════════════════════════
 // MIDDLEWARE: JWT AUTH
 // ══════════════════════════════════════════════════════════════
-// JWT contiene: { slug, negocioId, rol: "owner" | "superadmin" }
 function requireAuth(req, res, next) {
   try {
     const header = req.headers["authorization"];
     if (!header?.startsWith("Bearer ")) {
       return res.status(401).json({ success: false, error: "No autorizado: falta el token." });
     }
-
     const token   = header.split(" ")[1];
     const secret  = process.env.JWT_SECRET;
     if (!secret) return res.status(500).json({ success: false, error: "JWT_SECRET no configurado." });
 
     const payload = jwt.verify(token, secret);
 
-    // Superadmin: acceso total
     if (payload.rol === "superadmin") {
       req.auth = payload;
       return next();
     }
 
-    // Owner: el slug del JWT debe coincidir con el slug de la ruta/body
     const slugRuta = cleanSlug(
       req.params.slug || req.body?.slug || req.query?.slug || ""
     );
-
     if (slugRuta && payload.slug !== slugRuta) {
       return res.status(403).json({ success: false, error: "No autorizado para este negocio." });
     }
@@ -246,25 +228,14 @@ function calcularFrecuencia(cantidadTurnos) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "8.0", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "8.1", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 
 // ══════════════════════════════════════════════════════════════
-// REGISTRO PÚBLICO — Auto-registro de negocios
+// REGISTRO PÚBLICO
 // POST /registro
-// El cliente completa un formulario en Framer y se registra solo.
-// El slug se genera automáticamente a partir del business_name.
 // ══════════════════════════════════════════════════════════════
-
-/**
- * POST /registro
- * Body: {
- *   nombre_persona, apellido?, email, telefono?,
- *   business_name, password, rubro?
- * }
- * Responde: { success, slug, panel_url, token, dias_prueba }
- */
 app.post("/registro", limiterAuth, async (req, res) => {
   try {
     const {
@@ -278,7 +249,6 @@ app.post("/registro", limiterAuth, async (req, res) => {
       duracion_turno,
     } = req.body;
 
-    // ── Validaciones ──────────────────────────────────────────
     if (!nombre_persona || !email || !password || !business_name) {
       return res.status(400).json({
         success: false,
@@ -298,7 +268,6 @@ app.post("/registro", limiterAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "El nombre del negocio es demasiado corto." });
     }
 
-    // ── Verificar email único ─────────────────────────────────
     const { data: emailExiste } = await supabase
       .from("usuarios")
       .select("id")
@@ -309,14 +278,12 @@ app.post("/registro", limiterAuth, async (req, res) => {
       return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
     }
 
-    // ── Generar slug único ────────────────────────────────────
     const slug = await generarSlugUnico(business_name.trim());
 
-    // ── Hash de contraseña ────────────────────────────────────
-const hashedPassword = String(password);
+    // ✅ FIX: siempre hashear con bcrypt
+    const hashedPassword   = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
     const fechaVencimiento = calcularVencimiento(DIAS_PRUEBA);
 
-    // ── Insertar en DB ────────────────────────────────────────
     const insertData = {
       nombre_persona:     nombre_persona.trim(),
       apellido:           apellido?.trim() || null,
@@ -333,9 +300,7 @@ const hashedPassword = String(password);
       fecha_vencimiento:  fechaVencimiento,
     };
 
-    // Solo sobreescribir horarios si el front los mandó
     if (horarios && typeof horarios === "object") insertData.horarios = horarios;
-    // Solo sobreescribir duración si el front la mandó
     if (duracion_turno) insertData.duracion_turno = parseInt(duracion_turno) || 30;
 
     const { data: nuevoUsuario, error } = await supabase
@@ -351,7 +316,6 @@ const hashedPassword = String(password);
       throw error;
     }
 
-    // ── Generar JWT para login automático ─────────────────────
     const secret = process.env.JWT_SECRET;
     let token    = null;
     if (secret) {
@@ -362,7 +326,6 @@ const hashedPassword = String(password);
       );
     }
 
-    // ── Email de bienvenida (no bloqueante) ───────────────────
     fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
@@ -379,12 +342,12 @@ const hashedPassword = String(password);
     console.log(`✅ Registro: ${slug} (${business_name}) — trial hasta ${fechaVencimiento}`);
 
     res.status(201).json({
-      success:     true,
-      slug:        nuevoUsuario.slug,
-      business_name: nuevoUsuario.business_name,
-      panel_url:   `${PANEL_URL}?u=${nuevoUsuario.slug}`,
+      success:           true,
+      slug:              nuevoUsuario.slug,
+      business_name:     nuevoUsuario.business_name,
+      panel_url:         `${PANEL_URL}?u=${nuevoUsuario.slug}`,
       token,
-      dias_prueba: DIAS_PRUEBA,
+      dias_prueba:       DIAS_PRUEBA,
       fecha_vencimiento: fechaVencimiento,
     });
   } catch (e) {
@@ -393,30 +356,22 @@ const hashedPassword = String(password);
   }
 });
 
-/**
- * GET /registro/check-slug?business_name=...
- * Permite al frontend mostrar en tiempo real el slug que se asignaría,
- * y si ya está disponible.
- */
 app.get("/registro/check-slug", async (req, res) => {
   try {
     const { business_name } = req.query;
     if (!business_name) {
       return res.status(400).json({ success: false, error: "Falta business_name." });
     }
-
     const base = cleanSlug(business_name);
     if (!base) {
       return res.status(400).json({ success: false, error: "Nombre de negocio inválido para generar slug." });
     }
-
     const slugSugerido = await generarSlugUnico(business_name);
-
     res.json({
-      success:        true,
-      slug_sugerido:  slugSugerido,
-      slug_base:      base,
-      disponible:     slugSugerido === base,   // false si ya se tuvo que agregar sufijo
+      success:       true,
+      slug_sugerido: slugSugerido,
+      slug_base:     base,
+      disponible:    slugSugerido === base,
     });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -427,13 +382,6 @@ app.get("/registro/check-slug", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // SUPERADMIN — CRUD DE NEGOCIOS
 // ══════════════════════════════════════════════════════════════
-
-/**
- * POST /superadmin/negocios
- * Registra un negocio manualmente (admin). El slug se genera igual que
- * en el registro público, a partir del business_name.
- * Body: { nombre_persona, apellido, email, telefono, business_name, password, rubro? }
- */
 app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
   try {
     const {
@@ -495,9 +443,6 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
   }
 });
 
-/**
- * GET /superadmin/negocios
- */
 app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -532,9 +477,6 @@ app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
   }
 });
 
-/**
- * GET /superadmin/negocios/:slug
- */
 app.get("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -567,9 +509,6 @@ app.get("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   }
 });
 
-/**
- * PUT /superadmin/negocios/:slug
- */
 app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   try {
     const slug    = cleanSlug(req.params.slug);
@@ -580,20 +519,16 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
       "estado_suscripcion", "fecha_vencimiento",
     ];
     const update = {};
-
     allowed.forEach((key) => {
       if (req.body[key] !== undefined) update[key] = req.body[key];
     });
 
-    // Superadmin puede cambiar el slug manualmente
     if (req.body.nuevo_slug) {
       update.slug = cleanSlug(req.body.nuevo_slug);
     }
-
     if (req.body.password) {
       update.password = await bcrypt.hash(String(req.body.password), BCRYPT_ROUNDS);
     }
-
     if (req.body.sumar_dias && !isNaN(parseInt(req.body.sumar_dias))) {
       const { data: actual } = await supabase.from("usuarios").select("fecha_vencimiento").eq("slug", slug).single();
       const base = actual?.fecha_vencimiento && new Date(actual.fecha_vencimiento) > new Date()
@@ -606,16 +541,12 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
     const { error } = await supabase.from("usuarios").update(update).eq("slug", slug);
     if (error) throw error;
     invalidateCache(slug);
-
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
-/**
- * DELETE /superadmin/negocios/:slug — soft delete
- */
 app.delete("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -635,9 +566,15 @@ app.delete("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
 
 /**
  * POST /login
- * Body: { slug, password }  (también acepta "email" como alternativa al slug)
+ *
+ * Acepta: { email, password } o { slug, password }
+ *
+ * Lógica de comparación:
+ *   1. Intentar bcrypt.compare (usuarios nuevos / reseteados)
+ *   2. Si falla, comparación directa en texto plano (usuarios legacy)
+ *      y en ese caso migrar el password a bcrypt automáticamente.
  */
-app.post("/login", async (req, res) => {
+app.post("/login", limiterAuth, async (req, res) => {
   try {
     const rawSlug  = cleanSlug(req.body.slug || req.body.dominio || "");
     const email    = req.body.email?.trim().toLowerCase() || "";
@@ -658,7 +595,31 @@ app.post("/login", async (req, res) => {
     if (error || !user) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
     if (!user.activo)   return res.status(403).json({ success: false, error: "Este negocio está desactivado." });
 
-    const passwordOk = String(user.password) === String(password);
+    // ✅ FIX: comparación bcrypt primero, con fallback a texto plano
+    //         para usuarios creados antes del fix (migración automática)
+    let passwordOk = false;
+    const storedPassword = String(user.password);
+
+    // Detectar si el hash almacenado parece un bcrypt hash ($2a$, $2b$, $2y$)
+    const esBcrypt = /^\$2[aby]\$/.test(storedPassword);
+
+    if (esBcrypt) {
+      // Camino normal: comparar con bcrypt
+      passwordOk = await bcrypt.compare(String(password), storedPassword);
+    } else {
+      // Camino legacy: texto plano (usuarios anteriores al fix)
+      passwordOk = storedPassword === String(password);
+
+      // Migrar automáticamente a bcrypt si la contraseña es correcta
+      if (passwordOk) {
+        const nuevoHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+        await supabase
+          .from("usuarios")
+          .update({ password: nuevoHash })
+          .eq("id", user.id);
+        console.log(`🔄 Password migrado a bcrypt: ${user.slug}`);
+      }
+    }
 
     if (!passwordOk) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
 
@@ -699,15 +660,12 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/**
- * GET /verify-session
- */
 app.get("/verify-session", async (req, res) => {
   try {
     const token = req.headers["authorization"]?.split(" ")[1] || req.query.token;
     if (!token) return res.json({ active: false, reason: "no_token" });
 
-    const secret = process.env.JWT_SECRET;
+    const secret  = process.env.JWT_SECRET;
     const payload = jwt.verify(token, secret);
 
     const { data: user } = await supabase
@@ -724,26 +682,32 @@ app.get("/verify-session", async (req, res) => {
   }
 });
 
-app.post("/debug-login", async (req, res) => {
+// ──────────────────────────────────────────────────────────────
+// RUTA DE DIAGNÓSTICO — solo para desarrollo, eliminar en prod
+// ──────────────────────────────────────────────────────────────
+app.post("/debug-login", requireAdminKey, async (req, res) => {
   const { email, password } = req.body;
   const { data: user } = await supabase
     .from("usuarios")
     .select("email, password, activo")
     .eq("email", email)
     .single();
-  
+
+  if (!user) return res.json({ user_encontrado: false });
+
+  const esBcrypt    = /^\$2[aby]\$/.test(String(user.password));
+  const bcryptMatch = esBcrypt ? await bcrypt.compare(String(password), String(user.password)) : null;
+  const plainMatch  = !esBcrypt ? String(user.password) === String(password) : null;
+
   res.json({
-    user_encontrado: !!user,
-    activo: user?.activo,
-    password_en_db: user?.password,
-    password_recibido: password,
-    son_iguales: String(user?.password) === String(password)
+    user_encontrado:  true,
+    activo:           user.activo,
+    tipo_hash:        esBcrypt ? "bcrypt" : "texto_plano",
+    bcrypt_match:     bcryptMatch,
+    plain_match:      plainMatch,
   });
 });
 
-/**
- * POST /api/request-password-reset
- */
 app.post("/api/request-password-reset", limiterAuth, async (req, res) => {
   try {
     const { email, newPassword } = req.body;
@@ -777,6 +741,7 @@ app.post("/api/verify-and-reset-password", limiterAuth, async (req, res) => {
     const result = await googleRes.json();
     if (result.status !== "valid") return res.status(400).json({ success: false, error: "Código incorrecto o expirado." });
 
+    // ✅ FIX: hashear con bcrypt al resetear
     const hashedPassword = await bcrypt.hash(String(result.password), BCRYPT_ROUNDS);
     const { error } = await supabase.from("usuarios").update({ password: hashedPassword }).eq("email", email.trim().toLowerCase());
     if (error) throw error;
@@ -788,12 +753,8 @@ app.post("/api/verify-and-reset-password", limiterAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// NEGOCIO PÚBLICO (para la landing del cliente)
+// NEGOCIO PÚBLICO
 // ══════════════════════════════════════════════════════════════
-
-/**
- * GET /negocio/:slug
- */
 app.get("/negocio/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -818,11 +779,7 @@ app.get("/negocio/:slug", async (req, res) => {
       return res.json({
         success:    true,
         suspendido: true,
-        negocio: {
-          slug:          user.slug,
-          business_name: user.business_name,
-          rubro:         user.rubro,
-        },
+        negocio: { slug: user.slug, business_name: user.business_name, rubro: user.rubro },
       });
     }
 
@@ -852,10 +809,6 @@ app.get("/negocio/:slug", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // SLOTS DISPONIBLES
 // ══════════════════════════════════════════════════════════════
-
-/**
- * GET /slots-disponibles/:slug?fecha=YYYY-MM-DD&servicio_id=...
- */
 app.get("/slots-disponibles/:slug", async (req, res) => {
   try {
     const slug                   = cleanSlug(req.params.slug);
@@ -882,11 +835,8 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
 
     if (servicio_id) {
       const { data: srv } = await supabase
-        .from("servicios")
-        .select("duracion, capacidad")
-        .eq("id", servicio_id)
-        .eq("slug", slug)
-        .single();
+        .from("servicios").select("duracion, capacidad")
+        .eq("id", servicio_id).eq("slug", slug).single();
       if (srv) {
         duracion  = srv.duracion  || duracion;
         capacidad = srv.capacidad || capacidad;
@@ -921,8 +871,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     }
 
     const { data: turnosDia } = await supabase
-      .from("turnos")
-      .select("hora, estado")
+      .from("turnos").select("hora, estado")
       .eq("slug", slug).eq("fecha", fecha)
       .in("estado", ["confirmado", "pendiente"]);
 
@@ -946,12 +895,8 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// TURNOS — RESERVA PÚBLICA (sin login)
+// TURNOS — RESERVA PÚBLICA
 // ══════════════════════════════════════════════════════════════
-
-/**
- * GET /turnos/ocupados?slug=...&fecha=...
- */
 app.get("/turnos/ocupados", async (req, res) => {
   try {
     const slug  = cleanSlug(req.query.slug || req.query.dominio || "");
@@ -970,9 +915,6 @@ app.get("/turnos/ocupados", async (req, res) => {
   }
 });
 
-/**
- * POST /turnos/reservar
- */
 app.post("/turnos/reservar", limiterBooking, async (req, res) => {
   try {
     const { name, phone, email, fecha, hora, slug, dominio, servicio_id } = req.body;
@@ -1075,9 +1017,6 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
   }
 });
 
-/**
- * PUT /turnos/:id — dueño actualiza estado o notas
- */
 app.put("/turnos/:id", requireAuth, async (req, res) => {
   try {
     const { id }       = req.params;
@@ -1108,8 +1047,6 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // SERVICIOS
 // ══════════════════════════════════════════════════════════════
-
-/** GET /servicios/:slug — público */
 app.get("/servicios/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1129,7 +1066,6 @@ app.get("/servicios/:slug", async (req, res) => {
   }
 });
 
-/** GET /admin/servicios/:slug — lista completa (con inactivos) */
 app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1145,7 +1081,6 @@ app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
   }
 });
 
-/** POST /admin/servicios — crear */
 app.post("/admin/servicios", requireAuth, async (req, res) => {
   try {
     const { slug, dominio, nombre, descripcion, duracion, precio, capacidad, orden } = req.body;
@@ -1174,11 +1109,10 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
   }
 });
 
-/** PUT /admin/servicios/:id — editar */
 app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
   try {
-    const { id }       = req.params;
-    const slugClean    = cleanSlug(req.body.slug || req.body.dominio || req.auth.slug);
+    const { id }    = req.params;
+    const slugClean = cleanSlug(req.body.slug || req.body.dominio || req.auth.slug);
     const { nombre, descripcion, duracion, precio, capacidad, activo, orden } = req.body;
 
     const u = {};
@@ -1201,7 +1135,6 @@ app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
   }
 });
 
-/** DELETE /admin/servicios/:id — eliminar */
 app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
   try {
     const { id }    = req.params;
@@ -1218,9 +1151,8 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// AGENDA — Vista agrupada por fecha (próximos 30 días)
+// AGENDA
 // ══════════════════════════════════════════════════════════════
-
 app.get("/agenda/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1272,9 +1204,8 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// COBROS — Lista de ventas del negocio
+// COBROS
 // ══════════════════════════════════════════════════════════════
-
 app.get("/cobros/:slug", requireAuth, async (req, res) => {
   try {
     const slug   = cleanSlug(req.params.slug);
@@ -1312,9 +1243,8 @@ app.get("/cobros/:slug", requireAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// CLIENTES — CRM básico
+// CLIENTES
 // ══════════════════════════════════════════════════════════════
-
 app.get("/clientes/:slug", requireAuth, async (req, res) => {
   try {
     const slug   = cleanSlug(req.params.slug);
@@ -1351,7 +1281,7 @@ app.get("/clientes/:slug", requireAuth, async (req, res) => {
       .sort((a, b) => b.turnos - a.turnos);
 
     res.json({
-      success: true,
+      success:  true,
       clientes: clientesArr.slice(offset, offset + limite),
       total:    clientesArr.length,
       offset,
@@ -1369,9 +1299,8 @@ app.get("/clientes/:slug", requireAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// SETTINGS — Configuración del negocio
+// SETTINGS
 // ══════════════════════════════════════════════════════════════
-
 app.get("/settings/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1418,7 +1347,7 @@ const handleUpdateSettings = async (req, res) => {
     }
     if (duracion_turno)            u.duracion_turno      = parseInt(duracion_turno);
     if (capacidad_por_turno)       u.capacidad_por_turno = parseInt(capacidad_por_turno);
-    if (quien_asume_comision)      u.quien_asume_comision= quien_asume_comision;
+    if (quien_asume_comision)      u.quien_asume_comision = quien_asume_comision;
     if (horarios)                  u.horarios            = horarios;
     if (excepciones !== undefined) u.excepciones         = excepciones;
     if (business_name)             u.business_name       = business_name.trim();
@@ -1439,9 +1368,8 @@ app.put("/settings/:slug",  requireAuth, handleUpdateSettings);
 
 
 // ══════════════════════════════════════════════════════════════
-// ADMIN STATS — Dashboard principal del dueño
+// ADMIN STATS
 // ══════════════════════════════════════════════════════════════
-
 app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1499,11 +1427,11 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       .filter((t) => t.fecha === hoyISO)
       .sort((a, b) => a.hora.localeCompare(b.hora))
       .map((t) => ({
-        id:      t.id,
-        nombre:  t.nombre,
-        hora:    t.hora.slice(0, 5),
+        id:       t.id,
+        nombre:   t.nombre,
+        hora:     t.hora.slice(0, 5),
         servicio: t.servicio_nombre,
-        estado:  t.estado,
+        estado:   t.estado,
       }));
 
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
@@ -1581,13 +1509,13 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       ventasPorMes:  metricas.porMes,
       proximosDias,
 
-      horarios:      user.horarios,
+      horarios: user.horarios,
       config: {
         duracion:             user.duracion_turno      || 30,
         capacidad_por_turno:  user.capacidad_por_turno || 1,
         metodo_pago:          user.metodo_pago         || "none",
         porcentaje_sena:      user.porcentaje_sena     || 30,
-        quien_asume_comision: user.quien_asume_comision|| "cliente",
+        quien_asume_comision: user.quien_asume_comision || "cliente",
         mp_status:            user.mp_access_token ? "Conectado" : "Desconectado",
         mobbex_status:        user.mobbex_api_key  ? "Conectado" : "Desconectado",
         excepciones:          user.excepciones     || [],
@@ -1619,9 +1547,8 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// PAGOS — Mercado Pago + Mobbex (pagos de turnos del cliente)
+// PAGOS — Mercado Pago + Mobbex
 // ══════════════════════════════════════════════════════════════
-
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   try {
     const { nombre, telefono, email, fecha, hora, slug, dominio, servicio_id } = req.body;
@@ -1685,7 +1612,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const successUrl = process.env.SUCCESS_URL || `${API_URL}/success`;
     const cancelUrl  = process.env.CANCEL_URL  || `${API_URL}/error`;
 
-    // MOBBEX (prioridad)
+    // MOBBEX
     if (user.mobbex_api_key && user.mobbex_access_token) {
       try {
         const mobbexRes = await fetch("https://api.mobbex.com/p/sessions", {
@@ -1722,7 +1649,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       }
     }
 
-    // MERCADO PAGO (fallback)
+    // MERCADO PAGO
     if (user.mp_access_token) {
       try {
         const client = new MercadoPagoConfig({ accessToken: user.mp_access_token });
@@ -1758,9 +1685,8 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// SUSCRIPCIÓN — Checkout de renovación mensual de Associe
+// SUSCRIPCIÓN
 // ══════════════════════════════════════════════════════════════
-
 app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.body.slug || req.body.dominio || req.auth.slug);
@@ -1806,20 +1732,13 @@ app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
       },
     });
 
-    res.json({
-      success:     true,
-      payment_url: response.init_point,
-      monto:       PRECIO_SUSCRIPCION,
-    });
+    res.json({ success: true, payment_url: response.init_point, monto: PRECIO_SUSCRIPCION });
   } catch (e) {
     console.error("Error en /api/suscripcion/checkout:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
-/**
- * GET /api/suscripcion/estado
- */
 app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.query.slug || req.query.dominio || req.auth.slug);
@@ -1851,9 +1770,8 @@ app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// OAUTH — Mercado Pago (vinculación del negocio cliente)
+// OAUTH — Mercado Pago
 // ══════════════════════════════════════════════════════════════
-
 app.get("/oauth-callback", async (req, res) => {
   const { code, state: slug } = req.query;
   if (!code || !slug) return res.status(400).send("Parámetros inválidos.");
@@ -1885,9 +1803,8 @@ app.get("/oauth-callback", async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// WEBHOOKS — Pagos de turnos (MP + Mobbex)
+// WEBHOOKS — MP + Mobbex
 // ══════════════════════════════════════════════════════════════
-
 async function procesarPagoConfirmado({ slug, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, payment_id, estado }) {
   let turnoId = null;
 
@@ -2035,9 +1952,8 @@ app.post("/webhook/mobbex", async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// WEBHOOK — Pago de suscripción de Associe
+// WEBHOOK — Suscripción
 // ══════════════════════════════════════════════════════════════
-
 async function procesarPagoSuscripcion(payData) {
   const estado = payData.status === "approved" ? "aprobado" : "rechazado";
   if (estado !== "aprobado") return;
@@ -2108,9 +2024,7 @@ app.post("/webhook/suscripcion", async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // CRON — Verificación de vencimientos
-// GET /cron/check-vencimientos  (protegido con x-api-key)
 // ══════════════════════════════════════════════════════════════
-
 app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
   try {
     const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }))
@@ -2131,7 +2045,6 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
       await supabase.from("usuarios")
         .update({ estado_suscripcion: "suspendido" })
         .in("slug", slugs);
-
       slugs.forEach((s) => invalidateCache(s));
       console.log(`🔒 Suspendidos (${hoyISO}):`, slugs.join(", "));
     }
@@ -2148,18 +2061,17 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
       await supabase.from("usuarios")
         .update({ estado_suscripcion: "activo" })
         .in("slug", slugsReactivar);
-
       slugsReactivar.forEach((s) => invalidateCache(s));
       console.log(`✅ Reactivados:`, slugsReactivar.join(", "));
     }
 
     res.json({
-      success:            true,
-      fecha:              hoyISO,
-      suspendidos:        slugs,
-      reactivados:        slugsReactivar,
-      total_suspendidos:  slugs.length,
-      total_reactivados:  slugsReactivar.length,
+      success:           true,
+      fecha:             hoyISO,
+      suspendidos:       slugs,
+      reactivados:       slugsReactivar,
+      total_suspendidos: slugs.length,
+      total_reactivados: slugsReactivar.length,
     });
   } catch (e) {
     console.error("Error en /cron/check-vencimientos:", e.message);
@@ -2188,9 +2100,9 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v8.0                           ║
-  ║   Multi-tenant · Slug auto-generado          ║
-  ║   Registro público activado                  ║
+  ║   Associe API v8.1                           ║
+  ║   Multi-tenant · bcrypt unificado            ║
+  ║   Migración automática de passwords legacy   ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
