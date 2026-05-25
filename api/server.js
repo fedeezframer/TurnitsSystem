@@ -735,66 +735,62 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
 // GET /settings/:slug
 // POST/PUT /settings/:slug
 // ══════════════════════════════════════════════════════════════
-app.get("/settings/:slug", requireAuth, async (req, res) => {
+app.put("/settings/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
- 
-    const { data: user, error } = await supabase.from("usuarios")
-      .select(
-        // ⚠️  "rubro" eliminado — no existe en la tabla usuarios.
-        //     Si lo agregás en el futuro, volvé a incluirlo acá.
-        "slug, business_name, nombre_persona, apellido, email, telefono, " +
-        "duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, " +
-        "quien_asume_comision, horarios, excepciones, mp_access_token, " +
-        "mobbex_api_key, estado_suscripcion, fecha_vencimiento, activo"
-      )
-      .eq("slug", slug)
-      .single();
- 
-    if (error || !user) {
-      console.error(`[settings] Negocio no encontrado o error Supabase: slug=${slug}`, error?.message);
-      return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-    }
- 
-    const diasRestantes = user.fecha_vencimiento
-      ? diasHastaVencer(user.fecha_vencimiento)
-      : null;
- 
-    res.json({
-      success: true,
-      settings: {
-        slug:                 user.slug,
-        business_name:        user.business_name,
-        nombre_persona:       user.nombre_persona,
-        apellido:             user.apellido,
-        email:                user.email,
-        telefono:             user.telefono,
-        duracion_turno:       user.duracion_turno,
-        capacidad_por_turno:  user.capacidad_por_turno,
-        metodo_pago:          user.metodo_pago,
-        porcentaje_sena:      user.porcentaje_sena,
-        quien_asume_comision: user.quien_asume_comision,
-        horarios:             user.horarios || {},
-        excepciones:          user.excepciones || [],
-        activo:               isActivo(user.activo),
-        estado_suscripcion:   user.estado_suscripcion,
-        fecha_vencimiento:    user.fecha_vencimiento,
-        // Tokens sensibles nunca se exponen
-        mp_status:            user.mp_access_token ? "Conectado" : "Desconectado",
-        mobbex_status:        user.mobbex_api_key  ? "Conectado" : "Desconectado",
-        mp_access_token:      undefined,
-        mobbex_api_key:       undefined,
-        mobbex_access_token:  undefined,
-        dias_restantes:       diasRestantes,
-        alerta_vencimiento:   diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
-      },
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+
+    const ALLOWED_FIELDS = [
+      "business_name", "nombre_persona", "apellido", "telefono",
+      "duracion_turno", "capacidad_por_turno",
+      "metodo_pago", "porcentaje_sena", "quien_asume_comision",
+      "horarios", "excepciones",
+    ];
+
+    const update: Record<string, any> = {};
+
+    ALLOWED_FIELDS.forEach((field) => {
+      if (req.body[field] !== undefined) update[field] = req.body[field];
     });
-  } catch (e) {
-    console.error("Error en GET /settings/:slug:", e.message);
+
+    // Validaciones puntuales
+    if (update.duracion_turno    !== undefined) update.duracion_turno    = parseInt(update.duracion_turno)    || 30;
+    if (update.capacidad_por_turno !== undefined) update.capacidad_por_turno = parseInt(update.capacidad_por_turno) || 1;
+    if (update.porcentaje_sena   !== undefined) update.porcentaje_sena   = parseInt(update.porcentaje_sena)   || 30;
+    if (update.telefono          !== undefined) update.telefono          = cleanPhone(update.telefono);
+    if (update.business_name     !== undefined) update.business_name     = update.business_name.trim();
+    if (update.nombre_persona    !== undefined) update.nombre_persona    = update.nombre_persona.trim();
+
+    // excepciones: aceptar tanto array como objeto (el override manda array)
+    if (update.excepciones !== undefined && !Array.isArray(update.excepciones)) {
+      update.excepciones = Object.entries(update.excepciones).map(
+        ([fecha, exc]: [string, any]) => ({
+          fecha,
+          type: exc.type ?? "block",
+          ...(exc.slots ? { slots: exc.slots } : {}),
+        })
+      );
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ success: false, error: "No hay campos válidos para actualizar." });
+    }
+
+    const { error } = await supabase
+      .from("usuarios")
+      .update(update)
+      .eq("slug", slug);
+
+    if (error) throw error;
+
+    invalidateCache(slug);
+    console.log(`✅ Settings actualizados: ${slug}`, Object.keys(update));
+    res.json({ success: true, updated: Object.keys(update) });
+  } catch (e: any) {
+    console.error("Error en PUT /settings/:slug:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
 
 // ══════════════════════════════════════════════════════════════
 // ADMIN STATS — Dashboard principal
