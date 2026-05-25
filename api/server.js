@@ -37,7 +37,6 @@ const cleanSlug = (raw) => {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 };
 
-// activo viene como texto 'true' / 'false' desde la DB
 const isActivo = (val) => val === 'true' || val === true;
 
 async function generarSlugUnico(businessName) {
@@ -68,7 +67,6 @@ const diasHastaVencer = (fechaISO) => {
   return Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
 };
 
-// bcrypt con fallback texto plano + auto-migración
 async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
   const stored   = String(passwordGuardado);
   const esBcrypt = /^\$2[aby]\$/.test(stored);
@@ -77,7 +75,6 @@ async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
     return await bcrypt.compare(String(passwordIngresado), stored);
   }
 
-  // Legacy: texto plano
   const ok = stored === String(passwordIngresado);
   if (ok) {
     const hash = await bcrypt.hash(String(passwordIngresado), BCRYPT_ROUNDS);
@@ -216,7 +213,7 @@ function agruparVentas(ventas, hoyISO) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "9.1", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "9.2", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 
@@ -293,7 +290,6 @@ app.post("/registro", limiterAuth, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // AUTH — LOGIN
 // POST /login
-// Body: { email, password } o { slug, password }
 // ══════════════════════════════════════════════════════════════
 app.post("/login", limiterAuth, async (req, res) => {
   try {
@@ -388,8 +384,6 @@ app.get("/verify-session", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // ADMIN — RESETEAR PASSWORD
 // POST /admin/reset-password
-// Headers: x-api-key
-// Body: { email, new_password }
 // ══════════════════════════════════════════════════════════════
 app.post("/admin/reset-password", requireAdminKey, async (req, res) => {
   try {
@@ -733,8 +727,62 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // SETTINGS
 // GET /settings/:slug
-// POST/PUT /settings/:slug
+// PUT /settings/:slug
 // ══════════════════════════════════════════════════════════════
+app.get("/settings/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+
+    const { data: user, error } = await supabase.from("usuarios")
+      .select(
+        "slug, business_name, nombre_persona, apellido, email, telefono, " +
+        "duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, " +
+        "quien_asume_comision, horarios, excepciones, mp_access_token, " +
+        "mobbex_api_key, estado_suscripcion, fecha_vencimiento, activo"
+      )
+      .eq("slug", slug)
+      .single();
+
+    if (error || !user) {
+      console.error(`[settings] Negocio no encontrado: slug=${slug}`, error?.message);
+      return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    }
+
+    const diasRestantes = user.fecha_vencimiento
+      ? diasHastaVencer(user.fecha_vencimiento)
+      : null;
+
+    res.json({
+      success: true,
+      settings: {
+        slug:                 user.slug,
+        business_name:        user.business_name,
+        nombre_persona:       user.nombre_persona,
+        apellido:             user.apellido,
+        email:                user.email,
+        telefono:             user.telefono,
+        duracion_turno:       user.duracion_turno,
+        capacidad_por_turno:  user.capacidad_por_turno,
+        metodo_pago:          user.metodo_pago,
+        porcentaje_sena:      user.porcentaje_sena,
+        quien_asume_comision: user.quien_asume_comision,
+        horarios:             user.horarios || {},
+        excepciones:          user.excepciones || [],
+        activo:               isActivo(user.activo),
+        estado_suscripcion:   user.estado_suscripcion,
+        fecha_vencimiento:    user.fecha_vencimiento,
+        mp_status:            user.mp_access_token ? "Conectado" : "Desconectado",
+        mobbex_status:        user.mobbex_api_key  ? "Conectado" : "Desconectado",
+        dias_restantes:       diasRestantes,
+        alerta_vencimiento:   diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
+      },
+    });
+  } catch (e) {
+    console.error("Error en GET /settings/:slug:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.put("/settings/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -747,50 +795,43 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       "horarios", "excepciones",
     ];
 
-    const update: Record<string, any> = {};
-
+    const update = {};
     ALLOWED_FIELDS.forEach((field) => {
       if (req.body[field] !== undefined) update[field] = req.body[field];
     });
 
-    // Validaciones puntuales
-    if (update.duracion_turno    !== undefined) update.duracion_turno    = parseInt(update.duracion_turno)    || 30;
+    if (update.duracion_turno      !== undefined) update.duracion_turno      = parseInt(update.duracion_turno)      || 30;
     if (update.capacidad_por_turno !== undefined) update.capacidad_por_turno = parseInt(update.capacidad_por_turno) || 1;
-    if (update.porcentaje_sena   !== undefined) update.porcentaje_sena   = parseInt(update.porcentaje_sena)   || 30;
-    if (update.telefono          !== undefined) update.telefono          = cleanPhone(update.telefono);
-    if (update.business_name     !== undefined) update.business_name     = update.business_name.trim();
-    if (update.nombre_persona    !== undefined) update.nombre_persona    = update.nombre_persona.trim();
+    if (update.porcentaje_sena     !== undefined) update.porcentaje_sena     = parseInt(update.porcentaje_sena)     || 30;
+    if (update.telefono            !== undefined) update.telefono            = cleanPhone(update.telefono);
+    if (update.business_name       !== undefined) update.business_name       = update.business_name.trim();
+    if (update.nombre_persona      !== undefined) update.nombre_persona      = update.nombre_persona.trim();
 
-    // excepciones: aceptar tanto array como objeto (el override manda array)
+    // excepciones: aceptar tanto array como objeto
     if (update.excepciones !== undefined && !Array.isArray(update.excepciones)) {
-      update.excepciones = Object.entries(update.excepciones).map(
-        ([fecha, exc]: [string, any]) => ({
-          fecha,
-          type: exc.type ?? "block",
-          ...(exc.slots ? { slots: exc.slots } : {}),
-        })
-      );
+      update.excepciones = Object.entries(update.excepciones).map(([fecha, exc]) => ({
+        fecha,
+        type: exc.type ?? "block",
+        ...(exc.slots ? { slots: exc.slots } : {}),
+      }));
     }
 
     if (Object.keys(update).length === 0) {
       return res.status(400).json({ success: false, error: "No hay campos válidos para actualizar." });
     }
 
-    const { error } = await supabase
-      .from("usuarios")
-      .update(update)
-      .eq("slug", slug);
-
+    const { error } = await supabase.from("usuarios").update(update).eq("slug", slug);
     if (error) throw error;
 
     invalidateCache(slug);
     console.log(`✅ Settings actualizados: ${slug}`, Object.keys(update));
     res.json({ success: true, updated: Object.keys(update) });
-  } catch (e: any) {
+  } catch (e) {
     console.error("Error en PUT /settings/:slug:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
+
 
 // ══════════════════════════════════════════════════════════════
 // ADMIN STATS — Dashboard principal
@@ -996,7 +1037,6 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
     const allowed = ["nombre_persona", "apellido", "email", "telefono", "business_name", "rubro", "duracion_turno", "capacidad_por_turno", "estado_suscripcion", "fecha_vencimiento"];
     const update  = {};
     allowed.forEach((key) => { if (req.body[key] !== undefined) update[key] = req.body[key]; });
-    // activo se maneja aparte como texto
     if (req.body.activo !== undefined) update.activo = req.body.activo === true || req.body.activo === 'true' ? 'true' : 'false';
     if (req.body.password) update.password = await bcrypt.hash(String(req.body.password), BCRYPT_ROUNDS);
     if (req.body.sumar_dias && !isNaN(parseInt(req.body.sumar_dias))) {
@@ -1050,7 +1090,6 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const successUrl   = process.env.SUCCESS_URL || `${API_URL}/success`;
     const cancelUrl    = process.env.CANCEL_URL  || `${API_URL}/error`;
 
-    // MOBBEX
     if (user.mobbex_api_key && user.mobbex_access_token) {
       try {
         const mobbexRes = await fetch("https://api.mobbex.com/p/sessions", {
@@ -1064,7 +1103,6 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       } catch (e) { console.error("Error Mobbex:", e.message); }
     }
 
-    // MERCADO PAGO
     if (user.mp_access_token) {
       try {
         const client   = new MercadoPagoConfig({ accessToken: user.mp_access_token });
@@ -1316,7 +1354,7 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v9.1                           ║
+  ║   Associe API v9.2                           ║
   ║   activo como texto: 'true' / 'false'        ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
