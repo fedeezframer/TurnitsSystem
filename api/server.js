@@ -738,57 +738,62 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
 app.get("/settings/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
+ 
     const { data: user, error } = await supabase.from("usuarios")
-      .select("slug, business_name, rubro, nombre_persona, apellido, email, telefono, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, quien_asume_comision, horarios, excepciones, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, activo")
-      .eq("slug", slug).single();
-    if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-
-    const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+      .select(
+        // ⚠️  "rubro" eliminado — no existe en la tabla usuarios.
+        //     Si lo agregás en el futuro, volvé a incluirlo acá.
+        "slug, business_name, nombre_persona, apellido, email, telefono, " +
+        "duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, " +
+        "quien_asume_comision, horarios, excepciones, mp_access_token, " +
+        "mobbex_api_key, estado_suscripcion, fecha_vencimiento, activo"
+      )
+      .eq("slug", slug)
+      .single();
+ 
+    if (error || !user) {
+      console.error(`[settings] Negocio no encontrado o error Supabase: slug=${slug}`, error?.message);
+      return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    }
+ 
+    const diasRestantes = user.fecha_vencimiento
+      ? diasHastaVencer(user.fecha_vencimiento)
+      : null;
+ 
     res.json({
       success: true,
       settings: {
-        ...user,
-        activo:              isActivo(user.activo),
-        mp_status:           user.mp_access_token ? "Conectado" : "Desconectado",
-        mobbex_status:       user.mobbex_api_key  ? "Conectado" : "Desconectado",
-        mp_access_token:     undefined,
-        mobbex_api_key:      undefined,
-        mobbex_access_token: undefined,
-        dias_restantes:      diasRestantes,
-        alerta_vencimiento:  diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
+        slug:                 user.slug,
+        business_name:        user.business_name,
+        nombre_persona:       user.nombre_persona,
+        apellido:             user.apellido,
+        email:                user.email,
+        telefono:             user.telefono,
+        duracion_turno:       user.duracion_turno,
+        capacidad_por_turno:  user.capacidad_por_turno,
+        metodo_pago:          user.metodo_pago,
+        porcentaje_sena:      user.porcentaje_sena,
+        quien_asume_comision: user.quien_asume_comision,
+        horarios:             user.horarios || {},
+        excepciones:          user.excepciones || [],
+        activo:               isActivo(user.activo),
+        estado_suscripcion:   user.estado_suscripcion,
+        fecha_vencimiento:    user.fecha_vencimiento,
+        // Tokens sensibles nunca se exponen
+        mp_status:            user.mp_access_token ? "Conectado" : "Desconectado",
+        mobbex_status:        user.mobbex_api_key  ? "Conectado" : "Desconectado",
+        mp_access_token:      undefined,
+        mobbex_api_key:       undefined,
+        mobbex_access_token:  undefined,
+        dias_restantes:       diasRestantes,
+        alerta_vencimiento:   diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
       },
     });
   } catch (e) {
+    console.error("Error en GET /settings/:slug:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
-const handleUpdateSettings = async (req, res) => {
-  try {
-    const slug = cleanSlug(req.params.slug || req.body.slug || req.body.dominio);
-    const { horarios, duracion_turno, excepciones, porcentaje_sena, metodo_pago, quien_asume_comision, capacidad_por_turno, business_name, telefono, rubro, activo } = req.body;
-    const u = {};
-    if (metodo_pago)               u.metodo_pago          = metodo_pago;
-    if (porcentaje_sena !== undefined && !isNaN(parseInt(porcentaje_sena))) u.porcentaje_sena = Math.min(100, Math.max(1, parseInt(porcentaje_sena)));
-    if (duracion_turno)            u.duracion_turno       = parseInt(duracion_turno);
-    if (capacidad_por_turno)       u.capacidad_por_turno  = parseInt(capacidad_por_turno);
-    if (quien_asume_comision)      u.quien_asume_comision = quien_asume_comision;
-    if (horarios)                  u.horarios             = horarios;
-    if (excepciones !== undefined) u.excepciones          = excepciones;
-    if (business_name)             u.business_name        = business_name.trim();
-    if (telefono)                  u.telefono             = telefono.trim();
-    if (rubro)                     u.rubro                = rubro;
-    if (activo !== undefined)      u.activo               = activo === true || activo === 'true' ? 'true' : 'false';
-    const { error } = await supabase.from("usuarios").update(u).eq("slug", slug);
-    if (error) throw error;
-    invalidateCache(slug);
-    res.json({ success: true, message: "Configuración actualizada." });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-};
-app.post("/settings/:slug", requireAuth, handleUpdateSettings);
-app.put("/settings/:slug",  requireAuth, handleUpdateSettings);
 
 
 // ══════════════════════════════════════════════════════════════
