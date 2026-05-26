@@ -625,7 +625,7 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 app.post("/turnos/reservar", limiterBooking, async (req, res) => {
   try {
-    const { name, phone, email, fecha, hora, slug, servicio_id } = req.body;
+    const { name, phone, email, fecha, hora, slug, servicio_id, apellido } = req.body;
     const slugClean = cleanSlug(slug || "");
 
     if (!name || !phone || !fecha || !hora || !slugClean) {
