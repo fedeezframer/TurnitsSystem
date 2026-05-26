@@ -6,6 +6,7 @@ import fetch          from "node-fetch";
 import bcrypt         from "bcryptjs";
 import jwt            from "jsonwebtoken";
 import rateLimit      from "express-rate-limit";
+import multer from "multer";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
