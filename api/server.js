@@ -70,11 +70,7 @@ const diasHastaVencer = (fechaISO) => {
 async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
   const stored   = String(passwordGuardado);
   const esBcrypt = /^\$2[aby]\$/.test(stored);
-
-  if (esBcrypt) {
-    return await bcrypt.compare(String(passwordIngresado), stored);
-  }
-
+  if (esBcrypt) return await bcrypt.compare(String(passwordIngresado), stored);
   const ok = stored === String(passwordIngresado);
   if (ok) {
     const hash = await bcrypt.hash(String(passwordIngresado), BCRYPT_ROUNDS);
@@ -125,11 +121,8 @@ function requireAuth(req, res, next) {
     const token  = header.split(" ")[1];
     const secret = process.env.JWT_SECRET;
     if (!secret) return res.status(500).json({ success: false, error: "JWT_SECRET no configurado." });
-
     const payload = jwt.verify(token, secret);
-
     if (payload.rol === "superadmin") { req.auth = payload; return next(); }
-
     const slugRuta = cleanSlug(req.params.slug || req.body?.slug || req.query?.slug || "");
     if (slugRuta && payload.slug !== slugRuta) {
       return res.status(403).json({ success: false, error: "No autorizado para este negocio." });
@@ -216,7 +209,6 @@ function agruparVentas(ventas, hoyISO) {
 app.get("/",       (_, res) => res.json({ status: "online", version: "10.0", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
-
 // ══════════════════════════════════════════════════════════════
 // REGISTRO PÚBLICO
 // POST /registro
@@ -287,7 +279,6 @@ app.post("/registro", limiterAuth, async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
 // AUTH — LOGIN
 // POST /login
@@ -348,7 +339,6 @@ app.post("/login", limiterAuth, async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
 // AUTH — VERIFY SESSION
 // GET /verify-session
@@ -383,7 +373,6 @@ app.get("/verify-session", async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
 // ADMIN — RESETEAR PASSWORD
 // POST /admin/reset-password
@@ -393,17 +382,14 @@ app.post("/admin/reset-password", requireAdminKey, async (req, res) => {
     const { email, new_password } = req.body;
     if (!email || !new_password) return res.status(400).json({ success: false, error: "Faltan email y new_password." });
     if (!validatePassword(new_password)) return res.status(400).json({ success: false, error: "Mínimo 6 caracteres." });
-
     const hash = await bcrypt.hash(String(new_password), BCRYPT_ROUNDS);
     const { error } = await supabase.from("usuarios").update({ password: hash }).eq("email", email.trim().toLowerCase());
     if (error) throw error;
-    console.log(`🔑 Password reseteado por admin: ${email}`);
     res.json({ success: true, message: `Password actualizado para ${email}` });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
 
 // ══════════════════════════════════════════════════════════════
 // NEGOCIO PÚBLICO
@@ -415,7 +401,7 @@ app.get("/negocio/:slug", async (req, res) => {
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
     const { data: user, error } = await supabase.from("usuarios")
-      .select("slug, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, mobbex_api_key, activo, plan, estado_suscripcion, fecha_vencimiento")
+      .select("slug, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, activo, plan, estado_suscripcion, fecha_vencimiento")
       .eq("slug", slug).single();
 
     if (error || !user)         return res.status(404).json({ success: false, error: "Negocio no encontrado." });
@@ -444,7 +430,6 @@ app.get("/negocio/:slug", async (req, res) => {
         metodo_pago:         user.metodo_pago || "none",
         porcentaje_sena:     user.porcentaje_sena || 30,
         tiene_mp:            !!user.mp_access_token,
-        tiene_mobbex:        !!user.mobbex_api_key,
         plan:                user.plan || "gratis",
       },
     });
@@ -452,7 +437,6 @@ app.get("/negocio/:slug", async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
 
 // ══════════════════════════════════════════════════════════════
 // SLOTS DISPONIBLES
@@ -528,7 +512,6 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
 // SERVICIOS — PÚBLICOS
 // GET /servicios/:slug
@@ -537,12 +520,10 @@ app.get("/servicios/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
-
     const { data, error } = await supabase.from("servicios")
       .select("id, nombre, descripcion, duracion, precio, capacidad")
       .eq("slug", slug).eq("activo", 'true')
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
-
     if (error) throw error;
     res.json({ success: true, servicios: data || [] });
   } catch (e) {
@@ -550,13 +531,8 @@ app.get("/servicios/:slug", async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
-// SERVICIOS — ADMIN (con inactivos)
-// GET    /admin/servicios/:slug
-// POST   /admin/servicios
-// PUT    /admin/servicios/:id
-// DELETE /admin/servicios/:id
+// SERVICIOS — ADMIN
 // ══════════════════════════════════════════════════════════════
 app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
   try {
@@ -625,7 +601,6 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
 // TURNOS — RESERVA PÚBLICA
 // POST /turnos/reservar
@@ -650,7 +625,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
-    const requierePago = (user.mp_access_token || user.mobbex_api_key) && (user.metodo_pago === "sena" || user.metodo_pago === "total");
+    const requierePago = user.mp_access_token && (user.metodo_pago === "sena" || user.metodo_pago === "total");
     if (requierePago) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
 
     const hoy = new Date().toISOString().split("T")[0];
@@ -690,9 +665,8 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
-// AGENDA — Próximos 30 días (panel del dueño)
+// AGENDA — Próximos 30 días
 // GET /agenda/:slug
 // ══════════════════════════════════════════════════════════════
 app.get("/agenda/:slug", requireAuth, async (req, res) => {
@@ -721,11 +695,9 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
     const dias = Object.keys(porFecha).sort().map((fecha) => ({ fecha, esHoy: fecha === hoyISO, turnos: porFecha[fecha] }));
     res.json({ success: true, hoy: hoyISO, dias });
   } catch (e) {
-    console.error("Error en /agenda/:slug:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
 
 // ══════════════════════════════════════════════════════════════
 // SETTINGS
@@ -735,24 +707,18 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
 app.get("/settings/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
-
     const { data: user, error } = await supabase.from("usuarios")
       .select(
         "slug, business_name, nombre_persona, apellido, email, telefono, " +
         "plan, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, " +
-        "horarios, excepciones, mp_access_token, mobbex_api_key, " +
+        "horarios, excepciones, mp_access_token, " +
         "estado_suscripcion, fecha_vencimiento, activo"
       )
-      .eq("slug", slug)
-      .single();
+      .eq("slug", slug).single();
 
-    if (error || !user) {
-      return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-    }
+    if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    const diasRestantes = user.fecha_vencimiento
-      ? diasHastaVencer(user.fecha_vencimiento)
-      : null;
+    const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
 
     res.json({
       success: true,
@@ -774,13 +740,11 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         estado_suscripcion:  user.estado_suscripcion,
         fecha_vencimiento:   user.fecha_vencimiento,
         mp_status:           user.mp_access_token ? "Conectado" : "Desconectado",
-        mobbex_status:       user.mobbex_api_key  ? "Conectado" : "Desconectado",
         dias_restantes:      diasRestantes,
         alerta_vencimiento:  diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
       },
     });
   } catch (e) {
-    console.error("Error en GET /settings/:slug:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -811,8 +775,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
 
     if (update.excepciones !== undefined && !Array.isArray(update.excepciones)) {
       update.excepciones = Object.entries(update.excepciones).map(([fecha, exc]) => ({
-        fecha,
-        type: exc.type ?? "block",
+        fecha, type: exc.type ?? "block",
         ...(exc.slots ? { slots: exc.slots } : {}),
       }));
     }
@@ -823,16 +786,12 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
 
     const { error } = await supabase.from("usuarios").update(update).eq("slug", slug);
     if (error) throw error;
-
     invalidateCache(slug);
-    console.log(`✅ Settings actualizados: ${slug}`, Object.keys(update));
     res.json({ success: true, updated: Object.keys(update) });
   } catch (e) {
-    console.error("Error en PUT /settings/:slug:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
 
 // ══════════════════════════════════════════════════════════════
 // ADMIN STATS — Dashboard principal
@@ -949,7 +908,6 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
         metodo_pago:         user.metodo_pago         || "none",
         porcentaje_sena:     user.porcentaje_sena     || 30,
         mp_status:           user.mp_access_token ? "Conectado" : "Desconectado",
-        mobbex_status:       user.mobbex_api_key  ? "Conectado" : "Desconectado",
         excepciones:         user.excepciones     || [],
       },
       suscripcion: {
@@ -975,7 +933,6 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     res.status(500).json({ success: false, error: "Error al procesar estadísticas." });
   }
 });
-
 
 // ══════════════════════════════════════════════════════════════
 // SUPERADMIN — CRUD DE NEGOCIOS
@@ -1006,10 +963,8 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       if (error.code === "23505") return res.status(409).json({ success: false, error: "El email ya está registrado." });
       throw error;
     }
-    console.log(`✅ Negocio creado (admin): ${slug} — plan: ${data.plan} — vence: ${fechaVencimiento}`);
     res.status(201).json({ success: true, negocio: data, panel_url: `${PANEL_URL}?u=${slug}` });
   } catch (e) {
-    console.error("Error en POST /superadmin/negocios:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -1017,14 +972,14 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
 app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
   try {
     const { data, error } = await supabase.from("usuarios")
-      .select("id, slug, business_name, rubro, nombre_persona, apellido, email, telefono, activo, plan, metodo_pago, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
+      .select("id, slug, business_name, rubro, nombre_persona, apellido, email, telefono, activo, plan, metodo_pago, mp_access_token, estado_suscripcion, fecha_vencimiento, created_at")
       .order("business_name", { ascending: true });
     if (error) throw error;
     const negocios = (data || []).map((u) => ({
       id: u.id, slug: u.slug, business_name: u.business_name, rubro: u.rubro,
       nombre_persona: u.nombre_persona, apellido: u.apellido, email: u.email, telefono: u.telefono,
       activo: isActivo(u.activo), plan: u.plan || "gratis", metodo_pago: u.metodo_pago,
-      tiene_mp: !!u.mp_access_token, tiene_mobbex: !!u.mobbex_api_key,
+      tiene_mp: !!u.mp_access_token,
       estado_suscripcion: u.estado_suscripcion || "trial", fecha_vencimiento: u.fecha_vencimiento,
       dias_restantes: u.fecha_vencimiento ? diasHastaVencer(u.fecha_vencimiento) : null, creado: u.created_at,
     }));
@@ -1058,9 +1013,8 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
-// PAGOS — Mercado Pago + Mobbex (turnos)
+// PAGOS — Mercado Pago (turnos)
 // POST /api/create-preference
 // ══════════════════════════════════════════════════════════════
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
@@ -1094,19 +1048,6 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const successUrl   = process.env.SUCCESS_URL || `${API_URL}/success`;
     const cancelUrl    = process.env.CANCEL_URL  || `${API_URL}/error`;
 
-    if (user.mobbex_api_key && user.mobbex_access_token) {
-      try {
-        const mobbexRes = await fetch("https://api.mobbex.com/p/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-api-key": user.mobbex_api_key, "x-access-token": user.mobbex_access_token },
-          body: JSON.stringify({ total: montoACobrar, currency: "ARS", description: `${nombreServicio} (${conceptoPago}): ${fecha} ${hora}hs`, reference: `${slugClean}-${fecha}-${hora}`.replace(/[:.]/g, ""), webhook: `${API_URL}/webhook/mobbex`, return_url: successUrl, items: [{ image: "", description: `${nombreServicio} (${conceptoPago})`, quantity: 1, price: montoACobrar }], metadata: metaMeta, options: { button: false, redirect: true } }),
-        });
-        const mobbexData = await mobbexRes.json();
-        if (mobbexData?.data?.url) return res.json({ payment_url: mobbexData.data.url, monto: montoACobrar, pasarela: "mobbex" });
-        console.warn("⚠️ Mobbex sin URL, fallback a MP:", mobbexData);
-      } catch (e) { console.error("Error Mobbex:", e.message); }
-    }
-
     if (user.mp_access_token) {
       try {
         const client   = new MercadoPagoConfig({ accessToken: user.mp_access_token });
@@ -1118,11 +1059,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     res.status(400).json({ success: false, error: "Sin pasarela de pago configurada." });
   } catch (e) {
-    console.error("Error en /api/create-preference:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
 
 // ══════════════════════════════════════════════════════════════
 // SUSCRIPCIÓN — Checkout y estado
@@ -1149,7 +1088,6 @@ app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
     }});
     res.json({ success: true, payment_url: response.init_point, monto: PRECIO_SUSCRIPCION });
   } catch (e) {
-    console.error("Error en /api/suscripcion/checkout:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -1177,9 +1115,8 @@ app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
-// OAUTH — Mercado Pago (vinculación del negocio)
+// OAUTH — Mercado Pago
 // GET /oauth-callback
 // ══════════════════════════════════════════════════════════════
 app.get("/oauth-callback", async (req, res) => {
@@ -1203,9 +1140,8 @@ app.get("/oauth-callback", async (req, res) => {
   }
 });
 
-
 // ══════════════════════════════════════════════════════════════
-// WEBHOOKS — Procesamiento de pagos
+// WEBHOOK — Mercado Pago
 // ══════════════════════════════════════════════════════════════
 async function procesarPagoConfirmado({ slug, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, payment_id, estado }) {
   let turnoId = null;
@@ -1261,30 +1197,16 @@ app.post("/webhook/mp", async (req, res) => {
   } catch (e) { console.error("Error en /webhook/mp:", e.message); res.sendStatus(200); }
 });
 
-app.post("/webhook/mobbex", async (req, res) => {
-  try {
-    const body       = req.body;
-    const statusCode = Number(body.status?.code || 0);
-    const estado     = statusCode === 200 ? "aprobado" : statusCode >= 300 && statusCode < 400 ? "pendiente" : "rechazado";
-    const meta       = body.metadata || {};
-    const slug       = cleanSlug(meta.slug || "");
-    if (!slug) return res.sendStatus(200);
-    await procesarPagoConfirmado({ slug, nombre: meta.nombre, telefono: meta.telefono, email: meta.email, fecha: meta.fecha, hora: meta.hora, servicio_id: meta.servicio_id || null, servicio_nombre: meta.servicio_nombre || null, monto: Number(body.total || 0), moneda: "ARS", metodo_pago: "mobbex", payment_id: body.id || "mobbex-" + Date.now(), estado });
-    res.sendStatus(200);
-  } catch (e) { console.error("Error en /webhook/mobbex:", e.message); res.sendStatus(200); }
-});
-
 async function procesarPagoSuscripcion(payData) {
   if (payData.status !== "approved") return;
   const slug = cleanSlug(payData.metadata?.slug || "");
-  if (!slug) return console.error("⚠️ Webhook suscripción: slug no encontrado.");
+  if (!slug) return;
   const { data: user, error } = await supabase.from("usuarios").select("id, email, nombre_persona, plan, fecha_vencimiento").eq("slug", slug).single();
-  if (error || !user) return console.error(`⚠️ Webhook suscripción: negocio no encontrado (${slug}).`);
+  if (error || !user) return;
   const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
   await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "premium" }).eq("slug", slug);
   invalidateCache(slug);
-  console.log(`✅ Suscripción renovada: ${slug} → plan premium, vence ${nuevaFecha}`);
   if (user.email) {
     fetch(APPS_SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action: "suscripcionRenovada", adminEmail: user.email, nombre: user.nombre_persona || "Cliente", slug, nuevaFecha }) })
       .catch((e) => console.error("Error mail suscripción:", e.message));
@@ -1304,15 +1226,12 @@ app.post("/webhook/suscripcion", async (req, res) => {
   } catch (e) { console.error("Error en /webhook/suscripcion:", e.message); res.sendStatus(200); }
 });
 
-
 // ══════════════════════════════════════════════════════════════
 // CRON — Verificación de vencimientos
-// GET /cron/check-vencimientos  (x-api-key)
 // ══════════════════════════════════════════════════════════════
 app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
   try {
     const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toISOString().split("T")[0];
-
     const { data: vencidos, error } = await supabase.from("usuarios")
       .select("id, slug").eq("activo", 'true').neq("estado_suscripcion", "suspendido").lt("fecha_vencimiento", hoyISO);
     if (error) throw error;
@@ -1320,25 +1239,19 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
     if (slugs.length > 0) {
       await supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).in("slug", slugs);
       slugs.forEach((s) => invalidateCache(s));
-      console.log(`🔒 Suspendidos (${hoyISO}):`, slugs.join(", "));
     }
-
     const { data: reactivables } = await supabase.from("usuarios")
       .select("id, slug").eq("activo", 'true').eq("estado_suscripcion", "suspendido").gte("fecha_vencimiento", hoyISO);
     const slugsReactivar = (reactivables || []).map((u) => u.slug);
     if (slugsReactivar.length > 0) {
       await supabase.from("usuarios").update({ estado_suscripcion: "activo" }).in("slug", slugsReactivar);
       slugsReactivar.forEach((s) => invalidateCache(s));
-      console.log(`✅ Reactivados:`, slugsReactivar.join(", "));
     }
-
-    res.json({ success: true, fecha: hoyISO, suspendidos: slugs, reactivados: slugsReactivar, total_suspendidos: slugs.length, total_reactivados: slugsReactivar.length });
+    res.json({ success: true, fecha: hoyISO, suspendidos: slugs, reactivados: slugsReactivar });
   } catch (e) {
-    console.error("Error en /cron/check-vencimientos:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
 
 // ══════════════════════════════════════════════════════════════
 // 404 Y ERROR HANDLER
@@ -1351,7 +1264,6 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ success: false, error: "Error interno del servidor." });
 });
 
-
 // ══════════════════════════════════════════════════════════════
 // ARRANQUE
 // ══════════════════════════════════════════════════════════════
@@ -1359,7 +1271,7 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v10.0                          ║
+  ║   Associe API v10.0 (sin Mobbex)             ║
   ║   activo: 'true' / 'false'                   ║
   ║   plan:   'gratis' / 'premium'               ║
   ║   Puerto: ${PORT}                              ║
