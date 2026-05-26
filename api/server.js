@@ -549,6 +549,36 @@ app.get("/servicios/:slug", async (req, res) => {
   }
 });
 
+// POST /admin/servicios/upload-imagen
+// multipart/form-data: { imagen: File, slug: string }
+import multer from "multer";
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024 } });
+
+app.post("/admin/servicios/upload-imagen", requireAuth, upload.single("imagen"), async (req, res) => {
+  try {
+    const slug = cleanSlug(req.body.slug || req.auth.slug);
+    if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
+
+    const ext      = req.file.mimetype === "image/png" ? "png" : "jpg";
+    const fileName = `${slug}/${Date.now()}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from("servicios")
+      .upload(fileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: true,
+      });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from("servicios").getPublicUrl(fileName);
+    res.json({ success: true, url: data.publicUrl });
+  } catch (e) {
+    console.error("Error upload imagen:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ══════════════════════════════════════════════════════════════
 // SERVICIOS — ADMIN
 // ══════════════════════════════════════════════════════════════
