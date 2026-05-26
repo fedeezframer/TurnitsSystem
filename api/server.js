@@ -666,6 +666,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 
     const { data: turno, error: turnoError } = await supabase.from("turnos").insert([{
       slug: slugClean, nombre: name.trim(), telefono: phoneClean,
+      apellido: apellido?.trim() || null,
       email: email?.trim().toLowerCase() || null, fecha, hora,
       servicio_id: servicio_id || null, servicio_nombre: servicioNombre,
       precio_cobrado: precioCobrado, estado: "confirmado", metodo_pago: "none",
