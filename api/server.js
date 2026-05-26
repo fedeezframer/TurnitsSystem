@@ -53,7 +53,7 @@ async function generarSlugUnico(businessName) {
 const validateEmail    = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const validatePassword = (p) => p && p.length >= 6;
 const validatePhone    = (p) => /^[0-9]{7,15}$/.test(p.toString().replace(/\s/g, ""));
-const cleanPhone       = (p) => p.toString().replace(/\s/g, "").trim();
+const cleanPhone = (p) => p.toString().replace(/\s/g, "").replace(/^\+/, "").trim()
 
 const calcularVencimiento = (diasExtra = 30, baseISO = null) => {
   const base = baseISO ? new Date(baseISO + "T12:00:00-03:00") : new Date();
