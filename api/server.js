@@ -399,24 +399,31 @@ app.get("/negocio/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
-
+ 
+    console.log("🔍 /negocio/:slug buscando:", slug); // debug temporal
+ 
     const { data: user, error } = await supabase.from("usuarios")
       .select("slug, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, activo, plan, estado_suscripcion, fecha_vencimiento")
-      .eq("slug", slug).single();
-
-    if (error || !user)         return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+      .eq("slug", slug)
+      .maybeSingle(); // ← FIX: no lanza error si no encuentra
+ 
+    if (error) {
+      console.error("❌ Supabase error en /negocio:", error.message);
+      throw error;
+    }
+    if (!user)              return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
-
+ 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
-
+ 
     if (estaSuspendido) {
       if (user.estado_suscripcion !== "suspendido") {
         supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).eq("slug", slug).then(() => {});
       }
       return res.json({ success: true, suspendido: true, negocio: { slug: user.slug, business_name: user.business_name } });
     }
-
+ 
     res.json({
       success: true,
       negocio: {
@@ -434,6 +441,7 @@ app.get("/negocio/:slug", async (req, res) => {
       },
     });
   } catch (e) {
+    console.error("Error en /negocio:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -442,72 +450,79 @@ app.get("/negocio/:slug", async (req, res) => {
 // SLOTS DISPONIBLES
 // GET /slots-disponibles/:slug?fecha=YYYY-MM-DD&servicio_id=...
 // ══════════════════════════════════════════════════════════════
+
 app.get("/slots-disponibles/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const { fecha, servicio_id } = req.query;
     if (!slug || !fecha) return res.status(400).json({ success: false, error: "Faltan slug o fecha." });
-
+ 
     const { data: user, error: userError } = await supabase.from("usuarios")
       .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo, estado_suscripcion, fecha_vencimiento")
-      .eq("slug", slug).single();
-
-    if (userError || !user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-
+      .eq("slug", slug)
+      .maybeSingle(); // ← FIX: no lanza error si no encuentra
+ 
+    if (userError) throw userError;
+    if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+ 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.json({ success: true, slots: [], suspendido: true });
-
+ 
     let duracion  = user.duracion_turno      || 30;
     let capacidad = user.capacidad_por_turno || 1;
-
+ 
     if (servicio_id) {
-      const { data: srv } = await supabase.from("servicios").select("duracion, capacidad").eq("id", servicio_id).eq("slug", slug).single();
+      const { data: srv } = await supabase.from("servicios")
+        .select("duracion, capacidad")
+        .eq("id", servicio_id).eq("slug", slug)
+        .maybeSingle(); // ← FIX: mismo problema aplica acá
       if (srv) { duracion = srv.duracion || duracion; capacidad = srv.capacidad || capacidad; }
     }
-
+ 
     const excepcionesArr = user.excepciones || [];
     const estaExceptuado = Array.isArray(excepcionesArr)
       ? excepcionesArr.some((e) => typeof e === "string" ? e === fecha : e?.fecha === fecha && e?.type === "block")
       : false;
     if (estaExceptuado) return res.json({ success: true, slots: [] });
-
+ 
     const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
     const diaConfig  = user.horarios?.[diasSemana[new Date(fecha + "T12:00:00").getDay()]];
     if (!diaConfig?.activo) return res.json({ success: true, slots: [] });
-
+ 
     const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
     const fromMin = (m) => `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
-
+ 
     const inicio = toMin(diaConfig.jornada[0]);
     const fin    = toMin(diaConfig.jornada[1]);
     const dIni   = toMin(diaConfig.descanso?.[0]);
     const dFin   = toMin(diaConfig.descanso?.[1]);
-
+ 
     const slotsGenerados = [];
     let cursor = inicio;
     while (cursor + duracion <= fin) {
       if (!(dIni && dFin && cursor >= dIni && cursor < dFin)) slotsGenerados.push(fromMin(cursor));
       cursor += duracion;
     }
-
+ 
     const { data: turnosDia } = await supabase.from("turnos").select("hora, estado")
       .eq("slug", slug).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
-
+ 
     const reservasPorSlot = {};
     (turnosDia || []).forEach((t) => {
       const h = t.hora.slice(0, 5);
       reservasPorSlot[h] = (reservasPorSlot[h] || 0) + 1;
     });
-
+ 
     const slots = slotsGenerados.map((slot) => {
       const reservados  = reservasPorSlot[slot] || 0;
       const disponibles = capacidad - reservados;
       return { hora: slot, disponibles: Math.max(0, disponibles), lleno: disponibles <= 0 };
     });
-
+ 
     res.json({ success: true, slots });
   } catch (e) {
+    console.error("Error en /slots-disponibles:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
