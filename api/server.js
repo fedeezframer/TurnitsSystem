@@ -213,7 +213,7 @@ function agruparVentas(ventas, hoyISO) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "9.2", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "10.0", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 
@@ -248,6 +248,7 @@ app.post("/registro", limiterAuth, async (req, res) => {
       business_name:      business_name.trim(),
       slug,
       password:           hashedPassword,
+      plan:               "gratis",
       metodo_pago:        "none",
       porcentaje_sena:    30,
       excepciones:        [],
@@ -260,7 +261,7 @@ app.post("/registro", limiterAuth, async (req, res) => {
 
     const { data: nuevo, error } = await supabase.from("usuarios")
       .insert([insertData])
-      .select("id, slug, business_name, email, nombre_persona, estado_suscripcion, fecha_vencimiento")
+      .select("id, slug, business_name, email, nombre_persona, plan, estado_suscripcion, fecha_vencimiento")
       .single();
 
     if (error) {
@@ -279,7 +280,7 @@ app.post("/registro", limiterAuth, async (req, res) => {
     }).catch((e) => console.error("Error mail bienvenida:", e.message));
 
     console.log(`✅ Registro: ${slug} — trial hasta ${fechaVencimiento}`);
-    res.status(201).json({ success: true, slug: nuevo.slug, business_name: nuevo.business_name, panel_url: `${PANEL_URL}?u=${nuevo.slug}`, token, dias_prueba: DIAS_PRUEBA, fecha_vencimiento: fechaVencimiento });
+    res.status(201).json({ success: true, slug: nuevo.slug, business_name: nuevo.business_name, plan: nuevo.plan, panel_url: `${PANEL_URL}?u=${nuevo.slug}`, token, dias_prueba: DIAS_PRUEBA, fecha_vencimiento: fechaVencimiento });
   } catch (e) {
     console.error("Error en POST /registro:", e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -302,7 +303,7 @@ app.post("/login", limiterAuth, async (req, res) => {
     }
 
     let query = supabase.from("usuarios")
-      .select("id, slug, password, business_name, nombre_persona, apellido, email, activo, estado_suscripcion, fecha_vencimiento");
+      .select("id, slug, password, business_name, nombre_persona, apellido, email, activo, plan, estado_suscripcion, fecha_vencimiento");
     query = rawSlug ? query.eq("slug", rawSlug) : query.eq("email", email);
 
     const { data: user, error } = await query.single();
@@ -332,6 +333,7 @@ app.post("/login", limiterAuth, async (req, res) => {
       nombre_persona: user.nombre_persona,
       apellido:       user.apellido || "",
       email:          user.email,
+      plan:           user.plan || "gratis",
       suscripcion: {
         estado:            suscripcionVencida ? "suspendido" : estadoSuscripcion,
         fecha_vencimiento: user.fecha_vencimiento,
@@ -358,7 +360,7 @@ app.get("/verify-session", async (req, res) => {
 
     const payload  = jwt.verify(token, process.env.JWT_SECRET);
     const { data: user } = await supabase.from("usuarios")
-      .select("slug, business_name, email, nombre_persona, activo, estado_suscripcion, fecha_vencimiento")
+      .select("slug, business_name, email, nombre_persona, activo, plan, estado_suscripcion, fecha_vencimiento")
       .eq("slug", payload.slug).single();
 
     if (!user || !isActivo(user.activo)) return res.json({ active: false, reason: "not_found" });
@@ -369,6 +371,7 @@ app.get("/verify-session", async (req, res) => {
       slug:          user.slug,
       business_name: user.business_name,
       email:         user.email,
+      plan:          user.plan || "gratis",
       suscripcion: {
         estado:         user.estado_suscripcion,
         dias_restantes: diasRestantes,
@@ -412,7 +415,7 @@ app.get("/negocio/:slug", async (req, res) => {
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
     const { data: user, error } = await supabase.from("usuarios")
-      .select("slug, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, mobbex_api_key, quien_asume_comision, activo, estado_suscripcion, fecha_vencimiento")
+      .select("slug, business_name, rubro, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, mobbex_api_key, activo, plan, estado_suscripcion, fecha_vencimiento")
       .eq("slug", slug).single();
 
     if (error || !user)         return res.status(404).json({ success: false, error: "Negocio no encontrado." });
@@ -431,18 +434,18 @@ app.get("/negocio/:slug", async (req, res) => {
     res.json({
       success: true,
       negocio: {
-        slug:                 user.slug,
-        business_name:        user.business_name,
-        rubro:                user.rubro,
-        horarios:             user.horarios || {},
-        excepciones:          user.excepciones || [],
-        duracion_turno:       user.duracion_turno || 30,
-        capacidad_por_turno:  user.capacidad_por_turno || 1,
-        metodo_pago:          user.metodo_pago || "none",
-        porcentaje_sena:      user.porcentaje_sena || 30,
-        tiene_mp:             !!user.mp_access_token,
-        tiene_mobbex:         !!user.mobbex_api_key,
-        quien_asume_comision: user.quien_asume_comision || "cliente",
+        slug:                user.slug,
+        business_name:       user.business_name,
+        rubro:               user.rubro,
+        horarios:            user.horarios || {},
+        excepciones:         user.excepciones || [],
+        duracion_turno:      user.duracion_turno || 30,
+        capacidad_por_turno: user.capacidad_por_turno || 1,
+        metodo_pago:         user.metodo_pago || "none",
+        porcentaje_sena:     user.porcentaje_sena || 30,
+        tiene_mp:            !!user.mp_access_token,
+        tiene_mobbex:        !!user.mobbex_api_key,
+        plan:                user.plan || "gratis",
       },
     });
   } catch (e) {
@@ -736,15 +739,14 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
     const { data: user, error } = await supabase.from("usuarios")
       .select(
         "slug, business_name, nombre_persona, apellido, email, telefono, " +
-        "duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, " +
-        "quien_asume_comision, horarios, excepciones, mp_access_token, " +
-        "mobbex_api_key, estado_suscripcion, fecha_vencimiento, activo"
+        "plan, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, " +
+        "horarios, excepciones, mp_access_token, mobbex_api_key, " +
+        "estado_suscripcion, fecha_vencimiento, activo"
       )
       .eq("slug", slug)
       .single();
 
     if (error || !user) {
-      console.error(`[settings] Negocio no encontrado: slug=${slug}`, error?.message);
       return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     }
 
@@ -755,26 +757,26 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
     res.json({
       success: true,
       settings: {
-        slug:                 user.slug,
-        business_name:        user.business_name,
-        nombre_persona:       user.nombre_persona,
-        apellido:             user.apellido,
-        email:                user.email,
-        telefono:             user.telefono,
-        duracion_turno:       user.duracion_turno,
-        capacidad_por_turno:  user.capacidad_por_turno,
-        metodo_pago:          user.metodo_pago,
-        porcentaje_sena:      user.porcentaje_sena,
-        quien_asume_comision: user.quien_asume_comision,
-        horarios:             user.horarios || {},
-        excepciones:          user.excepciones || [],
-        activo:               isActivo(user.activo),
-        estado_suscripcion:   user.estado_suscripcion,
-        fecha_vencimiento:    user.fecha_vencimiento,
-        mp_status:            user.mp_access_token ? "Conectado" : "Desconectado",
-        mobbex_status:        user.mobbex_api_key  ? "Conectado" : "Desconectado",
-        dias_restantes:       diasRestantes,
-        alerta_vencimiento:   diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
+        slug:                user.slug,
+        business_name:       user.business_name,
+        nombre_persona:      user.nombre_persona,
+        apellido:            user.apellido,
+        email:               user.email,
+        telefono:            user.telefono,
+        plan:                user.plan || "gratis",
+        duracion_turno:      user.duracion_turno,
+        capacidad_por_turno: user.capacidad_por_turno,
+        metodo_pago:         user.metodo_pago,
+        porcentaje_sena:     user.porcentaje_sena,
+        horarios:            user.horarios || {},
+        excepciones:         user.excepciones || [],
+        activo:              isActivo(user.activo),
+        estado_suscripcion:  user.estado_suscripcion,
+        fecha_vencimiento:   user.fecha_vencimiento,
+        mp_status:           user.mp_access_token ? "Conectado" : "Desconectado",
+        mobbex_status:       user.mobbex_api_key  ? "Conectado" : "Desconectado",
+        dias_restantes:      diasRestantes,
+        alerta_vencimiento:  diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
       },
     });
   } catch (e) {
@@ -791,7 +793,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
     const ALLOWED_FIELDS = [
       "business_name", "nombre_persona", "apellido", "telefono",
       "duracion_turno", "capacidad_por_turno",
-      "metodo_pago", "porcentaje_sena", "quien_asume_comision",
+      "metodo_pago", "porcentaje_sena",
       "horarios", "excepciones",
     ];
 
@@ -807,7 +809,6 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
     if (update.business_name       !== undefined) update.business_name       = update.business_name.trim();
     if (update.nombre_persona      !== undefined) update.nombre_persona      = update.nombre_persona.trim();
 
-    // excepciones: aceptar tanto array como objeto
     if (update.excepciones !== undefined && !Array.isArray(update.excepciones)) {
       update.excepciones = Object.entries(update.excepciones).map(([fecha, exc]) => ({
         fecha,
@@ -942,14 +943,14 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       ventasPorDia, ventasPorSem: metricas.porSemana, ventasPorMes: metricas.porMes, proximosDias,
       horarios: user.horarios,
       config: {
-        duracion:             user.duracion_turno      || 30,
-        capacidad_por_turno:  user.capacidad_por_turno || 1,
-        metodo_pago:          user.metodo_pago         || "none",
-        porcentaje_sena:      user.porcentaje_sena     || 30,
-        quien_asume_comision: user.quien_asume_comision || "cliente",
-        mp_status:            user.mp_access_token ? "Conectado" : "Desconectado",
-        mobbex_status:        user.mobbex_api_key  ? "Conectado" : "Desconectado",
-        excepciones:          user.excepciones     || [],
+        plan:                user.plan || "gratis",
+        duracion:            user.duracion_turno      || 30,
+        capacidad_por_turno: user.capacidad_por_turno || 1,
+        metodo_pago:         user.metodo_pago         || "none",
+        porcentaje_sena:     user.porcentaje_sena     || 30,
+        mp_status:           user.mp_access_token ? "Conectado" : "Desconectado",
+        mobbex_status:       user.mobbex_api_key  ? "Conectado" : "Desconectado",
+        excepciones:         user.excepciones     || [],
       },
       suscripcion: {
         estado:            suscripcionVencida ? "suspendido" : estadoSuscripcion,
@@ -964,6 +965,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       apellido:       user.apellido || "",
       slug:           user.slug,
       rubro:          user.rubro || "generico",
+      plan:           user.plan  || "gratis",
     };
 
     globalCache[slug] = { timestamp: now, data: finalData };
@@ -980,7 +982,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
   try {
-    const { nombre_persona, apellido, email, telefono, business_name, password, rubro = "generico" } = req.body;
+    const { nombre_persona, apellido, email, telefono, business_name, password, rubro = "generico", plan = "gratis" } = req.body;
     if (!nombre_persona || !email || !password || !business_name) {
       return res.status(400).json({ success: false, error: "Faltan campos obligatorios." });
     }
@@ -995,15 +997,16 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       nombre_persona: nombre_persona.trim(), apellido: apellido?.trim() || "",
       email: email.trim().toLowerCase(), telefono: telefono ? cleanPhone(telefono) : null,
       business_name: business_name.trim(), slug, password: hashedPassword, rubro,
+      plan: ["gratis", "premium"].includes(plan) ? plan : "gratis",
       metodo_pago: "none", porcentaje_sena: 30, excepciones: [],
       activo: 'true', estado_suscripcion: "trial", fecha_vencimiento: fechaVencimiento,
-    }]).select("id, slug, business_name, rubro, email, nombre_persona, apellido, estado_suscripcion, fecha_vencimiento").single();
+    }]).select("id, slug, business_name, rubro, plan, email, nombre_persona, apellido, estado_suscripcion, fecha_vencimiento").single();
 
     if (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, error: "El email ya está registrado." });
       throw error;
     }
-    console.log(`✅ Negocio creado (admin): ${slug} — vence: ${fechaVencimiento}`);
+    console.log(`✅ Negocio creado (admin): ${slug} — plan: ${data.plan} — vence: ${fechaVencimiento}`);
     res.status(201).json({ success: true, negocio: data, panel_url: `${PANEL_URL}?u=${slug}` });
   } catch (e) {
     console.error("Error en POST /superadmin/negocios:", e.message);
@@ -1014,13 +1017,13 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
 app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
   try {
     const { data, error } = await supabase.from("usuarios")
-      .select("id, slug, business_name, rubro, nombre_persona, apellido, email, telefono, activo, metodo_pago, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
+      .select("id, slug, business_name, rubro, nombre_persona, apellido, email, telefono, activo, plan, metodo_pago, mp_access_token, mobbex_api_key, estado_suscripcion, fecha_vencimiento, created_at")
       .order("business_name", { ascending: true });
     if (error) throw error;
     const negocios = (data || []).map((u) => ({
       id: u.id, slug: u.slug, business_name: u.business_name, rubro: u.rubro,
       nombre_persona: u.nombre_persona, apellido: u.apellido, email: u.email, telefono: u.telefono,
-      activo: isActivo(u.activo), metodo_pago: u.metodo_pago,
+      activo: isActivo(u.activo), plan: u.plan || "gratis", metodo_pago: u.metodo_pago,
       tiene_mp: !!u.mp_access_token, tiene_mobbex: !!u.mobbex_api_key,
       estado_suscripcion: u.estado_suscripcion || "trial", fecha_vencimiento: u.fecha_vencimiento,
       dias_restantes: u.fecha_vencimiento ? diasHastaVencer(u.fecha_vencimiento) : null, creado: u.created_at,
@@ -1038,6 +1041,7 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
     const update  = {};
     allowed.forEach((key) => { if (req.body[key] !== undefined) update[key] = req.body[key]; });
     if (req.body.activo !== undefined) update.activo = req.body.activo === true || req.body.activo === 'true' ? 'true' : 'false';
+    if (req.body.plan   !== undefined) update.plan   = ["gratis", "premium"].includes(req.body.plan) ? req.body.plan : "gratis";
     if (req.body.password) update.password = await bcrypt.hash(String(req.body.password), BCRYPT_ROUNDS);
     if (req.body.sumar_dias && !isNaN(parseInt(req.body.sumar_dias))) {
       const { data: actual } = await supabase.from("usuarios").select("fecha_vencimiento").eq("slug", slug).single();
@@ -1129,7 +1133,7 @@ app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
     if (!MP_PLATFORM_TOKEN) return res.status(500).json({ success: false, error: "Pasarela de suscripción no configurada." });
 
     const { data: user, error } = await supabase.from("usuarios")
-      .select("id, email, nombre_persona, apellido, business_name, fecha_vencimiento")
+      .select("id, email, nombre_persona, apellido, business_name, plan, fecha_vencimiento")
       .eq("slug", slug).single();
     if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
@@ -1153,13 +1157,14 @@ app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
 app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.query.slug || req.query.dominio || req.auth.slug);
-    const { data: user, error } = await supabase.from("usuarios").select("estado_suscripcion, fecha_vencimiento").eq("slug", slug).single();
+    const { data: user, error } = await supabase.from("usuarios").select("plan, estado_suscripcion, fecha_vencimiento").eq("slug", slug).single();
     if (error || !user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
     res.json({
       success:           true,
+      plan:              user.plan || "gratis",
       estado:            suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "trial"),
       fecha_vencimiento: user.fecha_vencimiento,
       dias_restantes:    diasRestantes,
@@ -1273,13 +1278,13 @@ async function procesarPagoSuscripcion(payData) {
   if (payData.status !== "approved") return;
   const slug = cleanSlug(payData.metadata?.slug || "");
   if (!slug) return console.error("⚠️ Webhook suscripción: slug no encontrado.");
-  const { data: user, error } = await supabase.from("usuarios").select("id, email, nombre_persona, fecha_vencimiento").eq("slug", slug).single();
+  const { data: user, error } = await supabase.from("usuarios").select("id, email, nombre_persona, plan, fecha_vencimiento").eq("slug", slug).single();
   if (error || !user) return console.error(`⚠️ Webhook suscripción: negocio no encontrado (${slug}).`);
   const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
-  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo" }).eq("slug", slug);
+  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "premium" }).eq("slug", slug);
   invalidateCache(slug);
-  console.log(`✅ Suscripción renovada: ${slug} → vence ${nuevaFecha}`);
+  console.log(`✅ Suscripción renovada: ${slug} → plan premium, vence ${nuevaFecha}`);
   if (user.email) {
     fetch(APPS_SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action: "suscripcionRenovada", adminEmail: user.email, nombre: user.nombre_persona || "Cliente", slug, nuevaFecha }) })
       .catch((e) => console.error("Error mail suscripción:", e.message));
@@ -1354,8 +1359,9 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v9.2                           ║
-  ║   activo como texto: 'true' / 'false'        ║
+  ║   Associe API v10.0                          ║
+  ║   activo: 'true' / 'false'                   ║
+  ║   plan:   'gratis' / 'premium'               ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
