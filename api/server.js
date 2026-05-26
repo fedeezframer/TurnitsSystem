@@ -623,7 +623,9 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
 // TURNOS — RESERVA PÚBLICA
 // POST /turnos/reservar
 // ══════════════════════════════════════════════════════════════
+
 app.post("/turnos/reservar", limiterBooking, async (req, res) => {
+  console.log("📦 Body recibido:", JSON.stringify(req.body))
   try {
     const { name, phone, email, fecha, hora, slug, servicio_id, apellido } = req.body;
     const slugClean = cleanSlug(slug || "");
