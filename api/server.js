@@ -6,7 +6,7 @@ import fetch          from "node-fetch";
 import bcrypt         from "bcryptjs";
 import jwt            from "jsonwebtoken";
 import rateLimit      from "express-rate-limit";
-import multer from "multer";
+import multer         from "multer";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
@@ -27,6 +27,14 @@ const MP_PLATFORM_TOKEN   = process.env.MP_PLATFORM_TOKEN           || "";
 const PANEL_URL           = process.env.PANEL_URL                   || "https://negosociov2.framer.website/panel";
 const SUSCRIPCION_SUCCESS = process.env.SUSCRIPCION_SUCCESS_URL     || `${PANEL_URL}?status=suscripcion_ok`;
 const SUSCRIPCION_CANCEL  = process.env.SUSCRIPCION_CANCEL_URL      || `${PANEL_URL}?status=suscripcion_cancel`;
+
+// ══════════════════════════════════════════════════════════════
+// MULTER — Upload de imágenes
+// ══════════════════════════════════════════════════════════════
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 },
+});
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS
@@ -54,7 +62,7 @@ async function generarSlugUnico(businessName) {
 const validateEmail    = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const validatePassword = (p) => p && p.length >= 6;
 const validatePhone    = (p) => /^[0-9]{7,15}$/.test(p.toString().replace(/\s/g, ""));
-const cleanPhone = (p) => p.toString().replace(/\s/g, "").replace(/^\+/, "").trim()
+const cleanPhone = (p) => p.toString().replace(/\s/g, "").replace(/^\+/, "").trim();
 
 const calcularVencimiento = (diasExtra = 30, baseISO = null) => {
   const base = baseISO ? new Date(baseISO + "T12:00:00-03:00") : new Date();
@@ -207,7 +215,7 @@ function agruparVentas(ventas, hoyISO) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "11.0", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "11.1", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
@@ -550,17 +558,18 @@ app.get("/servicios/:slug", async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════
+// SERVICIOS — ADMIN — UPLOAD IMAGEN
 // POST /admin/servicios/upload-imagen
-// multipart/form-data: { imagen: File, slug: string }
-import multer from "multer";
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024 } });
-
+// ⚠️ DEBE IR ANTES de /admin/servicios/:id para que Express no
+//    interprete "upload-imagen" como un :id
+// ══════════════════════════════════════════════════════════════
 app.post("/admin/servicios/upload-imagen", requireAuth, upload.single("imagen"), async (req, res) => {
   try {
     const slug = cleanSlug(req.body.slug || req.auth.slug);
     if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
 
-    const ext      = req.file.mimetype === "image/png" ? "png" : "jpg";
+    const ext      = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/webp" ? "webp" : "jpg";
     const fileName = `${slug}/${Date.now()}.${ext}`;
 
     const { error } = await supabase.storage
@@ -581,7 +590,7 @@ app.post("/admin/servicios/upload-imagen", requireAuth, upload.single("imagen"),
 });
 
 // ══════════════════════════════════════════════════════════════
-// SERVICIOS — ADMIN
+// SERVICIOS — ADMIN — CRUD
 // ══════════════════════════════════════════════════════════════
 app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
   try {
@@ -654,9 +663,7 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
 // TURNOS — RESERVA PÚBLICA
 // POST /turnos/reservar
 // ══════════════════════════════════════════════════════════════
-
 app.post("/turnos/reservar", limiterBooking, async (req, res) => {
-  console.log("📦 Body recibido:", JSON.stringify(req.body))
   try {
     const { name, phone, email, fecha, hora, slug, servicio_id, apellido } = req.body;
     const slugClean = cleanSlug(slug || "");
@@ -1352,7 +1359,7 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v11.0                          ║
+  ║   Associe API v11.1                          ║
   ║   activo: 'true' / 'false'                   ║
   ║   plan:   'gratis' / 'premium'               ║
   ║   Puerto: ${PORT}                              ║
