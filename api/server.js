@@ -727,6 +727,58 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// TURNOS — CANCELAR / ACTUALIZAR ESTADO
+// PUT /turnos/:id
+// Agregar este bloque en server.js, después de POST /turnos/reservar
+// ══════════════════════════════════════════════════════════════
+app.put("/turnos/:id", requireAuth, async (req, res) => {
+  try {
+    const { id }    = req.params;
+    const slugClean = cleanSlug(req.body?.slug || req.auth?.slug || "");
+    const { estado, notas } = req.body;
+
+    const ESTADOS_VALIDOS = ["confirmado", "pendiente", "cancelado", "completado", "no_asistio"];
+    if (!estado || !ESTADOS_VALIDOS.includes(estado)) {
+      return res.status(400).json({ success: false, error: `Estado inválido. Debe ser uno de: ${ESTADOS_VALIDOS.join(", ")}` });
+    }
+
+    // Verificar que el turno pertenece a este negocio
+    const { data: turnoExistente, error: fetchError } = await supabase
+      .from("turnos")
+      .select("id, slug, estado")
+      .eq("id", id)
+      .eq("slug", slugClean)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!turnoExistente) {
+      return res.status(404).json({ success: false, error: "Turno no encontrado." });
+    }
+
+    const updateData = { estado };
+    if (notas !== undefined) updateData.notas = notas;
+
+    const { data: turnoActualizado, error: updateError } = await supabase
+      .from("turnos")
+      .update(updateData)
+      .eq("id", id)
+      .eq("slug", slugClean)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    invalidateCache(slugClean);
+
+    console.log(`✅ Turno ${id} → ${estado} (${slugClean})`);
+    res.json({ success: true, turno: turnoActualizado });
+  } catch (e) {
+    console.error("Error en PUT /turnos/:id:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // AGENDA — Próximos 30 días
 // GET /agenda/:slug
 // ══════════════════════════════════════════════════════════════
