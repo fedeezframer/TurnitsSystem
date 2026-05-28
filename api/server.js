@@ -224,7 +224,7 @@ app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date(
 // ══════════════════════════════════════════════════════════════
 app.post("/registro", limiterAuth, async (req, res) => {
   try {
-    const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno } = req.body;
+    const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan } = req.body;
 
     if (!nombre_persona || !email || !password || !business_name) {
       return res.status(400).json({ success: false, error: "Faltan campos obligatorios: nombre_persona, email, password, business_name." });
@@ -237,9 +237,16 @@ app.post("/registro", limiterAuth, async (req, res) => {
     const { data: emailExiste } = await supabase.from("usuarios").select("id").eq("email", email.trim().toLowerCase()).maybeSingle();
     if (emailExiste) return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
 
-    const slug             = await generarSlugUnico(business_name.trim());
-    const hashedPassword   = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-    const fechaVencimiento = calcularVencimiento(DIAS_PRUEBA);
+    const slug           = await generarSlugUnico(business_name.trim());
+    const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+
+    // Plan: solo acepta 'gratis' o 'premium', default 'gratis'
+    const planFinal = plan === "premium" ? "premium" : "gratis";
+
+    // Gratis → sin fecha de vencimiento, sin trial
+    // Premium → trial de DIAS_PRUEBA días
+    const fechaVencimiento = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
+    const estadoSuscripcion = planFinal === "premium" ? "trial" : "activo";
 
     const insertData = {
       nombre_persona:     nombre_persona.trim(),
@@ -249,12 +256,12 @@ app.post("/registro", limiterAuth, async (req, res) => {
       business_name:      business_name.trim(),
       slug,
       password:           hashedPassword,
-      plan:               "gratis",
+      plan:               planFinal,
       metodo_pago:        "none",
       porcentaje_sena:    30,
       excepciones:        [],
       activo:             "true",
-      estado_suscripcion: "trial",
+      estado_suscripcion: estadoSuscripcion,
       fecha_vencimiento:  fechaVencimiento,
     };
     if (horarios && typeof horarios === "object") insertData.horarios = horarios;
@@ -277,18 +284,26 @@ app.post("/registro", limiterAuth, async (req, res) => {
 
     fetch(APPS_SCRIPT_URL, {
       method: "POST", headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ action: "bienvenida", adminEmail: nuevo.email, nombre: nuevo.nombre_persona, slug: nuevo.slug, panel_url: `${PANEL_URL}?u=${nuevo.slug}`, dias_prueba: DIAS_PRUEBA }),
+      body: JSON.stringify({
+        action: "bienvenida",
+        adminEmail: nuevo.email,
+        nombre: nuevo.nombre_persona,
+        slug: nuevo.slug,
+        panel_url: `${PANEL_URL}?u=${nuevo.slug}`,
+        dias_prueba: planFinal === "premium" ? DIAS_PRUEBA : 0,
+      }),
     }).catch((e) => console.error("Error mail bienvenida:", e.message));
 
-    console.log(`✅ Registro: ${slug} — trial hasta ${fechaVencimiento}`);
+    console.log(`✅ Registro: ${slug} — plan: ${planFinal} — vencimiento: ${fechaVencimiento ?? "sin vencimiento"}`);
+
     res.status(201).json({
-      success:          true,
-      slug:             nuevo.slug,
-      business_name:    nuevo.business_name,
-      plan:             nuevo.plan,
-      panel_url:        `${PANEL_URL}?u=${nuevo.slug}`,
+      success:           true,
+      slug:              nuevo.slug,
+      business_name:     nuevo.business_name,
+      plan:              nuevo.plan,
+      panel_url:         `${PANEL_URL}?u=${nuevo.slug}`,
       token,
-      dias_prueba:      DIAS_PRUEBA,
+      dias_prueba:       planFinal === "premium" ? DIAS_PRUEBA : null,
       fecha_vencimiento: fechaVencimiento,
     });
   } catch (e) {
