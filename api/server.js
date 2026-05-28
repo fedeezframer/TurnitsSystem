@@ -1152,6 +1152,7 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
 // Marketplace fee: 5% cuando monto > MARKETPLACE_FEE_MINIMO
 // ══════════════════════════════════════════════════════════════
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
+  console.log("📥 create-preference body:", JSON.stringify(req.body));
   try {
     const { nombre, telefono, email, fecha, hora, slug, servicio_id } = req.body;
     const slugClean = cleanSlug(slug || "");
@@ -1180,9 +1181,14 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const montoACobrar = metodo === "sena" ? Math.round(precioServicio * (user.porcentaje_sena || 30) / 100) : precioServicio;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
     const fee          = calcularMarketplaceFee(montoACobrar);
-    const metaMeta     = { nombre, telefono: cleanPhone(telefono), email: email || "", fecha, hora, slug: slugClean, servicio_id: servicio_id || "", servicio_nombre: nombreServicio, metodo_pago: metodo, precio_servicio: precioServicio };
-    const successUrl   = process.env.SUCCESS_URL || `${API_URL}/success`;
-    const cancelUrl    = process.env.CANCEL_URL  || `${API_URL}/error`;
+
+    console.log("💵 montoACobrar:", montoACobrar);
+    console.log("💰 fee:", fee, typeof fee);
+    console.log("🔑 mp_access_token existe:", !!user.mp_access_token);
+
+    const metaMeta   = { nombre, telefono: cleanPhone(telefono), email: email || "", fecha, hora, slug: slugClean, servicio_id: servicio_id || "", servicio_nombre: nombreServicio, metodo_pago: metodo, precio_servicio: precioServicio };
+    const successUrl = process.env.SUCCESS_URL || `${API_URL}/success`;
+    const cancelUrl  = process.env.CANCEL_URL  || `${API_URL}/error`;
 
     if (user.mp_access_token) {
       try {
@@ -1195,18 +1201,30 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
           back_urls: { success: successUrl, failure: cancelUrl, pending: cancelUrl },
           auto_return: "approved",
         };
-        if (fee > 0) prefBody.marketplace_fee = fee;
+
+        if (fee > 0) prefBody.marketplace_fee = Number(fee.toFixed(2));
+
+        console.log("📋 prefBody:", JSON.stringify(prefBody));
+
         const response = await pref.create({ body: prefBody });
         console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean}`);
         return res.json({ payment_url: response.init_point, monto: montoACobrar, fee, pasarela: "mercadopago" });
-      } catch (e) { return res.status(500).json({ success: false, error: "Error con MercadoPago." }); }
+
+      } catch (e) {
+        console.error("❌ MP status:", e?.status);
+        console.error("❌ MP message:", e?.message);
+        console.error("❌ MP cause:", JSON.stringify(e?.cause));
+        console.error("❌ MP full:", JSON.stringify(e));
+        return res.status(500).json({ success: false, error: e?.message || "Error con MercadoPago." });
+      }
     }
 
     res.status(400).json({ success: false, error: "Sin pasarela de pago configurada." });
-  }  catch (e) { 
-    console.error("❌ MP Error:", e?.cause || e?.message || JSON.stringify(e));
-    return res.status(500).json({ success: false, error: e?.message || "Error con MercadoPago." }); 
-}
+
+  } catch (e) {
+    console.error("❌ Error general:", e?.message);
+    res.status(500).json({ success: false, error: e?.message || "Error interno." });
+  }
 });
 
 // ══════════════════════════════════════════════════════════════
