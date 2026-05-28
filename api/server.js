@@ -1195,7 +1195,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
           back_urls: { success: successUrl, failure: cancelUrl, pending: cancelUrl },
           auto_return: "approved",
         };
-        //if (fee > 0) prefBody.marketplace_fee = fee;//
+        if (fee > 0) prefBody.marketplace_fee = fee;
         const response = await pref.create({ body: prefBody });
         console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean}`);
         return res.json({ payment_url: response.init_point, monto: montoACobrar, fee, pasarela: "mercadopago" });
