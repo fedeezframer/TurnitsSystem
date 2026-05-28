@@ -1203,9 +1203,10 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     }
 
     res.status(400).json({ success: false, error: "Sin pasarela de pago configurada." });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
+  }  catch (e) { 
+    console.error("❌ MP Error:", e?.cause || e?.message || JSON.stringify(e));
+    return res.status(500).json({ success: false, error: e?.message || "Error con MercadoPago." }); 
+}
 });
 
 // ══════════════════════════════════════════════════════════════
