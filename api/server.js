@@ -95,9 +95,9 @@ async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
 
 // Calcula el marketplace fee: 5% solo si monto > MARKETPLACE_FEE_MINIMO
 const calcularMarketplaceFee = (monto) => {
-  if (monto <= MARKETPLACE_FEE_MINIMO) return 0;
-  return Math.round(monto * MARKETPLACE_FEE_PCT);
-};
+  const fee = Math.round(monto * MARKETPLACE_FEE_PCT); // 5%
+  return Math.max(fee, MARKETPLACE_FEE_MINIMO); // mínimo 500 ARS
+}
 
 // ══════════════════════════════════════════════════════════════
 // CACHÉ EN MEMORIA
