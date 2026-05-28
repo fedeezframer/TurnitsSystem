@@ -21,12 +21,16 @@ const CACHE_DURATION = 20_000;
 const JWT_EXPIRY     = "7d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 
-const DIAS_PRUEBA         = parseInt(process.env.DIAS_PRUEBA        || "15");
-const PRECIO_SUSCRIPCION  = parseInt(process.env.PRECIO_SUSCRIPCION || "23000");
-const MP_PLATFORM_TOKEN   = process.env.MP_PLATFORM_TOKEN           || "";
-const PANEL_URL           = process.env.PANEL_URL                   || "https://negosociov2.framer.website/panel";
-const SUSCRIPCION_SUCCESS = process.env.SUSCRIPCION_SUCCESS_URL     || `${PANEL_URL}?status=suscripcion_ok`;
-const SUSCRIPCION_CANCEL  = process.env.SUSCRIPCION_CANCEL_URL      || `${PANEL_URL}?status=suscripcion_cancel`;
+const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "15");
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "23000");
+const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
+const PANEL_URL          = process.env.PANEL_URL                  || "https://negosociov2.framer.website/panel";
+const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_URL}?status=renovacion_ok`;
+const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
+
+// Marketplace fee: 5% solo cuando el monto > 500 ARS
+const MARKETPLACE_FEE_PCT   = parseFloat(process.env.MARKETPLACE_FEE_PCT  || "0.05");
+const MARKETPLACE_FEE_MINIMO = parseInt(process.env.MARKETPLACE_FEE_MINIMO || "500");
 
 // ══════════════════════════════════════════════════════════════
 // MULTER — Upload de imágenes
@@ -88,6 +92,12 @@ async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
   }
   return ok;
 }
+
+// Calcula el marketplace fee: 5% solo si monto > MARKETPLACE_FEE_MINIMO
+const calcularMarketplaceFee = (monto) => {
+  if (monto <= MARKETPLACE_FEE_MINIMO) return 0;
+  return Math.round(monto * MARKETPLACE_FEE_PCT);
+};
 
 // ══════════════════════════════════════════════════════════════
 // CACHÉ EN MEMORIA
@@ -215,7 +225,7 @@ function agruparVentas(ventas, hoyISO) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "11.1", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "12.0", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
@@ -243,9 +253,9 @@ app.post("/registro", limiterAuth, async (req, res) => {
     // Plan: solo acepta 'gratis' o 'premium', default 'gratis'
     const planFinal = plan === "premium" ? "premium" : "gratis";
 
-    // Gratis → sin fecha de vencimiento, sin trial
-    // Premium → trial de DIAS_PRUEBA días
-    const fechaVencimiento = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
+    // Gratis  → sin fecha de vencimiento, estado activo permanente
+    // Premium → trial de DIAS_PRUEBA días, después requiere renovación manual
+    const fechaVencimiento  = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
     const estadoSuscripcion = planFinal === "premium" ? "trial" : "activo";
 
     const insertData = {
@@ -285,11 +295,11 @@ app.post("/registro", limiterAuth, async (req, res) => {
     fetch(APPS_SCRIPT_URL, {
       method: "POST", headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
-        action: "bienvenida",
+        action:     "bienvenida",
         adminEmail: nuevo.email,
-        nombre: nuevo.nombre_persona,
-        slug: nuevo.slug,
-        panel_url: `${PANEL_URL}?u=${nuevo.slug}`,
+        nombre:     nuevo.nombre_persona,
+        slug:       nuevo.slug,
+        panel_url:  `${PANEL_URL}?u=${nuevo.slug}`,
         dias_prueba: planFinal === "premium" ? DIAS_PRUEBA : 0,
       }),
     }).catch((e) => console.error("Error mail bienvenida:", e.message));
@@ -382,7 +392,7 @@ app.get("/verify-session", async (req, res) => {
     const token = req.headers["authorization"]?.split(" ")[1] || req.query.token;
     if (!token) return res.json({ active: false, reason: "no_token" });
 
-    const payload     = jwt.verify(token, process.env.JWT_SECRET);
+    const payload    = jwt.verify(token, process.env.JWT_SECRET);
     const { data: user } = await supabase.from("usuarios")
       .select("slug, business_name, email, nombre_persona, activo, plan, estado_suscripcion, fecha_vencimiento")
       .eq("slug", payload.slug).maybeSingle();
@@ -391,11 +401,12 @@ app.get("/verify-session", async (req, res) => {
 
     const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     res.json({
-      active:        true,
-      slug:          user.slug,
-      business_name: user.business_name,
-      email:         user.email,
-      plan:          user.plan || "gratis",
+      active:         true,
+      slug:           user.slug,
+      business_name:  user.business_name,
+      email:          user.email,
+      nombre_persona: user.nombre_persona,
+      plan:           user.plan || "gratis",
       suscripcion: {
         estado:         user.estado_suscripcion,
         dias_restantes: diasRestantes,
@@ -440,9 +451,10 @@ app.get("/negocio/:slug", async (req, res) => {
       .maybeSingle();
 
     if (error) throw error;
-    if (!user)               return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    if (!user)              return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
 
+    // Solo suspender si tiene fecha_vencimiento (plan premium vencido)
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
 
@@ -576,8 +588,7 @@ app.get("/servicios/:slug", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // SERVICIOS — ADMIN — UPLOAD IMAGEN
 // POST /admin/servicios/upload-imagen
-// ⚠️ DEBE IR ANTES de /admin/servicios/:id para que Express no
-//    interprete "upload-imagen" como un :id
+// ⚠️ DEBE IR ANTES de /admin/servicios/:id
 // ══════════════════════════════════════════════════════════════
 app.post("/admin/servicios/upload-imagen", requireAuth, upload.single("imagen"), async (req, res) => {
   try {
@@ -589,10 +600,7 @@ app.post("/admin/servicios/upload-imagen", requireAuth, upload.single("imagen"),
 
     const { error } = await supabase.storage
       .from("servicios")
-      .upload(fileName, req.file.buffer, {
-        contentType: req.file.mimetype,
-        upsert: true,
-      });
+      .upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
 
     if (error) throw error;
 
@@ -693,7 +701,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     const { data: user, error: userError } = await supabase.from("usuarios")
       .select("*").eq("slug", slugClean).maybeSingle();
     if (userError) throw userError;
-    if (!user)               return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    if (!user)              return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
@@ -742,9 +750,8 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// TURNOS — CANCELAR / ACTUALIZAR ESTADO
+// TURNOS — ACTUALIZAR ESTADO
 // PUT /turnos/:id
-// Agregar este bloque en server.js, después de POST /turnos/reservar
 // ══════════════════════════════════════════════════════════════
 app.put("/turnos/:id", requireAuth, async (req, res) => {
   try {
@@ -757,34 +764,22 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: `Estado inválido. Debe ser uno de: ${ESTADOS_VALIDOS.join(", ")}` });
     }
 
-    // Verificar que el turno pertenece a este negocio
     const { data: turnoExistente, error: fetchError } = await supabase
-      .from("turnos")
-      .select("id, slug, estado")
-      .eq("id", id)
-      .eq("slug", slugClean)
-      .maybeSingle();
+      .from("turnos").select("id, slug, estado")
+      .eq("id", id).eq("slug", slugClean).maybeSingle();
 
     if (fetchError) throw fetchError;
-    if (!turnoExistente) {
-      return res.status(404).json({ success: false, error: "Turno no encontrado." });
-    }
+    if (!turnoExistente) return res.status(404).json({ success: false, error: "Turno no encontrado." });
 
     const updateData = { estado };
     if (notas !== undefined) updateData.notas = notas;
 
     const { data: turnoActualizado, error: updateError } = await supabase
-      .from("turnos")
-      .update(updateData)
-      .eq("id", id)
-      .eq("slug", slugClean)
-      .select()
-      .single();
+      .from("turnos").update(updateData).eq("id", id).eq("slug", slugClean).select().single();
 
     if (updateError) throw updateError;
 
     invalidateCache(slugClean);
-
     console.log(`✅ Turno ${id} → ${estado} (${slugClean})`);
     res.json({ success: true, turno: turnoActualizado });
   } catch (e) {
@@ -863,7 +858,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         capacidad_por_turno: user.capacidad_por_turno,
         metodo_pago:         user.metodo_pago,
         porcentaje_sena:     user.porcentaje_sena,
-        horarios:            user.horarios   || {},
+        horarios:            user.horarios    || {},
         excepciones:         user.excepciones || [],
         activo:              isActivo(user.activo),
         estado_suscripcion:  user.estado_suscripcion,
@@ -1049,7 +1044,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
         dias_restantes:    diasRestantes,
         alerta:            diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
         vencida:           suscripcionVencida,
-        precio_renovacion: PRECIO_SUSCRIPCION,
+        precio_renovacion: PRECIO_RENOVACION,
       },
       businessName:   user.business_name,
       nombre_persona: user.nombre_persona,
@@ -1078,17 +1073,19 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
     if (!validateEmail(email))       return res.status(400).json({ success: false, error: "Email inválido." });
     if (!validatePassword(password)) return res.status(400).json({ success: false, error: "Contraseña: mínimo 6 caracteres." });
 
+    const planFinal        = plan === "premium" ? "premium" : "gratis";
     const slug             = await generarSlugUnico(business_name.trim());
     const hashedPassword   = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-    const fechaVencimiento = calcularVencimiento(DIAS_PRUEBA);
+    const fechaVencimiento = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
+    const estadoSuscripcion = planFinal === "premium" ? "trial" : "activo";
 
     const { data, error } = await supabase.from("usuarios").insert([{
       nombre_persona: nombre_persona.trim(), apellido: apellido?.trim() || "",
       email: email.trim().toLowerCase(), telefono: telefono ? cleanPhone(telefono) : null,
       business_name: business_name.trim(), slug, password: hashedPassword,
-      plan: ["gratis", "premium"].includes(plan) ? plan : "gratis",
+      plan: planFinal,
       metodo_pago: "none", porcentaje_sena: 30, excepciones: [],
-      activo: "true", estado_suscripcion: "trial", fecha_vencimiento: fechaVencimiento,
+      activo: "true", estado_suscripcion: estadoSuscripcion, fecha_vencimiento: fechaVencimiento,
     }]).select("id, slug, business_name, plan, email, nombre_persona, apellido, estado_suscripcion, fecha_vencimiento").single();
 
     if (error) {
@@ -1114,7 +1111,7 @@ app.get("/superadmin/negocios", requireAdminKey, async (req, res) => {
       activo: isActivo(u.activo), plan: u.plan || "gratis",
       metodo_pago: u.metodo_pago, tiene_mp: !!u.mp_access_token,
       estado_suscripcion: u.estado_suscripcion || "trial",
-      fecha_vencimiento: u.fecha_vencimiento,
+      fecha_vencimiento:  u.fecha_vencimiento,
       dias_restantes: u.fecha_vencimiento ? diasHastaVencer(u.fecha_vencimiento) : null,
       creado: u.created_at,
     }));
@@ -1151,6 +1148,7 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // PAGOS — Mercado Pago (turnos)
 // POST /api/create-preference
+// Marketplace fee: 5% cuando monto > MARKETPLACE_FEE_MINIMO
 // ══════════════════════════════════════════════════════════════
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   try {
@@ -1180,6 +1178,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     const montoACobrar = metodo === "sena" ? Math.round(precioServicio * (user.porcentaje_sena || 30) / 100) : precioServicio;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
+    const fee          = calcularMarketplaceFee(montoACobrar);
     const metaMeta     = { nombre, telefono: cleanPhone(telefono), email: email || "", fecha, hora, slug: slugClean, servicio_id: servicio_id || "", servicio_nombre: nombreServicio, metodo_pago: metodo, precio_servicio: precioServicio };
     const successUrl   = process.env.SUCCESS_URL || `${API_URL}/success`;
     const cancelUrl    = process.env.CANCEL_URL  || `${API_URL}/error`;
@@ -1188,14 +1187,17 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       try {
         const client   = new MercadoPagoConfig({ accessToken: user.mp_access_token });
         const pref     = new Preference(client);
-        const response = await pref.create({ body: {
+        const prefBody = {
           items: [{ title: `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`, unit_price: montoACobrar, quantity: 1, currency_id: "ARS" }],
           metadata: { ...metaMeta, tipo_pago: metodo },
           notification_url: `${API_URL}/webhook/mp`,
           back_urls: { success: successUrl, failure: cancelUrl, pending: cancelUrl },
           auto_return: "approved",
-        }});
-        return res.json({ payment_url: response.init_point, monto: montoACobrar, pasarela: "mercadopago" });
+        };
+        if (fee > 0) prefBody.marketplace_fee = fee;
+        const response = await pref.create({ body: prefBody });
+        console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean}`);
+        return res.json({ payment_url: response.init_point, monto: montoACobrar, fee, pasarela: "mercadopago" });
       } catch (e) { return res.status(500).json({ success: false, error: "Error con MercadoPago." }); }
     }
 
@@ -1206,12 +1208,14 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// SUSCRIPCIÓN — Checkout y estado
+// RENOVACIÓN — Pago único mensual (reemplaza suscripciones)
+// POST /api/renovacion/checkout
+// GET  /api/renovacion/estado
 // ══════════════════════════════════════════════════════════════
-app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
+app.post("/api/renovacion/checkout", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.body.slug || req.auth.slug);
-    if (!MP_PLATFORM_TOKEN) return res.status(500).json({ success: false, error: "Pasarela de suscripción no configurada." });
+    if (!MP_PLATFORM_TOKEN) return res.status(500).json({ success: false, error: "Pasarela de renovación no configurada." });
 
     const { data: user, error } = await supabase.from("usuarios")
       .select("id, email, nombre_persona, apellido, business_name, plan, fecha_vencimiento")
@@ -1222,20 +1226,20 @@ app.post("/api/suscripcion/checkout", requireAuth, async (req, res) => {
     const client   = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
     const pref     = new Preference(client);
     const response = await pref.create({ body: {
-      items: [{ title: `Associe — Suscripción mensual (${user.business_name})`, unit_price: PRECIO_SUSCRIPCION, quantity: 1, currency_id: "ARS" }],
+      items: [{ title: `Associe — Renovación mensual (${user.business_name})`, unit_price: PRECIO_RENOVACION, quantity: 1, currency_id: "ARS" }],
       payer: { email: user.email, name: `${user.nombre_persona || ""} ${user.apellido || ""}`.trim() },
-      metadata: { tipo: "suscripcion_associe", slug, user_id: user.id },
-      notification_url: `${API_URL}/webhook/suscripcion`,
-      back_urls: { success: SUSCRIPCION_SUCCESS, failure: SUSCRIPCION_CANCEL, pending: SUSCRIPCION_CANCEL },
+      metadata: { tipo: "renovacion_associe", slug, user_id: user.id },
+      notification_url: `${API_URL}/webhook/renovacion`,
+      back_urls: { success: RENOVACION_SUCCESS, failure: RENOVACION_CANCEL, pending: RENOVACION_CANCEL },
       auto_return: "approved",
     }});
-    res.json({ success: true, payment_url: response.init_point, monto: PRECIO_SUSCRIPCION });
+    res.json({ success: true, payment_url: response.init_point, monto: PRECIO_RENOVACION });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
-app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
+app.get("/api/renovacion/estado", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.query.slug || req.auth.slug);
     const { data: user, error } = await supabase.from("usuarios")
@@ -1253,7 +1257,7 @@ app.get("/api/suscripcion/estado", requireAuth, async (req, res) => {
       dias_restantes:    diasRestantes,
       alerta:            diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
       vencida:           suscripcionVencida,
-      precio_renovacion: PRECIO_SUSCRIPCION,
+      precio_renovacion: PRECIO_RENOVACION,
     });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -1332,7 +1336,7 @@ app.post("/webhook/mp", async (req, res) => {
       if (!paymentId) return res.sendStatus(200);
       const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` } });
       const payData = await payRes.json();
-      if (payData.metadata?.tipo === "suscripcion_associe") { await procesarPagoSuscripcion(payData); return res.sendStatus(200); }
+      if (payData.metadata?.tipo === "renovacion_associe") { await procesarRenovacion(payData); return res.sendStatus(200); }
       const slug = cleanSlug(payData.metadata?.slug || "");
       if (!slug) return res.sendStatus(200);
       const { data: userNegocio } = await supabase.from("usuarios").select("mp_access_token").eq("slug", slug).maybeSingle();
@@ -1349,59 +1353,86 @@ app.post("/webhook/mp", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// WEBHOOK — Suscripción
+// WEBHOOK — Renovación mensual (pago único)
 // ══════════════════════════════════════════════════════════════
-async function procesarPagoSuscripcion(payData) {
+async function procesarRenovacion(payData) {
   if (payData.status !== "approved") return;
   const slug = cleanSlug(payData.metadata?.slug || "");
   if (!slug) return;
   const { data: user } = await supabase.from("usuarios")
     .select("id, email, nombre_persona, plan, fecha_vencimiento").eq("slug", slug).maybeSingle();
   if (!user) return;
+
+  // Sumar 30 días desde hoy o desde la fecha vigente si aún no venció
   const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
-  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "premium" }).eq("slug", slug);
+
+  await supabase.from("usuarios").update({
+    fecha_vencimiento:  nuevaFecha,
+    estado_suscripcion: "activo",
+    plan:               "premium",
+  }).eq("slug", slug);
+
   invalidateCache(slug);
+  console.log(`✅ Renovación aprobada: ${slug} → vence ${nuevaFecha}`);
+
   if (user.email) {
-    fetch(APPS_SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action: "suscripcionRenovada", adminEmail: user.email, nombre: user.nombre_persona || "Cliente", slug, nuevaFecha }) })
-      .catch((e) => console.error("Error mail suscripción:", e.message));
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST", headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "renovacionAprobada", adminEmail: user.email, nombre: user.nombre_persona || "Cliente", slug, nuevaFecha }),
+    }).catch((e) => console.error("Error mail renovación:", e.message));
   }
 }
 
-app.post("/webhook/suscripcion", async (req, res) => {
+app.post("/webhook/renovacion", async (req, res) => {
   const { query, body } = req;
   try {
     if (query.topic === "payment" || body.type === "payment") {
       const paymentId = query.id || body.data?.id;
       if (!paymentId) return res.sendStatus(200);
       const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` } });
-      await procesarPagoSuscripcion(await payRes.json());
+      await procesarRenovacion(await payRes.json());
     }
     res.sendStatus(200);
-  } catch (e) { console.error("Error en /webhook/suscripcion:", e.message); res.sendStatus(200); }
+  } catch (e) { console.error("Error en /webhook/renovacion:", e.message); res.sendStatus(200); }
 });
 
 // ══════════════════════════════════════════════════════════════
 // CRON — Verificación de vencimientos
+// GET /cron/check-vencimientos
 // ══════════════════════════════════════════════════════════════
 app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
   try {
     const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toISOString().split("T")[0];
+
+    // Suspender premium vencidos (gratis tienen fecha_vencimiento NULL → no los toca)
     const { data: vencidos, error } = await supabase.from("usuarios")
-      .select("id, slug").eq("activo", "true").neq("estado_suscripcion", "suspendido").lt("fecha_vencimiento", hoyISO);
+      .select("id, slug")
+      .eq("activo", "true")
+      .neq("estado_suscripcion", "suspendido")
+      .not("fecha_vencimiento", "is", null)
+      .lt("fecha_vencimiento", hoyISO);
     if (error) throw error;
+
     const slugs = (vencidos || []).map((u) => u.slug);
     if (slugs.length > 0) {
       await supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).in("slug", slugs);
       slugs.forEach((s) => invalidateCache(s));
     }
+
+    // Reactivar si pagaron (fecha_vencimiento >= hoy y estaban suspendidos)
     const { data: reactivables } = await supabase.from("usuarios")
-      .select("id, slug").eq("activo", "true").eq("estado_suscripcion", "suspendido").gte("fecha_vencimiento", hoyISO);
+      .select("id, slug")
+      .eq("activo", "true")
+      .eq("estado_suscripcion", "suspendido")
+      .not("fecha_vencimiento", "is", null)
+      .gte("fecha_vencimiento", hoyISO);
     const slugsReactivar = (reactivables || []).map((u) => u.slug);
     if (slugsReactivar.length > 0) {
       await supabase.from("usuarios").update({ estado_suscripcion: "activo" }).in("slug", slugsReactivar);
       slugsReactivar.forEach((s) => invalidateCache(s));
     }
+
     res.json({ success: true, fecha: hoyISO, suspendidos: slugs, reactivados: slugsReactivar });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -1426,7 +1457,7 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v11.1                          ║
+  ║   Associe API v12.0                          ║
   ║   activo: 'true' / 'false'                   ║
   ║   plan:   'gratis' / 'premium'               ║
   ║   Puerto: ${PORT}                              ║
