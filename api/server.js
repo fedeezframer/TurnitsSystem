@@ -12,6 +12,7 @@ import multer         from "multer";
 // CONFIGURACIÓN GLOBAL
 // ══════════════════════════════════════════════════════════════
 const app = express();
+app.set("trust proxy", 1);
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzvcaYhHuyD-Xu63Aw9WpWrpcr5xmrgHW_IffXkmC90bs0pTzhWP1d8rWBaBuhG5Icx/exec";
