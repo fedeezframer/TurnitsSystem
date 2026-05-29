@@ -91,7 +91,7 @@ async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
 }
 
 // Fee de plataforma: 2% del monto de la transacción
-const calcularApplicationFee = (monto) => {
+const calcularMarketplaceFee = (monto) => {
   return Math.round(monto * 0.02);
 };
 
@@ -1218,8 +1218,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
           auto_return: "approved",
         };
 
-        // Solo agregamos application_fee si hay fee calculado
-        if (fee > 0) prefBody.application_fee = Number(fee.toFixed(2));
+        if (fee > 0) prefBody.marketplace_fee = Number(fee.toFixed(2));
 
         console.log("📋 prefBody:", JSON.stringify(prefBody));
 
