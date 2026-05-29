@@ -1350,35 +1350,113 @@ app.get("/oauth-callback", async (req, res) => {
 // la metadata completa que MP a veces restringe cross-token.
 // ══════════════════════════════════════════════════════════════
 async function procesarPagoConfirmado({ slug, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, payment_id, estado }) {
-  let turnoId = null;
-  if (estado === "aprobado") {
-    const { data: turnoInsertado } = await supabase.from("turnos").insert([{
-      slug, nombre: nombre?.trim() || "Cliente", telefono: cleanPhone(telefono?.toString() || "0"),
-      email: email?.trim().toLowerCase() || null, fecha, hora,
-      servicio_id: servicio_id || null, servicio_nombre: servicio_nombre || null,
-      precio_cobrado: monto, estado: "confirmado", metodo_pago, payment_id: String(payment_id),
-    }]).select().single();
-    turnoId = turnoInsertado?.id || null;
 
-    const { data: userNegocio } = await supabase.from("usuarios").select("email").eq("slug", slug).maybeSingle();
-    if (userNegocio?.email) {
-      fetch(APPS_SCRIPT_URL, {
-        method: "POST", headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "newAppointmentEmail", nombreCliente: nombre?.trim() || "Cliente", fechaHora: `${fecha} ${hora}`, adminEmail: userNegocio.email, emailCliente: email?.trim() || "" }),
-      }).catch((e) => console.error("Error mail webhook:", e.message));
+  // ── Idempotencia: si el payment_id ya existe en ventas, salimos ──
+  const { data: ventaExistente } = await supabase
+    .from("ventas")
+    .select("id")
+    .eq("payment_id", String(payment_id))
+    .maybeSingle();
+
+  if (ventaExistente) {
+    console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`);
+    return;
+  }
+
+  let turnoId = null;
+
+  if (estado === "aprobado") {
+    // Insertar turno — si el índice único lo rechaza, lo ignoramos
+    const { data: turnoInsertado, error: turnoError } = await supabase
+      .from("turnos")
+      .insert([{
+        slug,
+        nombre:          nombre?.trim() || "Cliente",
+        telefono:        cleanPhone(telefono?.toString() || "0"),
+        email:           email?.trim().toLowerCase() || null,
+        fecha,
+        hora,
+        servicio_id:     servicio_id    || null,
+        servicio_nombre: servicio_nombre || null,
+        precio_cobrado:  monto,
+        estado:          "confirmado",
+        metodo_pago,
+        payment_id:      String(payment_id),
+      }])
+      .select()
+      .single();
+
+    if (turnoError) {
+      if (turnoError.code === "23505") {
+        // Turno ya existe — buscamos su id para linkear la venta
+        console.log(`⚠️ Turno duplicado bloqueado por DB: ${payment_id}`);
+        const { data: turnoExistente } = await supabase
+          .from("turnos")
+          .select("id")
+          .eq("payment_id", String(payment_id))
+          .maybeSingle();
+        turnoId = turnoExistente?.id || null;
+      } else {
+        throw turnoError;
+      }
+    } else {
+      turnoId = turnoInsertado?.id || null;
+    }
+
+    // Mail — solo si el turno se creó por primera vez
+    if (!turnoError) {
+      const { data: userNegocio } = await supabase
+        .from("usuarios")
+        .select("email")
+        .eq("slug", slug)
+        .maybeSingle();
+
+      if (userNegocio?.email) {
+        fetch(APPS_SCRIPT_URL, {
+          method:  "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            action:         "newAppointmentEmail",
+            nombreCliente:  nombre?.trim() || "Cliente",
+            fechaHora:      `${fecha} ${hora}`,
+            adminEmail:     userNegocio.email,
+            emailCliente:   email?.trim() || "",
+          }),
+        }).catch((e) => console.error("Error mail webhook:", e.message));
+      }
     }
   }
-  await supabase.from("ventas").insert([{
-    slug, turno_id: turnoId, fecha_turno: fecha, fecha_pago: new Date().toISOString(),
-    monto, moneda: moneda || "ARS", metodo_pago, estado,
-    nombre_cliente:   nombre?.trim() || "Cliente",
-    email_cliente:    email?.trim()  || null,
-    telefono_cliente: cleanPhone(telefono?.toString() || ""),
-    servicio_id:      servicio_id    || null,
-    servicio_nombre:  servicio_nombre || null,
-    payment_id:       String(payment_id),
-  }]);
+
+  // Insertar venta — el índice único es la última barrera
+  const { error: ventaError } = await supabase
+    .from("ventas")
+    .insert([{
+      slug,
+      turno_id:         turnoId,
+      fecha_turno:      fecha,
+      fecha_pago:       new Date().toISOString(),
+      monto,
+      moneda:           moneda || "ARS",
+      metodo_pago,
+      estado,
+      nombre_cliente:   nombre?.trim() || "Cliente",
+      email_cliente:    email?.trim()  || null,
+      telefono_cliente: cleanPhone(telefono?.toString() || ""),
+      servicio_id:      servicio_id    || null,
+      servicio_nombre:  servicio_nombre || null,
+      payment_id:       String(payment_id),
+    }]);
+
+  if (ventaError) {
+    if (ventaError.code === "23505") {
+      console.log(`⚠️ Venta duplicada bloqueada por DB: ${payment_id}`);
+      return;
+    }
+    throw ventaError;
+  }
+
   invalidateCache(slug);
+  console.log(`✅ Pago procesado: ${payment_id} — slug: ${slug} — estado: ${estado}`);
 }
 
 app.post("/webhook/mp", async (req, res) => {
