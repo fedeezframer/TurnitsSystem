@@ -1314,6 +1314,7 @@ app.get("/api/renovacion/estado", requireAuth, async (req, res) => {
 // OAUTH — Mercado Pago
 // GET /oauth-callback
 // ══════════════════════════════════════════════════════════════
+
 app.get("/oauth-callback", async (req, res) => {
   const { code, state: slug } = req.query;
   if (!code || !slug) return res.status(400).send("Parámetros inválidos.");
@@ -1330,8 +1331,12 @@ app.get("/oauth-callback", async (req, res) => {
       }),
     });
     const data = await response.json();
+    console.log("🔑 OAuth response:", JSON.stringify(data));
     if (data.access_token) {
-      await supabase.from("usuarios").update({ mp_access_token: data.access_token }).eq("slug", slugClean);
+      await supabase.from("usuarios").update({
+        mp_access_token: data.access_token,
+        mp_public_key:   data.public_key || null,
+      }).eq("slug", slugClean);
       invalidateCache(slugClean);
       return res.redirect(`${PANEL_URL}?status=mp_success&u=${slugClean}`);
     }
