@@ -1218,7 +1218,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
           auto_return: "approved",
         };
 
-        if (fee > 0) prefBody.marketplace_fee = Number(fee.toFixed(2));
+        if (fee > 0) prefBody.marketplace_fee = Math.round(fee);
 
         console.log("📋 prefBody:", JSON.stringify(prefBody));
 
