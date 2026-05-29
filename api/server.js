@@ -1178,20 +1178,15 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : precioServicio;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
 
-    // ── FEE DE PLATAFORMA ──────────────────────────────────────
-    // application_fee funciona cuando:
-    //   1. La preference se crea con el access_token OAuth del vendedor (ya es el caso).
-    //   2. La app de MP tiene habilitado el modelo marketplace.
-    // El fee queda retenido en la cuenta de la plataforma;
-    // el resto (montoACobrar - fee) va al vendedor.
-    // ──────────────────────────────────────────────────────────
-    const fee = calcularMarketplaceFee(montoACobrar);
+    // Fee fijo de $400 por transacción (plan gratis)
+    // Si el monto es menor a $400, el fee es el 50% del monto para no superar el total
+    const fee = 1;
 
     console.log("💵 montoACobrar:", montoACobrar);
-    console.log("💰 application_fee:", fee);
+    console.log("💰 marketplace_fee:", fee);
     console.log("🔑 mp_access_token existe:", !!user.mp_access_token);
 
-    const metaMeta   = {
+    const metaMeta = {
       nombre, telefono: cleanPhone(telefono), email: email || "",
       fecha, hora, slug: slugClean,
       servicio_id: servicio_id || "", servicio_nombre: nombreServicio,
@@ -1202,14 +1197,13 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     if (user.mp_access_token) {
       try {
-        // Preference creada con el token OAuth del vendedor → application_fee funciona
         const client   = new MercadoPagoConfig({ accessToken: user.mp_access_token });
         const pref     = new Preference(client);
         const prefBody = {
           items: [{
-            title:      `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`,
-            unit_price: montoACobrar,
-            quantity:   1,
+            title:       `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`,
+            unit_price:  montoACobrar,
+            quantity:    1,
             currency_id: "ARS",
           }],
           metadata: { ...metaMeta, tipo_pago: metodo },
@@ -1218,12 +1212,12 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
           auto_return: "approved",
         };
 
-        if (fee > 0) prefBody.marketplace_fee = Math.round(fee);
+        if (fee > 0) prefBody.marketplace_fee = fee;
 
         console.log("📋 prefBody:", JSON.stringify(prefBody));
 
         const response = await pref.create({ body: prefBody });
-        console.log(`💰 Preference creada: monto=${montoACobrar} application_fee=${fee} slug=${slugClean}`);
+        console.log(`💰 Preference creada: monto=${montoACobrar} marketplace_fee=${fee} slug=${slugClean}`);
         return res.json({
           payment_url: response.init_point,
           monto:       montoACobrar,
