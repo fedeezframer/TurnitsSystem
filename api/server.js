@@ -1185,7 +1185,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     // El fee queda retenido en la cuenta de la plataforma;
     // el resto (montoACobrar - fee) va al vendedor.
     // ──────────────────────────────────────────────────────────
-    const fee = calcularApplicationFee(montoACobrar);
+    const fee = calcularMarketplaceFee(montoACobrar);
 
     console.log("💵 montoACobrar:", montoACobrar);
     console.log("💰 application_fee:", fee);
