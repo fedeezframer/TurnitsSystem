@@ -90,10 +90,10 @@ async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
   return ok;
 }
 
-// Calcula el marketplace fee: 5% solo si monto > MARKETPLACE_FEE_MINIMO
-const calcularMarketplaceFee = (monto) => {
-  return Math.round(monto * 0.02); // 2% sin mínimo
-}
+// Fee de plataforma: 2% del monto de la transacción
+const calcularApplicationFee = (monto) => {
+  return Math.round(monto * 0.02);
+};
 
 // ══════════════════════════════════════════════════════════════
 // CACHÉ EN MEMORIA
@@ -221,7 +221,7 @@ function agruparVentas(ventas, hoyISO) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "12.0", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "12.1", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
@@ -246,11 +246,7 @@ app.post("/registro", limiterAuth, async (req, res) => {
     const slug           = await generarSlugUnico(business_name.trim());
     const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
 
-    // Plan: solo acepta 'gratis' o 'premium', default 'gratis'
     const planFinal = plan === "premium" ? "premium" : "gratis";
-
-    // Gratis  → sin fecha de vencimiento, estado activo permanente
-    // Premium → trial de DIAS_PRUEBA días, después requiere renovación manual
     const fechaVencimiento  = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
     const estadoSuscripcion = planFinal === "premium" ? "trial" : "activo";
 
@@ -450,7 +446,6 @@ app.get("/negocio/:slug", async (req, res) => {
     if (!user)              return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
 
-    // Solo suspender si tiene fecha_vencimiento (plan premium vencido)
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
 
@@ -1144,7 +1139,12 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // PAGOS — Mercado Pago (turnos)
 // POST /api/create-preference
-// Marketplace fee: 5% cuando monto > MARKETPLACE_FEE_MINIMO
+//
+// CAMBIO v12.1: marketplace_fee → application_fee
+// La preference se crea con el access_token OAuth del vendedor.
+// application_fee retiene el fee en la cuenta de la plataforma
+// y el resto va al vendedor. Requiere que la app de MP tenga
+// habilitado el modelo marketplace en el dashboard de MP.
 // ══════════════════════════════════════════════════════════════
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   console.log("📥 create-preference body:", JSON.stringify(req.body));
@@ -1173,43 +1173,70 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const debePagar = metodo === "sena" || metodo === "total";
     if (!debePagar || precioServicio <= 0) return res.json({ isFree: true });
 
-    const montoACobrar = metodo === "sena" ? Math.round(precioServicio * (user.porcentaje_sena || 30) / 100) : precioServicio;
+    const montoACobrar = metodo === "sena"
+      ? Math.round(precioServicio * (user.porcentaje_sena || 30) / 100)
+      : precioServicio;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
-    const fee          = calcularMarketplaceFee(montoACobrar);
+
+    // ── FEE DE PLATAFORMA ──────────────────────────────────────
+    // application_fee funciona cuando:
+    //   1. La preference se crea con el access_token OAuth del vendedor (ya es el caso).
+    //   2. La app de MP tiene habilitado el modelo marketplace.
+    // El fee queda retenido en la cuenta de la plataforma;
+    // el resto (montoACobrar - fee) va al vendedor.
+    // ──────────────────────────────────────────────────────────
+    const fee = calcularApplicationFee(montoACobrar);
 
     console.log("💵 montoACobrar:", montoACobrar);
-    console.log("💰 fee:", fee, typeof fee);
+    console.log("💰 application_fee:", fee);
     console.log("🔑 mp_access_token existe:", !!user.mp_access_token);
 
-    const metaMeta   = { nombre, telefono: cleanPhone(telefono), email: email || "", fecha, hora, slug: slugClean, servicio_id: servicio_id || "", servicio_nombre: nombreServicio, metodo_pago: metodo, precio_servicio: precioServicio };
+    const metaMeta   = {
+      nombre, telefono: cleanPhone(telefono), email: email || "",
+      fecha, hora, slug: slugClean,
+      servicio_id: servicio_id || "", servicio_nombre: nombreServicio,
+      metodo_pago: metodo, precio_servicio: precioServicio,
+    };
     const successUrl = process.env.SUCCESS_URL || `${API_URL}/success`;
     const cancelUrl  = process.env.CANCEL_URL  || `${API_URL}/error`;
 
     if (user.mp_access_token) {
       try {
+        // Preference creada con el token OAuth del vendedor → application_fee funciona
         const client   = new MercadoPagoConfig({ accessToken: user.mp_access_token });
         const pref     = new Preference(client);
         const prefBody = {
-          items: [{ title: `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`, unit_price: montoACobrar, quantity: 1, currency_id: "ARS" }],
+          items: [{
+            title:      `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`,
+            unit_price: montoACobrar,
+            quantity:   1,
+            currency_id: "ARS",
+          }],
           metadata: { ...metaMeta, tipo_pago: metodo },
           notification_url: `${API_URL}/webhook/mp`,
           back_urls: { success: successUrl, failure: cancelUrl, pending: cancelUrl },
           auto_return: "approved",
         };
 
-        if (fee > 0) prefBody.marketplace_fee = Number(fee.toFixed(2));
+        // Solo agregamos application_fee si hay fee calculado
+        if (fee > 0) prefBody.application_fee = Number(fee.toFixed(2));
 
         console.log("📋 prefBody:", JSON.stringify(prefBody));
 
         const response = await pref.create({ body: prefBody });
-        console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean}`);
-        return res.json({ payment_url: response.init_point, monto: montoACobrar, fee, pasarela: "mercadopago" });
+        console.log(`💰 Preference creada: monto=${montoACobrar} application_fee=${fee} slug=${slugClean}`);
+        return res.json({
+          payment_url: response.init_point,
+          monto:       montoACobrar,
+          fee,
+          pasarela:    "mercadopago",
+        });
 
       } catch (e) {
-        console.error("❌ MP status:", e?.status);
+        console.error("❌ MP status:",  e?.status);
         console.error("❌ MP message:", e?.message);
-        console.error("❌ MP cause:", JSON.stringify(e?.cause));
-        console.error("❌ MP full:", JSON.stringify(e));
+        console.error("❌ MP cause:",   JSON.stringify(e?.cause));
+        console.error("❌ MP full:",    JSON.stringify(e));
         return res.status(500).json({ success: false, error: e?.message || "Error con MercadoPago." });
       }
     }
@@ -1223,7 +1250,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// RENOVACIÓN — Pago único mensual (reemplaza suscripciones)
+// RENOVACIÓN — Pago único mensual
 // POST /api/renovacion/checkout
 // GET  /api/renovacion/estado
 // ══════════════════════════════════════════════════════════════
@@ -1241,7 +1268,12 @@ app.post("/api/renovacion/checkout", requireAuth, async (req, res) => {
     const client   = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
     const pref     = new Preference(client);
     const response = await pref.create({ body: {
-      items: [{ title: `Associe — Renovación mensual (${user.business_name})`, unit_price: PRECIO_RENOVACION, quantity: 1, currency_id: "ARS" }],
+      items: [{
+        title:       `Associe — Renovación mensual (${user.business_name})`,
+        unit_price:  PRECIO_RENOVACION,
+        quantity:    1,
+        currency_id: "ARS",
+      }],
       payer: { email: user.email, name: `${user.nombre_persona || ""} ${user.apellido || ""}`.trim() },
       metadata: { tipo: "renovacion_associe", slug, user_id: user.id },
       notification_url: `${API_URL}/webhook/renovacion`,
@@ -1312,6 +1344,12 @@ app.get("/oauth-callback", async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // WEBHOOK — Mercado Pago (turnos)
+//
+// CAMBIO v12.1: se usa MP_PLATFORM_TOKEN para la primera
+// consulta del pago (necesario cuando el vendedor usa
+// application_fee y el webhook llega con el ID del payment).
+// Luego se re-consulta con el token del vendedor para obtener
+// la metadata completa que MP a veces restringe cross-token.
 // ══════════════════════════════════════════════════════════════
 async function procesarPagoConfirmado({ slug, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, payment_id, estado }) {
   let turnoId = null;
@@ -1335,10 +1373,12 @@ async function procesarPagoConfirmado({ slug, nombre, telefono, email, fecha, ho
   await supabase.from("ventas").insert([{
     slug, turno_id: turnoId, fecha_turno: fecha, fecha_pago: new Date().toISOString(),
     monto, moneda: moneda || "ARS", metodo_pago, estado,
-    nombre_cliente: nombre?.trim() || "Cliente", email_cliente: email?.trim() || null,
+    nombre_cliente:   nombre?.trim() || "Cliente",
+    email_cliente:    email?.trim()  || null,
     telefono_cliente: cleanPhone(telefono?.toString() || ""),
-    servicio_id: servicio_id || null, servicio_nombre: servicio_nombre || null,
-    payment_id: String(payment_id),
+    servicio_id:      servicio_id    || null,
+    servicio_nombre:  servicio_nombre || null,
+    payment_id:       String(payment_id),
   }]);
   invalidateCache(slug);
 }
@@ -1349,22 +1389,67 @@ app.post("/webhook/mp", async (req, res) => {
     if (query.topic === "payment" || body.type === "payment") {
       const paymentId = query.id || body.data?.id;
       if (!paymentId) return res.sendStatus(200);
-      const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` } });
+
+      // 1. Primera consulta con el token de plataforma para obtener metadata básica
+      //    y determinar a qué slug pertenece el pago.
+      const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` },
+      });
       const payData = await payRes.json();
-      if (payData.metadata?.tipo === "renovacion_associe") { await procesarRenovacion(payData); return res.sendStatus(200); }
+
+      // 2. Separar renovaciones de la plataforma
+      if (payData.metadata?.tipo === "renovacion_associe") {
+        await procesarRenovacion(payData);
+        return res.sendStatus(200);
+      }
+
       const slug = cleanSlug(payData.metadata?.slug || "");
       if (!slug) return res.sendStatus(200);
-      const { data: userNegocio } = await supabase.from("usuarios").select("mp_access_token").eq("slug", slug).maybeSingle();
-      let meta = payData.metadata;
+
+      // 3. Obtener el access_token OAuth del vendedor
+      const { data: userNegocio } = await supabase
+        .from("usuarios")
+        .select("mp_access_token")
+        .eq("slug", slug)
+        .maybeSingle();
+
+      // 4. Re-consultar con el token del vendedor para metadata completa.
+      //    MP puede omitir campos de metadata al consultar cross-token.
+      let finalPayData = payData;
       if (userNegocio?.mp_access_token) {
-        const real = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${userNegocio.mp_access_token}` } });
-        meta = (await real.json()).metadata;
+        const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          headers: { Authorization: `Bearer ${userNegocio.mp_access_token}` },
+        });
+        const vendorData = await vendorRes.json();
+        if (vendorData?.id) finalPayData = vendorData;
       }
-      const estado = payData.status === "approved" ? "aprobado" : payData.status === "pending" ? "pendiente" : "rechazado";
-      await procesarPagoConfirmado({ slug, nombre: meta.nombre, telefono: meta.telefono, email: meta.email, fecha: meta.fecha, hora: meta.hora, servicio_id: meta.servicio_id || null, servicio_nombre: meta.servicio_nombre || null, monto: Number(payData.transaction_amount || 0), moneda: payData.currency_id || "ARS", metodo_pago: "mercadopago", payment_id: paymentId, estado });
+
+      const meta   = finalPayData.metadata || {};
+      const estado = finalPayData.status === "approved" ? "aprobado"
+                   : finalPayData.status === "pending"  ? "pendiente"
+                   : "rechazado";
+
+      await procesarPagoConfirmado({
+        slug,
+        nombre:          meta.nombre,
+        telefono:        meta.telefono,
+        email:           meta.email,
+        fecha:           meta.fecha,
+        hora:            meta.hora,
+        servicio_id:     meta.servicio_id     || null,
+        servicio_nombre: meta.servicio_nombre || null,
+        monto:           Number(finalPayData.transaction_amount || 0),
+        moneda:          finalPayData.currency_id || "ARS",
+        metodo_pago:     "mercadopago",
+        payment_id:      paymentId,
+        estado,
+      });
     }
     res.sendStatus(200);
-  } catch (e) { console.error("Error en /webhook/mp:", e.message); res.sendStatus(200); }
+  } catch (e) {
+    console.error("Error en /webhook/mp:", e.message);
+    res.sendStatus(200);
+  }
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -1378,7 +1463,6 @@ async function procesarRenovacion(payData) {
     .select("id, email, nombre_persona, plan, fecha_vencimiento").eq("slug", slug).maybeSingle();
   if (!user) return;
 
-  // Sumar 30 días desde hoy o desde la fecha vigente si aún no venció
   const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
 
@@ -1405,11 +1489,16 @@ app.post("/webhook/renovacion", async (req, res) => {
     if (query.topic === "payment" || body.type === "payment") {
       const paymentId = query.id || body.data?.id;
       if (!paymentId) return res.sendStatus(200);
-      const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` } });
+      const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` },
+      });
       await procesarRenovacion(await payRes.json());
     }
     res.sendStatus(200);
-  } catch (e) { console.error("Error en /webhook/renovacion:", e.message); res.sendStatus(200); }
+  } catch (e) {
+    console.error("Error en /webhook/renovacion:", e.message);
+    res.sendStatus(200);
+  }
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -1420,7 +1509,6 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
   try {
     const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toISOString().split("T")[0];
 
-    // Suspender premium vencidos (gratis tienen fecha_vencimiento NULL → no los toca)
     const { data: vencidos, error } = await supabase.from("usuarios")
       .select("id, slug")
       .eq("activo", "true")
@@ -1435,7 +1523,6 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
       slugs.forEach((s) => invalidateCache(s));
     }
 
-    // Reactivar si pagaron (fecha_vencimiento >= hoy y estaban suspendidos)
     const { data: reactivables } = await supabase.from("usuarios")
       .select("id, slug")
       .eq("activo", "true")
@@ -1472,9 +1559,10 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v12.0                          ║
+  ║   Associe API v12.1                          ║
   ║   activo: 'true' / 'false'                   ║
   ║   plan:   'gratis' / 'premium'               ║
+  ║   fee:    application_fee (MP marketplace)   ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
