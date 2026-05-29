@@ -29,10 +29,6 @@ const PANEL_URL          = process.env.PANEL_URL                  || "https://ne
 const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_URL}?status=renovacion_ok`;
 const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
 
-// Marketplace fee: 5% solo cuando el monto > 500 ARS
-const MARKETPLACE_FEE_PCT   = parseFloat(process.env.MARKETPLACE_FEE_PCT  || "0.05");
-const MARKETPLACE_FEE_MINIMO = parseInt(process.env.MARKETPLACE_FEE_MINIMO || "500");
-
 // ══════════════════════════════════════════════════════════════
 // MULTER — Upload de imágenes
 // ══════════════════════════════════════════════════════════════
