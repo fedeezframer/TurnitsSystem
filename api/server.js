@@ -1178,9 +1178,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : precioServicio;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
 
-    // Fee fijo de $400 por transacción (plan gratis)
-    // Si el monto es menor a $400, el fee es el 50% del monto para no superar el total
-    const fee = 1;
+    const fee = Math.max(400, Math.round(monto * 0.02));
 
     console.log("💵 montoACobrar:", montoACobrar);
     console.log("💰 marketplace_fee:", fee);
