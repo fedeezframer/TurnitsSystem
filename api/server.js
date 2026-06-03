@@ -26,6 +26,8 @@ const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "15");
 const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "23000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 const PANEL_URL          = process.env.PANEL_URL                  || "https://associe.framer.website/panel";
+const SUCCESS_URL        = process.env.SUCCESS_URL                || "https://associe.framer.website/success";
+const ERROR_URL          = process.env.ERROR_URL                  || "https://associe.framer.website/error";
 const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_URL}?status=renovacion_ok`;
 const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
 
@@ -89,11 +91,6 @@ async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
   }
   return ok;
 }
-
-// Fee de plataforma: 2% del monto de la transacción
-const calcularMarketplaceFee = (monto) => {
-  return Math.round(monto * 0.02);
-};
 
 // ══════════════════════════════════════════════════════════════
 // CACHÉ EN MEMORIA
@@ -177,16 +174,18 @@ function generarRangoDias(desdeISO, cantidad) {
   return dias;
 }
 
-function agruparVentas(ventas, hoyISO) {
+function agruparPagos(turnos, hoyISO) {
   const porDia = {}, porSemana = {}, porMes = {};
   const porEstado = { aprobado: 0, pendiente: 0, rechazado: 0 };
   const clientesSet = new Set();
   let volumenTotal = 0, cantidadTotal = 0;
 
-  ventas.forEach((v) => {
-    const fecha  = (v.fecha_pago || v.created_at || hoyISO).split("T")[0];
-    const monto  = Number(v.monto || 0);
-    const estado = v.estado || "aprobado";
+  turnos.forEach((t) => {
+    const fecha  = (t.fecha_pago || t.created_at || hoyISO).toString().split("T")[0];
+    const monto  = Number(t.monto_pagado || 0);
+    const estado = t.pago_estado || "sin_pago";
+    if (estado === "sin_pago") return; // solo procesamos turnos con pago
+
     const [va, vm, vd] = fecha.split("-").map(Number);
     const semKey = `${va}-S${Math.ceil(vd / 7)}`;
     const mesKey = `${va}-${String(vm).padStart(2, "0")}`;
@@ -202,8 +201,8 @@ function agruparVentas(ventas, hoyISO) {
     porMes[mesKey].volumen     += monto; porMes[mesKey].cantidad    += 1;
     porEstado[estado]           = (porEstado[estado] || 0) + 1;
 
-    if (v.email_cliente)         clientesSet.add(v.email_cliente.toLowerCase());
-    else if (v.telefono_cliente) clientesSet.add(v.telefono_cliente);
+    if (t.email)    clientesSet.add(t.email.toLowerCase());
+    else if (t.telefono) clientesSet.add(t.telefono);
 
     if (estado === "aprobado") { volumenTotal += monto; cantidadTotal += 1; }
   });
@@ -221,7 +220,7 @@ function agruparVentas(ventas, hoyISO) {
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "12.1", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "13.0", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
@@ -674,7 +673,7 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// TURNOS — RESERVA PÚBLICA
+// TURNOS — RESERVA PÚBLICA (sin pago)
 // POST /turnos/reservar
 // ══════════════════════════════════════════════════════════════
 app.post("/turnos/reservar", limiterBooking, async (req, res) => {
@@ -719,11 +718,20 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     if (count >= capacidad) return res.status(400).json({ success: false, error: "Este turno ya está lleno." });
 
     const { data: turno, error: turnoError } = await supabase.from("turnos").insert([{
-      slug: slugClean, nombre: name.trim(), telefono: phoneClean,
-      apellido: apellido?.trim() || null,
-      email: email?.trim().toLowerCase() || null, fecha, hora,
-      servicio_id: servicio_id || null, servicio_nombre: servicioNombre,
-      precio_cobrado: precioCobrado, estado: "confirmado", metodo_pago: "none",
+      slug:            slugClean,
+      nombre:          name.trim(),
+      telefono:        phoneClean,
+      apellido:        apellido?.trim() || null,
+      email:           email?.trim().toLowerCase() || null,
+      fecha,
+      hora,
+      servicio_id:     servicio_id || null,
+      servicio_nombre: servicioNombre,
+      precio_cobrado:  precioCobrado,
+      monto_pagado:    0,
+      estado:          "confirmado",
+      metodo_pago:     "none",
+      pago_estado:     "sin_pago",
     }]).select().single();
     if (turnoError) throw turnoError;
 
@@ -733,7 +741,11 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     }).catch((e) => console.error("Error mail booking:", e.message));
 
     invalidateCache(slugClean);
-    res.json({ success: true, turno_id: turno.id, message: "Turno creado con éxito." });
+
+    // URL de comprobante para turno sin pago
+    const comprobanteUrl = `${SUCCESS_URL}?slug=${slugClean}&turno_id=${turno.id}`;
+
+    res.json({ success: true, turno_id: turno.id, comprobante_url: comprobanteUrl, message: "Turno creado con éxito." });
   } catch (e) {
     console.error("Error en /turnos/reservar:", e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -741,7 +753,56 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// TURNOS — ACTUALIZAR ESTADO
+// TURNOS — COMPROBANTE PÚBLICO
+// GET /turnos/publico/:id?slug=...
+// ══════════════════════════════════════════════════════════════
+app.get("/turnos/publico/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const slug   = cleanSlug(req.query.slug || "");
+    if (!id || !slug) return res.status(400).json({ success: false, error: "Faltan parámetros." });
+
+    const { data: turno, error } = await supabase.from("turnos")
+      .select("id, nombre, apellido, email, telefono, fecha, hora, servicio_nombre, precio_cobrado, monto_pagado, porcentaje_sena, metodo_pago, pago_estado, estado")
+      .eq("id", id)
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!turno) return res.status(404).json({ success: false, error: "Turno no encontrado." });
+
+    res.json({ success: true, turno });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// TURNOS — BUSCAR POR PAYMENT_ID (comprobante post-MP)
+// GET /turnos/by-payment?payment_id=...&slug=...
+// ══════════════════════════════════════════════════════════════
+app.get("/turnos/by-payment", async (req, res) => {
+  try {
+    const { payment_id, slug } = req.query;
+    if (!payment_id || !slug) return res.status(400).json({ success: false, error: "Faltan parámetros." });
+
+    const { data: turno, error } = await supabase.from("turnos")
+      .select("id, nombre, apellido, email, telefono, fecha, hora, servicio_nombre, precio_cobrado, monto_pagado, porcentaje_sena, metodo_pago, pago_estado, estado, fecha_pago")
+      .eq("payment_id", String(payment_id))
+      .eq("slug", cleanSlug(slug))
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!turno) return res.status(404).json({ success: false, error: "Turno no encontrado." });
+
+    res.json({ success: true, turno });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// TURNOS — ACTUALIZAR ESTADO (admin)
 // PUT /turnos/:id
 // ══════════════════════════════════════════════════════════════
 app.put("/turnos/:id", requireAuth, async (req, res) => {
@@ -800,9 +861,19 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
     (turnos || []).forEach((t) => {
       if (!porFecha[t.fecha]) porFecha[t.fecha] = [];
       porFecha[t.fecha].push({
-        id: t.id, nombre: t.nombre, hora: t.hora.slice(0, 5),
-        servicio: t.servicio_nombre || null, precio_cobrado: t.precio_cobrado || 0,
-        estado: t.estado, email: t.email, telefono: t.telefono, notas: t.notas || null,
+        id:             t.id,
+        nombre:         t.nombre,
+        apellido:       t.apellido || null,
+        hora:           t.hora.slice(0, 5),
+        servicio:       t.servicio_nombre || null,
+        precio_cobrado: t.precio_cobrado  || 0,
+        monto_pagado:   t.monto_pagado    || 0,
+        pago_estado:    t.pago_estado     || "sin_pago",
+        metodo_pago:    t.metodo_pago     || "none",
+        estado:         t.estado,
+        email:          t.email,
+        telefono:       t.telefono,
+        notas:          t.notas || null,
       });
     });
 
@@ -953,28 +1024,42 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     });
 
     const turnosLista = turnosData.map((t) => ({
-      id: t.id, nombre: t.nombre, telefono: t.telefono, email: t.email,
-      fecha: t.fecha, hora: t.hora.slice(0, 5), servicio: t.servicio_nombre,
-      precio_cobrado: t.precio_cobrado || 0, estado: t.estado, notas: t.notas || null,
-      duracion: user.duracion_turno || 30,
+      id:             t.id,
+      nombre:         t.nombre,
+      apellido:       t.apellido || null,
+      telefono:       t.telefono,
+      email:          t.email,
+      fecha:          t.fecha,
+      hora:           t.hora.slice(0, 5),
+      servicio:       t.servicio_nombre,
+      precio_cobrado: t.precio_cobrado || 0,
+      monto_pagado:   t.monto_pagado   || 0,
+      pago_estado:    t.pago_estado    || "sin_pago",
+      metodo_pago:    t.metodo_pago    || "none",
+      estado:         t.estado,
+      notas:          t.notas || null,
+      duracion:       user.duracion_turno || 30,
     })).reverse();
 
     const turnosHoyDetalle = turnosData
       .filter((t) => t.fecha === hoyISO)
       .sort((a, b) => a.hora.localeCompare(b.hora))
-      .map((t) => ({ id: t.id, nombre: t.nombre, hora: t.hora.slice(0, 5), servicio: t.servicio_nombre, estado: t.estado }));
+      .map((t) => ({ id: t.id, nombre: t.nombre, hora: t.hora.slice(0, 5), servicio: t.servicio_nombre, estado: t.estado, pago_estado: t.pago_estado || "sin_pago" }));
 
+    // Métricas de pagos desde turnos (últimos 90 días + próximos 7)
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
-    const { data: ventasData } = await supabase.from("ventas").select("*").eq("slug", slug)
-      .gte("fecha_turno", desde90.toISOString().split("T")[0])
-      .lte("fecha_turno", hasta7.toISOString().split("T")[0])
-      .order("fecha_pago", { ascending: true });
+    const { data: turnosPago } = await supabase.from("turnos")
+      .select("monto_pagado, pago_estado, fecha_pago, fecha, email, telefono, created_at")
+      .eq("slug", slug)
+      .gte("fecha", desde90.toISOString().split("T")[0])
+      .lte("fecha", hasta7.toISOString().split("T")[0])
+      .neq("pago_estado", "sin_pago");
 
-    const metricas  = agruparVentas(ventasData || [], hoyISO);
+    const metricas  = agruparPagos(turnosPago || [], hoyISO);
     const mesKey    = `${anioActual}-${String(mesActual).padStart(2, "0")}`;
-    const ventasHoy = metricas.porDia[hoyISO] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
-    const ventasMes = metricas.porMes.find((m) => m.label === mesKey) || { volumen: 0, cantidad: 0 };
+    const pagosHoy  = metricas.porDia[hoyISO] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
+    const pagosMes  = metricas.porMes.find((m) => m.label === mesKey) || { volumen: 0, cantidad: 0 };
 
     const proximosDias = generarRangoDias(hoyISO, 7).map((fecha) => ({
       fecha, ...(metricas.porDia[fecha] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 }),
@@ -992,9 +1077,9 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       }
     });
 
-    const ventasPorDia = {};
+    const pagosPorDia = {};
     generarRangoDias(inicioMes, diaHoyNum).forEach((d) => {
-      ventasPorDia[d] = metricas.porDia[d] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
+      pagosPorDia[d] = metricas.porDia[d] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
     });
 
     const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
@@ -1010,15 +1095,18 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       clientesConcurrentes: Math.floor(clientesUnicos.size * 0.4),
       ventas: {
         volumenTotal:   metricas.volumenTotal,
-        volumenHoy:     ventasHoy.volumen,
-        volumenMes:     ventasMes.volumen  || 0,
+        volumenHoy:     pagosHoy.volumen,
+        volumenMes:     pagosMes.volumen  || 0,
         ticketPromedio: metricas.ticketPromedio,
         cantidadTotal:  metricas.cantidadTotal,
-        cantidadHoy:    ventasHoy.cantidad,
-        cantidadMes:    ventasMes.cantidad || 0,
+        cantidadHoy:    pagosHoy.cantidad,
+        cantidadMes:    pagosMes.cantidad || 0,
         estados: { aprobado: metricas.porEstado.aprobado || 0, pendiente: metricas.porEstado.pendiente || 0, rechazado: metricas.porEstado.rechazado || 0 },
       },
-      ventasPorDia, ventasPorSem: metricas.porSemana, ventasPorMes: metricas.porMes, proximosDias,
+      ventasPorDia: pagosPorDia,
+      ventasPorSem: metricas.porSemana,
+      ventasPorMes: metricas.porMes,
+      proximosDias,
       horarios: user.horarios,
       config: {
         plan:                user.plan                || "gratis",
@@ -1064,10 +1152,10 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
     if (!validateEmail(email))       return res.status(400).json({ success: false, error: "Email inválido." });
     if (!validatePassword(password)) return res.status(400).json({ success: false, error: "Contraseña: mínimo 6 caracteres." });
 
-    const planFinal        = plan === "premium" ? "premium" : "gratis";
-    const slug             = await generarSlugUnico(business_name.trim());
-    const hashedPassword   = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-    const fechaVencimiento = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
+    const planFinal         = plan === "premium" ? "premium" : "gratis";
+    const slug              = await generarSlugUnico(business_name.trim());
+    const hashedPassword    = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+    const fechaVencimiento  = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
     const estadoSuscripcion = planFinal === "premium" ? "trial" : "activo";
 
     const { data, error } = await supabase.from("usuarios").insert([{
@@ -1137,19 +1225,13 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// PAGOS — Mercado Pago (turnos)
+// PAGOS — Mercado Pago (crear preference)
 // POST /api/create-preference
-//
-// CAMBIO v12.1: marketplace_fee → application_fee
-// La preference se crea con el access_token OAuth del vendedor.
-// application_fee retiene el fee en la cuenta de la plataforma
-// y el resto va al vendedor. Requiere que la app de MP tenga
-// habilitado el modelo marketplace en el dashboard de MP.
 // ══════════════════════════════════════════════════════════════
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   console.log("📥 create-preference body:", JSON.stringify(req.body));
   try {
-    const { nombre, telefono, email, fecha, hora, slug, servicio_id } = req.body;
+    const { nombre, telefono, email, fecha, hora, slug, servicio_id, apellido } = req.body;
     const slugClean = cleanSlug(slug || "");
     if (!nombre || !telefono || !fecha || !hora || !slugClean) {
       return res.status(400).json({ success: false, error: "Faltan datos requeridos." });
@@ -1180,18 +1262,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     const fee = Math.max(400, Math.round(montoACobrar * 0.02));
 
-    console.log("💵 montoACobrar:", montoACobrar);
-    console.log("💰 marketplace_fee:", fee);
-    console.log("🔑 mp_access_token existe:", !!user.mp_access_token);
-
-    const metaMeta = {
-      nombre, telefono: cleanPhone(telefono), email: email || "",
-      fecha, hora, slug: slugClean,
-      servicio_id: servicio_id || "", servicio_nombre: nombreServicio,
-      metodo_pago: metodo, precio_servicio: precioServicio,
-    };
-    const successUrl = process.env.SUCCESS_URL || `${API_URL}/success`;
-    const cancelUrl  = process.env.CANCEL_URL  || `${API_URL}/error`;
+    // Back URLs con slug para que el comprobante pueda identificar el negocio
+    const successUrl = `${SUCCESS_URL}?slug=${slugClean}`;
+    const cancelUrl  = `${ERROR_URL}?slug=${slugClean}`;
 
     if (user.mp_access_token) {
       try {
@@ -1204,15 +1277,25 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
             quantity:    1,
             currency_id: "ARS",
           }],
-          metadata: { ...metaMeta, tipo_pago: metodo },
+          metadata: {
+            nombre,
+            telefono:        cleanPhone(telefono),
+            email:           email || "",
+            apellido:        apellido || "",
+            fecha,
+            hora,
+            slug:            slugClean,
+            servicio_id:     servicio_id     || "",
+            servicio_nombre: nombreServicio,
+            metodo_pago:     metodo,
+            precio_servicio: precioServicio,
+          },
           notification_url: `${API_URL}/webhook/mp`,
           back_urls: { success: successUrl, failure: cancelUrl, pending: cancelUrl },
           auto_return: "approved",
         };
 
         if (fee > 0) prefBody.marketplace_fee = fee;
-
-        console.log("📋 prefBody:", JSON.stringify(prefBody));
 
         const response = await pref.create({ body: prefBody });
         console.log(`💰 Preference creada: monto=${montoACobrar} marketplace_fee=${fee} slug=${slugClean}`);
@@ -1222,18 +1305,13 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
           fee,
           pasarela:    "mercadopago",
         });
-
       } catch (e) {
-        console.error("❌ MP status:",  e?.status);
-        console.error("❌ MP message:", e?.message);
-        console.error("❌ MP cause:",   JSON.stringify(e?.cause));
-        console.error("❌ MP full:",    JSON.stringify(e));
+        console.error("❌ MP error:", JSON.stringify(e));
         return res.status(500).json({ success: false, error: e?.message || "Error con MercadoPago." });
       }
     }
 
     res.status(400).json({ success: false, error: "Sin pasarela de pago configurada." });
-
   } catch (e) {
     console.error("❌ Error general:", e?.message);
     res.status(500).json({ success: false, error: e?.message || "Error interno." });
@@ -1241,7 +1319,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// RENOVACIÓN — Pago único mensual
+// RENOVACIÓN — Pago mensual
 // POST /api/renovacion/checkout
 // GET  /api/renovacion/estado
 // ══════════════════════════════════════════════════════════════
@@ -1306,7 +1384,6 @@ app.get("/api/renovacion/estado", requireAuth, async (req, res) => {
 // OAUTH — Mercado Pago
 // GET /oauth-callback
 // ══════════════════════════════════════════════════════════════
-
 app.get("/oauth-callback", async (req, res) => {
   const { code, state: slug } = req.query;
   if (!code || !slug) return res.status(400).send("Parámetros inválidos.");
@@ -1339,122 +1416,85 @@ app.get("/oauth-callback", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// WEBHOOK — Mercado Pago (turnos)
-//
-// CAMBIO v12.1: se usa MP_PLATFORM_TOKEN para la primera
-// consulta del pago (necesario cuando el vendedor usa
-// application_fee y el webhook llega con el ID del payment).
-// Luego se re-consulta con el token del vendedor para obtener
-// la metadata completa que MP a veces restringe cross-token.
+// WEBHOOK — Mercado Pago (turnos con pago)
+// POST /webhook/mp
 // ══════════════════════════════════════════════════════════════
-async function procesarPagoConfirmado({ slug, nombre, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, payment_id, estado }) {
+async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, precio_servicio, payment_id, estado, porcentaje_sena }) {
 
-  // ── Idempotencia: si el payment_id ya existe en ventas, salimos ──
-  const { data: ventaExistente } = await supabase
-    .from("ventas")
+  // Idempotencia: si el payment_id ya existe, salimos
+  const { data: turnoExistente } = await supabase
+    .from("turnos")
     .select("id")
     .eq("payment_id", String(payment_id))
     .maybeSingle();
 
-  if (ventaExistente) {
+  if (turnoExistente) {
     console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`);
     return;
   }
 
-  let turnoId = null;
+  const { data: user } = await supabase.from("usuarios")
+    .select("email, porcentaje_sena, capacidad_por_turno")
+    .eq("slug", slug).maybeSingle();
+
+  const porcSena     = porcentaje_sena || user?.porcentaje_sena || 30;
+  const pagoEstado   = estado === "aprobado" ? "aprobado"
+                     : estado === "pendiente" ? "pendiente"
+                     : "rechazado";
 
   if (estado === "aprobado") {
-    // Insertar turno — si el índice único lo rechaza, lo ignoramos
-    const { data: turnoInsertado, error: turnoError } = await supabase
-      .from("turnos")
-      .insert([{
-        slug,
-        nombre:          nombre?.trim() || "Cliente",
-        telefono:        cleanPhone(telefono?.toString() || "0"),
-        email:           email?.trim().toLowerCase() || null,
-        fecha,
-        hora,
-        servicio_id:     servicio_id    || null,
-        servicio_nombre: servicio_nombre || null,
-        precio_cobrado:  monto,
-        estado:          "confirmado",
-        metodo_pago,
-        payment_id:      String(payment_id),
-      }])
-      .select()
-      .single();
+    const capacidad = user?.capacidad_por_turno || 1;
+    const { count } = await supabase.from("turnos")
+      .select("id", { count: "exact" })
+      .eq("slug", slug).eq("fecha", fecha).eq("hora", hora)
+      .neq("estado", "cancelado");
+    if (count >= capacidad) {
+      console.log(`⚠️ Turno ${fecha} ${hora} lleno para ${slug}, payment_id ${payment_id}`);
+    }
+
+    const { error: turnoError } = await supabase.from("turnos").insert([{
+      slug,
+      nombre:          nombre?.trim() || "Cliente",
+      apellido:        apellido?.trim() || null,
+      telefono:        cleanPhone(telefono?.toString() || "0"),
+      email:           email?.trim().toLowerCase() || null,
+      fecha,
+      hora,
+      servicio_id:     servicio_id    || null,
+      servicio_nombre: servicio_nombre || null,
+      precio_cobrado:  precio_servicio || monto,
+      monto_pagado:    monto,
+      porcentaje_sena: metodo_pago === "sena" ? porcSena : null,
+      metodo_pago,
+      pago_estado:     pagoEstado,
+      fecha_pago:      new Date().toISOString(),
+      moneda:          moneda || "ARS",
+      estado:          "confirmado",
+      payment_id:      String(payment_id),
+    }]);
 
     if (turnoError) {
       if (turnoError.code === "23505") {
-        // Turno ya existe — buscamos su id para linkear la venta
         console.log(`⚠️ Turno duplicado bloqueado por DB: ${payment_id}`);
-        const { data: turnoExistente } = await supabase
-          .from("turnos")
-          .select("id")
-          .eq("payment_id", String(payment_id))
-          .maybeSingle();
-        turnoId = turnoExistente?.id || null;
       } else {
         throw turnoError;
       }
-    } else {
-      turnoId = turnoInsertado?.id || null;
+    } else if (user?.email) {
+      fetch(APPS_SCRIPT_URL, {
+        method: "POST", headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({
+          action:        "newAppointmentEmail",
+          nombreCliente: nombre?.trim() || "Cliente",
+          fechaHora:     `${fecha} ${hora}`,
+          adminEmail:    user.email,
+          emailCliente:  email?.trim() || "",
+        }),
+      }).catch((e) => console.error("Error mail webhook:", e.message));
     }
-
-    // Mail — solo si el turno se creó por primera vez
-    if (!turnoError) {
-      const { data: userNegocio } = await supabase
-        .from("usuarios")
-        .select("email")
-        .eq("slug", slug)
-        .maybeSingle();
-
-      if (userNegocio?.email) {
-        fetch(APPS_SCRIPT_URL, {
-          method:  "POST",
-          headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify({
-            action:         "newAppointmentEmail",
-            nombreCliente:  nombre?.trim() || "Cliente",
-            fechaHora:      `${fecha} ${hora}`,
-            adminEmail:     userNegocio.email,
-            emailCliente:   email?.trim() || "",
-          }),
-        }).catch((e) => console.error("Error mail webhook:", e.message));
-      }
-    }
-  }
-
-  // Insertar venta — el índice único es la última barrera
-  const { error: ventaError } = await supabase
-    .from("ventas")
-    .insert([{
-      slug,
-      turno_id:         turnoId,
-      fecha_turno:      fecha,
-      fecha_pago:       new Date().toISOString(),
-      monto,
-      moneda:           moneda || "ARS",
-      metodo_pago,
-      estado,
-      nombre_cliente:   nombre?.trim() || "Cliente",
-      email_cliente:    email?.trim()  || null,
-      telefono_cliente: cleanPhone(telefono?.toString() || ""),
-      servicio_id:      servicio_id    || null,
-      servicio_nombre:  servicio_nombre || null,
-      payment_id:       String(payment_id),
-    }]);
-
-  if (ventaError) {
-    if (ventaError.code === "23505") {
-      console.log(`⚠️ Venta duplicada bloqueada por DB: ${payment_id}`);
-      return;
-    }
-    throw ventaError;
   }
 
   invalidateCache(slug);
-  console.log(`✅ Pago procesado: ${payment_id} — slug: ${slug} — estado: ${estado}`);
+  console.log(`✅ Pago procesado: ${payment_id} — slug: ${slug} — estado: ${pagoEstado}`);
 }
 
 app.post("/webhook/mp", async (req, res) => {
@@ -1464,14 +1504,11 @@ app.post("/webhook/mp", async (req, res) => {
       const paymentId = query.id || body.data?.id;
       if (!paymentId) return res.sendStatus(200);
 
-      // 1. Primera consulta con el token de plataforma para obtener metadata básica
-      //    y determinar a qué slug pertenece el pago.
       const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` },
       });
       const payData = await payRes.json();
 
-      // 2. Separar renovaciones de la plataforma
       if (payData.metadata?.tipo === "renovacion_associe") {
         await procesarRenovacion(payData);
         return res.sendStatus(200);
@@ -1480,15 +1517,9 @@ app.post("/webhook/mp", async (req, res) => {
       const slug = cleanSlug(payData.metadata?.slug || "");
       if (!slug) return res.sendStatus(200);
 
-      // 3. Obtener el access_token OAuth del vendedor
-      const { data: userNegocio } = await supabase
-        .from("usuarios")
-        .select("mp_access_token")
-        .eq("slug", slug)
-        .maybeSingle();
+      const { data: userNegocio } = await supabase.from("usuarios")
+        .select("mp_access_token").eq("slug", slug).maybeSingle();
 
-      // 4. Re-consultar con el token del vendedor para metadata completa.
-      //    MP puede omitir campos de metadata al consultar cross-token.
       let finalPayData = payData;
       if (userNegocio?.mp_access_token) {
         const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
@@ -1506,6 +1537,7 @@ app.post("/webhook/mp", async (req, res) => {
       await procesarPagoConfirmado({
         slug,
         nombre:          meta.nombre,
+        apellido:        meta.apellido        || null,
         telefono:        meta.telefono,
         email:           meta.email,
         fecha:           meta.fecha,
@@ -1514,7 +1546,8 @@ app.post("/webhook/mp", async (req, res) => {
         servicio_nombre: meta.servicio_nombre || null,
         monto:           Number(finalPayData.transaction_amount || 0),
         moneda:          finalPayData.currency_id || "ARS",
-        metodo_pago:     "mercadopago",
+        metodo_pago:     meta.metodo_pago     || "mercadopago",
+        precio_servicio: meta.precio_servicio || null,
         payment_id:      paymentId,
         estado,
       });
@@ -1527,7 +1560,8 @@ app.post("/webhook/mp", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// WEBHOOK — Renovación mensual (pago único)
+// WEBHOOK — Renovación mensual
+// POST /webhook/renovacion
 // ══════════════════════════════════════════════════════════════
 async function procesarRenovacion(payData) {
   if (payData.status !== "approved") return;
@@ -1633,10 +1667,10 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v12.1                          ║
-  ║   activo: 'true' / 'false'                   ║
+  ║   Associe API v13.0                          ║
+  ║   ventas unificadas en turnos                ║
   ║   plan:   'gratis' / 'premium'               ║
-  ║   fee:    application_fee (MP marketplace)   ║
+  ║   fee:    marketplace_fee (MP marketplace)   ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
