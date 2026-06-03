@@ -25,7 +25,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "15");
 const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "23000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
-const PANEL_URL          = process.env.PANEL_URL                  || "https://negosociov2.framer.website/panel";
+const PANEL_URL          = process.env.PANEL_URL                  || "https://associe.framer.website/panel";
 const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_URL}?status=renovacion_ok`;
 const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
 
@@ -1178,7 +1178,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : precioServicio;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
 
-    const fee = Math.max(400, Math.round(monto * 0.02));
+    const fee = Math.max(400, Math.round(montoACobrar * 0.02));
 
     console.log("💵 montoACobrar:", montoACobrar);
     console.log("💰 marketplace_fee:", fee);
