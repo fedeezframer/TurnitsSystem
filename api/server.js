@@ -1006,9 +1006,18 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     const hoyISO     = `${anioActual}-${String(mesActual).padStart(2, "0")}-${String(diaHoyNum).padStart(2, "0")}`;
     const inicioMes  = `${anioActual}-${String(mesActual).padStart(2, "0")}-01`;
 
-    const { data: turnosMes } = await supabase.from("turnos").select("*")
-      .eq("slug", slug).gte("fecha", inicioMes).neq("estado", "cancelado")
-      .order("fecha", { ascending: true }).order("hora", { ascending: true });
+    const [{ data: turnosMes }, { data: serviciosNegocio }] = await Promise.all([
+    supabase.from("turnos").select("*")
+        .eq("slug", slug).gte("fecha", inicioMes).neq("estado", "cancelado")
+        .order("fecha", { ascending: true }).order("hora", { ascending: true }),
+    supabase.from("servicios").select("id, duracion")
+        .eq("slug", slug).eq("activo", "true"),
+]);
+
+    const turnosData     = turnosMes || [];
+    const duracionPorServicio = Object.fromEntries(
+    (serviciosNegocio || []).map((s) => [s.id, s.duracion])
+);
 
     const turnosData     = turnosMes || [];
     const turnosHoy      = turnosData.filter((t) => t.fecha === hoyISO).length;
