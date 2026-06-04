@@ -1047,7 +1047,9 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       metodo_pago:    t.metodo_pago    || "none",
       estado:         t.estado,
       notas:          t.notas || null,
-      duracion:       user.duracion_turno || 30,
+     duracion: (t.servicio_id && duracionPorServicio[t.servicio_id])
+    ? duracionPorServicio[t.servicio_id]
+    : (user.duracion_turno || 30),
     })).reverse();
 
     const turnosHoyDetalle = turnosData
