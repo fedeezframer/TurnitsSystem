@@ -983,6 +983,10 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
 // ADMIN STATS — Dashboard principal
 // GET /admin-stats/:slug
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// ADMIN STATS — Dashboard principal
+// GET /admin-stats/:slug
+// ══════════════════════════════════════════════════════════════
 app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1007,19 +1011,18 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     const inicioMes  = `${anioActual}-${String(mesActual).padStart(2, "0")}-01`;
 
     const [{ data: turnosMes }, { data: serviciosNegocio }] = await Promise.all([
-    supabase.from("turnos").select("*")
+      supabase.from("turnos").select("*")
         .eq("slug", slug).gte("fecha", inicioMes).neq("estado", "cancelado")
         .order("fecha", { ascending: true }).order("hora", { ascending: true }),
-    supabase.from("servicios").select("id, duracion")
+      supabase.from("servicios").select("id, duracion")
         .eq("slug", slug).eq("activo", "true"),
-]);
+    ]);
 
-    const turnosData     = turnosMes || [];
+    const turnosData          = turnosMes || [];
     const duracionPorServicio = Object.fromEntries(
-    (serviciosNegocio || []).map((s) => [s.id, s.duracion])
-);
+      (serviciosNegocio || []).map((s) => [s.id, s.duracion])
+    );
 
-    const turnosData     = turnosMes || [];
     const turnosHoy      = turnosData.filter((t) => t.fecha === hoyISO).length;
     const turnosMesTotal = turnosData.length;
 
@@ -1047,9 +1050,9 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       metodo_pago:    t.metodo_pago    || "none",
       estado:         t.estado,
       notas:          t.notas || null,
-     duracion: (t.servicio_id && duracionPorServicio[t.servicio_id])
-    ? duracionPorServicio[t.servicio_id]
-    : (user.duracion_turno || 30),
+      duracion:       (t.servicio_id && duracionPorServicio[t.servicio_id])
+                        ? duracionPorServicio[t.servicio_id]
+                        : (user.duracion_turno || 30),
     })).reverse();
 
     const turnosHoyDetalle = turnosData
@@ -1057,7 +1060,6 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       .sort((a, b) => a.hora.localeCompare(b.hora))
       .map((t) => ({ id: t.id, nombre: t.nombre, hora: t.hora.slice(0, 5), servicio: t.servicio_nombre, estado: t.estado, pago_estado: t.pago_estado || "sin_pago" }));
 
-    // Métricas de pagos desde turnos (últimos 90 días + próximos 7)
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
     const { data: turnosPago } = await supabase.from("turnos")
