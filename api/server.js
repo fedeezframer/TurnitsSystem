@@ -334,10 +334,19 @@ app.post("/login", limiterAuth, async (req, res) => {
     const { data: user, error } = await query.maybeSingle();
     if (error) throw error;
     if (!user) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
-    if (!isActivo(user.activo)) return res.status(403).json({ success: false, error: "Este negocio está desactivado." });
 
+    // ── Verificar password ANTES de revelar estado de la cuenta ──
     const passwordOk = await verificarPassword(password, user.password, user.id);
     if (!passwordOk) return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
+
+    // ── Cuenta desactivada manualmente por admin (no por vencimiento) ──
+    const diasRestantes     = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
+    const esPremium         = user.plan === "premium";
+
+    if (!isActivo(user.activo) && !suscripcionVencida) {
+      return res.status(403).json({ success: false, error: "Este negocio está desactivado." });
+    }
 
     const secret = process.env.JWT_SECRET;
     if (!secret) return res.status(500).json({ success: false, error: "JWT_SECRET no configurado." });
@@ -347,9 +356,28 @@ app.post("/login", limiterAuth, async (req, res) => {
       secret, { expiresIn: JWT_EXPIRY }
     );
 
-    const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
-    const estadoSuscripcion  = user.estado_suscripcion || "trial";
-    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
+    const estadoSuscripcion = user.estado_suscripcion || "trial";
+
+    // ── Si está vencido → login exitoso pero con redirect a renovar ──
+    if (suscripcionVencida && esPremium) {
+      return res.json({
+        success:        true,
+        token,
+        slug:           user.slug,
+        business_name:  user.business_name,
+        nombre_persona: user.nombre_persona,
+        apellido:       user.apellido || "",
+        email:          user.email,
+        plan:           user.plan,
+        redirect:       "renovar",   // ← señal para el frontend
+        suscripcion: {
+          estado:            "suspendido",
+          fecha_vencimiento: user.fecha_vencimiento,
+          dias_restantes:    diasRestantes,
+          vencida:           true,
+        },
+      });
+    }
 
     res.json({
       success:        true,
