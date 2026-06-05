@@ -1332,18 +1332,55 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// RENOVACIÓN — Pago mensual
-// POST /api/renovacion/checkout
-// GET  /api/renovacion/estado
+// RENOVACIÓN PÚBLICA — Info del negocio sin auth
+// GET /renovacion/info/:slug
 // ══════════════════════════════════════════════════════════════
-app.post("/api/renovacion/checkout", requireAuth, async (req, res) => {
+app.get("/renovacion/info/:slug", async (req, res) => {
   try {
-    const slug = cleanSlug(req.body.slug || req.auth.slug);
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+
+    const { data: user, error } = await supabase.from("usuarios")
+      .select("slug, business_name, nombre_persona, plan, estado_suscripcion, fecha_vencimiento")
+      .eq("slug", slug).maybeSingle();
+
+    if (error) throw error;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
+
+    res.json({
+      success:        true,
+      slug:           user.slug,
+      business_name:  user.business_name,
+      nombre_persona: user.nombre_persona,
+      plan:           user.plan || "gratis",
+      estado:         suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "activo"),
+      fecha_vencimiento: user.fecha_vencimiento,
+      dias_restantes:    diasRestantes,
+      vencida:           suscripcionVencida,
+      precio_renovacion: PRECIO_RENOVACION,
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// RENOVACIÓN PÚBLICA — Checkout sin auth
+// POST /renovacion/checkout/:slug
+// ══════════════════════════════════════════════════════════════
+app.post("/renovacion/checkout/:slug", async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
     if (!MP_PLATFORM_TOKEN) return res.status(500).json({ success: false, error: "Pasarela de renovación no configurada." });
 
     const { data: user, error } = await supabase.from("usuarios")
       .select("id, email, nombre_persona, apellido, business_name, plan, fecha_vencimiento")
       .eq("slug", slug).maybeSingle();
+
     if (error) throw error;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
@@ -1356,38 +1393,49 @@ app.post("/api/renovacion/checkout", requireAuth, async (req, res) => {
         quantity:    1,
         currency_id: "ARS",
       }],
-      payer: { email: user.email, name: `${user.nombre_persona || ""} ${user.apellido || ""}`.trim() },
+      payer: {
+        email: user.email,
+        name:  `${user.nombre_persona || ""} ${user.apellido || ""}`.trim(),
+      },
       metadata: { tipo: "renovacion_associe", slug, user_id: user.id },
       notification_url: `${API_URL}/webhook/renovacion`,
       back_urls: { success: RENOVACION_SUCCESS, failure: RENOVACION_CANCEL, pending: RENOVACION_CANCEL },
       auto_return: "approved",
     }});
+
     res.json({ success: true, payment_url: response.init_point, monto: PRECIO_RENOVACION });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
-app.get("/api/renovacion/estado", requireAuth, async (req, res) => {
+// ══════════════════════════════════════════════════════════════
+// RENOVACIÓN PÚBLICA — Downgrade a plan gratuito
+// POST /renovacion/downgrade/:slug
+// ══════════════════════════════════════════════════════════════
+app.post("/renovacion/downgrade/:slug", async (req, res) => {
   try {
-    const slug = cleanSlug(req.query.slug || req.auth.slug);
-    const { data: user, error } = await supabase.from("usuarios")
-      .select("plan, estado_suscripcion, fecha_vencimiento").eq("slug", slug).maybeSingle();
-    if (error) throw error;
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+
+    const { data: user, error: fetchError } = await supabase.from("usuarios")
+      .select("id, slug").eq("slug", slug).maybeSingle();
+
+    if (fetchError) throw fetchError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
-    const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
-    res.json({
-      success:           true,
-      plan:              user.plan || "gratis",
-      estado:            suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "trial"),
-      fecha_vencimiento: user.fecha_vencimiento,
-      dias_restantes:    diasRestantes,
-      alerta:            diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
-      vencida:           suscripcionVencida,
-      precio_renovacion: PRECIO_RENOVACION,
-    });
+    const { error: updateError } = await supabase.from("usuarios").update({
+      plan:               "gratis",
+      estado_suscripcion: "activo",
+      fecha_vencimiento:  null,
+    }).eq("slug", slug);
+
+    if (updateError) throw updateError;
+
+    invalidateCache(slug);
+    console.log(`⬇️  Downgrade a gratis: ${slug}`);
+
+    res.json({ success: true, plan: "gratis", mensaje: "Plan cambiado a gratuito correctamente." });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
