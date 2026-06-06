@@ -456,6 +456,74 @@ app.post("/admin/reset-password", requireAdminKey, async (req, res) => {
   }
 });
 
+// POST /auth/send-code
+app.post("/auth/send-code", async (req, res) => {
+  try {
+    const { slug } = req.body
+    if (!slug) return res.status(400).json({ success: false, error: "Slug requerido." })
+
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString()
+    const expiry = new Date(Date.now() + 1000 * 60 * 15) // 15 min
+
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .update({ codigo_verificacion: codigo, codigo_verificacion_expiry: expiry.toISOString() })
+      .eq("slug", slug)
+      .select("email, nombre_persona")
+      .single()
+
+    if (error) throw error
+
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "verificarCodigo",
+        email: user.email,
+        nombre: user.nombre_persona,
+        codigo,
+      }),
+    }).catch((e) => console.error("Error mail código:", e.message))
+
+    res.json({ success: true })
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// POST /auth/verify-code
+app.post("/auth/verify-code", async (req, res) => {
+  try {
+    const { slug, codigo } = req.body
+    if (!slug || !codigo) return res.status(400).json({ success: false, error: "Faltan parámetros." })
+
+    const { data: user, error } = await supabase
+      .from("usuarios")
+      .select("codigo_verificacion, codigo_verificacion_expiry, email_verificado")
+      .eq("slug", slug)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado." })
+    if (user.email_verificado) return res.json({ success: true, ya_verificado: true })
+    if (user.codigo_verificacion !== codigo.trim())
+      return res.status(400).json({ success: false, error: "Código incorrecto." })
+    if (new Date(user.codigo_verificacion_expiry) < new Date())
+      return res.status(400).json({ success: false, error: "El código expiró. Pedí uno nuevo." })
+
+    await supabase.from("usuarios").update({
+      email_verificado: true,
+      codigo_verificacion: null,
+      codigo_verificacion_expiry: null,
+    }).eq("slug", slug)
+
+    invalidateCache(slug)
+    res.json({ success: true })
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
 // ══════════════════════════════════════════════════════════════
 // NEGOCIO PÚBLICO
 // GET /negocio/:slug
