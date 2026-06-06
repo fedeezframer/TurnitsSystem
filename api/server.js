@@ -1426,6 +1426,27 @@ app.get("/auth/verify-email", async (req, res) => {
   }
 })
 
+app.get("/auth/reset-token-info", async (req, res) => {
+  try {
+    const { token } = req.query
+    if (!token) return res.status(400).json({ success: false, error: "Token requerido." })
+
+    const { data: user } = await supabase
+      .from("usuarios")
+      .select("slug, nombre_persona, reset_token_expiry")
+      .eq("reset_token", token)
+      .maybeSingle()
+
+    if (!user) return res.status(400).json({ success: false, error: "Token inválido o ya usado." })
+    if (new Date(user.reset_token_expiry) < new Date())
+      return res.status(400).json({ success: false, error: "El token expiró." })
+
+    res.json({ success: true, slug: user.slug, nombre: user.nombre_persona })
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
 // ══════════════════════════════════════════════════════════════
 // PAGOS — Mercado Pago (crear preference)
 // POST /api/create-preference
