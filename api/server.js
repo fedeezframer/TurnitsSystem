@@ -1294,7 +1294,7 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
       reset_token_expiry: expiry.toISOString(),
     }).eq("id", user.id)
 
-    const resetUrl = `${PANEL_URL}/reset-password?token=${token}`
+    const resetUrl = `${PANEL_URL}/reset-password?token=${token}&u=${user.slug}`
 
     fetch(APPS_SCRIPT_URL, {
       method: "POST",
