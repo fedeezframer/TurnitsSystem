@@ -1266,6 +1266,166 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// AUTH — Solicitar recuperación de contraseña
+// POST /auth/forgot-password
+// ══════════════════════════════════════════════════════════════
+app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
+  try {
+    const email = req.body.email?.trim().toLowerCase()
+    if (!email || !validateEmail(email))
+      return res.status(400).json({ success: false, error: "Email inválido." })
+
+    const { data: user } = await supabase
+      .from("usuarios")
+      .select("id, nombre_persona, email")
+      .eq("email", email)
+      .maybeSingle()
+
+    // Siempre respondemos igual para no revelar si el email existe
+    if (!user)
+      return res.json({ success: true, message: "Si el email existe, vas a recibir un enlace." })
+
+    const token  = crypto.randomUUID()
+    const expiry = new Date(Date.now() + 1000 * 60 * 30) // 30 minutos
+
+    await supabase.from("usuarios").update({
+      reset_token:        token,
+      reset_token_expiry: expiry.toISOString(),
+    }).eq("id", user.id)
+
+    const resetUrl = `${PANEL_URL}/reset-password?token=${token}`
+
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action:   "resetPassword",
+        email:    user.email,
+        nombre:   user.nombre_persona,
+        resetUrl,
+      }),
+    }).catch((e) => console.error("Error mail reset:", e.message))
+
+    res.json({ success: true, message: "Si el email existe, vas a recibir un enlace." })
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════
+// AUTH — Resetear contraseña con token
+// POST /auth/reset-password
+// ══════════════════════════════════════════════════════════════
+app.post("/auth/reset-password", limiterAuth, async (req, res) => {
+  try {
+    const { token, new_password } = req.body
+    if (!token || !new_password)
+      return res.status(400).json({ success: false, error: "Faltan token y nueva contraseña." })
+    if (!validatePassword(new_password))
+      return res.status(400).json({ success: false, error: "Mínimo 6 caracteres." })
+
+    const { data: user } = await supabase
+      .from("usuarios")
+      .select("id, reset_token_expiry")
+      .eq("reset_token", token)
+      .maybeSingle()
+
+    if (!user)
+      return res.status(400).json({ success: false, error: "Token inválido o ya usado." })
+
+    if (new Date(user.reset_token_expiry) < new Date())
+      return res.status(400).json({ success: false, error: "El token expiró. Solicitá uno nuevo." })
+
+    const hash = await bcrypt.hash(String(new_password), BCRYPT_ROUNDS)
+
+    await supabase.from("usuarios").update({
+      password:           hash,
+      reset_token:        null,
+      reset_token_expiry: null,
+    }).eq("id", user.id)
+
+    res.json({ success: true, message: "Contraseña actualizada correctamente." })
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════
+// AUTH — Enviar verificación de email
+// POST /auth/send-verification
+// ══════════════════════════════════════════════════════════════
+app.post("/auth/send-verification", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.auth.slug)
+
+    const { data: user } = await supabase
+      .from("usuarios")
+      .select("id, email, nombre_persona, email_verificado")
+      .eq("slug", slug)
+      .maybeSingle()
+
+    if (!user)
+      return res.status(404).json({ success: false, error: "Usuario no encontrado." })
+    if (user.email_verificado)
+      return res.json({ success: true, message: "El email ya está verificado." })
+
+    const token = crypto.randomUUID()
+
+    await supabase.from("usuarios").update({
+      verificacion_token: token,
+    }).eq("id", user.id)
+
+    const verificarUrl = `${API_URL}/auth/verify-email?token=${token}`
+
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action:        "verificarEmail",
+        email:         user.email,
+        nombre:        user.nombre_persona,
+        verificarUrl,
+      }),
+    }).catch((e) => console.error("Error mail verificacion:", e.message))
+
+    res.json({ success: true, message: "Email de verificación enviado." })
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════
+// AUTH — Confirmar verificación de email (link desde el mail)
+// GET /auth/verify-email?token=...
+// ══════════════════════════════════════════════════════════════
+app.get("/auth/verify-email", async (req, res) => {
+  try {
+    const { token } = req.query
+    if (!token)
+      return res.redirect(`${PANEL_URL}?status=verificacion_error`)
+
+    const { data: user } = await supabase
+      .from("usuarios")
+      .select("id, slug")
+      .eq("verificacion_token", token)
+      .maybeSingle()
+
+    if (!user)
+      return res.redirect(`${PANEL_URL}?status=verificacion_error`)
+
+    await supabase.from("usuarios").update({
+      email_verificado:   true,
+      verificacion_token: null,
+    }).eq("id", user.id)
+
+    invalidateCache(user.slug)
+    res.redirect(`${PANEL_URL}?status=verificacion_ok&u=${user.slug}`)
+  } catch (e) {
+    res.redirect(`${PANEL_URL}?status=verificacion_error`)
+  }
+})
+
+// ══════════════════════════════════════════════════════════════
 // PAGOS — Mercado Pago (crear preference)
 // POST /api/create-preference
 // ══════════════════════════════════════════════════════════════
