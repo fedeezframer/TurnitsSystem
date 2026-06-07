@@ -225,78 +225,163 @@ app.get("/",       (_, res) => res.json({ status: "online", version: "13.0", tim
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
-// REGISTRO PÚBLICO
-// POST /registro
+// REGISTRO — PASO 1: guardar pendiente + enviar código
+// POST /registro/iniciar
 // ══════════════════════════════════════════════════════════════
-app.post("/registro", limiterAuth, async (req, res) => {
+app.post("/registro/iniciar", limiterAuth, async (req, res) => {
   try {
     const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan } = req.body;
 
-    if (!nombre_persona || !email || !password || !business_name) {
-      return res.status(400).json({ success: false, error: "Faltan campos obligatorios: nombre_persona, email, password, business_name." });
-    }
-    if (!validateEmail(email))       return res.status(400).json({ success: false, error: "Email inválido." });
-    if (!validatePassword(password)) return res.status(400).json({ success: false, error: "La contraseña debe tener al menos 6 caracteres." });
-    if (telefono && !validatePhone(cleanPhone(telefono))) return res.status(400).json({ success: false, error: "Teléfono inválido (7-15 dígitos)." });
-    if (business_name.trim().length < 2) return res.status(400).json({ success: false, error: "El nombre del negocio es demasiado corto." });
+    if (!nombre_persona || !email || !password || !business_name)
+      return res.status(400).json({ success: false, error: "Faltan campos obligatorios." });
+    if (!validateEmail(email))
+      return res.status(400).json({ success: false, error: "Email inválido." });
+    if (!validatePassword(password))
+      return res.status(400).json({ success: false, error: "La contraseña debe tener al menos 6 caracteres." });
+    if (telefono && !validatePhone(cleanPhone(telefono)))
+      return res.status(400).json({ success: false, error: "Teléfono inválido (7-15 dígitos)." });
+    if (business_name.trim().length < 2)
+      return res.status(400).json({ success: false, error: "El nombre del negocio es demasiado corto." });
 
-    const { data: emailExiste } = await supabase.from("usuarios").select("id").eq("email", email.trim().toLowerCase()).maybeSingle();
-    if (emailExiste) return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
+    const emailClean = email.trim().toLowerCase();
 
-    const slug           = await generarSlugUnico(business_name.trim());
-    const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+    // Verificar que no exista ya en usuarios
+    const { data: yaExiste } = await supabase
+      .from("usuarios").select("id").eq("email", emailClean).maybeSingle();
+    if (yaExiste)
+      return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
 
-    const planFinal = plan === "premium" ? "premium" : "gratis";
+    const password_hash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+    const codigo        = Math.floor(100000 + Math.random() * 900000).toString();
+    const codigo_expiry = new Date(Date.now() + 1000 * 60 * 15).toISOString(); // 15 min
+
+    // Upsert: si ya había un intento previo con ese email, lo sobreescribe
+    const { error } = await supabase.from("registros_pendientes").upsert([{
+      email:          emailClean,
+      nombre_persona: nombre_persona.trim(),
+      apellido:       apellido?.trim()       || null,
+      telefono:       telefono ? cleanPhone(telefono) : null,
+      business_name:  business_name.trim(),
+      password_hash,
+      plan:           plan === "premium" ? "premium" : "gratis",
+      horarios:       horarios && typeof horarios === "object" ? horarios : null,
+      duracion_turno: parseInt(duracion_turno) || 30,
+      codigo,
+      codigo_expiry,
+    }], { onConflict: "email" });
+
+    if (error) throw error;
+
+    // Enviar código por mail
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST", headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "verificarCodigo",
+        email:  emailClean,
+        nombre: nombre_persona.trim(),
+        codigo,
+      }),
+    }).catch((e) => console.error("Error mail código:", e.message));
+
+    console.log(`📧 Código enviado a ${emailClean}`);
+    res.json({ success: true, message: "Código enviado. Revisá tu email." });
+
+  } catch (e) {
+    console.error("Error en /registro/iniciar:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// REGISTRO — PASO 2: verificar código + crear cuenta
+// POST /registro/verificar
+// ══════════════════════════════════════════════════════════════
+app.post("/registro/verificar", limiterAuth, async (req, res) => {
+  try {
+    const { email, codigo } = req.body;
+    if (!email || !codigo)
+      return res.status(400).json({ success: false, error: "Faltan email y código." });
+
+    const emailClean = email.trim().toLowerCase();
+
+    const { data: pendiente, error } = await supabase
+      .from("registros_pendientes").select("*")
+      .eq("email", emailClean).maybeSingle();
+
+    if (error) throw error;
+    if (!pendiente)
+      return res.status(404).json({ success: false, error: "No hay un registro pendiente para ese email." });
+    if (pendiente.codigo !== codigo.trim())
+      return res.status(400).json({ success: false, error: "Código incorrecto." });
+    if (new Date(pendiente.codigo_expiry) < new Date())
+      return res.status(400).json({ success: false, error: "El código expiró. Iniciá el registro de nuevo." });
+
+    // Doble check: que no se haya creado la cuenta mientras tanto
+    const { data: yaExiste } = await supabase
+      .from("usuarios").select("id").eq("email", emailClean).maybeSingle();
+    if (yaExiste)
+      return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
+
+    // Crear el usuario real
+    const slug              = await generarSlugUnico(pendiente.business_name);
+    const planFinal         = pendiente.plan === "premium" ? "premium" : "gratis";
     const fechaVencimiento  = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
     const estadoSuscripcion = planFinal === "premium" ? "trial" : "activo";
 
     const insertData = {
-      nombre_persona:     nombre_persona.trim(),
-      apellido:           apellido?.trim() || null,
-      email:              email.trim().toLowerCase(),
-      telefono:           telefono ? cleanPhone(telefono) : null,
-      business_name:      business_name.trim(),
+      nombre_persona:     pendiente.nombre_persona,
+      apellido:           pendiente.apellido           || null,
+      email:              emailClean,
+      telefono:           pendiente.telefono           || null,
+      business_name:      pendiente.business_name,
       slug,
-      password:           hashedPassword,
+      password:           pendiente.password_hash,
       plan:               planFinal,
       metodo_pago:        "none",
       porcentaje_sena:    30,
       excepciones:        [],
       activo:             "true",
+      email_verificado:   true,  // ya verificó
       estado_suscripcion: estadoSuscripcion,
       fecha_vencimiento:  fechaVencimiento,
     };
-    if (horarios && typeof horarios === "object") insertData.horarios = horarios;
-    if (duracion_turno) insertData.duracion_turno = parseInt(duracion_turno) || 30;
+    if (pendiente.horarios)      insertData.horarios      = pendiente.horarios;
+    if (pendiente.duracion_turno) insertData.duracion_turno = pendiente.duracion_turno;
 
-    const { data: nuevo, error } = await supabase.from("usuarios")
-      .insert([insertData])
+    const { data: nuevo, error: insertError } = await supabase
+      .from("usuarios").insert([insertData])
       .select("id, slug, business_name, email, nombre_persona, plan, estado_suscripcion, fecha_vencimiento")
       .single();
 
-    if (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, error: "El email ya está registrado." });
-      throw error;
+    if (insertError) {
+      if (insertError.code === "23505")
+        return res.status(409).json({ success: false, error: "El email ya está registrado." });
+      throw insertError;
     }
 
+    // Limpiar registro pendiente
+    await supabase.from("registros_pendientes").delete().eq("email", emailClean);
+
+    // Mail de bienvenida
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST", headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action:      "bienvenida",
+        adminEmail:  nuevo.email,
+        nombre:      nuevo.nombre_persona,
+        slug:        nuevo.slug,
+        panel_url:   `${PANEL_URL}?u=${nuevo.slug}`,
+        dias_prueba: planFinal === "premium" ? DIAS_PRUEBA : 0,
+      }),
+    }).catch((e) => console.error("Error mail bienvenida:", e.message));
+
+    // JWT
     const secret = process.env.JWT_SECRET;
     const token  = secret
       ? jwt.sign({ slug: nuevo.slug, negocioId: nuevo.id, rol: "owner" }, secret, { expiresIn: JWT_EXPIRY })
       : null;
 
-    fetch(APPS_SCRIPT_URL, {
-      method: "POST", headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action:     "bienvenida",
-        adminEmail: nuevo.email,
-        nombre:     nuevo.nombre_persona,
-        slug:       nuevo.slug,
-        panel_url:  `${PANEL_URL}?u=${nuevo.slug}`,
-        dias_prueba: planFinal === "premium" ? DIAS_PRUEBA : 0,
-      }),
-    }).catch((e) => console.error("Error mail bienvenida:", e.message));
-
-    console.log(`✅ Registro: ${slug} — plan: ${planFinal} — vencimiento: ${fechaVencimiento ?? "sin vencimiento"}`);
+    console.log(`✅ Registro verificado y cuenta creada: ${slug}`);
 
     res.status(201).json({
       success:           true,
@@ -308,8 +393,52 @@ app.post("/registro", limiterAuth, async (req, res) => {
       dias_prueba:       planFinal === "premium" ? DIAS_PRUEBA : null,
       fecha_vencimiento: fechaVencimiento,
     });
+
   } catch (e) {
-    console.error("Error en POST /registro:", e.message);
+    console.error("Error en /registro/verificar:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// REGISTRO — Reenviar código
+// POST /registro/reenviar-codigo
+// ══════════════════════════════════════════════════════════════
+app.post("/registro/reenviar-codigo", limiterAuth, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, error: "Email requerido." });
+
+    const emailClean = email.trim().toLowerCase();
+
+    const { data: pendiente, error } = await supabase
+      .from("registros_pendientes").select("nombre_persona")
+      .eq("email", emailClean).maybeSingle();
+
+    if (error) throw error;
+    if (!pendiente)
+      return res.status(404).json({ success: false, error: "No hay un registro pendiente para ese email." });
+
+    const codigo        = Math.floor(100000 + Math.random() * 900000).toString();
+    const codigo_expiry = new Date(Date.now() + 1000 * 60 * 15).toISOString();
+
+    await supabase.from("registros_pendientes")
+      .update({ codigo, codigo_expiry })
+      .eq("email", emailClean);
+
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST", headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "verificarCodigo",
+        email:  emailClean,
+        nombre: pendiente.nombre_persona,
+        codigo,
+      }),
+    }).catch((e) => console.error("Error reenvío código:", e.message));
+
+    res.json({ success: true, message: "Código reenviado." });
+
+  } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
