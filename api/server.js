@@ -1209,10 +1209,6 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
 // ADMIN STATS — Dashboard principal
 // GET /admin-stats/:slug
 // ══════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════
-// ADMIN STATS — Dashboard principal
-// GET /admin-stats/:slug
-// ══════════════════════════════════════════════════════════════
 app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1863,7 +1859,7 @@ app.post("/renovacion/checkout/:slug", async (req, res) => {
     const pref     = new Preference(client);
     const response = await pref.create({ body: {
       items: [{
-        title:       `Associe — Renovación mensual (${user.business_name})`,
+        title:       `Associe — Suscripción mensual (${user.business_name})`,
         unit_price:  PRECIO_RENOVACION,
         quantity:    1,
         currency_id: "ARS",
