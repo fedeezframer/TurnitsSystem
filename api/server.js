@@ -711,76 +711,116 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     const slug = cleanSlug(req.params.slug);
     const { fecha, servicio_id } = req.query;
     if (!slug || !fecha) return res.status(400).json({ success: false, error: "Faltan slug o fecha." });
-
+ 
     const { data: user, error: userError } = await supabase.from("usuarios")
       .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo, estado_suscripcion, fecha_vencimiento")
       .eq("slug", slug)
       .maybeSingle();
-
+ 
     if (userError) throw userError;
     if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-
+ 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.json({ success: true, slots: [], suspendido: true });
-
-    let duracion  = user.duracion_turno      || 30;
-    let capacidad = user.capacidad_por_turno || 1;
-
+ 
+    // ── Duración y capacidad del servicio solicitado ──
+    let duracionSolicitada  = user.duracion_turno      || 30;
+    let capacidad           = user.capacidad_por_turno || 1;
+ 
     if (servicio_id) {
       const { data: srv } = await supabase.from("servicios")
         .select("duracion, capacidad")
         .eq("id", servicio_id).eq("slug", slug)
         .maybeSingle();
-      if (srv) { duracion = srv.duracion || duracion; capacidad = srv.capacidad || capacidad; }
+      if (srv) {
+        duracionSolicitada = srv.duracion || duracionSolicitada;
+        capacidad          = srv.capacidad || capacidad;
+      }
     }
-
+ 
+    // ── Excepciones ──
     const excepcionesArr = user.excepciones || [];
     const estaExceptuado = Array.isArray(excepcionesArr)
       ? excepcionesArr.some((e) => typeof e === "string" ? e === fecha : e?.fecha === fecha && e?.type === "block")
       : false;
     if (estaExceptuado) return res.json({ success: true, slots: [] });
-
+ 
+    // ── Día de la semana ──
     const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
     const diaConfig  = user.horarios?.[diasSemana[new Date(fecha + "T12:00:00").getDay()]];
     if (!diaConfig?.activo) return res.json({ success: true, slots: [] });
-
+ 
     const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
     const fromMin = (m) => `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
-
-    const inicio = toMin(diaConfig.jornada[0]);
-    const fin    = toMin(diaConfig.jornada[1]);
-    const dIni   = toMin(diaConfig.descanso?.[0]);
-    const dFin   = toMin(diaConfig.descanso?.[1]);
-
+ 
+    const inicioJornada = toMin(diaConfig.jornada[0]);
+    const finJornada    = toMin(diaConfig.jornada[1]);
+    const dIni          = toMin(diaConfig.descanso?.[0]);
+    const dFin          = toMin(diaConfig.descanso?.[1]);
+ 
+    // ── Generar slots candidatos para el servicio solicitado ──
     const slotsGenerados = [];
-    let cursor = inicio;
-    while (cursor + duracion <= fin) {
-      if (!(dIni && dFin && cursor >= dIni && cursor < dFin)) slotsGenerados.push(fromMin(cursor));
-      cursor += duracion;
+    let cursor = inicioJornada;
+    while (cursor + duracionSolicitada <= finJornada) {
+      if (!(dIni && dFin && cursor >= dIni && cursor < dFin)) {
+        slotsGenerados.push(cursor); // guardamos en minutos para operar
+      }
+      cursor += duracionSolicitada;
     }
-
-    const { data: turnosDia } = await supabase.from("turnos").select("hora, estado")
-      .eq("slug", slug).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
-
-    const reservasPorSlot = {};
-    (turnosDia || []).forEach((t) => {
-      const h = t.hora.slice(0, 5);
-      reservasPorSlot[h] = (reservasPorSlot[h] || 0) + 1;
+ 
+    // ── Traer TODOS los turnos del día (todos los servicios) ──
+    // Necesitamos saber la duración real de cada turno para calcular solapamientos
+    const { data: turnosDia } = await supabase.from("turnos")
+      .select("hora, estado, servicio_id")
+      .eq("slug", slug).eq("fecha", fecha)
+      .in("estado", ["confirmado", "pendiente"]);
+ 
+    // ── Traer duraciones de todos los servicios del negocio ──
+    const { data: todosServicios } = await supabase.from("servicios")
+      .select("id, duracion")
+      .eq("slug", slug);
+ 
+    const duracionPorServicio = {};
+    (todosServicios || []).forEach((s) => { duracionPorServicio[s.id] = s.duracion; });
+ 
+    // ── Construir lista de rangos ocupados: [inicioMin, finMin] ──
+    // Cada turno ocupa desde su hora hasta hora + duración de SU servicio
+    const rangosOcupados = (turnosDia || []).map((t) => {
+      const inicioTurno = toMin(t.hora.slice(0, 5));
+      const durTurno    = (t.servicio_id && duracionPorServicio[t.servicio_id])
+        ? duracionPorServicio[t.servicio_id]
+        : (user.duracion_turno || 30);
+      return { inicio: inicioTurno, fin: inicioTurno + durTurno };
     });
-
-    const slots = slotsGenerados.map((slot) => {
-      const reservados  = reservasPorSlot[slot] || 0;
-      const disponibles = capacidad - reservados;
-      return { hora: slot, disponibles: Math.max(0, disponibles), lleno: disponibles <= 0 };
+ 
+    // ── Para cada slot candidato, verificar solapamiento ──
+    // Un slot [slotInicio, slotInicio + duracionSolicitada] se solapa con un turno [tInicio, tFin] si:
+    //   slotInicio < tFin  &&  slotInicio + duracionSolicitada > tInicio
+    const slots = slotsGenerados.map((slotInicio) => {
+      const slotFin = slotInicio + duracionSolicitada;
+ 
+      // Contar cuántos turnos se solapan con este slot
+      const solapados = rangosOcupados.filter(
+        ({ inicio, fin }) => slotInicio < fin && slotFin > inicio
+      ).length;
+ 
+      const disponibles = Math.max(0, capacidad - solapados);
+ 
+      return {
+        hora:        fromMin(slotInicio),
+        disponibles,
+        lleno:       disponibles <= 0,
+      };
     });
-
+ 
     res.json({ success: true, slots });
   } catch (e) {
     console.error("Error en /slots-disponibles:", e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
+ 
 
 // ══════════════════════════════════════════════════════════════
 // SERVICIOS — PÚBLICOS
