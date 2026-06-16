@@ -1735,7 +1735,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : precioServicio;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
 
-    const fee = Math.max(400, Math.round(montoACobrar * 0.02));
+    const fee = Math.max(350, Math.round(montoACobrar * 0.02));
 
     const successUrl = `${SUCCESS_URL}?slug=${slugClean}`;
     const cancelUrl  = `${ERROR_URL}?slug=${slugClean}`;
