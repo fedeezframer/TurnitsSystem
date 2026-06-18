@@ -1849,7 +1849,7 @@ app.post("/renovacion/checkout/:slug", async (req, res) => {
     const pref     = new Preference(client);
     const response = await pref.create({ body: {
       items: [{
-        title:       `Associe — Suscripción mensual (${user.business_name})`,
+        title:       `Turnits — Suscripción Premium (${user.business_name})`,
         unit_price:  PRECIO_RENOVACION,
         quantity:    1,
         currency_id: "ARS",
