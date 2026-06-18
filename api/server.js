@@ -109,13 +109,13 @@ const limiterAPI     = rateLimit({ windowMs: 60 * 1000,       max: 200 });
 // ══════════════════════════════════════════════════════════════
 // MIDDLEWARES
 // ══════════════════════════════════════════════════════════════
-app.use(cors({
+.use(cors({
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
 }));
-app.use(express.json({ limit: "10mb" }));
-app.use(limiterAPI);
+.use(express.json({ limit: "10mb" }));
+.use(limiterAPI);
 
 // ══════════════════════════════════════════════════════════════
 // SUPABASE
@@ -226,11 +226,11 @@ function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, s
   const panelUrl = `${PANEL_URL}?u=${slug}`;
 
   // Mail al admin
-  fetch(APPS_SCRIPT_URL, {
+  fetch(S_SCRIPT_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({
-      action:        "newAppointmentEmail",
+      action:        "newointmentEmail",
       nombreCliente,
       fechaHora,
       adminEmail,
@@ -246,7 +246,7 @@ function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, s
 
   // Mail al cliente (solo si tiene email)
   if (emailCliente) {
-    fetch(APPS_SCRIPT_URL, {
+    fetch(S_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
@@ -481,6 +481,46 @@ app.post("/registro/reenviar-codigo", limiterAuth, async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+
+app.post("/turnos/check-cliente", async (req, res) => {
+    try {
+        const { slug, email, telefono } = req.body
+        const slugClean = cleanSlug(slug || "")
+ 
+        if (!slugClean || (!email && !telefono)) {
+            return res.status(400).json({ success: false, error: "Faltan parámetros." })
+        }
+ 
+        const hoy = new Date().toISOString().split("T")[0]
+ 
+        // Construir filtro OR dinámico
+        const orParts = []
+        const emailClean = email?.trim().toLowerCase()
+        const phoneClean = telefono ? cleanPhone(telefono.toString()) : null
+        if (emailClean) orParts.push(`email.eq.${emailClean}`)
+        if (phoneClean) orParts.push(`telefono.eq.${phoneClean}`)
+ 
+        const { data: turnos, error } = await supabase
+            .from("turnos")
+            .select("id, email, telefono")
+            .eq("slug", slugClean)
+            .gte("fecha", hoy)
+            .neq("estado", "cancelado")
+            .or(orParts.join(","))
+ 
+        if (error) throw error
+ 
+        const existe = (turnos?.length ?? 0) > 0
+        const coincide_email    = existe && !!emailClean && turnos.some(t => t.email?.toLowerCase() === emailClean)
+        const coincide_telefono = existe && !!phoneClean && turnos.some(t => t.telefono === phoneClean)
+ 
+        res.json({ success: true, existe, coincide_email, coincide_telefono })
+    } catch (e) {
+        console.error("Error en /turnos/check-cliente:", e.message)
+        res.status(500).json({ success: false, error: e.message })
+    }
+})
+ 
 
 // ══════════════════════════════════════════════════════════════
 // AUTH — LOGIN
