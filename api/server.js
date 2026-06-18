@@ -26,9 +26,9 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "15");
 const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "23000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
-const PANEL_URL          = process.env.PANEL_URL                  || "https://associe.framer.website/panel";
-const SUCCESS_URL        = process.env.SUCCESS_URL                || "https://associe.framer.website/success";
-const ERROR_URL          = process.env.ERROR_URL                  || "https://associe.framer.website/error";
+const PANEL_URL          = process.env.PANEL_URL                  || "https://turnits.com/panel";
+const SUCCESS_URL        = process.env.SUCCESS_URL                || "https://turnits.com/success";
+const ERROR_URL          = process.env.ERROR_URL                  || "https://turnits.com/error";
 const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_URL}?status=renovacion_ok`;
 const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
 
@@ -1556,7 +1556,7 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
       reset_token_expiry: expiry.toISOString(),
     }).eq("id", user.id);
 
-    const resetUrl = `https://associe.framer.website/cambiar-contraseña?token=${token}`;
+    const resetUrl = `https://turnits.com/cambiar-contraseña?token=${token}`;
 
     fetch(APPS_SCRIPT_URL, {
       method: "POST",
