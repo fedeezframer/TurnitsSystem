@@ -1841,7 +1841,10 @@ app.post("/renovacion/downgrade/:slug", async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     const { error: updateError } = await supabase.from("usuarios").update({
-      plan: "gratis", estado_suscripcion: "activo", fecha_vencimiento: null,
+      plan:               "gratis",
+      estado_suscripcion: "activo",
+      fecha_vencimiento:  null,
+      metodo_pago:        "total",
     }).eq("slug", slug);
 
     if (updateError) throw updateError;
