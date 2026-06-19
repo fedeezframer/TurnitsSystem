@@ -24,7 +24,7 @@ const JWT_EXPIRY     = "7d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "15");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "23000");
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "19000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 const PANEL_URL          = process.env.PANEL_URL                  || "https://turnits.com/panel";
 const SUCCESS_URL        = process.env.SUCCESS_URL                || "https://turnits.com/success";
