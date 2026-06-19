@@ -1394,10 +1394,19 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
                         : (user.duracion_turno || 30),
     })).reverse();
 
-    const turnosHoyDetalle = turnosData
-      .filter((t) => t.fecha === hoyISO)
-      .sort((a, b) => a.hora.localeCompare(b.hora))
-      .map((t) => ({ id: t.id, nombre: t.nombre, hora: t.hora.slice(0, 5), servicio: t.servicio_nombre, estado: t.estado, pago_estado: t.pago_estado || "sin_pago" }));
+const turnosHoyDetalle = turnosData
+    .filter((t) => t.fecha === hoyISO)
+    .sort((a, b) => a.hora.localeCompare(b.hora))
+    .map((t) => ({
+        id:             t.id,
+        nombre:         t.nombre,
+        hora:           t.hora.slice(0, 5),
+        servicio:       t.servicio_nombre,
+        estado:         t.estado,
+        pago_estado:    t.pago_estado    || "sin_pago",
+        metodo_pago:    t.metodo_pago    || "none",
+        precio_cobrado: t.precio_cobrado || 0,
+    }));
 
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
