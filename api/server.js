@@ -1022,7 +1022,19 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
-    const requierePago = user.mp_access_token && (user.metodo_pago === "sena" || user.metodo_pago === "total");
+    // ── NUEVO: plan gratis sin MP no puede ofrecer turnos sin cobro ──
+    const esPlanGratis = user.plan === "gratis";
+    const tieneMP      = !!user.mp_access_token;
+    const requierePago = tieneMP && (user.metodo_pago === "sena" || user.metodo_pago === "total");
+
+    if (esPlanGratis && !tieneMP) {
+      return res.status(403).json({
+        success: false,
+        error:   "free_no_payment_method",
+        message: "Este negocio aún no configuró un método de pago.",
+      });
+    }
+
     if (requierePago) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
 
     const hoy = new Date().toISOString().split("T")[0];
@@ -1031,7 +1043,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
       .or(`telefono.eq.${phoneClean}${email ? `,email.eq.${email.trim().toLowerCase()}` : ""}`);
     if (turnosExistentes?.length > 0) return res.status(400).json({ success: false, error: "Ya tenés un turno agendado activo." });
 
-    let capacidad = user.capacidad_por_turno || 1;
+    let capacidad      = user.capacidad_por_turno || 1;
     let servicioNombre = null;
     let precioCobrado  = 0;
 
@@ -1089,7 +1101,6 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
-
 // ══════════════════════════════════════════════════════════════
 // TURNOS — COMPROBANTE PÚBLICO
 // GET /turnos/publico/:id
