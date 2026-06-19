@@ -33,12 +33,17 @@ const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_UR
 const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
 
 // ══════════════════════════════════════════════════════════════
-// MULTER — Upload de imágenes
+// MULTER
 // ══════════════════════════════════════════════════════════════
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 3 * 1024 * 1024 },
 });
+
+// ══════════════════════════════════════════════════════════════
+// SUPABASE
+// ══════════════════════════════════════════════════════════════
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS
@@ -107,20 +112,15 @@ const limiterBooking = rateLimit({ windowMs: 60 * 1000,       max: 20,  message:
 const limiterAPI     = rateLimit({ windowMs: 60 * 1000,       max: 200 });
 
 // ══════════════════════════════════════════════════════════════
-// MIDDLEWARES
+// MIDDLEWARES  ← CORREGIDO (faltaba "app.")
 // ══════════════════════════════════════════════════════════════
-.use(cors({
+app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
 }));
-.use(express.json({ limit: "10mb" }));
-.use(limiterAPI);
-
-// ══════════════════════════════════════════════════════════════
-// SUPABASE
-// ══════════════════════════════════════════════════════════════
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+app.use(express.json({ limit: "10mb" }));
+app.use(limiterAPI);
 
 // ══════════════════════════════════════════════════════════════
 // MIDDLEWARE: JWT AUTH
@@ -219,14 +219,12 @@ function agruparPagos(turnos, hoyISO) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HELPER: ENVIAR MAIL DE TURNO
-// Centraliza el envío para reserva sin pago y webhook MP
+// HELPER: ENVIAR MAIL DE TURNO  ← CORREGIDO (era S_SCRIPT_URL)
 // ══════════════════════════════════════════════════════════════
 function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, slug, servicio, precioTotal, montoOnline, metodoPago }) {
   const panelUrl = `${PANEL_URL}?u=${slug}`;
 
-  // Mail al admin
-  fetch(S_SCRIPT_URL, {
+  fetch(APPS_SCRIPT_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({
@@ -244,9 +242,8 @@ function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, s
     }),
   }).catch((e) => console.error("Error mail turno admin:", e.message));
 
-  // Mail al cliente (solo si tiene email)
   if (emailCliente) {
-    fetch(S_SCRIPT_URL, {
+    fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
@@ -267,11 +264,11 @@ function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, s
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "13.1", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "13.2", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
-// REGISTRO — PASO 1: guardar pendiente + enviar código
+// REGISTRO — PASO 1
 // POST /registro/iniciar
 // ══════════════════════════════════════════════════════════════
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
@@ -336,7 +333,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// REGISTRO — PASO 2: verificar código + crear cuenta
+// REGISTRO — PASO 2
 // POST /registro/verificar
 // ══════════════════════════════════════════════════════════════
 app.post("/registro/verificar", limiterAuth, async (req, res) => {
@@ -402,7 +399,6 @@ app.post("/registro/verificar", limiterAuth, async (req, res) => {
 
     await supabase.from("registros_pendientes").delete().eq("email", emailClean);
 
-    // Mail de bienvenida
     fetch(APPS_SCRIPT_URL, {
       method: "POST", headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
@@ -482,45 +478,47 @@ app.post("/registro/reenviar-codigo", limiterAuth, async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════
+// TURNOS — Check cliente duplicado
+// POST /turnos/check-cliente
+// ══════════════════════════════════════════════════════════════
 app.post("/turnos/check-cliente", async (req, res) => {
-    try {
-        const { slug, email, telefono } = req.body
-        const slugClean = cleanSlug(slug || "")
- 
-        if (!slugClean || (!email && !telefono)) {
-            return res.status(400).json({ success: false, error: "Faltan parámetros." })
-        }
- 
-        const hoy = new Date().toISOString().split("T")[0]
- 
-        // Construir filtro OR dinámico
-        const orParts = []
-        const emailClean = email?.trim().toLowerCase()
-        const phoneClean = telefono ? cleanPhone(telefono.toString()) : null
-        if (emailClean) orParts.push(`email.eq.${emailClean}`)
-        if (phoneClean) orParts.push(`telefono.eq.${phoneClean}`)
- 
-        const { data: turnos, error } = await supabase
-            .from("turnos")
-            .select("id, email, telefono")
-            .eq("slug", slugClean)
-            .gte("fecha", hoy)
-            .neq("estado", "cancelado")
-            .or(orParts.join(","))
- 
-        if (error) throw error
- 
-        const existe = (turnos?.length ?? 0) > 0
-        const coincide_email    = existe && !!emailClean && turnos.some(t => t.email?.toLowerCase() === emailClean)
-        const coincide_telefono = existe && !!phoneClean && turnos.some(t => t.telefono === phoneClean)
- 
-        res.json({ success: true, existe, coincide_email, coincide_telefono })
-    } catch (e) {
-        console.error("Error en /turnos/check-cliente:", e.message)
-        res.status(500).json({ success: false, error: e.message })
+  try {
+    const { slug, email, telefono } = req.body;
+    const slugClean = cleanSlug(slug || "");
+
+    if (!slugClean || (!email && !telefono)) {
+      return res.status(400).json({ success: false, error: "Faltan parámetros." });
     }
-})
- 
+
+    const hoy = new Date().toISOString().split("T")[0];
+
+    const orParts = [];
+    const emailClean = email?.trim().toLowerCase();
+    const phoneClean = telefono ? cleanPhone(telefono.toString()) : null;
+    if (emailClean) orParts.push(`email.eq.${emailClean}`);
+    if (phoneClean) orParts.push(`telefono.eq.${phoneClean}`);
+
+    const { data: turnos, error } = await supabase
+      .from("turnos")
+      .select("id, email, telefono")
+      .eq("slug", slugClean)
+      .gte("fecha", hoy)
+      .neq("estado", "cancelado")
+      .or(orParts.join(","));
+
+    if (error) throw error;
+
+    const existe = (turnos?.length ?? 0) > 0;
+    const coincide_email    = existe && !!emailClean && turnos.some(t => t.email?.toLowerCase() === emailClean);
+    const coincide_telefono = existe && !!phoneClean && turnos.some(t => t.telefono === phoneClean);
+
+    res.json({ success: true, existe, coincide_email, coincide_telefono });
+  } catch (e) {
+    console.error("Error en /turnos/check-cliente:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
 
 // ══════════════════════════════════════════════════════════════
 // AUTH — LOGIN
@@ -786,7 +784,7 @@ app.get("/negocio/:slug", async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // SLOTS DISPONIBLES
-// GET /slots-disponibles/:slug?fecha=YYYY-MM-DD&servicio_id=...
+// GET /slots-disponibles/:slug
 // ══════════════════════════════════════════════════════════════
 app.get("/slots-disponibles/:slug", async (req, res) => {
   try {
@@ -905,7 +903,6 @@ app.get("/servicios/:slug", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // SERVICIOS — ADMIN — UPLOAD IMAGEN
 // POST /admin/servicios/upload-imagen
-// ⚠️ DEBE IR ANTES de /admin/servicios/:id
 // ══════════════════════════════════════════════════════════════
 app.post("/admin/servicios/upload-imagen", requireAuth, upload.single("imagen"), async (req, res) => {
   try {
@@ -1071,7 +1068,6 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     }]).select().single();
     if (turnoError) throw turnoError;
 
-    // ── Mail con todos los campos necesarios ──
     enviarMailTurno({
       adminEmail:    user.email,
       emailCliente:  email?.trim().toLowerCase() || "",
@@ -1080,7 +1076,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
       slug:          slugClean,
       servicio:      servicioNombre || "",
       precioTotal:   precioCobrado,
-      montoOnline:   0,             // sin cobro online
+      montoOnline:   0,
       metodoPago:    user.metodo_pago || "none",
     });
 
@@ -1096,7 +1092,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // TURNOS — COMPROBANTE PÚBLICO
-// GET /turnos/publico/:id?slug=...
+// GET /turnos/publico/:id
 // ══════════════════════════════════════════════════════════════
 app.get("/turnos/publico/:id", async (req, res) => {
   try {
@@ -1119,7 +1115,7 @@ app.get("/turnos/publico/:id", async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // TURNOS — BUSCAR POR PAYMENT_ID
-// GET /turnos/by-payment?payment_id=...&slug=...
+// GET /turnos/by-payment
 // ══════════════════════════════════════════════════════════════
 app.get("/turnos/by-payment", async (req, res) => {
   try {
@@ -1224,8 +1220,6 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // SETTINGS
-// GET /settings/:slug
-// PUT /settings/:slug
 // ══════════════════════════════════════════════════════════════
 app.get("/settings/:slug", requireAuth, async (req, res) => {
   try {
@@ -1318,7 +1312,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// ADMIN STATS — Dashboard principal
+// ADMIN STATS
 // GET /admin-stats/:slug
 // ══════════════════════════════════════════════════════════════
 app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
@@ -1572,8 +1566,7 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// AUTH — Solicitar recuperación de contraseña
-// POST /auth/forgot-password
+// AUTH — Recuperación de contraseña
 // ══════════════════════════════════════════════════════════════
 app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
   try {
@@ -1601,12 +1594,7 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
     fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action:   "resetPassword",
-        email:    user.email,
-        nombre:   user.nombre_persona,
-        resetUrl,
-      }),
+      body: JSON.stringify({ action: "resetPassword", email: user.email, nombre: user.nombre_persona, resetUrl }),
     }).catch((e) => console.error("Error mail reset:", e.message));
 
     res.json({ success: true, message: "Si el email existe, vas a recibir un enlace." });
@@ -1615,10 +1603,6 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════════════════════════
-// AUTH — Resetear contraseña con token
-// POST /auth/reset-password
-// ══════════════════════════════════════════════════════════════
 app.post("/auth/reset-password", limiterAuth, async (req, res) => {
   try {
     const { token, new_password } = req.body;
@@ -1637,12 +1621,7 @@ app.post("/auth/reset-password", limiterAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "El token expiró. Solicitá uno nuevo." });
 
     const hash = await bcrypt.hash(String(new_password), BCRYPT_ROUNDS);
-
-    await supabase.from("usuarios").update({
-      password:           hash,
-      reset_token:        null,
-      reset_token_expiry: null,
-    }).eq("id", user.id);
+    await supabase.from("usuarios").update({ password: hash, reset_token: null, reset_token_expiry: null }).eq("id", user.id);
 
     res.json({ success: true, message: "Contraseña actualizada correctamente." });
   } catch (e) {
@@ -1650,38 +1629,24 @@ app.post("/auth/reset-password", limiterAuth, async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════════════════════════
-// AUTH — Enviar verificación de email
-// POST /auth/send-verification
-// ══════════════════════════════════════════════════════════════
 app.post("/auth/send-verification", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.auth.slug);
-
     const { data: user } = await supabase
       .from("usuarios").select("id, email, nombre_persona, email_verificado")
       .eq("slug", slug).maybeSingle();
 
-    if (!user)
-      return res.status(404).json({ success: false, error: "Usuario no encontrado." });
-    if (user.email_verificado)
-      return res.json({ success: true, message: "El email ya está verificado." });
+    if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado." });
+    if (user.email_verificado) return res.json({ success: true, message: "El email ya está verificado." });
 
     const token = crypto.randomUUID();
-
     await supabase.from("usuarios").update({ verificacion_token: token }).eq("id", user.id);
 
     const verificarUrl = `${API_URL}/auth/verify-email?token=${token}`;
-
     fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action:        "verificarEmail",
-        email:         user.email,
-        nombre:        user.nombre_persona,
-        verificarUrl,
-      }),
+      body: JSON.stringify({ action: "verificarEmail", email: user.email, nombre: user.nombre_persona, verificarUrl }),
     }).catch((e) => console.error("Error mail verificacion:", e.message));
 
     res.json({ success: true, message: "Email de verificación enviado." });
@@ -1690,28 +1655,18 @@ app.post("/auth/send-verification", requireAuth, async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════════════════════════
-// AUTH — Confirmar verificación de email (link desde el mail)
-// GET /auth/verify-email?token=...
-// ══════════════════════════════════════════════════════════════
 app.get("/auth/verify-email", async (req, res) => {
   try {
     const { token } = req.query;
-    if (!token)
-      return res.redirect(`${PANEL_URL}?status=verificacion_error`);
+    if (!token) return res.redirect(`${PANEL_URL}?status=verificacion_error`);
 
     const { data: user } = await supabase
       .from("usuarios").select("id, slug")
       .eq("verificacion_token", token).maybeSingle();
 
-    if (!user)
-      return res.redirect(`${PANEL_URL}?status=verificacion_error`);
+    if (!user) return res.redirect(`${PANEL_URL}?status=verificacion_error`);
 
-    await supabase.from("usuarios").update({
-      email_verificado:   true,
-      verificacion_token: null,
-    }).eq("id", user.id);
-
+    await supabase.from("usuarios").update({ email_verificado: true, verificacion_token: null }).eq("id", user.id);
     invalidateCache(user.slug);
     res.redirect(`${PANEL_URL}?status=verificacion_ok&u=${user.slug}`);
   } catch (e) {
@@ -1719,7 +1674,6 @@ app.get("/auth/verify-email", async (req, res) => {
   }
 });
 
-// GET /auth/reset-token-info
 app.get("/auth/reset-token-info", async (req, res) => {
   try {
     const { token } = req.query;
@@ -1740,7 +1694,7 @@ app.get("/auth/reset-token-info", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// PAGOS — Mercado Pago (crear preference)
+// PAGOS — Mercado Pago
 // POST /api/create-preference
 // ══════════════════════════════════════════════════════════════
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
@@ -1774,51 +1728,23 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       ? Math.round(precioServicio * (user.porcentaje_sena || 30) / 100)
       : precioServicio;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
-
     const fee = Math.max(350, Math.round(montoACobrar * 0.02));
-
-    const successUrl = `${SUCCESS_URL}?slug=${slugClean}`;
-    const cancelUrl  = `${ERROR_URL}?slug=${slugClean}`;
 
     if (user.mp_access_token) {
       try {
         const client   = new MercadoPagoConfig({ accessToken: user.mp_access_token });
         const pref     = new Preference(client);
         const prefBody = {
-          items: [{
-            title:       `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`,
-            unit_price:  montoACobrar,
-            quantity:    1,
-            currency_id: "ARS",
-          }],
-          metadata: {
-            nombre,
-            telefono:        cleanPhone(telefono),
-            email:           email || "",
-            apellido:        apellido || "",
-            fecha,
-            hora,
-            slug:            slugClean,
-            servicio_id:     servicio_id     || "",
-            servicio_nombre: nombreServicio,
-            metodo_pago:     metodo,
-            precio_servicio: precioServicio,
-          },
+          items: [{ title: `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`, unit_price: montoACobrar, quantity: 1, currency_id: "ARS" }],
+          metadata: { nombre, telefono: cleanPhone(telefono), email: email || "", apellido: apellido || "", fecha, hora, slug: slugClean, servicio_id: servicio_id || "", servicio_nombre: nombreServicio, metodo_pago: metodo, precio_servicio: precioServicio },
           notification_url: `${API_URL}/webhook/mp`,
-          back_urls: { success: successUrl, failure: cancelUrl, pending: cancelUrl },
+          back_urls: { success: `${SUCCESS_URL}?slug=${slugClean}`, failure: `${ERROR_URL}?slug=${slugClean}`, pending: `${ERROR_URL}?slug=${slugClean}` },
           auto_return: "approved",
         };
-
         if (fee > 0) prefBody.marketplace_fee = fee;
-
         const response = await pref.create({ body: prefBody });
-        console.log(`💰 Preference creada: monto=${montoACobrar} marketplace_fee=${fee} slug=${slugClean}`);
-        return res.json({
-          payment_url: response.init_point,
-          monto:       montoACobrar,
-          fee,
-          pasarela:    "mercadopago",
-        });
+        console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean}`);
+        return res.json({ payment_url: response.init_point, monto: montoACobrar, fee, pasarela: "mercadopago" });
       } catch (e) {
         console.error("❌ MP error:", JSON.stringify(e));
         return res.status(500).json({ success: false, error: e?.message || "Error con MercadoPago." });
@@ -1833,8 +1759,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// RENOVACIÓN — Info pública
-// GET /renovacion/info/:slug
+// RENOVACIÓN
 // ══════════════════════════════════════════════════════════════
 app.get("/renovacion/info/:slug", async (req, res) => {
   try {
@@ -1852,26 +1777,17 @@ app.get("/renovacion/info/:slug", async (req, res) => {
     const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
 
     res.json({
-      success:           true,
-      slug:              user.slug,
-      business_name:     user.business_name,
-      nombre_persona:    user.nombre_persona,
-      plan:              user.plan || "gratis",
-      estado:            suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "activo"),
-      fecha_vencimiento: user.fecha_vencimiento,
-      dias_restantes:    diasRestantes,
-      vencida:           suscripcionVencida,
-      precio_renovacion: PRECIO_RENOVACION,
+      success: true, slug: user.slug, business_name: user.business_name,
+      nombre_persona: user.nombre_persona, plan: user.plan || "gratis",
+      estado: suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "activo"),
+      fecha_vencimiento: user.fecha_vencimiento, dias_restantes: diasRestantes,
+      vencida: suscripcionVencida, precio_renovacion: PRECIO_RENOVACION,
     });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// ══════════════════════════════════════════════════════════════
-// RENOVACIÓN — Checkout sin auth
-// POST /renovacion/checkout/:slug
-// ══════════════════════════════════════════════════════════════
 app.post("/renovacion/checkout/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1888,16 +1804,8 @@ app.post("/renovacion/checkout/:slug", async (req, res) => {
     const client   = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
     const pref     = new Preference(client);
     const response = await pref.create({ body: {
-      items: [{
-        title:       `Turnits — Suscripción Premium (${user.business_name})`,
-        unit_price:  PRECIO_RENOVACION,
-        quantity:    1,
-        currency_id: "ARS",
-      }],
-      payer: {
-        email: user.email,
-        name:  `${user.nombre_persona || ""} ${user.apellido || ""}`.trim(),
-      },
+      items: [{ title: `Turnits — Suscripción Premium (${user.business_name})`, unit_price: PRECIO_RENOVACION, quantity: 1, currency_id: "ARS" }],
+      payer: { email: user.email, name: `${user.nombre_persona || ""} ${user.apellido || ""}`.trim() },
       metadata: { tipo: "renovacion_associe", slug, user_id: user.id },
       notification_url: `${API_URL}/webhook/renovacion`,
       back_urls: { success: RENOVACION_SUCCESS, failure: RENOVACION_CANCEL, pending: RENOVACION_CANCEL },
@@ -1910,10 +1818,6 @@ app.post("/renovacion/checkout/:slug", async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════════════════════════
-// RENOVACIÓN — Downgrade a plan gratuito
-// POST /renovacion/downgrade/:slug
-// ══════════════════════════════════════════════════════════════
 app.post("/renovacion/downgrade/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1926,13 +1830,10 @@ app.post("/renovacion/downgrade/:slug", async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     const { error: updateError } = await supabase.from("usuarios").update({
-      plan:               "gratis",
-      estado_suscripcion: "activo",
-      fecha_vencimiento:  null,
+      plan: "gratis", estado_suscripcion: "activo", fecha_vencimiento: null,
     }).eq("slug", slug);
 
     if (updateError) throw updateError;
-
     invalidateCache(slug);
     console.log(`⬇️  Downgrade a gratis: ${slug}`);
     res.json({ success: true, plan: "gratis", mensaje: "Plan cambiado a gratuito correctamente." });
@@ -1943,7 +1844,6 @@ app.post("/renovacion/downgrade/:slug", async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // OAUTH — Mercado Pago
-// GET /oauth-callback
 // ══════════════════════════════════════════════════════════════
 app.get("/oauth-callback", async (req, res) => {
   const { code, state: slug } = req.query;
@@ -1952,21 +1852,12 @@ app.get("/oauth-callback", async (req, res) => {
     const slugClean = cleanSlug(slug);
     const response  = await fetch("https://api.mercadopago.com/oauth/token", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id:     process.env.MP_TURNERO_CLIENT_ID,
-        client_secret: process.env.MP_TURNERO_CLIENT_SECRET,
-        grant_type:    "authorization_code",
-        code,
-        redirect_uri:  `${API_URL}/oauth-callback`,
-      }),
+      body: JSON.stringify({ client_id: process.env.MP_TURNERO_CLIENT_ID, client_secret: process.env.MP_TURNERO_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: `${API_URL}/oauth-callback` }),
     });
     const data = await response.json();
     console.log("🔑 OAuth response:", JSON.stringify(data));
     if (data.access_token) {
-      await supabase.from("usuarios").update({
-        mp_access_token: data.access_token,
-        mp_public_key:   data.public_key || null,
-      }).eq("slug", slugClean);
+      await supabase.from("usuarios").update({ mp_access_token: data.access_token, mp_public_key: data.public_key || null }).eq("slug", slugClean);
       invalidateCache(slugClean);
       return res.redirect(`${PANEL_URL}?status=mp_success&u=${slugClean}`);
     }
@@ -1977,83 +1868,49 @@ app.get("/oauth-callback", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// WEBHOOK — Mercado Pago (turnos con pago)
-// POST /webhook/mp
+// WEBHOOKS
 // ══════════════════════════════════════════════════════════════
 async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, precio_servicio, payment_id, estado, porcentaje_sena }) {
-
   const { data: turnoExistente } = await supabase
     .from("turnos").select("id").eq("payment_id", String(payment_id)).maybeSingle();
-
-  if (turnoExistente) {
-    console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`);
-    return;
-  }
+  if (turnoExistente) { console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`); return; }
 
   const { data: user } = await supabase.from("usuarios")
-    .select("email, porcentaje_sena, capacidad_por_turno")
-    .eq("slug", slug).maybeSingle();
+    .select("email, porcentaje_sena, capacidad_por_turno").eq("slug", slug).maybeSingle();
 
   const porcSena   = porcentaje_sena || user?.porcentaje_sena || 30;
-  const pagoEstado = estado === "aprobado" ? "aprobado"
-                   : estado === "pendiente" ? "pendiente"
-                   : "rechazado";
+  const pagoEstado = estado === "aprobado" ? "aprobado" : estado === "pendiente" ? "pendiente" : "rechazado";
 
   if (estado === "aprobado") {
     const capacidad = user?.capacidad_por_turno || 1;
-    const { count } = await supabase.from("turnos")
-      .select("id", { count: "exact" })
-      .eq("slug", slug).eq("fecha", fecha).eq("hora", hora)
-      .neq("estado", "cancelado");
-    if (count >= capacidad) {
-      console.log(`⚠️ Turno ${fecha} ${hora} lleno para ${slug}, payment_id ${payment_id}`);
-    }
+    const { count } = await supabase.from("turnos").select("id", { count: "exact" })
+      .eq("slug", slug).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
+    if (count >= capacidad) console.log(`⚠️ Turno ${fecha} ${hora} lleno para ${slug}, payment_id ${payment_id}`);
 
     const { error: turnoError } = await supabase.from("turnos").insert([{
-      slug,
-      nombre:          nombre?.trim() || "Cliente",
-      apellido:        apellido?.trim() || null,
-      telefono:        cleanPhone(telefono?.toString() || "0"),
-      email:           email?.trim().toLowerCase() || null,
-      fecha,
-      hora,
-      servicio_id:     servicio_id    || null,
-      servicio_nombre: servicio_nombre || null,
-      precio_cobrado:  precio_servicio || monto,
-      monto_pagado:    monto,
+      slug, nombre: nombre?.trim() || "Cliente", apellido: apellido?.trim() || null,
+      telefono: cleanPhone(telefono?.toString() || "0"), email: email?.trim().toLowerCase() || null,
+      fecha, hora, servicio_id: servicio_id || null, servicio_nombre: servicio_nombre || null,
+      precio_cobrado: precio_servicio || monto, monto_pagado: monto,
       porcentaje_sena: metodo_pago === "sena" ? porcSena : null,
-      metodo_pago,
-      pago_estado:     pagoEstado,
-      fecha_pago:      new Date().toISOString(),
-      moneda:          moneda || "ARS",
-      estado:          "confirmado",
-      payment_id:      String(payment_id),
+      metodo_pago, pago_estado: pagoEstado, fecha_pago: new Date().toISOString(),
+      moneda: moneda || "ARS", estado: "confirmado", payment_id: String(payment_id),
     }]);
 
     if (turnoError) {
-      if (turnoError.code === "23505") {
-        console.log(`⚠️ Turno duplicado bloqueado por DB: ${payment_id}`);
-      } else {
-        throw turnoError;
-      }
+      if (turnoError.code === "23505") { console.log(`⚠️ Turno duplicado bloqueado por DB: ${payment_id}`); }
+      else throw turnoError;
     } else if (user?.email) {
-      // ── Mail con todos los campos ──
-      const saldoRestante = metodo_pago === "sena" && precio_servicio > monto
-        ? precio_servicio - monto
-        : 0;
-
+      const saldoRestante = metodo_pago === "sena" && precio_servicio > monto ? precio_servicio - monto : 0;
       enviarMailTurno({
         adminEmail:    user.email,
         emailCliente:  email?.trim().toLowerCase() || "",
         nombreCliente: nombre?.trim() || "Cliente",
         fechaHora:     `${fecha} ${hora}`,
-        slug,
-        servicio:      servicio_nombre || "",
+        slug, servicio: servicio_nombre || "",
         precioTotal:   Number(precio_servicio || monto || 0),
         montoOnline:   Number(monto || 0),
         metodoPago:    metodo_pago || "mercadopago",
-        saldoRestante,
-        porcentajeSena: metodo_pago === "sena" ? porcSena : null,
       });
     }
   }
@@ -2069,52 +1926,32 @@ app.post("/webhook/mp", async (req, res) => {
       const paymentId = query.id || body.data?.id;
       if (!paymentId) return res.sendStatus(200);
 
-      const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` },
-      });
+      const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` } });
       const payData = await payRes.json();
 
-      if (payData.metadata?.tipo === "renovacion_associe") {
-        await procesarRenovacion(payData);
-        return res.sendStatus(200);
-      }
+      if (payData.metadata?.tipo === "renovacion_associe") { await procesarRenovacion(payData); return res.sendStatus(200); }
 
       const slug = cleanSlug(payData.metadata?.slug || "");
       if (!slug) return res.sendStatus(200);
 
-      const { data: userNegocio } = await supabase.from("usuarios")
-        .select("mp_access_token").eq("slug", slug).maybeSingle();
+      const { data: userNegocio } = await supabase.from("usuarios").select("mp_access_token").eq("slug", slug).maybeSingle();
 
       let finalPayData = payData;
       if (userNegocio?.mp_access_token) {
-        const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-          headers: { Authorization: `Bearer ${userNegocio.mp_access_token}` },
-        });
+        const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${userNegocio.mp_access_token}` } });
         const vendorData = await vendorRes.json();
         if (vendorData?.id) finalPayData = vendorData;
       }
 
       const meta   = finalPayData.metadata || {};
-      const estado = finalPayData.status === "approved" ? "aprobado"
-                   : finalPayData.status === "pending"  ? "pendiente"
-                   : "rechazado";
+      const estado = finalPayData.status === "approved" ? "aprobado" : finalPayData.status === "pending" ? "pendiente" : "rechazado";
 
       await procesarPagoConfirmado({
-        slug,
-        nombre:          meta.nombre,
-        apellido:        meta.apellido        || null,
-        telefono:        meta.telefono,
-        email:           meta.email,
-        fecha:           meta.fecha,
-        hora:            meta.hora,
-        servicio_id:     meta.servicio_id     || null,
-        servicio_nombre: meta.servicio_nombre || null,
-        monto:           Number(finalPayData.transaction_amount || 0),
-        moneda:          finalPayData.currency_id || "ARS",
-        metodo_pago:     meta.metodo_pago     || "mercadopago",
-        precio_servicio: meta.precio_servicio || null,
-        payment_id:      paymentId,
-        estado,
+        slug, nombre: meta.nombre, apellido: meta.apellido || null, telefono: meta.telefono,
+        email: meta.email, fecha: meta.fecha, hora: meta.hora, servicio_id: meta.servicio_id || null,
+        servicio_nombre: meta.servicio_nombre || null, monto: Number(finalPayData.transaction_amount || 0),
+        moneda: finalPayData.currency_id || "ARS", metodo_pago: meta.metodo_pago || "mercadopago",
+        precio_servicio: meta.precio_servicio || null, payment_id: paymentId, estado,
       });
     }
     res.sendStatus(200);
@@ -2124,10 +1961,6 @@ app.post("/webhook/mp", async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════════════════════════
-// WEBHOOK — Renovación mensual
-// POST /webhook/renovacion
-// ══════════════════════════════════════════════════════════════
 async function procesarRenovacion(payData) {
   if (payData.status !== "approved") return;
   const slug = cleanSlug(payData.metadata?.slug || "");
@@ -2139,25 +1972,14 @@ async function procesarRenovacion(payData) {
   const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
 
-  await supabase.from("usuarios").update({
-    fecha_vencimiento:  nuevaFecha,
-    estado_suscripcion: "activo",
-    plan:               "premium",
-  }).eq("slug", slug);
-
+  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "premium" }).eq("slug", slug);
   invalidateCache(slug);
   console.log(`✅ Renovación aprobada: ${slug} → vence ${nuevaFecha}`);
 
   if (user.email) {
     fetch(APPS_SCRIPT_URL, {
       method: "POST", headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action:      "renovacionAprobada",
-        adminEmail:  user.email,
-        nombre:      user.nombre_persona || "Cliente",
-        slug,
-        nuevaFecha,
-      }),
+      body: JSON.stringify({ action: "renovacionAprobada", adminEmail: user.email, nombre: user.nombre_persona || "Cliente", slug, nuevaFecha }),
     }).catch((e) => console.error("Error mail renovación:", e.message));
   }
 }
@@ -2168,9 +1990,7 @@ app.post("/webhook/renovacion", async (req, res) => {
     if (query.topic === "payment" || body.type === "payment") {
       const paymentId = query.id || body.data?.id;
       if (!paymentId) return res.sendStatus(200);
-      const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` },
-      });
+      const payRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` } });
       await procesarRenovacion(await payRes.json());
     }
     res.sendStatus(200);
@@ -2182,18 +2002,14 @@ app.post("/webhook/renovacion", async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // CRON — Verificación de vencimientos
-// GET /cron/check-vencimientos
 // ══════════════════════════════════════════════════════════════
 app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
   try {
     const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toISOString().split("T")[0];
 
     const { data: vencidos, error } = await supabase.from("usuarios")
-      .select("id, slug")
-      .eq("activo", "true")
-      .neq("estado_suscripcion", "suspendido")
-      .not("fecha_vencimiento", "is", null)
-      .lt("fecha_vencimiento", hoyISO);
+      .select("id, slug").eq("activo", "true").neq("estado_suscripcion", "suspendido")
+      .not("fecha_vencimiento", "is", null).lt("fecha_vencimiento", hoyISO);
     if (error) throw error;
 
     const slugs = (vencidos || []).map((u) => u.slug);
@@ -2203,11 +2019,8 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
     }
 
     const { data: reactivables } = await supabase.from("usuarios")
-      .select("id, slug")
-      .eq("activo", "true")
-      .eq("estado_suscripcion", "suspendido")
-      .not("fecha_vencimiento", "is", null)
-      .gte("fecha_vencimiento", hoyISO);
+      .select("id, slug").eq("activo", "true").eq("estado_suscripcion", "suspendido")
+      .not("fecha_vencimiento", "is", null).gte("fecha_vencimiento", hoyISO);
     const slugsReactivar = (reactivables || []).map((u) => u.slug);
     if (slugsReactivar.length > 0) {
       await supabase.from("usuarios").update({ estado_suscripcion: "activo" }).in("slug", slugsReactivar);
@@ -2238,10 +2051,8 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v13.1                          ║
-  ║   mails unificados con todos los campos      ║
-  ║   plan:   'gratis' / 'premium'               ║
-  ║   fee:    marketplace_fee (MP marketplace)   ║
+  ║   Associe API v13.2                          ║
+  ║   Fix: app.use() y APPS_SCRIPT_URL           ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
