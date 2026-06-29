@@ -1323,6 +1323,215 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// LOGO — Upload
+// POST /admin/logo/:slug
+// ══════════════════════════════════════════════════════════════
+app.post("/admin/logo/:slug", requireAuth, upload.single("logo"), async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
+
+    const ext      = req.file.mimetype === "image/png"  ? "png"
+                   : req.file.mimetype === "image/webp" ? "webp"
+                   : req.file.mimetype === "image/svg+xml" ? "svg"
+                   : "jpg";
+    const fileName = `${slug}/logo.${ext}`;
+
+    // Eliminar logo anterior si existe
+    await supabase.storage.from("logos").remove([
+      `${slug}/logo.png`, `${slug}/logo.jpg`,
+      `${slug}/logo.webp`, `${slug}/logo.svg`
+    ]);
+
+    const { error: uploadError } = await supabase.storage
+      .from("logos")
+      .upload(fileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: true,
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from("logos").getPublicUrl(fileName);
+    const logoUrl  = data.publicUrl + `?v=${Date.now()}`; // cache busting
+
+    await supabase.from("usuarios").update({ logo_url: logoUrl }).eq("slug", slug);
+    invalidateCache(slug);
+
+    res.json({ success: true, logo_url: logoUrl });
+  } catch (e) {
+    console.error("Error upload logo:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// DELETE /admin/logo/:slug
+app.delete("/admin/logo/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+
+    await supabase.storage.from("logos").remove([
+      `${slug}/logo.png`, `${slug}/logo.jpg`,
+      `${slug}/logo.webp`, `${slug}/logo.svg`
+    ]);
+
+    await supabase.from("usuarios").update({ logo_url: null }).eq("slug", slug);
+    invalidateCache(slug);
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// TEMA — Guardar
+// PUT /admin/tema/:slug
+// ══════════════════════════════════════════════════════════════
+app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { primario, secundario, fondo, texto, acento } = req.body;
+
+    const temaActual = { primario, secundario, fondo, texto, acento };
+
+    // Filtrar solo los valores definidos
+    const temaFiltrado = Object.fromEntries(
+      Object.entries(temaActual).filter(([_, v]) => v !== undefined)
+    );
+
+    if (Object.keys(temaFiltrado).length === 0) {
+      return res.status(400).json({ success: false, error: "No hay valores de tema para guardar." });
+    }
+
+    // Merge con el tema existente
+    const { data: user } = await supabase.from("usuarios")
+      .select("tema").eq("slug", slug).maybeSingle();
+
+    const temaMerged = { ...(user?.tema || {}), ...temaFiltrado };
+
+    await supabase.from("usuarios").update({ tema: temaMerged }).eq("slug", slug);
+    invalidateCache(slug);
+
+    res.json({ success: true, tema: temaMerged });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// GET /admin/tema/:slug  (también disponible en /settings ya, pero separado por comodidad)
+app.get("/admin/tema/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { data: user, error } = await supabase.from("usuarios")
+      .select("tema, logo_url").eq("slug", slug).maybeSingle();
+    if (error) throw error;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    res.json({
+      success: true,
+      tema:     user.tema     || {},
+      logo_url: user.logo_url || null,
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// EQUIPO — CRUD
+// ══════════════════════════════════════════════════════════════
+
+// GET /admin/equipo/:slug
+app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { data, error } = await supabase.from("equipo")
+      .select("*")
+      .eq("slug", slug)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    res.json({ success: true, equipo: data || [] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST /admin/equipo
+app.post("/admin/equipo", requireAuth, async (req, res) => {
+  try {
+    const { slug, nombre, apellido, color, rol } = req.body;
+    const slugClean = cleanSlug(slug || req.auth.slug);
+
+    if (!slugClean || !nombre) {
+      return res.status(400).json({ success: false, error: "Faltan nombre y slug." });
+    }
+
+    const COLORES_VALIDOS = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+    const colorFinal = color && COLORES_VALIDOS.test(color) ? color : "#6366F1";
+
+    const { data, error } = await supabase.from("equipo").insert([{
+      slug:     slugClean,
+      nombre:   nombre.trim(),
+      apellido: apellido?.trim() || null,
+      color:    colorFinal,
+      rol:      rol || "colaborador",
+      activo:   true,
+    }]).select().single();
+
+    if (error) throw error;
+    res.status(201).json({ success: true, miembro: data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// PUT /admin/equipo/:id
+app.put("/admin/equipo/:id", requireAuth, async (req, res) => {
+  try {
+    const { id }    = req.params;
+    const slugClean = cleanSlug(req.body.slug || req.auth.slug);
+    const { nombre, apellido, color, rol, activo } = req.body;
+
+    const update = {};
+    if (nombre   !== undefined) update.nombre   = nombre.trim();
+    if (apellido !== undefined) update.apellido = apellido.trim();
+    if (color    !== undefined) update.color    = color;
+    if (rol      !== undefined) update.rol      = rol;
+    if (activo   !== undefined) update.activo   = activo === true || activo === "true";
+
+    const { data, error } = await supabase.from("equipo")
+      .update(update)
+      .eq("id", id)
+      .eq("slug", slugClean)
+      .select().single();
+
+    if (error) throw error;
+    res.json({ success: true, miembro: data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// DELETE /admin/equipo/:id
+app.delete("/admin/equipo/:id", requireAuth, async (req, res) => {
+  try {
+    const { id }    = req.params;
+    const slugClean = cleanSlug(req.body?.slug || req.query?.slug || req.auth.slug);
+
+    const { error } = await supabase.from("equipo")
+      .delete()
+      .eq("id", id)
+      .eq("slug", slugClean);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // ADMIN STATS
 // GET /admin-stats/:slug
 // ══════════════════════════════════════════════════════════════
