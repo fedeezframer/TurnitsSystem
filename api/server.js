@@ -776,7 +776,7 @@ app.get("/negocio/:slug", async (req, res) => {
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
     const { data: user, error } = await supabase.from("usuarios")
-      .select("slug, business_name, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, activo, plan, estado_suscripcion, fecha_vencimiento")
+      .select("slug, business_name, horarios, excepciones, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, mp_access_token, activo, plan, estado_suscripcion, fecha_vencimiento, tema, logo_url")
       .eq("slug", slug)
       .maybeSingle();
 
@@ -807,6 +807,8 @@ app.get("/negocio/:slug", async (req, res) => {
         porcentaje_sena:     user.porcentaje_sena     || 30,
         tiene_mp:            !!user.mp_access_token,
         plan:                user.plan                || "gratis",
+        tema: user.tema || null,
+        logo_url: user.logo_url || null,
       },
     });
   } catch (e) {
@@ -1364,10 +1366,14 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
     const slug = cleanSlug(req.params.slug);
     const { primario, secundario, fondo, texto, acento, guardar_paleta, nombre_paleta } = req.body;
 
-    const temaActual = { primario, secundario, fondo, texto, acento };
-    const temaFiltrado = Object.fromEntries(
-      Object.entries(temaActual).filter(([_, v]) => v !== undefined)
-    );
+  const COLOR_KEYS = ["primario", "secundario", "fondo", "texto", "acento"];
+  const temaFiltrado = {};
+
+  COLOR_KEYS.forEach((key) => {
+    if (req.body[key] !== undefined && req.body[key] !== null && req.body[key] !== "") {
+      temaFiltrado[key] = req.body[key];
+  }
+});
 
     const { data: user, error: fetchError } = await supabase.from("usuarios")
       .select("tema, paletas_personalizadas").eq("slug", slug).maybeSingle();
@@ -1403,25 +1409,6 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
     invalidateCache(slug);
 
     res.json({ success: true, tema: temaMerged, paletas_personalizadas: update.paletas_personalizadas || user.paletas_personalizadas || [] });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-app.get("/admin/tema/:slug", requireAuth, async (req, res) => {
-  try {
-    const slug = cleanSlug(req.params.slug);
-    const { data: user, error } = await supabase.from("usuarios")
-      .select("tema, logo_url, paletas_personalizadas").eq("slug", slug).maybeSingle();
-    if (error) throw error;
-    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-
-    res.json({
-      success: true,
-      tema: user.tema || {},
-      logo_url: user.logo_url || null,
-      paletas_personalizadas: user.paletas_personalizadas || [],
-    });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
