@@ -807,8 +807,8 @@ app.get("/negocio/:slug", async (req, res) => {
         porcentaje_sena:     user.porcentaje_sena     || 30,
         tiene_mp:            !!user.mp_access_token,
         plan:                user.plan                || "gratis",
-        tema: user.tema || null,
-        logo_url: user.logo_url || null,
+        tema:                user.tema                || null,
+        logo_url:            user.logo_url            || null,
       },
     });
   } catch (e) {
@@ -1366,14 +1366,16 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
     const slug = cleanSlug(req.params.slug);
     const { primario, secundario, fondo, texto, acento, guardar_paleta, nombre_paleta } = req.body;
 
-  const COLOR_KEYS = ["primario", "secundario", "fondo", "texto", "acento"];
-  const temaFiltrado = {};
-
-  COLOR_KEYS.forEach((key) => {
-    if (req.body[key] !== undefined && req.body[key] !== null && req.body[key] !== "") {
-      temaFiltrado[key] = req.body[key];
-  }
-});
+    // FIX: filtro defensivo — además de excluir undefined, excluye
+    // null y string vacío, para que nunca se pisen colores guardados
+    // con valores vacíos (por ejemplo si el front manda "" por error).
+    const COLOR_KEYS = ["primario", "secundario", "fondo", "texto", "acento"];
+    const temaActual = { primario, secundario, fondo, texto, acento };
+    const temaFiltrado = {};
+    COLOR_KEYS.forEach((key) => {
+      const v = temaActual[key];
+      if (v !== undefined && v !== null && v !== "") temaFiltrado[key] = v;
+    });
 
     const { data: user, error: fetchError } = await supabase.from("usuarios")
       .select("tema, paletas_personalizadas").eq("slug", slug).maybeSingle();
@@ -1385,8 +1387,7 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
 
     if (guardar_paleta) {
       const COLORES_VALIDOS = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
-      const camposOk = ["primario", "secundario", "fondo", "texto", "acento"]
-        .every((k) => COLORES_VALIDOS.test(temaMerged[k] || ""));
+      const camposOk = COLOR_KEYS.every((k) => COLORES_VALIDOS.test(temaMerged[k] || ""));
       if (!camposOk) {
         return res.status(400).json({ success: false, error: "Colores inválidos para guardar la paleta." });
       }
@@ -1409,6 +1410,25 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
     invalidateCache(slug);
 
     res.json({ success: true, tema: temaMerged, paletas_personalizadas: update.paletas_personalizadas || user.paletas_personalizadas || [] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get("/admin/tema/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { data: user, error } = await supabase.from("usuarios")
+      .select("tema, logo_url, paletas_personalizadas").eq("slug", slug).maybeSingle();
+    if (error) throw error;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    res.json({
+      success: true,
+      tema: user.tema || {},
+      logo_url: user.logo_url || null,
+      paletas_personalizadas: user.paletas_personalizadas || [],
+    });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -2396,9 +2416,9 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Turnits API v13.3                            ║
-  ║   Fix: seguridad downgrade, webhook robusto,   ║
-  ║   sobreventa, rutas duplicadas, typo mail      ║
+  ║   Turnits API v13.4                            ║
+  ║   Fix: tema/logo expuestos en /negocio,        ║
+  ║   filtro defensivo de tema, preview live       ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
