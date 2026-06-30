@@ -1322,6 +1322,73 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
   }
 });
 
+app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { primario, secundario, fondo, texto, acento, guardar_paleta, nombre_paleta } = req.body;
+
+    const temaActual = { primario, secundario, fondo, texto, acento };
+    const temaFiltrado = Object.fromEntries(
+      Object.entries(temaActual).filter(([_, v]) => v !== undefined)
+    );
+
+    const { data: user } = await supabase.from("usuarios")
+      .select("tema, paletas_personalizadas").eq("slug", slug).maybeSingle();
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const temaMerged = { ...(user.tema || {}), ...temaFiltrado };
+    const update = { tema: temaMerged };
+
+    // Si el usuario pide guardar la paleta actual como "suya"
+    if (guardar_paleta) {
+      const COLORES_VALIDOS = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+      const camposOk = ["primario", "secundario", "fondo", "texto", "acento"]
+        .every((k) => COLORES_VALIDOS.test(temaMerged[k] || ""));
+      if (!camposOk) {
+        return res.status(400).json({ success: false, error: "Colores inválidos para guardar la paleta." });
+      }
+      const paletasActuales = Array.isArray(user.paletas_personalizadas) ? user.paletas_personalizadas : [];
+      const nuevaPaleta = {
+        id: crypto.randomUUID(),
+        nombre: (nombre_paleta || "Mi paleta").trim().slice(0, 30),
+        tema: temaMerged,
+        created_at: new Date().toISOString(),
+      };
+      update.paletas_personalizadas = [...paletasActuales, nuevaPaleta].slice(-10); // máx 10
+    }
+
+    if (Object.keys(temaFiltrado).length === 0 && !guardar_paleta) {
+      return res.status(400).json({ success: false, error: "No hay valores de tema para guardar." });
+    }
+
+    await supabase.from("usuarios").update(update).eq("slug", slug);
+    invalidateCache(slug);
+
+    res.json({ success: true, tema: temaMerged, paletas_personalizadas: update.paletas_personalizadas || user.paletas_personalizadas || [] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get("/admin/tema/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { data: user, error } = await supabase.from("usuarios")
+      .select("tema, logo_url, paletas_personalizadas").eq("slug", slug).maybeSingle();
+    if (error) throw error;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    res.json({
+      success: true,
+      tema: user.tema || {},
+      logo_url: user.logo_url || null,
+      paletas_personalizadas: user.paletas_personalizadas || [],
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ══════════════════════════════════════════════════════════════
 // LOGO — Upload
 // POST /admin/logo/:slug
