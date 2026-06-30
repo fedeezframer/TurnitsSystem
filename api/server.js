@@ -42,8 +42,17 @@ const upload = multer({
 
 // ══════════════════════════════════════════════════════════════
 // SUPABASE
+// FIX: priorizar la service role key explícita. Este backend hace
+// updates/deletes/storage admin, así que NUNCA debe usarse la anon key.
+// Si en Render solo existe SUPABASE_KEY (nombre viejo), se usa como
+// fallback para no romper el deploy actual, pero conviene migrar
+// la variable a SUPABASE_SERVICE_ROLE_KEY cuanto antes.
 // ══════════════════════════════════════════════════════════════
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const SUPABASE_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn("⚠️  Usando SUPABASE_KEY como fallback. Migrar a SUPABASE_SERVICE_ROLE_KEY y verificar que sea la service role, no la anon key.");
+}
+const supabase = createClient(process.env.SUPABASE_URL, SUPABASE_SECRET);
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS
@@ -112,7 +121,7 @@ const limiterBooking = rateLimit({ windowMs: 60 * 1000,       max: 20,  message:
 const limiterAPI     = rateLimit({ windowMs: 60 * 1000,       max: 200 });
 
 // ══════════════════════════════════════════════════════════════
-// MIDDLEWARES  ← CORREGIDO (faltaba "app.")
+// MIDDLEWARES
 // ══════════════════════════════════════════════════════════════
 app.use(cors({
   origin: "*",
@@ -219,7 +228,8 @@ function agruparPagos(turnos, hoyISO) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HELPER: ENVIAR MAIL DE TURNO  ← CORREGIDO (era S_SCRIPT_URL)
+// HELPER: ENVIAR MAIL DE TURNO
+// FIX: typo "newointmentEmail" → "newAppointmentEmail"
 // ══════════════════════════════════════════════════════════════
 function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, slug, servicio, precioTotal, montoOnline, metodoPago }) {
   const panelUrl = `${PANEL_URL}?u=${slug}`;
@@ -228,7 +238,7 @@ function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, s
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({
-      action:        "newointmentEmail",
+      action:        "newAppointmentEmail",
       nombreCliente,
       fechaHora,
       adminEmail,
@@ -262,9 +272,31 @@ function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, s
 }
 
 // ══════════════════════════════════════════════════════════════
+// HELPER: AVISAR CONFLICTO DE SOBREVENTA AL ADMIN
+// (usado cuando un pago se aprueba pero el cupo ya estaba lleno)
+// ══════════════════════════════════════════════════════════════
+function enviarMailConflictoTurno({ adminEmail, nombreCliente, fechaHora, slug, payment_id, monto }) {
+  if (!adminEmail) return;
+  fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({
+      action: "turnoConflicto",
+      adminEmail,
+      nombreCliente,
+      fechaHora,
+      slug,
+      payment_id,
+      monto,
+      panelUrl: `${PANEL_URL}?u=${slug}`,
+    }),
+  }).catch((e) => console.error("Error mail conflicto turno:", e.message));
+}
+
+// ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "13.2", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "13.3", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
@@ -720,11 +752,12 @@ app.post("/auth/verify-code", async (req, res) => {
     if (new Date(user.codigo_verificacion_expiry) < new Date())
       return res.status(400).json({ success: false, error: "El código expiró. Pedí uno nuevo." });
 
-    await supabase.from("usuarios").update({
+    const { error: updError } = await supabase.from("usuarios").update({
       email_verificado:           true,
       codigo_verificacion:        null,
       codigo_verificacion_expiry: null,
     }).eq("slug", slug);
+    if (updError) throw updError;
 
     invalidateCache(slug);
     res.json({ success: true });
@@ -1022,7 +1055,6 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
-    // ── NUEVO: plan gratis sin MP no puede ofrecer turnos sin cobro ──
     const esPlanGratis = user.plan === "gratis";
     const tieneMP      = !!user.mp_access_token;
     const requierePago = tieneMP && (user.metodo_pago === "sena" || user.metodo_pago === "total");
@@ -1101,6 +1133,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+
 // ══════════════════════════════════════════════════════════════
 // TURNOS — COMPROBANTE PÚBLICO
 // GET /turnos/publico/:id
@@ -1322,6 +1355,10 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════
+// TEMA — Guardar / Leer (única versión, antes estaba duplicada)
+// PUT/GET /admin/tema/:slug
+// ══════════════════════════════════════════════════════════════
 app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1332,14 +1369,14 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
       Object.entries(temaActual).filter(([_, v]) => v !== undefined)
     );
 
-    const { data: user } = await supabase.from("usuarios")
+    const { data: user, error: fetchError } = await supabase.from("usuarios")
       .select("tema, paletas_personalizadas").eq("slug", slug).maybeSingle();
+    if (fetchError) throw fetchError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     const temaMerged = { ...(user.tema || {}), ...temaFiltrado };
     const update = { tema: temaMerged };
 
-    // Si el usuario pide guardar la paleta actual como "suya"
     if (guardar_paleta) {
       const COLORES_VALIDOS = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
       const camposOk = ["primario", "secundario", "fondo", "texto", "acento"]
@@ -1354,14 +1391,15 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
         tema: temaMerged,
         created_at: new Date().toISOString(),
       };
-      update.paletas_personalizadas = [...paletasActuales, nuevaPaleta].slice(-10); // máx 10
+      update.paletas_personalizadas = [...paletasActuales, nuevaPaleta].slice(-10);
     }
 
     if (Object.keys(temaFiltrado).length === 0 && !guardar_paleta) {
       return res.status(400).json({ success: false, error: "No hay valores de tema para guardar." });
     }
 
-    await supabase.from("usuarios").update(update).eq("slug", slug);
+    const { error: updError } = await supabase.from("usuarios").update(update).eq("slug", slug);
+    if (updError) throw updError;
     invalidateCache(slug);
 
     res.json({ success: true, tema: temaMerged, paletas_personalizadas: update.paletas_personalizadas || user.paletas_personalizadas || [] });
@@ -1404,7 +1442,6 @@ app.post("/admin/logo/:slug", requireAuth, upload.single("logo"), async (req, re
                    : "jpg";
     const fileName = `${slug}/logo.${ext}`;
 
-    // Eliminar logo anterior si existe
     await supabase.storage.from("logos").remove([
       `${slug}/logo.png`, `${slug}/logo.jpg`,
       `${slug}/logo.webp`, `${slug}/logo.svg`
@@ -1420,9 +1457,10 @@ app.post("/admin/logo/:slug", requireAuth, upload.single("logo"), async (req, re
     if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from("logos").getPublicUrl(fileName);
-    const logoUrl  = data.publicUrl + `?v=${Date.now()}`; // cache busting
+    const logoUrl  = data.publicUrl + `?v=${Date.now()}`;
 
-    await supabase.from("usuarios").update({ logo_url: logoUrl }).eq("slug", slug);
+    const { error: updError } = await supabase.from("usuarios").update({ logo_url: logoUrl }).eq("slug", slug);
+    if (updError) throw updError;
     invalidateCache(slug);
 
     res.json({ success: true, logo_url: logoUrl });
@@ -1442,7 +1480,8 @@ app.delete("/admin/logo/:slug", requireAuth, async (req, res) => {
       `${slug}/logo.webp`, `${slug}/logo.svg`
     ]);
 
-    await supabase.from("usuarios").update({ logo_url: null }).eq("slug", slug);
+    const { error: updError } = await supabase.from("usuarios").update({ logo_url: null }).eq("slug", slug);
+    if (updError) throw updError;
     invalidateCache(slug);
 
     res.json({ success: true });
@@ -1452,64 +1491,9 @@ app.delete("/admin/logo/:slug", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// TEMA — Guardar
-// PUT /admin/tema/:slug
-// ══════════════════════════════════════════════════════════════
-app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
-  try {
-    const slug = cleanSlug(req.params.slug);
-    const { primario, secundario, fondo, texto, acento } = req.body;
-
-    const temaActual = { primario, secundario, fondo, texto, acento };
-
-    // Filtrar solo los valores definidos
-    const temaFiltrado = Object.fromEntries(
-      Object.entries(temaActual).filter(([_, v]) => v !== undefined)
-    );
-
-    if (Object.keys(temaFiltrado).length === 0) {
-      return res.status(400).json({ success: false, error: "No hay valores de tema para guardar." });
-    }
-
-    // Merge con el tema existente
-    const { data: user } = await supabase.from("usuarios")
-      .select("tema").eq("slug", slug).maybeSingle();
-
-    const temaMerged = { ...(user?.tema || {}), ...temaFiltrado };
-
-    await supabase.from("usuarios").update({ tema: temaMerged }).eq("slug", slug);
-    invalidateCache(slug);
-
-    res.json({ success: true, tema: temaMerged });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// GET /admin/tema/:slug  (también disponible en /settings ya, pero separado por comodidad)
-app.get("/admin/tema/:slug", requireAuth, async (req, res) => {
-  try {
-    const slug = cleanSlug(req.params.slug);
-    const { data: user, error } = await supabase.from("usuarios")
-      .select("tema, logo_url").eq("slug", slug).maybeSingle();
-    if (error) throw error;
-    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-
-    res.json({
-      success: true,
-      tema:     user.tema     || {},
-      logo_url: user.logo_url || null,
-    });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// ══════════════════════════════════════════════════════════════
 // EQUIPO — CRUD
 // ══════════════════════════════════════════════════════════════
 
-// GET /admin/equipo/:slug
 app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1524,7 +1508,6 @@ app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
   }
 });
 
-// POST /admin/equipo
 app.post("/admin/equipo", requireAuth, async (req, res) => {
   try {
     const { slug, nombre, apellido, color, rol } = req.body;
@@ -1553,7 +1536,6 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
   }
 });
 
-// PUT /admin/equipo/:id
 app.put("/admin/equipo/:id", requireAuth, async (req, res) => {
   try {
     const { id }    = req.params;
@@ -1580,7 +1562,6 @@ app.put("/admin/equipo/:id", requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /admin/equipo/:id
 app.delete("/admin/equipo/:id", requireAuth, async (req, res) => {
   try {
     const { id }    = req.params;
@@ -1992,6 +1973,11 @@ app.get("/auth/reset-token-info", async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // PAGOS — Mercado Pago
 // POST /api/create-preference
+// FIX: ahora se guarda un registro en pagos_pendientes con un
+// external_reference único ANTES de crear la preferencia. El webhook
+// usa ese registro para resolver el slug/datos del turno sin
+// depender únicamente de que el token de plataforma pueda leer
+// el pago del vendedor.
 // ══════════════════════════════════════════════════════════════
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   console.log("📥 create-preference body:", JSON.stringify(req.body));
@@ -2028,18 +2014,35 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     if (user.mp_access_token) {
       try {
+        // 1) Crear registro de pago pendiente — fuente de verdad para el webhook
+        const metaPendiente = {
+          slug: slugClean,
+          nombre, telefono: cleanPhone(telefono), email: email || "",
+          apellido: apellido || "", fecha, hora,
+          servicio_id: servicio_id || null, servicio_nombre: nombreServicio,
+          precio_servicio: precioServicio, metodo_pago: metodo, monto: montoACobrar,
+          estado: "pendiente",
+        };
+        const { data: pendiente, error: pendError } = await supabase
+          .from("pagos_pendientes").insert([metaPendiente]).select("id").single();
+        if (pendError) throw pendError;
+
         const client   = new MercadoPagoConfig({ accessToken: user.mp_access_token });
         const pref     = new Preference(client);
         const prefBody = {
           items: [{ title: `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`, unit_price: montoACobrar, quantity: 1, currency_id: "ARS" }],
-          metadata: { nombre, telefono: cleanPhone(telefono), email: email || "", apellido: apellido || "", fecha, hora, slug: slugClean, servicio_id: servicio_id || "", servicio_nombre: nombreServicio, metodo_pago: metodo, precio_servicio: precioServicio },
+          metadata: metaPendiente,
+          external_reference: pendiente.id,
           notification_url: `${API_URL}/webhook/mp`,
           back_urls: { success: `${SUCCESS_URL}?slug=${slugClean}`, failure: `${ERROR_URL}?slug=${slugClean}`, pending: `${ERROR_URL}?slug=${slugClean}` },
           auto_return: "approved",
         };
         if (fee > 0) prefBody.marketplace_fee = fee;
         const response = await pref.create({ body: prefBody });
-        console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean}`);
+
+        await supabase.from("pagos_pendientes").update({ preference_id: response.id }).eq("id", pendiente.id);
+
+        console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean} ref=${pendiente.id}`);
         return res.json({ payment_url: response.init_point, monto: montoACobrar, fee, pasarela: "mercadopago" });
       } catch (e) {
         console.error("❌ MP error:", JSON.stringify(e));
@@ -2114,7 +2117,9 @@ app.post("/renovacion/checkout/:slug", async (req, res) => {
   }
 });
 
-app.post("/renovacion/downgrade/:slug", async (req, res) => {
+// FIX: protegido — antes era público y cualquiera con el slug podía
+// bajar a un negocio a plan gratis. Lo usa el owner desde el panel.
+app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
@@ -2156,7 +2161,10 @@ app.get("/oauth-callback", async (req, res) => {
     const data = await response.json();
     console.log("🔑 OAuth response:", JSON.stringify(data));
     if (data.access_token) {
-      await supabase.from("usuarios").update({ mp_access_token: data.access_token, mp_public_key: data.public_key || null }).eq("slug", slugClean);
+      const { error: updError } = await supabase.from("usuarios")
+        .update({ mp_access_token: data.access_token, mp_public_key: data.public_key || null })
+        .eq("slug", slugClean);
+      if (updError) { console.error("Error guardando token MP:", updError.message); return res.redirect(`${PANEL_URL}?status=mp_error&u=${slugClean}`); }
       invalidateCache(slugClean);
       return res.redirect(`${PANEL_URL}?status=mp_success&u=${slugClean}`);
     }
@@ -2168,6 +2176,10 @@ app.get("/oauth-callback", async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 // WEBHOOKS
+// FIX (sobreventa): si el cupo está lleno, NO se inserta el turno.
+// Se loguea como conflicto y se avisa al admin para que reprograme
+// o reembolse manualmente, en vez de confirmar un turno por encima
+// de la capacidad.
 // ══════════════════════════════════════════════════════════════
 async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, monto, moneda, metodo_pago, precio_servicio, payment_id, estado, porcentaje_sena }) {
   const { data: turnoExistente } = await supabase
@@ -2184,7 +2196,18 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
     const capacidad = user?.capacidad_por_turno || 1;
     const { count } = await supabase.from("turnos").select("id", { count: "exact" })
       .eq("slug", slug).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
-    if (count >= capacidad) console.log(`⚠️ Turno ${fecha} ${hora} lleno para ${slug}, payment_id ${payment_id}`);
+
+    if (count >= capacidad) {
+      console.error(`🚫 SOBREVENTA bloqueada: turno ${fecha} ${hora} lleno para ${slug}, payment_id ${payment_id}. NO se confirma el turno, requiere intervención manual.`);
+      enviarMailConflictoTurno({
+        adminEmail: user?.email,
+        nombreCliente: nombre?.trim() || "Cliente",
+        fechaHora: `${fecha} ${hora}`,
+        slug, payment_id, monto,
+      });
+      invalidateCache(slug);
+      return;
+    }
 
     const { error: turnoError } = await supabase.from("turnos").insert([{
       slug, nombre: nombre?.trim() || "Cliente", apellido: apellido?.trim() || null,
@@ -2218,6 +2241,9 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
   console.log(`✅ Pago procesado: ${payment_id} — slug: ${slug} — estado: ${pagoEstado}`);
 }
 
+// FIX: el webhook ahora resuelve el slug primero contra pagos_pendientes
+// (vía external_reference), que es más confiable que depender de que
+// el MP_PLATFORM_TOKEN pueda leer la metadata del pago del vendedor.
 app.post("/webhook/mp", async (req, res) => {
   const { query, body } = req;
   try {
@@ -2230,28 +2256,61 @@ app.post("/webhook/mp", async (req, res) => {
 
       if (payData.metadata?.tipo === "renovacion_associe") { await procesarRenovacion(payData); return res.sendStatus(200); }
 
-      const slug = cleanSlug(payData.metadata?.slug || "");
-      if (!slug) return res.sendStatus(200);
+      // 1) Intentar resolver por external_reference contra pagos_pendientes (fuente confiable)
+      let pendiente = null;
+      const externalRef = payData.external_reference || body.external_reference;
+      if (externalRef) {
+        const { data } = await supabase.from("pagos_pendientes").select("*").eq("id", externalRef).maybeSingle();
+        pendiente = data;
+      }
+
+      // 2) Fallback a metadata si no hay pendiente (ej. pagos viejos antes de este fix)
+      const slug = cleanSlug(pendiente?.slug || payData.metadata?.slug || "");
+      if (!slug) {
+        console.error(`⚠️ Webhook MP: no se pudo resolver el slug para payment ${paymentId}. external_reference=${externalRef}`);
+        return res.sendStatus(200);
+      }
 
       const { data: userNegocio } = await supabase.from("usuarios").select("mp_access_token").eq("slug", slug).maybeSingle();
 
+      // 3) Releer el pago con el token del vendedor para confirmar estado/monto reales
       let finalPayData = payData;
       if (userNegocio?.mp_access_token) {
-        const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${userNegocio.mp_access_token}` } });
-        const vendorData = await vendorRes.json();
-        if (vendorData?.id) finalPayData = vendorData;
+        try {
+          const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${userNegocio.mp_access_token}` } });
+          const vendorData = await vendorRes.json();
+          if (vendorData?.id) finalPayData = vendorData;
+        } catch (e) {
+          console.error("No se pudo releer el pago con token del vendedor, se usa data de plataforma:", e.message);
+        }
       }
 
-      const meta   = finalPayData.metadata || {};
+      const meta   = pendiente || finalPayData.metadata || {};
       const estado = finalPayData.status === "approved" ? "aprobado" : finalPayData.status === "pending" ? "pendiente" : "rechazado";
 
       await procesarPagoConfirmado({
-        slug, nombre: meta.nombre, apellido: meta.apellido || null, telefono: meta.telefono,
-        email: meta.email, fecha: meta.fecha, hora: meta.hora, servicio_id: meta.servicio_id || null,
-        servicio_nombre: meta.servicio_nombre || null, monto: Number(finalPayData.transaction_amount || 0),
-        moneda: finalPayData.currency_id || "ARS", metodo_pago: meta.metodo_pago || "mercadopago",
-        precio_servicio: meta.precio_servicio || null, payment_id: paymentId, estado,
+        slug,
+        nombre:           meta.nombre,
+        apellido:         meta.apellido || null,
+        telefono:         meta.telefono,
+        email:            meta.email,
+        fecha:            meta.fecha,
+        hora:             meta.hora,
+        servicio_id:      meta.servicio_id || null,
+        servicio_nombre:  meta.servicio_nombre || null,
+        monto:            Number(finalPayData.transaction_amount || meta.monto || 0),
+        moneda:           finalPayData.currency_id || "ARS",
+        metodo_pago:      meta.metodo_pago || "mercadopago",
+        precio_servicio:  meta.precio_servicio || null,
+        payment_id:       paymentId,
+        estado,
       });
+
+      if (pendiente) {
+        await supabase.from("pagos_pendientes")
+          .update({ estado, payment_id: String(paymentId) })
+          .eq("id", pendiente.id);
+      }
     }
     res.sendStatus(200);
   } catch (e) {
@@ -2350,8 +2409,9 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Associe API v13.2                          ║
-  ║   Fix: app.use() y APPS_SCRIPT_URL           ║
+  ║   Turnits API v13.3                            ║
+  ║   Fix: seguridad downgrade, webhook robusto,   ║
+  ║   sobreventa, rutas duplicadas, typo mail      ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
