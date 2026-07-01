@@ -853,32 +853,61 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       }
     }
 
-    const excepcionesArr = user.excepciones || [];
-    const estaExceptuado = Array.isArray(excepcionesArr)
-      ? excepcionesArr.some((e) => typeof e === "string" ? e === fecha : e?.fecha === fecha && e?.type === "block")
-      : false;
-    if (estaExceptuado) return res.json({ success: true, slots: [] });
-
-    const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
-    const diaConfig  = user.horarios?.[diasSemana[new Date(fecha + "T12:00:00").getDay()]];
-    if (!diaConfig?.activo) return res.json({ success: true, slots: [] });
-
+    // ── Helpers de tiempo ──
     const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
     const fromMin = (m) => `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
 
-    const inicioJornada = toMin(diaConfig.jornada[0]);
-    const finJornada    = toMin(diaConfig.jornada[1]);
-    const dIni          = toMin(diaConfig.descanso?.[0]);
-    const dFin          = toMin(diaConfig.descanso?.[1]);
+    // ── Resolver excepción del día puntual (tiene prioridad sobre horarios) ──
+    const excepcionesArr = user.excepciones || [];
+    const fechaExcepcion = excepcionesArr.find((e) =>
+      typeof e === "string" ? e === fecha : e?.fecha === fecha
+    );
+    const excType = typeof fechaExcepcion === "string" ? "block" : fechaExcepcion?.type;
 
-    const slotsGenerados = [];
-    let cursor = inicioJornada;
-    while (cursor + duracionSolicitada <= finJornada) {
-      if (!(dIni && dFin && cursor >= dIni && cursor < dFin)) {
-        slotsGenerados.push(cursor);
+    if (excType === "block") return res.json({ success: true, slots: [] });
+
+    const esCustom =
+      excType === "custom" &&
+      Array.isArray(fechaExcepcion?.slots) &&
+      fechaExcepcion.slots.length > 0;
+
+    // ── Armar los intervalos de trabajo del día ──
+    let intervalos = []; // [[inicioMin, finMin], ...]
+
+    if (esCustom) {
+      // Excepción con intervalos propios: manda por encima del horario
+      // semanal, sin importar si ese día de la semana está "activo" o no.
+      intervalos = fechaExcepcion.slots
+        .map(([desde, hasta]) => [toMin(desde), toMin(hasta)])
+        .filter(([ini, fin]) => ini != null && fin != null && fin > ini);
+      if (intervalos.length === 0) return res.json({ success: true, slots: [] });
+    } else {
+      const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+      const diaConfig  = user.horarios?.[diasSemana[new Date(fecha + "T12:00:00").getDay()]];
+      if (!diaConfig?.activo) return res.json({ success: true, slots: [] });
+
+      const inicioJornada = toMin(diaConfig.jornada[0]);
+      const finJornada    = toMin(diaConfig.jornada[1]);
+      const dIni          = toMin(diaConfig.descanso?.[0]);
+      const dFin          = toMin(diaConfig.descanso?.[1]);
+
+      if (dIni && dFin && dFin > dIni) {
+        intervalos.push([inicioJornada, dIni]);
+        intervalos.push([dFin, finJornada]);
+      } else {
+        intervalos.push([inicioJornada, finJornada]);
       }
-      cursor += duracionSolicitada;
     }
+
+    // ── Generar slots a partir de los intervalos resueltos ──
+    const slotsGenerados = [];
+    intervalos.forEach(([ini, fin]) => {
+      let cursor = ini;
+      while (cursor + duracionSolicitada <= fin) {
+        slotsGenerados.push(cursor);
+        cursor += duracionSolicitada;
+      }
+    });
 
     const { data: turnosDia } = await supabase.from("turnos")
       .select("hora, estado, servicio_id")
