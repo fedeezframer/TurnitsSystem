@@ -33,6 +33,38 @@ const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_UR
 const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
 
 // ══════════════════════════════════════════════════════════════
+// WHATSAPP CLOUD API — Config
+// Notificaciones de turno por WhatsApp usando la Cloud API oficial
+// de Meta, con UN número propio de Turnits (igual que Apps Script
+// manda los mails para todos los negocios).
+//
+// Variables de entorno necesarias en Render:
+//   WHATSAPP_TOKEN              → access token permanente del WABA de Turnits
+//   WHATSAPP_PHONE_NUMBER_ID    → phone_number_id del número emisor (Meta Business Suite)
+//   WHATSAPP_VERIFY_TOKEN       → string propio, cualquiera, para el handshake del webhook
+//   WHATSAPP_TEMPLATE_TURNO     → nombre de la plantilla aprobada (default: "confirmacion_turno")
+//   WHATSAPP_API_VERSION        → versión de Graph API (default: "v21.0")
+//   WHATSAPP_DEFAULT_COUNTRY    → prefijo a anteponer si el teléfono no lo trae (default: "549" = Arg. móvil)
+//
+// La plantilla "confirmacion_turno" debe crearse y aprobarse antes
+// en Meta Business Manager. Este helper asume 4 variables en el
+// body, en este orden: {{1}} nombre cliente, {{2}} nombre negocio,
+// {{3}} servicio, {{4}} fecha y hora. Si tu plantilla aprobada
+// tiene otro texto/orden, ajustá los "parameters" de enviarWhatsappTurno().
+// ══════════════════════════════════════════════════════════════
+const WHATSAPP_TOKEN           = process.env.WHATSAPP_TOKEN            || "";
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID  || "";
+const WHATSAPP_VERIFY_TOKEN    = process.env.WHATSAPP_VERIFY_TOKEN     || "";
+const WHATSAPP_TEMPLATE_TURNO  = process.env.WHATSAPP_TEMPLATE_TURNO   || "confirmacion_turno";
+const WHATSAPP_API_VERSION     = process.env.WHATSAPP_API_VERSION      || "v21.0";
+const WHATSAPP_DEFAULT_COUNTRY = process.env.WHATSAPP_DEFAULT_COUNTRY  || "549";
+const WHATSAPP_HABILITADO      = !!(WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID);
+
+if (!WHATSAPP_HABILITADO) {
+  console.warn("⚠️  WhatsApp Cloud API no configurada (faltan WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID). Notificaciones por WhatsApp deshabilitadas.");
+}
+
+// ══════════════════════════════════════════════════════════════
 // MULTER
 // ══════════════════════════════════════════════════════════════
 const upload = multer({
@@ -294,9 +326,93 @@ function enviarMailConflictoTurno({ adminEmail, nombreCliente, fechaHora, slug, 
 }
 
 // ══════════════════════════════════════════════════════════════
+// HELPER: WHATSAPP — formatear teléfono a formato internacional
+// WhatsApp exige el número completo con código de país (sin "+" ni
+// espacios). Si el teléfono guardado no trae código de país, le
+// antepone WHATSAPP_DEFAULT_COUNTRY (Argentina móvil "549" por defecto).
+// ══════════════════════════════════════════════════════════════
+function formatPhoneWhatsapp(telefono) {
+  const limpio = cleanPhone(telefono?.toString() || "");
+  if (!limpio) return null;
+  if (limpio.startsWith(WHATSAPP_DEFAULT_COUNTRY)) return limpio;
+  // Si ya es un número largo (probablemente ya trae otro código de país), lo dejamos como está.
+  if (limpio.length > 11) return limpio;
+  return `${WHATSAPP_DEFAULT_COUNTRY}${limpio.replace(/^0+/, "")}`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// HELPER: WHATSAPP — envío genérico de mensaje por plantilla
+// (Cloud API oficial de Meta, Graph API)
+// ══════════════════════════════════════════════════════════════
+async function enviarWhatsapp(to, templateName, components = [], languageCode = "es_AR") {
+  if (!WHATSAPP_HABILITADO) return { skipped: true, error: "whatsapp_no_configurado" };
+
+  const numero = formatPhoneWhatsapp(to);
+  if (!numero) return { skipped: true, error: "sin_telefono" };
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type":  "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: numero,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: languageCode },
+            components,
+          },
+        }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("❌ Error WhatsApp:", JSON.stringify(data));
+      return { success: false, error: data };
+    }
+    return { success: true, data };
+  } catch (e) {
+    console.error("❌ Error enviando WhatsApp:", e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// HELPER: WHATSAPP — notificación de turno confirmado al cliente
+// Usa la plantilla WHATSAPP_TEMPLATE_TURNO (debe existir y estar
+// aprobada en Meta Business Manager antes de andar). Asume 4
+// variables en el body: nombre, negocio, servicio, fecha/hora —
+// ajustá el array de "parameters" si tu plantilla real es distinta.
+// No bloquea el flujo principal: si falla, solo lo loguea.
+// ══════════════════════════════════════════════════════════════
+function enviarWhatsappTurno({ telefono, nombreCliente, businessName, fechaHora, servicio }) {
+  if (!WHATSAPP_HABILITADO || !telefono) return;
+
+  enviarWhatsapp(telefono, WHATSAPP_TEMPLATE_TURNO, [
+    {
+      type: "body",
+      parameters: [
+        { type: "text", text: (nombreCliente || "Cliente").toString().slice(0, 60) },
+        { type: "text", text: (businessName  || "").toString().slice(0, 60) },
+        { type: "text", text: (servicio      || "tu turno").toString().slice(0, 60) },
+        { type: "text", text: (fechaHora     || "").toString().slice(0, 60) },
+      ],
+    },
+  ]).then((r) => {
+    if (r?.success) console.log(`📲 WhatsApp turno enviado a ${telefono}`);
+  }).catch((e) => console.error("Error WhatsApp turno:", e.message));
+}
+
+// ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "13.3", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "13.5", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
@@ -853,61 +969,32 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       }
     }
 
-    // ── Helpers de tiempo ──
+    const excepcionesArr = user.excepciones || [];
+    const estaExceptuado = Array.isArray(excepcionesArr)
+      ? excepcionesArr.some((e) => typeof e === "string" ? e === fecha : e?.fecha === fecha && e?.type === "block")
+      : false;
+    if (estaExceptuado) return res.json({ success: true, slots: [] });
+
+    const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+    const diaConfig  = user.horarios?.[diasSemana[new Date(fecha + "T12:00:00").getDay()]];
+    if (!diaConfig?.activo) return res.json({ success: true, slots: [] });
+
     const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
     const fromMin = (m) => `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
 
-    // ── Resolver excepción del día puntual (tiene prioridad sobre horarios) ──
-    const excepcionesArr = user.excepciones || [];
-    const fechaExcepcion = excepcionesArr.find((e) =>
-      typeof e === "string" ? e === fecha : e?.fecha === fecha
-    );
-    const excType = typeof fechaExcepcion === "string" ? "block" : fechaExcepcion?.type;
+    const inicioJornada = toMin(diaConfig.jornada[0]);
+    const finJornada    = toMin(diaConfig.jornada[1]);
+    const dIni          = toMin(diaConfig.descanso?.[0]);
+    const dFin          = toMin(diaConfig.descanso?.[1]);
 
-    if (excType === "block") return res.json({ success: true, slots: [] });
-
-    const esCustom =
-      excType === "custom" &&
-      Array.isArray(fechaExcepcion?.slots) &&
-      fechaExcepcion.slots.length > 0;
-
-    // ── Armar los intervalos de trabajo del día ──
-    let intervalos = []; // [[inicioMin, finMin], ...]
-
-    if (esCustom) {
-      // Excepción con intervalos propios: manda por encima del horario
-      // semanal, sin importar si ese día de la semana está "activo" o no.
-      intervalos = fechaExcepcion.slots
-        .map(([desde, hasta]) => [toMin(desde), toMin(hasta)])
-        .filter(([ini, fin]) => ini != null && fin != null && fin > ini);
-      if (intervalos.length === 0) return res.json({ success: true, slots: [] });
-    } else {
-      const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
-      const diaConfig  = user.horarios?.[diasSemana[new Date(fecha + "T12:00:00").getDay()]];
-      if (!diaConfig?.activo) return res.json({ success: true, slots: [] });
-
-      const inicioJornada = toMin(diaConfig.jornada[0]);
-      const finJornada    = toMin(diaConfig.jornada[1]);
-      const dIni          = toMin(diaConfig.descanso?.[0]);
-      const dFin          = toMin(diaConfig.descanso?.[1]);
-
-      if (dIni && dFin && dFin > dIni) {
-        intervalos.push([inicioJornada, dIni]);
-        intervalos.push([dFin, finJornada]);
-      } else {
-        intervalos.push([inicioJornada, finJornada]);
-      }
-    }
-
-    // ── Generar slots a partir de los intervalos resueltos ──
     const slotsGenerados = [];
-    intervalos.forEach(([ini, fin]) => {
-      let cursor = ini;
-      while (cursor + duracionSolicitada <= fin) {
+    let cursor = inicioJornada;
+    while (cursor + duracionSolicitada <= finJornada) {
+      if (!(dIni && dFin && cursor >= dIni && cursor < dFin)) {
         slotsGenerados.push(cursor);
-        cursor += duracionSolicitada;
       }
-    });
+      cursor += duracionSolicitada;
+    }
 
     const { data: turnosDia } = await supabase.from("turnos")
       .select("hora, estado, servicio_id")
@@ -1153,6 +1240,15 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
       precioTotal:   precioCobrado,
       montoOnline:   0,
       metodoPago:    user.metodo_pago || "none",
+    });
+
+    // Confirmación por WhatsApp al cliente (no bloquea la respuesta si falla)
+    enviarWhatsappTurno({
+      telefono:      phoneClean,
+      nombreCliente: name.trim(),
+      businessName:  user.business_name,
+      fechaHora:     `${fecha} ${hora}`,
+      servicio:      servicioNombre || "",
     });
 
     invalidateCache(slugClean);
@@ -2223,7 +2319,7 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
   if (turnoExistente) { console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`); return; }
 
   const { data: user } = await supabase.from("usuarios")
-    .select("email, porcentaje_sena, capacidad_por_turno").eq("slug", slug).maybeSingle();
+    .select("email, business_name, porcentaje_sena, capacidad_por_turno").eq("slug", slug).maybeSingle();
 
   const porcSena   = porcentaje_sena || user?.porcentaje_sena || 30;
   const pagoEstado = estado === "aprobado" ? "aprobado" : estado === "pendiente" ? "pendiente" : "rechazado";
@@ -2258,17 +2354,28 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
     if (turnoError) {
       if (turnoError.code === "23505") { console.log(`⚠️ Turno duplicado bloqueado por DB: ${payment_id}`); }
       else throw turnoError;
-    } else if (user?.email) {
-      const saldoRestante = metodo_pago === "sena" && precio_servicio > monto ? precio_servicio - monto : 0;
-      enviarMailTurno({
-        adminEmail:    user.email,
-        emailCliente:  email?.trim().toLowerCase() || "",
+    } else {
+      if (user?.email) {
+        const saldoRestante = metodo_pago === "sena" && precio_servicio > monto ? precio_servicio - monto : 0;
+        enviarMailTurno({
+          adminEmail:    user.email,
+          emailCliente:  email?.trim().toLowerCase() || "",
+          nombreCliente: nombre?.trim() || "Cliente",
+          fechaHora:     `${fecha} ${hora}`,
+          slug, servicio: servicio_nombre || "",
+          precioTotal:   Number(precio_servicio || monto || 0),
+          montoOnline:   Number(monto || 0),
+          metodoPago:    metodo_pago || "mercadopago",
+        });
+      }
+
+      // Confirmación por WhatsApp al cliente (independiente del email)
+      enviarWhatsappTurno({
+        telefono:      telefono,
         nombreCliente: nombre?.trim() || "Cliente",
+        businessName:  user?.business_name,
         fechaHora:     `${fecha} ${hora}`,
-        slug, servicio: servicio_nombre || "",
-        precioTotal:   Number(precio_servicio || monto || 0),
-        montoOnline:   Number(monto || 0),
-        metodoPago:    metodo_pago || "mercadopago",
+        servicio:      servicio_nombre || "",
       });
     }
   }
@@ -2395,6 +2502,82 @@ app.post("/webhook/renovacion", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// WEBHOOK — WhatsApp Cloud API (Meta)
+// GET  → handshake de verificación que pide Meta al configurar el
+//        webhook en Meta for Developers (App > WhatsApp > Configuración).
+// POST → eventos entrantes: mensajes de clientes y actualizaciones
+//        de estado de los mensajes que mandamos (entregado/leído).
+//        No hace nada crítico todavía, solo loguea — es la base
+//        para eventualmente responder consultas por WhatsApp.
+// ══════════════════════════════════════════════════════════════
+app.get("/webhook/whatsapp", (req, res) => {
+  const mode      = req.query["hub.mode"];
+  const token     = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token && WHATSAPP_VERIFY_TOKEN && token === WHATSAPP_VERIFY_TOKEN) {
+    console.log("✅ Webhook de WhatsApp verificado por Meta.");
+    return res.status(200).send(challenge);
+  }
+  res.sendStatus(403);
+});
+
+app.post("/webhook/whatsapp", (req, res) => {
+  try {
+    const entry  = req.body?.entry?.[0];
+    const change = entry?.changes?.[0]?.value;
+
+    const mensajes = change?.messages;
+    if (mensajes?.length) {
+      mensajes.forEach((m) => {
+        console.log(`📩 WhatsApp de ${m.from}: ${m.text?.body || `[${m.type}]`}`);
+      });
+    }
+
+    const estados = change?.statuses;
+    if (estados?.length) {
+      estados.forEach((s) => {
+        console.log(`📶 WhatsApp status: ${s.id} → ${s.status}`);
+      });
+    }
+  } catch (e) {
+    console.error("Error en /webhook/whatsapp:", e.message);
+  }
+  // Meta espera siempre 200, incluso si algo falla al procesar.
+  res.sendStatus(200);
+});
+
+// ══════════════════════════════════════════════════════════════
+// ADMIN — Test de envío por WhatsApp
+// POST /admin/whatsapp/test
+// Útil para probar que el token, el phone_number_id y la plantilla
+// están bien configurados antes de depender de esto en producción.
+// ══════════════════════════════════════════════════════════════
+app.post("/admin/whatsapp/test", requireAdminKey, async (req, res) => {
+  try {
+    const { telefono, nombre, businessName, servicio, fechaHora } = req.body;
+    if (!telefono) return res.status(400).json({ success: false, error: "Falta el teléfono." });
+    if (!WHATSAPP_HABILITADO) return res.status(400).json({ success: false, error: "WhatsApp no está configurado (faltan variables de entorno)." });
+
+    const resultado = await enviarWhatsapp(telefono, WHATSAPP_TEMPLATE_TURNO, [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: nombre       || "Cliente de prueba" },
+          { type: "text", text: businessName || "Turnits" },
+          { type: "text", text: servicio     || "Corte de pelo" },
+          { type: "text", text: fechaHora    || new Date().toLocaleString("es-AR") },
+        ],
+      },
+    ]);
+
+    res.json({ success: !!resultado.success, resultado });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // CRON — Verificación de vencimientos
 // ══════════════════════════════════════════════════════════════
 app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
@@ -2445,9 +2628,9 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Turnits API v13.4                            ║
-  ║   Fix: tema/logo expuestos en /negocio,        ║
-  ║   filtro defensivo de tema, preview live       ║
+  ║   Turnits API v13.5                            ║
+  ║   Nuevo: notificaciones de turno por WhatsApp  ║
+  ║   Cloud API (${WHATSAPP_HABILITADO ? "configurada" : "SIN configurar"})               ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
