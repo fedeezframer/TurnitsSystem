@@ -43,6 +43,7 @@ const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_UR
 //   WHATSAPP_PHONE_NUMBER_ID    → phone_number_id del número emisor (Meta Business Suite)
 //   WHATSAPP_VERIFY_TOKEN       → string propio, cualquiera, para el handshake del webhook
 //   WHATSAPP_TEMPLATE_TURNO     → nombre de la plantilla aprobada (default: "confirmacion_turno")
+//   WHATSAPP_TEMPLATE_LISTA_ESPERA → nombre de la plantilla de aviso de cupo liberado (default: "turno_liberado")
 //   WHATSAPP_API_VERSION        → versión de Graph API (default: "v21.0")
 //   WHATSAPP_DEFAULT_COUNTRY    → prefijo a anteponer si el teléfono no lo trae (default: "549" = Arg. móvil)
 //
@@ -52,13 +53,14 @@ const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_UR
 // {{3}} servicio, {{4}} fecha y hora. Si tu plantilla aprobada
 // tiene otro texto/orden, ajustá los "parameters" de enviarWhatsappTurno().
 // ══════════════════════════════════════════════════════════════
-const WHATSAPP_TOKEN           = process.env.WHATSAPP_TOKEN            || "";
-const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID  || "";
-const WHATSAPP_VERIFY_TOKEN    = process.env.WHATSAPP_VERIFY_TOKEN     || "";
-const WHATSAPP_TEMPLATE_TURNO  = process.env.WHATSAPP_TEMPLATE_TURNO   || "confirmacion_turno";
-const WHATSAPP_API_VERSION     = process.env.WHATSAPP_API_VERSION      || "v21.0";
-const WHATSAPP_DEFAULT_COUNTRY = process.env.WHATSAPP_DEFAULT_COUNTRY  || "549";
-const WHATSAPP_HABILITADO      = !!(WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID);
+const WHATSAPP_TOKEN                = process.env.WHATSAPP_TOKEN                || "";
+const WHATSAPP_PHONE_NUMBER_ID      = process.env.WHATSAPP_PHONE_NUMBER_ID      || "";
+const WHATSAPP_VERIFY_TOKEN         = process.env.WHATSAPP_VERIFY_TOKEN         || "";
+const WHATSAPP_TEMPLATE_TURNO       = process.env.WHATSAPP_TEMPLATE_TURNO       || "confirmacion_turno";
+const WHATSAPP_TEMPLATE_LISTA_ESPERA = process.env.WHATSAPP_TEMPLATE_LISTA_ESPERA || "turno_liberado";
+const WHATSAPP_API_VERSION          = process.env.WHATSAPP_API_VERSION          || "v21.0";
+const WHATSAPP_DEFAULT_COUNTRY      = process.env.WHATSAPP_DEFAULT_COUNTRY      || "549";
+const WHATSAPP_HABILITADO           = !!(WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID);
 
 if (!WHATSAPP_HABILITADO) {
   console.warn("⚠️  WhatsApp Cloud API no configurada (faltan WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID). Notificaciones por WhatsApp deshabilitadas.");
@@ -125,6 +127,53 @@ const diasHastaVencer = (fechaISO) => {
   const vence = new Date(fechaISO + "T23:59:59-03:00");
   return Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
 };
+
+// Determina si una fecha es día laboral (según horarios + excepciones). Devuelve la config del día o null.
+function obtenerConfigDia(horarios, excepciones, fecha) {
+  const excepcionesArr = excepciones || [];
+  const estaExceptuado = Array.isArray(excepcionesArr)
+    ? excepcionesArr.some((e) => typeof e === "string" ? e === fecha : e?.fecha === fecha && e?.type === "block")
+    : false;
+  if (estaExceptuado) return null;
+
+  const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+  const diaConfig = horarios?.[diasSemana[new Date(fecha + "T12:00:00").getDay()]];
+  if (!diaConfig?.activo) return null;
+  return diaConfig;
+}
+
+// Notifica al primero en la lista de espera cuando se libera un cupo
+async function notificarListaEspera(slug, fecha) {
+  const { data: pendientes } = await supabase.from("lista_espera")
+    .select("*").eq("slug", slug).eq("fecha", fecha).eq("estado", "pendiente")
+    .order("created_at", { ascending: true }).limit(1);
+  if (!pendientes?.length) return;
+
+  const entrada = pendientes[0];
+  const { data: user } = await supabase.from("usuarios").select("business_name").eq("slug", slug).maybeSingle();
+
+  if ((entrada.canal_aviso === "email" || entrada.canal_aviso === "ambos") && entrada.email) {
+    fetch(APPS_SCRIPT_URL, {
+      method: "POST", headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "turnoLiberado", emailCliente: entrada.email, nombreCliente: entrada.nombre,
+        businessName: user?.business_name || "", fecha, slug,
+      }),
+    }).catch((e) => console.error("Error mail lista de espera:", e.message));
+  }
+
+  if ((entrada.canal_aviso === "whatsapp" || entrada.canal_aviso === "ambos") && entrada.telefono) {
+    enviarWhatsapp(entrada.telefono, WHATSAPP_TEMPLATE_LISTA_ESPERA, [
+      { type: "body", parameters: [
+        { type: "text", text: entrada.nombre.slice(0, 60) },
+        { type: "text", text: (user?.business_name || "").slice(0, 60) },
+        { type: "text", text: fecha },
+      ]},
+    ]).catch((e) => console.error("Error whatsapp lista de espera:", e.message));
+  }
+
+  await supabase.from("lista_espera").update({ estado: "notificado" }).eq("id", entrada.id);
+}
 
 async function verificarPassword(passwordIngresado, passwordGuardado, userId) {
   const stored   = String(passwordGuardado);
@@ -412,7 +461,7 @@ function enviarWhatsappTurno({ telefono, nombreCliente, businessName, fechaHora,
 // ══════════════════════════════════════════════════════════════
 // RUTAS BASE
 // ══════════════════════════════════════════════════════════════
-app.get("/",       (_, res) => res.json({ status: "online", version: "13.5", timestamp: new Date().toISOString() }));
+app.get("/",       (_, res) => res.json({ status: "online", version: "13.6", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
 
 // ══════════════════════════════════════════════════════════════
@@ -945,39 +994,25 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
 
     const { data: user, error: userError } = await supabase.from("usuarios")
       .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo, estado_suscripcion, fecha_vencimiento")
-      .eq("slug", slug)
-      .maybeSingle();
-
+      .eq("slug", slug).maybeSingle();
     if (userError) throw userError;
     if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
-    if (estaSuspendido) return res.json({ success: true, slots: [], suspendido: true });
+    if (estaSuspendido) return res.json({ success: true, slots: [], suspendido: true, puede_anotarse_espera: false });
 
     let duracionSolicitada = user.duracion_turno      || 30;
     let capacidad          = user.capacidad_por_turno || 1;
 
     if (servicio_id) {
-      const { data: srv } = await supabase.from("servicios")
-        .select("duracion, capacidad")
-        .eq("id", servicio_id).eq("slug", slug)
-        .maybeSingle();
-      if (srv) {
-        duracionSolicitada = srv.duracion || duracionSolicitada;
-        capacidad          = srv.capacidad || capacidad;
-      }
+      const { data: srv } = await supabase.from("servicios").select("duracion, capacidad")
+        .eq("id", servicio_id).eq("slug", slug).maybeSingle();
+      if (srv) { duracionSolicitada = srv.duracion || duracionSolicitada; capacidad = srv.capacidad || capacidad; }
     }
 
-    const excepcionesArr = user.excepciones || [];
-    const estaExceptuado = Array.isArray(excepcionesArr)
-      ? excepcionesArr.some((e) => typeof e === "string" ? e === fecha : e?.fecha === fecha && e?.type === "block")
-      : false;
-    if (estaExceptuado) return res.json({ success: true, slots: [] });
-
-    const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
-    const diaConfig  = user.horarios?.[diasSemana[new Date(fecha + "T12:00:00").getDay()]];
-    if (!diaConfig?.activo) return res.json({ success: true, slots: [] });
+    const diaConfig = obtenerConfigDia(user.horarios, user.excepciones, fecha);
+    if (!diaConfig) return res.json({ success: true, slots: [], puede_anotarse_espera: false });
 
     const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
     const fromMin = (m) => `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
@@ -990,42 +1025,42 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     const slotsGenerados = [];
     let cursor = inicioJornada;
     while (cursor + duracionSolicitada <= finJornada) {
-      if (!(dIni && dFin && cursor >= dIni && cursor < dFin)) {
-        slotsGenerados.push(cursor);
-      }
+      if (!(dIni && dFin && cursor >= dIni && cursor < dFin)) slotsGenerados.push(cursor);
       cursor += duracionSolicitada;
     }
 
-    const { data: turnosDia } = await supabase.from("turnos")
-      .select("hora, estado, servicio_id")
-      .eq("slug", slug).eq("fecha", fecha)
-      .in("estado", ["confirmado", "pendiente"]);
-
-    const { data: todosServicios } = await supabase.from("servicios")
-      .select("id, duracion")
-      .eq("slug", slug);
+    const { data: turnosDia } = await supabase.from("turnos").select("hora, estado, servicio_id")
+      .eq("slug", slug).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
+    const { data: todosServicios } = await supabase.from("servicios").select("id, duracion").eq("slug", slug);
 
     const duracionPorServicio = {};
     (todosServicios || []).forEach((s) => { duracionPorServicio[s.id] = s.duracion; });
 
     const rangosOcupados = (turnosDia || []).map((t) => {
       const inicioTurno = toMin(t.hora.slice(0, 5));
-      const durTurno    = (t.servicio_id && duracionPorServicio[t.servicio_id])
-        ? duracionPorServicio[t.servicio_id]
-        : (user.duracion_turno || 30);
+      const durTurno    = (t.servicio_id && duracionPorServicio[t.servicio_id]) ? duracionPorServicio[t.servicio_id] : (user.duracion_turno || 30);
       return { inicio: inicioTurno, fin: inicioTurno + durTurno };
     });
 
-    const slots = slotsGenerados.map((slotInicio) => {
-      const slotFin    = slotInicio + duracionSolicitada;
-      const solapados  = rangosOcupados.filter(
-        ({ inicio, fin }) => slotInicio < fin && slotFin > inicio
-      ).length;
-      const disponibles = Math.max(0, capacidad - solapados);
-      return { hora: fromMin(slotInicio), disponibles, lleno: disponibles <= 0 };
-    });
+    // Si "fecha" es hoy, ignoramos los horarios que ya pasaron
+    const ahoraArg      = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+    const hoyISO         = ahoraArg.toISOString().split("T")[0];
+    const esHoy           = fecha === hoyISO;
+    const minutosAhora    = esHoy ? (ahoraArg.getHours() * 60 + ahoraArg.getMinutes()) : null;
 
-    res.json({ success: true, slots });
+    const slots = slotsGenerados
+      .filter((slotInicio) => !esHoy || slotInicio > minutosAhora)
+      .map((slotInicio) => {
+        const slotFin   = slotInicio + duracionSolicitada;
+        const solapados = rangosOcupados.filter(({ inicio, fin }) => slotInicio < fin && slotFin > inicio).length;
+        const disponibles = Math.max(0, capacidad - solapados);
+        return { hora: fromMin(slotInicio), disponibles, lleno: disponibles <= 0 };
+      });
+
+    // Día laboral + no queda ningún horario libre de acá en adelante → se puede anotar en la cola
+    const puedeAnotarseEspera = slots.every((s) => s.lleno);
+
+    res.json({ success: true, slots, puede_anotarse_espera: puedeAnotarseEspera });
   } catch (e) {
     console.error("Error en /slots-disponibles:", e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -1073,6 +1108,99 @@ app.post("/admin/servicios/upload-imagen", requireAuth, upload.single("imagen"),
     res.json({ success: true, url: data.publicUrl });
   } catch (e) {
     console.error("Error upload imagen:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// LISTA DE ESPERA
+// ══════════════════════════════════════════════════════════════
+app.post("/turnos/lista-espera", limiterBooking, async (req, res) => {
+  try {
+    const { slug, fecha, servicio_id, nombre, telefono, email, canal_aviso } = req.body;
+    const slugClean = cleanSlug(slug || "");
+    const canal = ["email", "whatsapp", "ambos"].includes(canal_aviso) ? canal_aviso : null;
+
+    if (!slugClean || !fecha || !nombre || !canal) {
+      return res.status(400).json({ success: false, error: "Faltan datos requeridos." });
+    }
+    if ((canal === "email" || canal === "ambos") && !email)
+      return res.status(400).json({ success: false, error: "Falta el email." });
+    if ((canal === "whatsapp" || canal === "ambos") && !telefono)
+      return res.status(400).json({ success: false, error: "Falta el teléfono." });
+    if (email && !validateEmail(email))
+      return res.status(400).json({ success: false, error: "Email inválido." });
+
+    const phoneClean = telefono ? cleanPhone(telefono.toString()) : null;
+    if (phoneClean && !validatePhone(phoneClean))
+      return res.status(400).json({ success: false, error: "Teléfono inválido." });
+
+    const { data: user, error: userError } = await supabase.from("usuarios")
+      .select("horarios, excepciones, activo, estado_suscripcion, fecha_vencimiento")
+      .eq("slug", slugClean).maybeSingle();
+    if (userError) throw userError;
+    if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+    const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
+    if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
+
+    const diaConfig = obtenerConfigDia(user.horarios, user.excepciones, fecha);
+    if (!diaConfig) return res.status(400).json({ success: false, error: "Ese día no es un día laboral." });
+
+    const emailClean = email?.trim().toLowerCase() || null;
+
+    const { data: entrada, error } = await supabase.from("lista_espera").insert([{
+      slug: slugClean, fecha, servicio_id: servicio_id || null,
+      nombre: nombre.trim(), telefono: phoneClean, email: emailClean,
+      canal_aviso: canal, estado: "pendiente",
+    }]).select().single();
+    if (error) {
+      if (error.code === "23505") return res.status(409).json({ success: false, error: "Ya estás anotado en la lista de espera para ese día." });
+      throw error;
+    }
+
+    res.status(201).json({ success: true, id: entrada.id, message: "Te anotamos en la lista de espera. Te avisamos si se libera un turno." });
+  } catch (e) {
+    console.error("Error en /turnos/lista-espera:", e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get("/admin/lista-espera/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { data, error } = await supabase.from("lista_espera")
+      .select("*").eq("slug", slug).eq("estado", "pendiente")
+      .order("fecha", { ascending: true }).order("created_at", { ascending: true });
+    if (error) throw error;
+    res.json({ success: true, lista_espera: data || [] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.delete("/admin/lista-espera/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const slugClean = cleanSlug(req.body?.slug || req.query?.slug || req.auth.slug);
+    const { error } = await supabase.from("lista_espera").delete().eq("id", id).eq("slug", slugClean);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Cron diario: borra solicitudes de días que ya pasaron sin liberarse
+app.get("/cron/limpiar-lista-espera", requireAdminKey, async (req, res) => {
+  try {
+    const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toISOString().split("T")[0];
+    const { data, error } = await supabase.from("lista_espera")
+      .delete().lt("fecha", hoyISO).eq("estado", "pendiente").select("id");
+    if (error) throw error;
+    res.json({ success: true, borrados: data?.length || 0 });
+  } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -1322,7 +1450,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
     }
 
     const { data: turnoExistente, error: fetchError } = await supabase
-      .from("turnos").select("id, slug, estado")
+      .from("turnos").select("id, slug, estado, fecha")
       .eq("id", id).eq("slug", slugClean).maybeSingle();
 
     if (fetchError) throw fetchError;
@@ -1335,6 +1463,12 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       .from("turnos").update(updateData).eq("id", id).eq("slug", slugClean).select().single();
 
     if (updateError) throw updateError;
+
+    const ESTADOS_OCUPAN = ["confirmado", "pendiente"];
+    const liberaCupo = ESTADOS_OCUPAN.includes(turnoExistente.estado) && !ESTADOS_OCUPAN.includes(estado);
+    if (liberaCupo) {
+      notificarListaEspera(slugClean, turnoExistente.fecha).catch((e) => console.error("Error notificando lista de espera:", e.message));
+    }
 
     invalidateCache(slugClean);
     console.log(`✅ Turno ${id} → ${estado} (${slugClean})`);
@@ -2628,9 +2762,10 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════╗
-  ║   Turnits API v13.5                            ║
-  ║   Nuevo: notificaciones de turno por WhatsApp  ║
-  ║   Cloud API (${WHATSAPP_HABILITADO ? "configurada" : "SIN configurar"})               ║
+  ║   Turnits API v13.6                            ║
+  ║   Nuevo: lista de espera + notificación de     ║
+  ║   cupo liberado (email + WhatsApp)             ║
+  ║   WhatsApp (${WHATSAPP_HABILITADO ? "configurada" : "SIN configurar"})               ║
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
