@@ -3635,12 +3635,22 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     const hoyISO     = `${anioActual}-${String(mesActual).padStart(2, "0")}-${String(diaHoyNum).padStart(2, "0")}`;
     const inicioMes  = `${anioActual}-${String(mesActual).padStart(2, "0")}-01`;
 
-    const [{ data: turnosMes }, { data: serviciosNegocio }] = await Promise.all([
+    // Rango del mes anterior, usado para comparar tendencias (turnos y clientes nuevos vs mes pasado).
+    const mesAnteriorRef        = new Date(anioActual, mesActual - 2, 1);
+    const inicioMesAnterior     = `${mesAnteriorRef.getFullYear()}-${String(mesAnteriorRef.getMonth() + 1).padStart(2, "0")}-01`;
+    const finMesAnteriorRef     = new Date(anioActual, mesActual - 1, 0);
+    const finMesAnterior        = `${finMesAnteriorRef.getFullYear()}-${String(finMesAnteriorRef.getMonth() + 1).padStart(2, "0")}-${String(finMesAnteriorRef.getDate()).padStart(2, "0")}`;
+    const inicioMesAnteriorDate = new Date(inicioMesAnterior + "T00:00:00");
+    const finMesAnteriorDate    = new Date(finMesAnterior + "T23:59:59");
+
+    const [{ data: turnosMes }, { data: serviciosNegocio }, { count: turnosMesAnteriorTotal }] = await Promise.all([
       supabase.from("turnos").select("*")
         .eq("slug", slug).gte("fecha", inicioMes).neq("estado", "cancelado")
         .order("fecha", { ascending: true }).order("hora", { ascending: true }),
       supabase.from("servicios").select("id, duracion")
         .eq("slug", slug).eq("activo", "true"),
+      supabase.from("turnos").select("id", { count: "exact", head: true })
+        .eq("slug", slug).gte("fecha", inicioMesAnterior).lte("fecha", finMesAnterior).neq("estado", "cancelado"),
     ]);
 
     const turnosData          = turnosMes || [];
@@ -3720,14 +3730,44 @@ const turnosHoyDetalle = turnosData
 
     const { data: todosLosTurnos } = await supabase.from("turnos")
       .select("telefono, email, created_at").eq("slug", slug).neq("estado", "cancelado");
-    const clientesUnicos = new Set(), clientesMesSet = new Set();
-    const inicioMesDate  = new Date(inicioMes + "T00:00:00");
+    const inicioMesDate = new Date(inicioMes + "T00:00:00");
+
+    // Métricas de clientes reales.
+    // Antes: "clientesConcurrentes" era un 40% del total inventado (no salía de ningún dato real),
+    // y "clientesNuevos" contaba a cualquiera que hubiera reservado este mes (aunque fuera cliente
+    // de hace años), no a clientes nuevos de verdad.
+    // Ahora: "nuevo" = su primer turno histórico cayó este mes. "Frecuente" = 3+ turnos históricos.
+    const primeraVezPorCliente = {}; // key -> fecha del primer turno histórico de ese cliente
+    const conteoPorCliente     = {}; // key -> cantidad total de turnos históricos (no cancelados)
     (todosLosTurnos || []).forEach((t) => {
       const key = t.telefono || t.email?.toLowerCase();
-      if (key) {
-        clientesUnicos.add(key);
-        if (new Date(t.created_at) >= inicioMesDate) clientesMesSet.add(key);
+      if (!key) return;
+      const creado = new Date(t.created_at);
+      conteoPorCliente[key] = (conteoPorCliente[key] || 0) + 1;
+      if (!primeraVezPorCliente[key] || creado < primeraVezPorCliente[key]) {
+        primeraVezPorCliente[key] = creado;
       }
+    });
+
+    const clientesUnicos = new Set(Object.keys(conteoPorCliente));
+
+    let clientesNuevosMes         = 0; // primer turno histórico dentro del mes actual
+    let clientesNuevosMesAnterior = 0; // primer turno histórico dentro del mes anterior (para comparar tendencia)
+    let clientesRecurrentes       = 0; // ya eran clientes antes de este mes (no son "nuevos")
+    let clientesFrecuentes        = 0; // 3 o más turnos históricos: clientes fieles/frecuentes reales
+
+    Object.entries(primeraVezPorCliente).forEach(([key, primeraFecha]) => {
+      if (primeraFecha >= inicioMesDate) {
+        clientesNuevosMes++;
+      } else {
+        clientesRecurrentes++;
+        if (primeraFecha >= inicioMesAnteriorDate && primeraFecha <= finMesAnteriorDate) {
+          clientesNuevosMesAnterior++;
+        }
+      }
+    });
+    Object.values(conteoPorCliente).forEach((cantidad) => {
+      if (cantidad >= 3) clientesFrecuentes++;
     });
 
     const pagosPorDia = {};
@@ -3740,12 +3780,14 @@ const turnosHoyDetalle = turnosData
     const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
 
     const finalData = {
-      turnosHoy, turnosMes: turnosMesTotal, turnosHoyDetalle,
+      turnosHoy, turnosMes: turnosMesTotal, turnosMesAnterior: turnosMesAnteriorTotal || 0, turnosHoyDetalle,
       chartData: Object.keys(semanas).map((k) => ({ label: k, turnos: semanas[k] })),
       turnosLista,
-      totalClientes:        clientesUnicos.size,
-      clientesNuevos:       clientesMesSet.size,
-      clientesConcurrentes: Math.floor(clientesUnicos.size * 0.4),
+      totalClientes:             clientesUnicos.size,
+      clientesNuevos:            clientesNuevosMes,
+      clientesNuevosMesAnterior: clientesNuevosMesAnterior,
+      clientesRecurrentes:       clientesRecurrentes,
+      clientesFrecuentes:        clientesFrecuentes,
       ventas: {
         volumenTotal:   metricas.volumenTotal,
         volumenHoy:     pagosHoy.volumen,
