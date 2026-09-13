@@ -463,7 +463,7 @@ async function generarTips(slug) {
         slug, tipo: "tip",
         titulo: "Te recomendamos conectar Mercado Pago",
         mensaje: "Con un método de pago activo (seña o pago total) reducís el ausentismo: los clientes que pagan casi no faltan.",
-        data: { clave: "conectar_mp" },
+        data: { clave: "conectar_mp", seccion: "pagos" },
       });
     }
 
@@ -472,7 +472,7 @@ async function generarTips(slug) {
         slug, tipo: "tip",
         titulo: "Cargá tus servicios",
         mensaje: "Definir servicios con precio y duración hace que la reserva sea más rápida y clara para tus clientes.",
-        data: { clave: "cargar_servicios" },
+        data: { clave: "cargar_servicios", seccion: "servicios" },
       });
     }
 
@@ -481,7 +481,7 @@ async function generarTips(slug) {
         slug, tipo: "tip",
         titulo: "Sumá tu logo",
         mensaje: "Un logo propio le da más confianza a tus clientes al momento de reservar.",
-        data: { clave: "subir_logo" },
+        data: { clave: "subir_logo", seccion: "temas" },
       });
     }
   } catch (e) {
