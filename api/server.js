@@ -32,7 +32,7 @@ const JWT_EXPIRY     = process.env.JWT_EXPIRY || "1d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "21000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 // FIX-SEC: secret propio para validar la firma de los webhooks de MP.
 const MP_WEBHOOK_SECRET  = process.env.MP_WEBHOOK_SECRET          || "";
@@ -964,7 +964,11 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       slug,
       password:           pendiente.password_hash,
       plan:               planFinal,
-      metodo_pago:        "none",
+      // FIX-UX: antes arrancaba en "none" (sin cobro online) incluso en
+      // el trial premium, así que el negocio nacía sin poder cobrar hasta
+      // que alguien entrara a tocar el switch manualmente. Default: Total
+      // del servicio (una vez que conecte MP, ya puede cobrar el 100%).
+      metodo_pago:        "total",
       porcentaje_sena:    30,
       excepciones:        [],
       activo:             "true",
@@ -1449,10 +1453,9 @@ const { data: user, error } = await supabase.from("usuarios")
     }
  
     const esPremium               = user.plan === "premium";
-const enTrial                 = user.estado_suscripcion === "trial";
-const mpDisponible            = !!user.mp_access_token && ["sena", "total"].includes(user.metodo_pago);
-const transferenciaDisponible = esPremium && !enTrial && !!user.acepta_transferencia;
-const efectivoDisponible      = esPremium && !enTrial && !!user.acepta_efectivo;
+    const mpDisponible            = !!user.mp_access_token && ["sena", "total"].includes(user.metodo_pago);
+    const transferenciaDisponible = esPremium && !!user.acepta_transferencia;
+    const efectivoDisponible      = esPremium && !!user.acepta_efectivo;
  
     const metodos_pago_disponibles = [
       ...(mpDisponible            ? ["mercadopago"]  : []),
@@ -2483,9 +2486,9 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     // FIX-SEC: transferencia/efectivo son exclusivos de premium. Se
     // revalida acá (no solo confiar en lo que muestra el front) por
     // si el negocio bajó de plan después de haber tenido esto activo.
-    if (user.plan !== "premium" || user.estado_suscripcion === "trial") {
-  return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
-}
+    if (user.plan !== "premium") {
+      return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
+    }
     if (metodo_pago === "transferencia" && !user.acepta_transferencia) {
       return res.status(403).json({ success: false, error: "Este negocio no acepta pagos por transferencia." });
     }
@@ -3343,7 +3346,8 @@ app.put("/admin/reprogramaciones/:id", requireAuth, async (req, res) => {
       tipo: "sistema",
       titulo: "Turno reprogramado",
       mensaje: `El turno de ${turno.nombre || "un cliente"} se movió al ${solicitud.fecha_propuesta} ${solicitud.hora_propuesta}hs.`,
-      data: { turno_id: turno.id },
+      // FIX: es sobre un turno puntual → agenda, no "inicio".
+      data: { turno_id: turno.id, seccion: "agenda" },
     });
  
     invalidateCache(slugClean);
@@ -3869,7 +3873,9 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       email: email.trim().toLowerCase(), telefono: telefono ? cleanPhone(telefono) : null,
       business_name: business_name.trim(), slug, password: hashedPassword,
       plan: planFinal,
-      metodo_pago: "none", porcentaje_sena: 30, excepciones: [],
+      // FIX-UX: mismo default que en el alta pública — "total" en vez de
+      // "none", para no nacer sin cobro online (ver /registro/verificar).
+      metodo_pago: "total", porcentaje_sena: 30, excepciones: [],
       activo: "true", estado_suscripcion: estadoSuscripcion, fecha_vencimiento: fechaVencimiento,
     }]).select("id, slug, business_name, plan, email, nombre_persona, apellido, estado_suscripcion, fecha_vencimiento").single();
 
@@ -4216,8 +4222,8 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     // ($150). El plan gratis no se toca: sigue en 2% con piso $300.
     const enTrial = user.estado_suscripcion === "trial";
     const fee = esPremium
-  ? (enTrial ? 250 : 0)
-  : Math.max(300, Math.round(montoACobrar * 0.02));
+      ? (enTrial ? 250 : 150)
+      : Math.max(300, Math.round(montoACobrar * 0.02));
 
     if (user.mp_access_token) {
       try {
@@ -4357,11 +4363,20 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
     if (fetchError) throw fetchError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
+    // FIX-UX/COMISIONES: acepta_transferencia/acepta_efectivo quedaban en
+    // true después de bajar a gratis. El booking ya los rechaza igual
+    // (chequeo plan !== "premium" en /reservar), pero dejarlos prendidos
+    // en la base hace que otras pantallas (ej. el checklist de onboarding)
+    // sigan mostrando esos métodos como "configurados" cuando en realidad
+    // el negocio no puede cobrarlos más. Se apagan acá para que todo el
+    // panel quede consistente con el plan real.
     const { error: updateError } = await supabase.from("usuarios").update({
-      plan:               "gratis",
-      estado_suscripcion: "activo",
-      fecha_vencimiento:  null,
-      metodo_pago:        "total",
+      plan:                 "gratis",
+      estado_suscripcion:   "activo",
+      fecha_vencimiento:    null,
+      metodo_pago:          "total",
+      acepta_transferencia: false,
+      acepta_efectivo:      false,
     }).eq("slug", slug);
 
     if (updateError) throw updateError;
@@ -4515,13 +4530,28 @@ app.get("/oauth-callback", async (req, res) => {
     console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${data.error || data.message || "sin access_token"})`} — refresh_token: ${data.refresh_token ? "sí" : "no"}`);
     if (data.access_token) {
       const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
+
+      // FIX-UX: conectar MP guardaba el token pero dejaba metodo_pago tal
+      // cual estaba (por default "none"), entonces el negocio quedaba
+      // "Conectado" en el panel pero sin cobrar realmente nada — confuso.
+      // Si todavía no había elegido un método, lo activamos en "total"
+      // (cobro completo) para que conectar ya implique poder cobrar.
+      // Si ya tenía "sena" o "total" elegido de antes (ej: reconexión
+      // porque venció el token), no lo tocamos.
+      const { data: negocioPrevio } = await supabase.from("usuarios")
+        .select("metodo_pago").eq("slug", slugClean).maybeSingle();
+      const updateMp = {
+        mp_access_token:     encryptMpSecret(data.access_token),
+        mp_refresh_token:    encryptMpSecret(data.refresh_token || null),
+        mp_token_expires_at: expiresAt,
+        mp_public_key:       data.public_key || null,
+      };
+      if (!negocioPrevio || !["sena", "total"].includes(negocioPrevio.metodo_pago)) {
+        updateMp.metodo_pago = "total";
+      }
+
       const { error: updError } = await supabase.from("usuarios")
-        .update({
-          mp_access_token:     encryptMpSecret(data.access_token),
-          mp_refresh_token:    encryptMpSecret(data.refresh_token || null),
-          mp_token_expires_at: expiresAt,
-          mp_public_key:       data.public_key || null,
-        })
+        .update(updateMp)
         .eq("slug", slugClean);
       if (updError) { console.error("Error guardando token MP:", updError.message); return res.redirect(`${PANEL_URL}?status=mp_error&u=${slugClean}`); }
       invalidateCache(slugClean);
@@ -4531,7 +4561,9 @@ app.get("/oauth-callback", async (req, res) => {
         tipo: "sistema",
         titulo: "Mercado Pago conectado",
         mensaje: "Ya podés cobrar señas o el total de tus turnos desde el link de reserva.",
-        data: { clave: "mp_conectado" },
+        // FIX: "sistema" es un tipo genérico y por default cae en "inicio",
+        // pero este mensaje habla puntualmente de cobros → lleva a "pagos".
+        data: { clave: "mp_conectado", seccion: "pagos" },
       });
 
       return res.redirect(`${PANEL_URL}?status=mp_success&u=${slugClean}`);
@@ -4585,7 +4617,9 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
         tipo: "sistema",
         titulo: "⚠️ Conflicto de sobreventa",
         mensaje: `Un pago de ${nombre?.trim() || "un cliente"} se aprobó para el ${fecha} ${hora}hs pero el cupo ya estaba lleno. Requiere que lo revises manualmente.`,
-        data: { fecha, hora, payment_id, monto },
+        // FIX: hay que revisar el turno en cuestión → agenda, no "inicio"
+        // (el default genérico de tipo "sistema").
+        data: { fecha, hora, payment_id, monto, seccion: "agenda" },
       });
 
       invalidateCache(slug);
@@ -4758,7 +4792,8 @@ async function procesarRenovacion(payData) {
     tipo: "sistema",
     titulo: "Renovación aprobada",
     mensaje: `Tu plan Premium se renovó correctamente. Nueva fecha de vencimiento: ${nuevaFecha}.`,
-    data: { nuevaFecha },
+    // FIX: es sobre la suscripción/cobro → pagos, no "inicio".
+    data: { nuevaFecha, seccion: "pagos" },
   });
 }
 
