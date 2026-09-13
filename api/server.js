@@ -32,7 +32,7 @@ const JWT_EXPIRY     = process.env.JWT_EXPIRY || "1d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "21000");
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 // FIX-SEC: secret propio para validar la firma de los webhooks de MP.
 const MP_WEBHOOK_SECRET  = process.env.MP_WEBHOOK_SECRET          || "";
@@ -1449,9 +1449,10 @@ const { data: user, error } = await supabase.from("usuarios")
     }
  
     const esPremium               = user.plan === "premium";
-    const mpDisponible            = !!user.mp_access_token && ["sena", "total"].includes(user.metodo_pago);
-    const transferenciaDisponible = esPremium && !!user.acepta_transferencia;
-    const efectivoDisponible      = esPremium && !!user.acepta_efectivo;
+const enTrial                 = user.estado_suscripcion === "trial";
+const mpDisponible            = !!user.mp_access_token && ["sena", "total"].includes(user.metodo_pago);
+const transferenciaDisponible = esPremium && !enTrial && !!user.acepta_transferencia;
+const efectivoDisponible      = esPremium && !enTrial && !!user.acepta_efectivo;
  
     const metodos_pago_disponibles = [
       ...(mpDisponible            ? ["mercadopago"]  : []),
@@ -2482,9 +2483,9 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     // FIX-SEC: transferencia/efectivo son exclusivos de premium. Se
     // revalida acá (no solo confiar en lo que muestra el front) por
     // si el negocio bajó de plan después de haber tenido esto activo.
-    if (user.plan !== "premium") {
-      return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
-    }
+    if (user.plan !== "premium" || user.estado_suscripcion === "trial") {
+  return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
+}
     if (metodo_pago === "transferencia" && !user.acepta_transferencia) {
       return res.status(403).json({ success: false, error: "Este negocio no acepta pagos por transferencia." });
     }
@@ -4215,8 +4216,8 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     // ($150). El plan gratis no se toca: sigue en 2% con piso $300.
     const enTrial = user.estado_suscripcion === "trial";
     const fee = esPremium
-      ? (enTrial ? 250 : 150)
-      : Math.max(300, Math.round(montoACobrar * 0.02));
+  ? (enTrial ? 250 : 0)
+  : Math.max(300, Math.round(montoACobrar * 0.02));
 
     if (user.mp_access_token) {
       try {
