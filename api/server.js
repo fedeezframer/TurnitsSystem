@@ -4490,7 +4490,12 @@ app.get("/mp/connect/:slug", (req, res) => {
     return res.status(500).send("Mercado Pago no está configurado (falta MP_TURNERO_CLIENT_ID en el servidor).");
   }
   const redirectUri = encodeURIComponent(`${API_URL}/oauth-callback`);
-  const authUrl = `https://auth.mercadopago.com/authorization?client_id=${process.env.MP_TURNERO_CLIENT_ID}&response_type=code&platform_id=mp&state=${slug}&redirect_uri=${redirectUri}`;
+  // FIX: sin pedir el scope "offline_access" acá, MP no manda refresh_token
+  // en la respuesta de /oauth/token -> por eso quedaba vacío. Con esto,
+  // además de leer/cobrar (scopes por defecto), pedimos permiso para
+  // poder renovar el access_token sin que el negocio tenga que reconectar
+  // cada 180 días.
+  const authUrl = `https://auth.mercadopago.com/authorization?client_id=${process.env.MP_TURNERO_CLIENT_ID}&response_type=code&platform_id=mp&state=${slug}&scope=offline_access&redirect_uri=${redirectUri}`;
   res.redirect(authUrl);
 });
 
@@ -4506,7 +4511,7 @@ app.get("/oauth-callback", async (req, res) => {
     const data = await response.json();
     // FIX-SEC: nunca loguear la respuesta completa (traía access_token y
     // refresh_token en texto plano). Solo dejamos rastro de si vino bien o mal.
-    console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${data.error || data.message || "sin access_token"})`}`);
+    console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${data.error || data.message || "sin access_token"})`} — refresh_token: ${data.refresh_token ? "sí" : "no"}`);
     if (data.access_token) {
       const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
       const { error: updError } = await supabase.from("usuarios")
