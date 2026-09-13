@@ -4216,14 +4216,11 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : baseCalculo;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
 
-    const esPremium = user.plan === "premium";
-    // Comisión fija para premium: distinta durante el período de
-    // prueba ($200) vs. una vez que ya pagó al menos una renovación
-    // ($150). El plan gratis no se toca: sigue en 2% con piso $300.
-    const enTrial = user.estado_suscripcion === "trial";
-    const fee = esPremium
-      ? (enTrial ? 250 : 150)
-      : Math.max(300, Math.round(montoACobrar * 0.02));
+const esPremium = user.plan === "premium";
+const enTrial = user.estado_suscripcion === "trial";
+const fee = esPremium
+  ? (enTrial ? 300 : 0)
+  : Math.max(300, Math.round(montoACobrar * 0.02));
 
     if (user.mp_access_token) {
       try {
