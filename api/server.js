@@ -36,6 +36,16 @@ const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "21000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 // FIX-SEC: secret propio para validar la firma de los webhooks de MP.
 const MP_WEBHOOK_SECRET  = process.env.MP_WEBHOOK_SECRET          || "";
+// FIX-SEC: clave para cifrar en reposo el access_token/refresh_token de MP
+// de cada negocio (AES-256-GCM). Generarla UNA sola vez con:
+//   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+// y guardarla en Render como env var (32 bytes en hex = 64 caracteres).
+// Si se pierde o se cambia, los tokens ya cifrados en la base quedan
+// ilegibles (el negocio tendría que reconectar Mercado Pago).
+const MP_TOKEN_ENC_KEY   = process.env.MP_TOKEN_ENC_KEY           || "";
+if (!MP_TOKEN_ENC_KEY) {
+  console.warn("⚠️  MP_TOKEN_ENC_KEY no configurada. Los tokens de Mercado Pago de los negocios NO se pueden cifrar/descifrar (falta la clave).");
+}
 const PANEL_URL          = process.env.PANEL_URL                  || "https://turnits.com/panel";
 const SUCCESS_URL        = process.env.SUCCESS_URL                || "https://turnits.com/success";
 const ERROR_URL          = process.env.ERROR_URL                  || "https://turnits.com/error";
@@ -4210,6 +4220,11 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     if (user.mp_access_token) {
       try {
+        const tokenVigente = await obtenerTokenMpVigente(slugClean, user);
+        if (!tokenVigente) {
+          return res.status(500).json({ success: false, error: "No se pudo validar la conexión con Mercado Pago. Reconectá tu cuenta desde el panel." });
+        }
+
         const metaPendiente = {
           slug: slugClean,
           nombre, telefono: cleanPhone(telefono), email: email || "",
@@ -4225,7 +4240,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
           .from("pagos_pendientes").insert([metaPendiente]).select("id").single();
         if (pendError) throw pendError;
 
-        const client = new MercadoPagoConfig({ accessToken: user.mp_access_token });
+        const client = new MercadoPagoConfig({ accessToken: tokenVigente });
         const pref   = new Preference(client);
 
         // 👇 FIX: un solo ítem con el monto ya prorrateado, evita que la suma
@@ -4255,7 +4270,10 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
         console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean} ref=${pendiente.id}`);
         return res.json({ payment_url: response.init_point, monto: montoACobrar, fee, pasarela: "mercadopago" });
       } catch (e) {
-        console.error("❌ MP error:", JSON.stringify(e));
+        // FIX-SEC: no loguear el objeto de error completo del SDK de MP:
+        // suele incluir la request original, que lleva el Authorization
+        // header con el access_token del negocio. Solo el mensaje.
+        console.error("❌ MP error:", e?.message || e);
         return res.status(500).json({ success: false, error: e?.message || "Error con MercadoPago." });
       }
     }
@@ -4355,6 +4373,106 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// SEGURIDAD DE CREDENCIALES DE MERCADO PAGO
+//
+// FIX-SEC: antes se guardaba el access_token de cada negocio en texto
+// plano en la tabla "usuarios" y, peor, la respuesta CRUDA de MP
+// (incluyendo access_token, refresh_token y public_key) se mandaba
+// entera a los logs con console.log. Cualquiera con acceso a los logs
+// de Render (o a un export/backup de la base) podía leer las claves
+// de cobro de TODOS los negocios conectados.
+//
+// Ahora:
+//  1) El access_token y el refresh_token se cifran (AES-256-GCM) antes
+//     de guardarse, con MP_TOKEN_ENC_KEY (nunca viaja a los logs).
+//  2) Se guarda también el refresh_token y la fecha de expiración
+//     (MP los tokens de OAuth expiran a los 180 días). Antes el
+//     refresh_token se descartaba -> pasados los 180 días el cobro
+//     con MP se rompía solo y el negocio tenía que reconectar todo
+//     a mano, sin aviso previo.
+//  3) Antes de usar el token para cobrar, si está por vencer, se
+//     renueva solo contra MP y se vuelve a guardar cifrado.
+// ══════════════════════════════════════════════════════════════
+function encryptMpSecret(plainText) {
+  if (!plainText) return null;
+  if (!MP_TOKEN_ENC_KEY) return plainText; // sin clave configurada, no rompemos el flujo (ver warning al boot)
+  const key = crypto.createHash("sha256").update(MP_TOKEN_ENC_KEY).digest();
+  const iv  = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(String(plainText), "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  // formato: enc:v1:<iv>:<authTag>:<ciphertext>  (todo en base64)
+  return `enc:v1:${iv.toString("base64")}:${authTag.toString("base64")}:${encrypted.toString("base64")}`;
+}
+
+function decryptMpSecret(storedValue) {
+  if (!storedValue) return null;
+  if (!storedValue.startsWith("enc:v1:")) return storedValue; // valor viejo sin cifrar (ver migración)
+  if (!MP_TOKEN_ENC_KEY) {
+    console.error("❌ No se puede descifrar el token de MP: falta MP_TOKEN_ENC_KEY.");
+    return null;
+  }
+  try {
+    const [, , ivB64, tagB64, dataB64] = storedValue.split(":");
+    const key = crypto.createHash("sha256").update(MP_TOKEN_ENC_KEY).digest();
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivB64, "base64"));
+    decipher.setAuthTag(Buffer.from(tagB64, "base64"));
+    const decrypted = Buffer.concat([decipher.update(Buffer.from(dataB64, "base64")), decipher.final()]);
+    return decrypted.toString("utf8");
+  } catch (e) {
+    console.error("❌ Error descifrando token de MP:", e.message);
+    return null;
+  }
+}
+
+// Devuelve un access_token de MP listo para usar, renovándolo primero si
+// está vencido o a menos de 15 días de vencer. Si no hace falta renovar,
+// simplemente descifra y devuelve el que ya estaba guardado.
+async function obtenerTokenMpVigente(slug, userRow) {
+  const accessTokenPlano = decryptMpSecret(userRow.mp_access_token);
+  if (!accessTokenPlano) return null;
+
+  const vencePronto = userRow.mp_token_expires_at
+    ? new Date(userRow.mp_token_expires_at).getTime() - Date.now() < 15 * 24 * 60 * 60 * 1000
+    : false;
+  if (!vencePronto || !userRow.mp_refresh_token) return accessTokenPlano;
+
+  const refreshTokenPlano = decryptMpSecret(userRow.mp_refresh_token);
+  if (!refreshTokenPlano) return accessTokenPlano; // no podemos renovar, seguimos con el que hay
+
+  try {
+    const response = await fetch("https://api.mercadopago.com/oauth/token", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: process.env.MP_TURNERO_CLIENT_ID,
+        client_secret: process.env.MP_TURNERO_CLIENT_SECRET,
+        grant_type: "refresh_token",
+        refresh_token: refreshTokenPlano,
+      }),
+    });
+    const data = await response.json();
+    if (!data.access_token) {
+      console.error(`⚠️  No se pudo renovar el token de MP para ${slug}: ${data.error || data.message || "respuesta sin access_token"}`);
+      return accessTokenPlano; // usamos el viejo mientras siga vivo
+    }
+
+    const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
+    await supabase.from("usuarios").update({
+      mp_access_token:     encryptMpSecret(data.access_token),
+      mp_refresh_token:    encryptMpSecret(data.refresh_token || refreshTokenPlano),
+      mp_token_expires_at: expiresAt,
+    }).eq("slug", slug);
+    invalidateCache(slug);
+
+    console.log(`🔄 Token de MP renovado para ${slug} (vence: ${expiresAt || "sin dato"})`);
+    return data.access_token;
+  } catch (e) {
+    console.error(`❌ Error renovando token de MP para ${slug}:`, e.message);
+    return accessTokenPlano;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // OAUTH — Mercado Pago
 // ══════════════════════════════════════════════════════════════
 app.get("/oauth-callback", async (req, res) => {
@@ -4367,10 +4485,18 @@ app.get("/oauth-callback", async (req, res) => {
       body: JSON.stringify({ client_id: process.env.MP_TURNERO_CLIENT_ID, client_secret: process.env.MP_TURNERO_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: `${API_URL}/oauth-callback` }),
     });
     const data = await response.json();
-    console.log("🔑 OAuth response:", JSON.stringify(data));
+    // FIX-SEC: nunca loguear la respuesta completa (traía access_token y
+    // refresh_token en texto plano). Solo dejamos rastro de si vino bien o mal.
+    console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${data.error || data.message || "sin access_token"})`}`);
     if (data.access_token) {
+      const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
       const { error: updError } = await supabase.from("usuarios")
-        .update({ mp_access_token: data.access_token, mp_public_key: data.public_key || null })
+        .update({
+          mp_access_token:     encryptMpSecret(data.access_token),
+          mp_refresh_token:    encryptMpSecret(data.refresh_token || null),
+          mp_token_expires_at: expiresAt,
+          mp_public_key:       data.public_key || null,
+        })
         .eq("slug", slugClean);
       if (updError) { console.error("Error guardando token MP:", updError.message); return res.redirect(`${PANEL_URL}?status=mp_error&u=${slugClean}`); }
       invalidateCache(slugClean);
@@ -4524,13 +4650,15 @@ app.post("/webhook/mp", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const { data: userNegocio } = await supabase.from("usuarios").select("mp_access_token").eq("slug", slug).maybeSingle();
+      const { data: userNegocio } = await supabase.from("usuarios")
+        .select("mp_access_token, mp_refresh_token, mp_token_expires_at").eq("slug", slug).maybeSingle();
 
       // 3) Releer el pago con el token del vendedor para confirmar estado/monto reales
       let finalPayData = payData;
-      if (userNegocio?.mp_access_token) {
+      const tokenVendedor = userNegocio ? await obtenerTokenMpVigente(slug, userNegocio) : null;
+      if (tokenVendedor) {
         try {
-          const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${userNegocio.mp_access_token}` } });
+          const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${tokenVendedor}` } });
           const vendorData = await vendorRes.json();
           if (vendorData?.id) finalPayData = vendorData;
         } catch (e) {
