@@ -4475,6 +4475,25 @@ async function obtenerTokenMpVigente(slug, userRow) {
 // ══════════════════════════════════════════════════════════════
 // OAUTH — Mercado Pago
 // ══════════════════════════════════════════════════════════════
+
+// FIX-SEC (pedido del usuario): el frontend ya no arma la URL de
+// autorización de MP a mano (eso obligaba a cargar el client_id como
+// propiedad de Framer y mantenerlo sincronizado a mano con Render;
+// justamente ESO causó el invalid_grant de hoy: quedó desactualizado
+// después de rotar credenciales). Ahora el panel solo navega a esta
+// ruta con el slug, y el backend arma la URL con el client_id que
+// vive en una sola fuente de verdad: la env var de Render.
+app.get("/mp/connect/:slug", (req, res) => {
+  const slug = cleanSlug(req.params.slug);
+  if (!slug) return res.status(400).send("Slug inválido.");
+  if (!process.env.MP_TURNERO_CLIENT_ID) {
+    return res.status(500).send("Mercado Pago no está configurado (falta MP_TURNERO_CLIENT_ID en el servidor).");
+  }
+  const redirectUri = encodeURIComponent(`${API_URL}/oauth-callback`);
+  const authUrl = `https://auth.mercadopago.com/authorization?client_id=${process.env.MP_TURNERO_CLIENT_ID}&response_type=code&platform_id=mp&state=${slug}&redirect_uri=${redirectUri}`;
+  res.redirect(authUrl);
+});
+
 app.get("/oauth-callback", async (req, res) => {
   const { code, state: slug } = req.query;
   if (!code || !slug) return res.status(400).send("Parámetros inválidos.");
