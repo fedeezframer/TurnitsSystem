@@ -3665,7 +3665,8 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       supabase.from("servicios").select("id, duracion")
         .eq("slug", slug).eq("activo", "true"),
       supabase.from("turnos").select("id", { count: "exact", head: true })
-        .eq("slug", slug).gte("fecha", inicioMesAnterior).lte("fecha", finMesAnterior).neq("estado", "cancelado"),
+        .eq("slug", slug).gte("fecha", inicioMesAnterior).lte("fecha", finMesAnterior)
+        .not("estado", "in", "(cancelado,pendiente)"),
     ]);
 
     const turnosData          = turnosMes || [];
@@ -3673,11 +3674,19 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       (serviciosNegocio || []).map((s) => [s.id, s.duracion])
     );
 
-    const turnosHoy      = turnosData.filter((t) => t.fecha === hoyISO).length;
-    const turnosMesTotal = turnosData.length;
+    // FIX-METRICA: los turnos "pendiente" (transferencia/efectivo sin aprobar todavía)
+    // no se cuentan en las métricas del panel (turnosHoy, turnosMes, el gráfico por semana
+    // y la comparación con el mes anterior). Solo cuentan una vez que el negocio los aprueba
+    // (pasan a "confirmado") o se completan. turnosData sigue con TODOS los estados no
+    // cancelados porque turnosLista / turnosHoyDetalle sí necesitan mostrar los pendientes
+    // (el negocio los tiene que ver para poder aprobarlos o rechazarlos).
+    const turnosParaMetricas = turnosData.filter((t) => t.estado !== "pendiente");
+
+    const turnosHoy      = turnosParaMetricas.filter((t) => t.fecha === hoyISO).length;
+    const turnosMesTotal = turnosParaMetricas.length;
 
     const semanas = { "Sem 1": 0, "Sem 2": 0, "Sem 3": 0, "Sem 4": 0 };
-    turnosData.forEach((t) => {
+    turnosParaMetricas.forEach((t) => {
       const dia = parseInt(t.fecha.split("-")[2]);
       if      (dia <= 7)  semanas["Sem 1"]++;
       else if (dia <= 14) semanas["Sem 2"]++;
