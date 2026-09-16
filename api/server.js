@@ -718,7 +718,11 @@ function agruparPagos(turnos, hoyISO) {
 
   turnos.forEach((t) => {
     const fecha  = (t.fecha_pago || t.created_at || hoyISO).toString().split("T")[0];
-    const monto  = Number(t.monto_pagado || 0);
+    const monto = Number(
+  t.monto_pagado ??
+  t.precio_cobrado ??
+  0
+);
     const estado = t.pago_estado || "sin_pago";
     if (estado === "sin_pago") return;
 
@@ -3737,7 +3741,7 @@ const turnosHoyDetalle = turnosData
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
     const { data: turnosPago } = await supabase.from("turnos")
-      .select("monto_pagado, pago_estado, fecha_pago, fecha, email, telefono, created_at")
+      .select("monto_pagado, precio_cobrado, metodo_pago, pago_estado, fecha_pago, fecha, email, telefono, created_at")
       .eq("slug", slug)
       .gte("fecha", desde90.toISOString().split("T")[0])
       .lte("fecha", hasta7.toISOString().split("T")[0])
@@ -4272,7 +4276,11 @@ const fee = esPremium
           metadata: metaPendiente,
           external_reference: pendiente.id,
           notification_url: `${API_URL}/webhook/mp`,
-          back_urls: { success: `${SUCCESS_URL}?slug=${slugClean}`, failure: `${ERROR_URL}?slug=${slugClean}`, pending: `${ERROR_URL}?slug=${slugClean}` },
+          back_urls: {
+  success: `${API_URL}/api/mp/success?slug=${encodeURIComponent(slugClean)}`,
+  failure: `${ERROR_URL}?slug=${encodeURIComponent(slugClean)}`,
+  pending: `${ERROR_URL}?slug=${encodeURIComponent(slugClean)}`
+},
           auto_return: "approved",
         };
         if (fee > 0) prefBody.marketplace_fee = fee;
@@ -4687,6 +4695,126 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
   invalidateCache(slug);
   console.log(`✅ Pago procesado: ${payment_id} — slug: ${slug} — estado: ${pagoEstado}`);
 }
+
+app.get("/api/mp/success", async (req, res) => {
+  try {
+    const paymentId = String(
+      req.query.payment_id ||
+      req.query.collection_id ||
+      ""
+    ).trim();
+
+    if (!paymentId) {
+      return res.status(400).send("Falta payment_id");
+    }
+
+    const paymentResponse = await fetch(
+      `https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${MP_PLATFORM_TOKEN}`
+        }
+      }
+    );
+
+    if (!paymentResponse.ok) {
+      console.error(
+        "No se pudo consultar el pago en Mercado Pago:",
+        paymentResponse.status
+      );
+
+      return res.status(502).send("No se pudo verificar el pago");
+    }
+
+    const payment = await paymentResponse.json();
+
+    const externalReference = String(
+      payment.external_reference || ""
+    ).trim();
+
+    let pendiente = null;
+
+    if (externalReference) {
+      const { data, error } = await supabase
+        .from("pagos_pendientes")
+        .select("*")
+        .eq("id", externalReference)
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          "Error buscando pago pendiente:",
+          error.message
+        );
+      }
+
+      pendiente = data || null;
+    }
+
+    const estadoMercadoPago = String(
+      payment.status || ""
+    ).toLowerCase();
+
+    let estadoTurnits = "rechazado";
+
+    if (estadoMercadoPago === "approved") {
+      estadoTurnits = "aprobado";
+    } else if (
+      estadoMercadoPago === "pending" ||
+      estadoMercadoPago === "in_process"
+    ) {
+      estadoTurnits = "pendiente";
+    }
+
+    let resultado = null;
+
+    if (pendiente) {
+      resultado = await procesarPagoConfirmado({
+        ...pendiente,
+        monto: Number(payment.transaction_amount || pendiente.monto || 0),
+        moneda: payment.currency_id || pendiente.moneda || "ARS",
+        payment_id: paymentId,
+        estado: estadoTurnits,
+        pendienteId: pendiente.id
+      });
+    }
+
+    const destino = new URL(SUCCESS_URL);
+
+    if (pendiente?.slug) {
+      destino.searchParams.set("slug", pendiente.slug);
+    } else if (req.query.slug) {
+      destino.searchParams.set(
+        "slug",
+        String(req.query.slug)
+      );
+    }
+
+    destino.searchParams.set("payment_id", paymentId);
+    destino.searchParams.set(
+      "status",
+      estadoMercadoPago || "unknown"
+    );
+
+    if (resultado?.turno?.id) {
+      destino.searchParams.set(
+        "turno_id",
+        String(resultado.turno.id)
+      );
+    }
+
+    return res.redirect(303, destino.toString());
+  } catch (error) {
+    console.error(
+      "Error en /api/mp/success:",
+      error
+    );
+
+    return res.status(500).send(
+      "Error procesando el retorno de Mercado Pago"
+    );
+  }
+});
 
 app.post("/webhook/mp", async (req, res) => {
   const { query, body } = req;
