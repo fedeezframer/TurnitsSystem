@@ -4986,6 +4986,153 @@ async function procesarPagoConfirmado({
   };
 }
 
+// ══════════════════════════════════════════════════════════════
+// RETORNO DE MERCADO PAGO
+// ══════════════════════════════════════════════════════════════
+app.get("/api/mp/success", async (req, res) => {
+  try {
+    const paymentId = String(
+      req.query.payment_id ||
+      req.query.collection_id ||
+      ""
+    ).trim();
+
+    if (!paymentId) {
+      return res.status(400).send("Falta payment_id");
+    }
+
+    const paymentResponse = await fetch(
+      `https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${MP_PLATFORM_TOKEN}`
+        }
+      }
+    );
+
+    if (!paymentResponse.ok) {
+      console.error(
+        "No se pudo consultar el pago en Mercado Pago:",
+        paymentResponse.status
+      );
+
+      return res.status(502).send("No se pudo verificar el pago");
+    }
+
+    const payment = await paymentResponse.json();
+
+    const externalReference = String(
+      payment.external_reference || ""
+    ).trim();
+
+    let pendiente = null;
+
+    if (externalReference) {
+      const { data, error } = await supabase
+        .from("pagos_pendientes")
+        .select("*")
+        .eq("id", externalReference)
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          "Error buscando pago pendiente:",
+          error.message
+        );
+      }
+
+      pendiente = data || null;
+    }
+
+    const estadoMercadoPago = String(
+      payment.status || ""
+    ).toLowerCase();
+
+    const estadoTurnits =
+      estadoMercadoPago === "approved"
+        ? "aprobado"
+        : estadoMercadoPago === "pending" ||
+          estadoMercadoPago === "in_process"
+          ? "pendiente"
+          : "rechazado";
+
+    let resultado = null;
+
+    if (pendiente) {
+      resultado = await procesarPagoConfirmado({
+        slug: pendiente.slug,
+        nombre: pendiente.nombre,
+        apellido: pendiente.apellido || null,
+        telefono: pendiente.telefono,
+        email: pendiente.email,
+        fecha: pendiente.fecha,
+        hora: pendiente.hora,
+        servicio_id: pendiente.servicio_id || null,
+        servicio_nombre: pendiente.servicio_nombre || null,
+        equipo_id: pendiente.equipo_id || null,
+        equipo_nombre: pendiente.equipo_nombre || null,
+        monto: Number(
+          payment.transaction_amount ||
+          pendiente.monto ||
+          0
+        ),
+        moneda: payment.currency_id || pendiente.moneda || "ARS",
+        tipo_cobro:
+          pendiente.metodo_pago === "sena" ||
+          pendiente.metodo_pago === "total"
+            ? pendiente.metodo_pago
+            : null,
+        precio_servicio: pendiente.precio_servicio || 0,
+        payment_id: paymentId,
+        estado: estadoTurnits,
+        porcentaje_sena: pendiente.porcentaje_sena,
+        extras: pendiente.extras || [],
+        monto_extras: pendiente.monto_extras || 0
+      });
+
+      await supabase
+        .from("pagos_pendientes")
+        .update({
+          estado: estadoTurnits,
+          payment_id: paymentId
+        })
+        .eq("id", pendiente.id);
+    }
+
+    const destino = new URL(SUCCESS_URL);
+
+    destino.searchParams.set(
+      "slug",
+      pendiente?.slug ||
+      String(req.query.slug || "")
+    );
+
+    destino.searchParams.set("payment_id", paymentId);
+    destino.searchParams.set(
+      "status",
+      estadoMercadoPago || "unknown"
+    );
+
+    if (resultado?.turno?.id) {
+      destino.searchParams.set(
+        "turno_id",
+        String(resultado.turno.id)
+      );
+    }
+
+    return res.redirect(303, destino.toString());
+  } catch (error) {
+    console.error(
+      "Error en /api/mp/success:",
+      error
+    );
+
+    return res.status(500).send(
+      "Error procesando el retorno de Mercado Pago"
+    );
+  }
+});
+
 app.post("/webhook/mp", async (req, res) => {
   const { query, body } = req;
   try {
