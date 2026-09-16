@@ -3716,7 +3716,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       telefono:       t.telefono,
       email:          t.email,
       fecha:          t.fecha,
-      hora:           t.hora.slice(0, 5),
+      hora:           (t.hora || "").slice(0, 5),
       servicio:       t.servicio_nombre,
       precio_cobrado: t.precio_cobrado || 0,
       monto_pagado:   t.monto_pagado   || 0,
@@ -3734,11 +3734,11 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
 
 const turnosHoyDetalle = turnosData
     .filter((t) => t.fecha === hoyISO)
-    .sort((a, b) => a.hora.localeCompare(b.hora))
+    .sort((a, b) => (a.hora || "").localeCompare(b.hora || ""))
     .map((t) => ({
         id:             t.id,
         nombre:         t.nombre,
-        hora:           t.hora.slice(0, 5),
+        hora:           (t.hora || "").slice(0, 5),
         servicio:       t.servicio_nombre,
         estado:         t.estado,
         pago_estado:    t.pago_estado    || "sin_pago",
@@ -3869,7 +3869,7 @@ const turnosHoyDetalle = turnosData
     globalCache[slug] = { timestamp: now, data: finalData };
     res.json(finalData);
   } catch (e) {
-    console.error("Error en /admin-stats:", e.message);
+    console.error("Error en /admin-stats:", e.message, e.stack);
     res.status(500).json({ success: false, error: "Error al procesar estadísticas." });
   }
 });
