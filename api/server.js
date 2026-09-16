@@ -131,7 +131,7 @@ async function enviarPush(slug, { titulo, mensaje, tipo = "sistema", url = null 
       title: `${PUSH_ICONOS_POR_TIPO[tipo] || "🔔"} ${titulo}`,
       body:  mensaje,
       tag:   tipo,
-      url:   url || `${PANEL_URL}?u=${slug}`,
+      url:   url || `${PANEL_URL}/${slug}`,
     });
 
     await Promise.all(subs.map(async (s) => {
@@ -766,7 +766,7 @@ function agruparPagos(turnos, hoyISO) {
 // pendiente") en base a tipoCobro, sea cual sea el canal.
 function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, slug, servicio, profesional, precioTotal, montoOnline, metodoPago, tipoCobro, reprogramarUrl, extras }) {
   if (!APPS_SCRIPT_URL) return;
-  const panelUrl = `${PANEL_URL}?u=${slug}`;
+  const panelUrl = `${PANEL_URL}/${slug}`;
   const extrasPayload = Array.isArray(extras)
     ? extras.map((e) => ({ nombre: e.nombre, precio: Number(e.precio) || 0 }))
     : [];
@@ -831,7 +831,7 @@ function enviarMailConflictoTurno({ adminEmail, nombreCliente, fechaHora, slug, 
       slug,
       payment_id,
       monto,
-      panelUrl: `${PANEL_URL}?u=${slug}`,
+      panelUrl: `${PANEL_URL}/${slug}`,
     }),
   }).catch((e) => console.error("Error mail conflicto turno:", e.message));
 }
@@ -1014,7 +1014,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
           adminEmail:  nuevo.email,
           nombre:      nuevo.nombre_persona,
           slug:        nuevo.slug,
-          panel_url:   `${PANEL_URL}?u=${nuevo.slug}`,
+          panel_url:   `${PANEL_URL}/${nuevo.slug}`,
           dias_prueba: planFinal === "premium" ? DIAS_PRUEBA : 0,
         }),
       }).catch((e) => console.error("Error mail bienvenida:", e.message));
@@ -1041,7 +1041,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       slug:              nuevo.slug,
       business_name:     nuevo.business_name,
       plan:              nuevo.plan,
-      panel_url:         `${PANEL_URL}?u=${nuevo.slug}`,
+      panel_url:         `${PANEL_URL}/${nuevo.slug}`,
       token,
       dias_prueba:       planFinal === "premium" ? DIAS_PRUEBA : null,
       fecha_vencimiento: fechaVencimiento,
@@ -2595,7 +2595,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
         : (precioCobrado + montoExtras),
       precioTotal: precioCobrado + montoExtras,
       extras:      extrasResueltos,
-      panelUrl:    `${PANEL_URL}?u=${slugClean}`,
+      panelUrl:    `${PANEL_URL}/${slugClean}`,
     }),
   }).catch((e) => console.error("Error mail turno pendiente:", e.message));
 }
@@ -3208,7 +3208,7 @@ app.post("/reprogramar/solicitar", limiterBooking, async (req, res) => {
           fechaActual: `${turno.fecha} ${horaActualFmt}`,
           fechaPropuesta: `${fecha_nueva} ${hora_nueva}`,
           slug: slugClean,
-          panelUrl: `${PANEL_URL}?u=${slugClean}`,
+          panelUrl: `${PANEL_URL}/${slugClean}`,
         }),
       }).catch((e) => console.error("Error mail reprogramación solicitada:", e.message));
     }
@@ -3907,7 +3907,7 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       if (error.code === "23505") return res.status(409).json({ success: false, error: "El email ya está registrado." });
       throw error;
     }
-    res.status(201).json({ success: true, negocio: data, panel_url: `${PANEL_URL}?u=${slug}` });
+    res.status(201).json({ success: true, negocio: data, panel_url: `${PANEL_URL}/${slug}` });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo crear el negocio." });
   }
@@ -4163,7 +4163,7 @@ app.get("/auth/verify-email", async (req, res) => {
 
     await supabase.from("usuarios").update({ email_verificado: true, verificacion_token: null }).eq("id", user.id);
     invalidateCache(user.slug);
-    res.redirect(`${PANEL_URL}?status=verificacion_ok&u=${user.slug}`);
+    res.redirect(`${PANEL_URL}/${user.slug}?status=verificacion_ok`);
   } catch (e) {
     res.redirect(`${PANEL_URL}?status=verificacion_error`);
   }
@@ -4574,7 +4574,7 @@ app.get("/oauth-callback", async (req, res) => {
       const { error: updError } = await supabase.from("usuarios")
         .update(updateMp)
         .eq("slug", slugClean);
-      if (updError) { console.error("Error guardando token MP:", updError.message); return res.redirect(`${PANEL_URL}?status=mp_error&u=${slugClean}`); }
+      if (updError) { console.error("Error guardando token MP:", updError.message); return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error`); }
       invalidateCache(slugClean);
 
       crearNotificacion({
@@ -4587,9 +4587,9 @@ app.get("/oauth-callback", async (req, res) => {
         data: { clave: "mp_conectado", seccion: "pagos" },
       });
 
-      return res.redirect(`${PANEL_URL}?status=mp_success&u=${slugClean}`);
+      return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_success`);
     }
-    res.redirect(`${PANEL_URL}?status=mp_error&u=${slugClean}`);
+    res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error`);
   } catch (e) {
     res.status(500).send("Error al vincular Mercado Pago.");
   }
