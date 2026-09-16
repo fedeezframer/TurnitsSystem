@@ -5011,13 +5011,18 @@ app.get("/api/mp/success", async (req, res) => {
     );
 
     if (!paymentResponse.ok) {
-      console.error(
-        "No se pudo consultar el pago en Mercado Pago:",
-        paymentResponse.status
-      );
+  const detalleError = await paymentResponse.text();
 
-      return res.status(502).send("No se pudo verificar el pago");
-    }
+  console.error(
+    "No se pudo consultar el pago en Mercado Pago:",
+    paymentResponse.status,
+    detalleError
+  );
+
+  return res.status(502).send(
+    `No se pudo verificar el pago. HTTP ${paymentResponse.status}`
+  );
+}
 
     const payment = await paymentResponse.json();
 
