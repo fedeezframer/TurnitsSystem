@@ -2886,6 +2886,8 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
         apellido:       t.apellido || null,
         hora:           t.hora.slice(0, 5),
         servicio:       t.servicio_nombre || null,
+        equipo_id: t.equipo_id || null,
+        equipo_nombre: t.equipo_nombre || null,
         precio_cobrado: t.precio_cobrado  || 0,
         monto_pagado:   t.monto_pagado    || 0,
         monto_pendiente_local: Math.max((t.precio_cobrado || 0) - (t.monto_pagado || 0), 0),
