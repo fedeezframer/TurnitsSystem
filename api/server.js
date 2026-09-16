@@ -131,7 +131,7 @@ async function enviarPush(slug, { titulo, mensaje, tipo = "sistema", url = null 
       title: `${PUSH_ICONOS_POR_TIPO[tipo] || "🔔"} ${titulo}`,
       body:  mensaje,
       tag:   tipo,
-      url:   url || `${PANEL_URL}/${slug}`,
+      url:   url || `${PANEL_URL}?u=${slug}`,
     });
 
     await Promise.all(subs.map(async (s) => {
@@ -718,11 +718,7 @@ function agruparPagos(turnos, hoyISO) {
 
   turnos.forEach((t) => {
     const fecha  = (t.fecha_pago || t.created_at || hoyISO).toString().split("T")[0];
-    const monto = Number(
-  t.monto_pagado ??
-  t.precio_cobrado ??
-  0
-);
+    const monto  = Number(t.monto_pagado || 0);
     const estado = t.pago_estado || "sin_pago";
     if (estado === "sin_pago") return;
 
@@ -770,7 +766,7 @@ function agruparPagos(turnos, hoyISO) {
 // pendiente") en base a tipoCobro, sea cual sea el canal.
 function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, slug, servicio, profesional, precioTotal, montoOnline, metodoPago, tipoCobro, reprogramarUrl, extras }) {
   if (!APPS_SCRIPT_URL) return;
-  const panelUrl = `${PANEL_URL}/${slug}`;
+  const panelUrl = `${PANEL_URL}?u=${slug}`;
   const extrasPayload = Array.isArray(extras)
     ? extras.map((e) => ({ nombre: e.nombre, precio: Number(e.precio) || 0 }))
     : [];
@@ -835,7 +831,7 @@ function enviarMailConflictoTurno({ adminEmail, nombreCliente, fechaHora, slug, 
       slug,
       payment_id,
       monto,
-      panelUrl: `${PANEL_URL}/${slug}`,
+      panelUrl: `${PANEL_URL}?u=${slug}`,
     }),
   }).catch((e) => console.error("Error mail conflicto turno:", e.message));
 }
@@ -1018,7 +1014,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
           adminEmail:  nuevo.email,
           nombre:      nuevo.nombre_persona,
           slug:        nuevo.slug,
-          panel_url:   `${PANEL_URL}/${nuevo.slug}`,
+          panel_url:   `${PANEL_URL}?u=${nuevo.slug}`,
           dias_prueba: planFinal === "premium" ? DIAS_PRUEBA : 0,
         }),
       }).catch((e) => console.error("Error mail bienvenida:", e.message));
@@ -1045,7 +1041,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       slug:              nuevo.slug,
       business_name:     nuevo.business_name,
       plan:              nuevo.plan,
-      panel_url:         `${PANEL_URL}/${nuevo.slug}`,
+      panel_url:         `${PANEL_URL}?u=${nuevo.slug}`,
       token,
       dias_prueba:       planFinal === "premium" ? DIAS_PRUEBA : null,
       fecha_vencimiento: fechaVencimiento,
@@ -1551,6 +1547,12 @@ app.get("/extras/:servicio_id", async (req, res) => {
 });
 
 // GET /equipo/:slug — profesionales activos (público, para el checkout)
+// Solo se devuelven profesionales con al menos un servicio activo
+// vinculado (tabla servicio_equipo). Un profesional sin servicios
+// configurados no tiene nada reservable, así que no debe aparecer
+// en el selector de la agenda pública: si por esto queda un solo
+// profesional, el frontend salta directamente el paso de "elegir
+// profesional" (ver requiereProfesional en BookingFlow).
 app.get("/equipo/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1560,12 +1562,21 @@ app.get("/equipo/:slug", async (req, res) => {
     if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     const { data, error } = await supabase.from("equipo")
-      .select("id, nombre, apellido, color, foto_url")
+      .select("id, nombre, apellido, color, foto_url, servicio_equipo!inner(servicios!inner(activo, slug))")
       .eq("slug", slug).eq("activo", true)
+      .eq("servicio_equipo.servicios.activo", "true")
+      .eq("servicio_equipo.servicios.slug", slug)
       .order("created_at", { ascending: true });
     if (error) throw error;
 
-    res.json({ success: true, equipo: data || [] });
+    // Sacamos el campo embebido servicio_equipo: solo lo usamos para
+    // filtrar, el frontend no lo necesita.
+    const vistos = new Set();
+    const equipo = (data || [])
+      .filter((p) => (vistos.has(p.id) ? false : (vistos.add(p.id), true)))
+      .map(({ servicio_equipo, ...p }) => p);
+
+    res.json({ success: true, equipo });
   } catch (e) {
     res.status(500).json({ success: false, error: "Error al obtener el equipo." });
   }
@@ -2584,7 +2595,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
         : (precioCobrado + montoExtras),
       precioTotal: precioCobrado + montoExtras,
       extras:      extrasResueltos,
-      panelUrl:    `${PANEL_URL}/${slugClean}`,
+      panelUrl:    `${PANEL_URL}?u=${slugClean}`,
     }),
   }).catch((e) => console.error("Error mail turno pendiente:", e.message));
 }
@@ -3197,7 +3208,7 @@ app.post("/reprogramar/solicitar", limiterBooking, async (req, res) => {
           fechaActual: `${turno.fecha} ${horaActualFmt}`,
           fechaPropuesta: `${fecha_nueva} ${hora_nueva}`,
           slug: slugClean,
-          panelUrl: `${PANEL_URL}/${slugClean}`,
+          panelUrl: `${PANEL_URL}?u=${slugClean}`,
         }),
       }).catch((e) => console.error("Error mail reprogramación solicitada:", e.message));
     }
@@ -3741,7 +3752,7 @@ const turnosHoyDetalle = turnosData
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
     const { data: turnosPago } = await supabase.from("turnos")
-      .select("monto_pagado, precio_cobrado, metodo_pago, pago_estado, fecha_pago, fecha, email, telefono, created_at")
+      .select("monto_pagado, pago_estado, fecha_pago, fecha, email, telefono, created_at")
       .eq("slug", slug)
       .gte("fecha", desde90.toISOString().split("T")[0])
       .lte("fecha", hasta7.toISOString().split("T")[0])
@@ -3896,7 +3907,7 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       if (error.code === "23505") return res.status(409).json({ success: false, error: "El email ya está registrado." });
       throw error;
     }
-    res.status(201).json({ success: true, negocio: data, panel_url: `${PANEL_URL}/${slug}` });
+    res.status(201).json({ success: true, negocio: data, panel_url: `${PANEL_URL}?u=${slug}` });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo crear el negocio." });
   }
@@ -4276,11 +4287,7 @@ const fee = esPremium
           metadata: metaPendiente,
           external_reference: pendiente.id,
           notification_url: `${API_URL}/webhook/mp`,
-          back_urls: {
-  success: `${API_URL}/api/mp/success?slug=${encodeURIComponent(slugClean)}`,
-  failure: `${ERROR_URL}?slug=${encodeURIComponent(slugClean)}`,
-  pending: `${ERROR_URL}?slug=${encodeURIComponent(slugClean)}`
-},
+          back_urls: { success: `${SUCCESS_URL}?slug=${slugClean}`, failure: `${ERROR_URL}?slug=${slugClean}`, pending: `${ERROR_URL}?slug=${slugClean}` },
           auto_return: "approved",
         };
         if (fee > 0) prefBody.marketplace_fee = fee;
@@ -4601,389 +4608,99 @@ app.get("/oauth-callback", async (req, res) => {
 // función solo procesa pagos de Mercado Pago, así que el canal real es
 // siempre "mercadopago"; lo que llega en tipo_cobro es lo que antes se
 // guardaba (mal) en la columna metodo_pago del turno.
-async function procesarPagoConfirmado({
-  slug,
-  nombre,
-  apellido,
-  telefono,
-  email,
-  fecha,
-  hora,
-  servicio_id,
-  servicio_nombre,
-  equipo_id,
-  equipo_nombre,
-  monto,
-  moneda,
-  tipo_cobro,
-  precio_servicio,
-  payment_id,
-  estado,
-  porcentaje_sena,
-  extras,
-  monto_extras,
-  pendienteId = null
-}) {
-  const paymentId = String(payment_id || "").trim();
+async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, equipo_id, equipo_nombre, monto, moneda, tipo_cobro, precio_servicio, payment_id, estado, porcentaje_sena, extras, monto_extras }) {
+  const { data: turnoExistente } = await supabase
+    .from("turnos").select("id").eq("payment_id", String(payment_id)).maybeSingle();
+  if (turnoExistente) { console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`); return; }
 
-  if (!paymentId) {
-    throw new Error("No se recibió payment_id");
-  }
+  const { data: user } = await supabase.from("usuarios")
+    .select("email, business_name, porcentaje_sena, capacidad_por_turno").eq("slug", slug).maybeSingle();
 
-  const pagoEstado =
-    estado === "aprobado"
-      ? "aprobado"
-      : estado === "pendiente"
-        ? "pendiente"
-        : "rechazado";
+  const porcSena   = porcentaje_sena || user?.porcentaje_sena || 30;
+  const pagoEstado = estado === "aprobado" ? "aprobado" : estado === "pendiente" ? "pendiente" : "rechazado";
 
-  /*
-   * 1. Evitar duplicados.
-   * Si el webhook y /api/mp/success llegan juntos,
-   * solamente uno debe crear el turno.
-   */
-  const { data: turnoExistente, error: errorBusqueda } = await supabase
-    .from("turnos")
-    .select("id, slug, payment_id, estado")
-    .eq("payment_id", paymentId)
-    .maybeSingle();
+  if (estado === "aprobado") {
+    const capacidad = user?.capacidad_por_turno || 1;
+    const { count } = await supabase.from("turnos").select("id", { count: "exact" })
+      .eq("slug", slug).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
 
-  if (errorBusqueda) {
-    throw errorBusqueda;
-  }
-
-  if (turnoExistente) {
-    console.log(
-      `⚠️ Pago ${paymentId} ya procesado. No se crea otro turno.`
-    );
-
-    if (pendienteId) {
-      await supabase
-        .from("pagos_pendientes")
-        .update({
-          estado: pagoEstado,
-          payment_id: paymentId
-        })
-        .eq("id", pendienteId);
-    }
-
-    return {
-      ok: true,
-      duplicado: true,
-      turno: turnoExistente,
-      pago_estado: pagoEstado
-    };
-  }
-
-  /*
-   * 2. Recuperar la configuración del negocio.
-   */
-  const { data: user, error: errorUsuario } = await supabase
-    .from("usuarios")
-    .select(
-      "email, business_name, porcentaje_sena, capacidad_por_turno"
-    )
-    .eq("slug", slug)
-    .maybeSingle();
-
-  if (errorUsuario) {
-    throw errorUsuario;
-  }
-
-  const porcSena = Number(
-    porcentaje_sena ??
-    user?.porcentaje_sena ??
-    30
-  );
-
-  const precioTotalReserva =
-    Number(precio_servicio || 0) +
-    Number(monto_extras || 0);
-
-  const montoRealmentePagado = Number(monto || 0);
-
-  /*
-   * 3. Actualizar pagos_pendientes incluso si el pago
-   * quedó pendiente o fue rechazado.
-   */
-  if (pendienteId) {
-    const { error: errorPendiente } = await supabase
-      .from("pagos_pendientes")
-      .update({
-        estado: pagoEstado,
-        payment_id: paymentId
-      })
-      .eq("id", pendienteId);
-
-    if (errorPendiente) {
-      console.error(
-        "Error actualizando pagos_pendientes:",
-        errorPendiente.message
-      );
-    }
-  }
-
-  /*
-   * 4. Los pagos pendientes o rechazados no crean
-   * un turno confirmado.
-   */
-  if (pagoEstado !== "aprobado") {
-    console.log(
-      `ℹ️ Pago ${paymentId} quedó en estado ${pagoEstado}.`
-    );
-
-    invalidateCache(slug);
-
-    return {
-      ok: true,
-      creado: false,
-      pago_estado: pagoEstado,
-      turno: null
-    };
-  }
-
-  /*
-   * 5. Verificar capacidad antes de crear el turno.
-   */
-  const capacidad = Number(
-    user?.capacidad_por_turno || 1
-  );
-
-  const { count, error: errorCapacidad } = await supabase
-    .from("turnos")
-    .select("id", {
-      count: "exact",
-      head: true
-    })
-    .eq("slug", slug)
-    .eq("fecha", fecha)
-    .eq("hora", hora)
-    .neq("estado", "cancelado");
-
-  if (errorCapacidad) {
-    throw errorCapacidad;
-  }
-
-  if (Number(count || 0) >= capacidad) {
-    console.error(
-      `🚫 Sobreventa bloqueada: ${fecha} ${hora} para ${slug}. ` +
-      `payment_id=${paymentId}`
-    );
-
-    if (user?.email) {
+    if (count >= capacidad) {
+      console.error(`🚫 SOBREVENTA bloqueada: turno ${fecha} ${hora} lleno para ${slug}, payment_id ${payment_id}. NO se confirma el turno, requiere intervención manual.`);
       enviarMailConflictoTurno({
-        adminEmail: user.email,
+        adminEmail: user?.email,
         nombreCliente: nombre?.trim() || "Cliente",
         fechaHora: `${fecha} ${hora}`,
+        slug, payment_id, monto,
+      });
+
+      crearNotificacion({
         slug,
-        payment_id: paymentId,
-        monto: montoRealmentePagado
+        tipo: "sistema",
+        titulo: "⚠️ Conflicto de sobreventa",
+        mensaje: `Un pago de ${nombre?.trim() || "un cliente"} se aprobó para el ${fecha} ${hora}hs pero el cupo ya estaba lleno. Requiere que lo revises manualmente.`,
+        // FIX: hay que revisar el turno en cuestión → agenda, no "inicio"
+        // (el default genérico de tipo "sistema").
+        data: { fecha, hora, payment_id, monto, seccion: "agenda" },
+      });
+
+      invalidateCache(slug);
+      return;
+    }
+
+    const { data: turnoInsertado, error: turnoError } = await supabase.from("turnos").insert([{
+      slug, nombre: nombre?.trim() || "Cliente", apellido: apellido?.trim() || null,
+      telefono: cleanPhone(telefono?.toString() || "0"), email: email?.trim().toLowerCase() || null,
+      fecha, hora, servicio_id: servicio_id || null, servicio_nombre: servicio_nombre || null,
+      equipo_id: equipo_id || null, equipo_nombre: equipo_nombre || null,
+      precio_cobrado: Number(precio_servicio || 0) + Number(monto_extras || 0),
+      monto_pagado: monto,
+      extras: extras || [],
+      monto_extras: monto_extras || 0,
+      porcentaje_sena: tipo_cobro === "sena" ? porcSena : null,
+      tipo_cobro: tipo_cobro || null,
+      metodo_pago: "mercadopago", pago_estado: pagoEstado, fecha_pago: new Date().toISOString(),
+      moneda: moneda || "ARS", estado: "confirmado", payment_id: String(payment_id),
+    }]).select().single();
+
+
+    if (turnoError) {
+      if (turnoError.code === "23505") { console.log(`⚠️ Turno duplicado bloqueado por DB: ${payment_id}`); }
+      else throw turnoError;
+    } else {
+      if (user?.email) {
+  enviarMailTurno({
+    adminEmail:    user.email,
+    emailCliente:  email?.trim().toLowerCase() || "",
+    nombreCliente: nombre?.trim() || "Cliente",
+    fechaHora:     `${fecha} ${hora}`,
+    slug, servicio: servicio_nombre || "",
+    profesional:   equipo_nombre || "",
+    precioTotal:   Number(precio_servicio || 0) + Number(monto_extras || 0),
+    montoOnline:   Number(monto || 0),
+    metodoPago:    "mercadopago",
+    tipoCobro:     tipo_cobro || null,
+    extras:        extras || [],
+    reprogramarUrl: armarReprogramarUrl(turnoInsertado.id, turnoInsertado.gestion_token, slug),
+  });
+}
+
+      enviarWhatsapp(telefono, WHATSAPP_TEMPLATES.TURNO_NUEVO, [
+        nombre?.trim() || "Cliente", user?.business_name || slug, fecha, hora.slice(0, 5), servicio_nombre || "turno",
+      ]).catch((e) => console.error("Error WhatsApp turno nuevo (pago):", e.message));
+
+      // Notificación in-app: turno pagado (una sola, con servicio + monto)
+      crearNotificacion({
+        slug,
+        tipo: "pago_aprobado",
+        titulo: "Turno pagado",
+        mensaje: `${nombre?.trim() || "Cliente"} pagó ${tipo_cobro === "sena" ? "la seña" : "el turno completo"} (${servicio_nombre ? servicio_nombre + " — " : ""}$${monto}) para el ${fecha} a las ${hora}hs.`,
+        data: { fecha, hora, monto },
       });
     }
-
-    crearNotificacion({
-      slug,
-      tipo: "sistema",
-      titulo: "⚠️ Conflicto de sobreventa",
-      mensaje:
-        `Un pago de ${nombre?.trim() || "un cliente"} ` +
-        `se aprobó para el ${fecha} ${hora}hs, ` +
-        `pero el cupo ya estaba lleno. Requiere revisión manual.`,
-      data: {
-        fecha,
-        hora,
-        payment_id: paymentId,
-        monto: montoRealmentePagado,
-        seccion: "agenda"
-      }
-    });
-
-    invalidateCache(slug);
-
-    return {
-      ok: false,
-      creado: false,
-      sobreventa: true,
-      pago_estado: pagoEstado,
-      turno: null
-    };
   }
 
-  /*
-   * 6. Crear el turno usando los valores congelados
-   * de pagos_pendientes.
-   */
-  const { data: turnoInsertado, error: turnoError } = await supabase
-    .from("turnos")
-    .insert([
-      {
-        slug,
-        nombre: nombre?.trim() || "Cliente",
-        apellido: apellido?.trim() || null,
-        telefono: cleanPhone(
-          telefono?.toString() || "0"
-        ),
-        email: email?.trim().toLowerCase() || null,
-
-        fecha,
-        hora,
-
-        servicio_id: servicio_id || null,
-        servicio_nombre: servicio_nombre || null,
-
-        equipo_id: equipo_id || null,
-        equipo_nombre: equipo_nombre || null,
-
-        /*
-         * precio_cobrado = precio total de la reserva.
-         * monto_pagado = importe efectivamente abonado.
-         */
-        precio_cobrado: precioTotalReserva,
-        monto_pagado: montoRealmentePagado,
-
-        extras: extras || [],
-        monto_extras: Number(monto_extras || 0),
-
-        porcentaje_sena:
-          tipo_cobro === "sena"
-            ? porcSena
-            : null,
-
-        tipo_cobro: tipo_cobro || null,
-        metodo_pago: "mercadopago",
-        pago_estado: "aprobado",
-        fecha_pago: new Date().toISOString(),
-        moneda: moneda || "ARS",
-        estado: "confirmado",
-        payment_id: paymentId
-      }
-    ])
-    .select()
-    .single();
-
-  /*
-   * 7. Si existe una restricción UNIQUE sobre payment_id,
-   * una carrera simultánea queda bloqueada por la base.
-   */
-  if (turnoError) {
-    if (turnoError.code === "23505") {
-      const { data: turnoDuplicado } = await supabase
-        .from("turnos")
-        .select("id, slug, payment_id, estado")
-        .eq("payment_id", paymentId)
-        .maybeSingle();
-
-      console.log(
-        `⚠️ Inserción duplicada bloqueada por la base: ${paymentId}`
-      );
-
-      return {
-        ok: true,
-        duplicado: true,
-        turno: turnoDuplicado || null,
-        pago_estado: pagoEstado
-      };
-    }
-
-    throw turnoError;
-  }
-
-  /*
-   * 8. Confirmar pagos_pendientes después de crear el turno.
-   */
-  if (pendienteId) {
-    const { error: errorPendienteFinal } = await supabase
-      .from("pagos_pendientes")
-      .update({
-        estado: "aprobado",
-        payment_id: paymentId
-      })
-      .eq("id", pendienteId);
-
-    if (errorPendienteFinal) {
-      console.error(
-        "Error confirmando pagos_pendientes:",
-        errorPendienteFinal.message
-      );
-    }
-  }
-
-  /*
-   * 9. Enviar notificaciones y comunicaciones existentes.
-   */
-  if (user?.email) {
-    enviarMailTurno({
-      adminEmail: user.email,
-      emailCliente: email?.trim().toLowerCase() || "",
-      nombreCliente: nombre?.trim() || "Cliente",
-      fechaHora: `${fecha} ${hora}`,
-      slug,
-      servicio: servicio_nombre || "",
-      profesional: equipo_nombre || "",
-      precioTotal: precioTotalReserva,
-      montoOnline: montoRealmentePagado,
-      metodoPago: "mercadopago",
-      tipoCobro: tipo_cobro || null,
-      extras: extras || [],
-      reprogramarUrl: armarReprogramarUrl(
-        turnoInsertado.id,
-        turnoInsertado.gestion_token,
-        slug
-      )
-    });
-  }
-
-  enviarWhatsapp(
-    telefono,
-    WHATSAPP_TEMPLATES.TURNO_NUEVO,
-    [
-      nombre?.trim() || "Cliente",
-      user?.business_name || slug,
-      fecha,
-      hora.slice(0, 5),
-      servicio_nombre || "turno"
-    ]
-  ).catch((error) => {
-    console.error(
-      "Error WhatsApp turno nuevo por Mercado Pago:",
-      error.message
-    );
-  });
-
-  crearNotificacion({
-    slug,
-    tipo: "pago_aprobado",
-    titulo: "Turno pagado",
-    mensaje:
-      `${nombre?.trim() || "Cliente"} pagó ` +
-      `${tipo_cobro === "sena" ? "la seña" : "el turno completo"} ` +
-      `(${servicio_nombre ? servicio_nombre + " — " : ""}` +
-      `$${montoRealmentePagado}) para el ${fecha} a las ${hora}hs.`,
-    data: {
-      fecha,
-      hora,
-      monto: montoRealmentePagado,
-      payment_id: paymentId
-    }
-  });
-
-  /*
-   * 10. Actualizar la agenda inmediatamente.
-   */
   invalidateCache(slug);
-
-  console.log(
-    `✅ Pago procesado: ${paymentId} — ` +
-    `slug: ${slug} — estado: aprobado`
-  );
-
-  return {
-    ok: true,
-    creado: true,
-    duplicado: false,
-    pago_estado: "aprobado",
-    turno: turnoInsertado
-  };
+  console.log(`✅ Pago procesado: ${payment_id} — slug: ${slug} — estado: ${pagoEstado}`);
 }
 
 app.post("/webhook/mp", async (req, res) => {
