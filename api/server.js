@@ -131,7 +131,7 @@ async function enviarPush(slug, { titulo, mensaje, tipo = "sistema", url = null 
       title: `${PUSH_ICONOS_POR_TIPO[tipo] || "🔔"} ${titulo}`,
       body:  mensaje,
       tag:   tipo,
-      url:   url || `${PANEL_URL}?u=${slug}`,
+      url:   url || `${PANEL_URL}/${slug}`,
     });
 
     await Promise.all(subs.map(async (s) => {
@@ -770,7 +770,7 @@ function agruparPagos(turnos, hoyISO) {
 // pendiente") en base a tipoCobro, sea cual sea el canal.
 function enviarMailTurno({ adminEmail, emailCliente, nombreCliente, fechaHora, slug, servicio, profesional, precioTotal, montoOnline, metodoPago, tipoCobro, reprogramarUrl, extras }) {
   if (!APPS_SCRIPT_URL) return;
-  const panelUrl = `${PANEL_URL}?u=${slug}`;
+  const panelUrl = `${PANEL_URL}/${slug}`;
   const extrasPayload = Array.isArray(extras)
     ? extras.map((e) => ({ nombre: e.nombre, precio: Number(e.precio) || 0 }))
     : [];
@@ -835,7 +835,7 @@ function enviarMailConflictoTurno({ adminEmail, nombreCliente, fechaHora, slug, 
       slug,
       payment_id,
       monto,
-      panelUrl: `${PANEL_URL}?u=${slug}`,
+      panelUrl: `${PANEL_URL}/${slug}`,
     }),
   }).catch((e) => console.error("Error mail conflicto turno:", e.message));
 }
@@ -1018,7 +1018,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
           adminEmail:  nuevo.email,
           nombre:      nuevo.nombre_persona,
           slug:        nuevo.slug,
-          panel_url:   `${PANEL_URL}?u=${nuevo.slug}`,
+          panel_url:   `${PANEL_URL}/${nuevo.slug}`,
           dias_prueba: planFinal === "premium" ? DIAS_PRUEBA : 0,
         }),
       }).catch((e) => console.error("Error mail bienvenida:", e.message));
@@ -1045,7 +1045,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       slug:              nuevo.slug,
       business_name:     nuevo.business_name,
       plan:              nuevo.plan,
-      panel_url:         `${PANEL_URL}?u=${nuevo.slug}`,
+      panel_url:         `${PANEL_URL}/${nuevo.slug}`,
       token,
       dias_prueba:       planFinal === "premium" ? DIAS_PRUEBA : null,
       fecha_vencimiento: fechaVencimiento,
@@ -2584,7 +2584,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
         : (precioCobrado + montoExtras),
       precioTotal: precioCobrado + montoExtras,
       extras:      extrasResueltos,
-      panelUrl:    `${PANEL_URL}?u=${slugClean}`,
+      panelUrl:    `${PANEL_URL}/${slugClean}`,
     }),
   }).catch((e) => console.error("Error mail turno pendiente:", e.message));
 }
@@ -2886,8 +2886,6 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
         apellido:       t.apellido || null,
         hora:           t.hora.slice(0, 5),
         servicio:       t.servicio_nombre || null,
-        equipo_id: t.equipo_id || null,
-        equipo_nombre: t.equipo_nombre || null,
         precio_cobrado: t.precio_cobrado  || 0,
         monto_pagado:   t.monto_pagado    || 0,
         monto_pendiente_local: Math.max((t.precio_cobrado || 0) - (t.monto_pagado || 0), 0),
@@ -3199,7 +3197,7 @@ app.post("/reprogramar/solicitar", limiterBooking, async (req, res) => {
           fechaActual: `${turno.fecha} ${horaActualFmt}`,
           fechaPropuesta: `${fecha_nueva} ${hora_nueva}`,
           slug: slugClean,
-          panelUrl: `${PANEL_URL}?u=${slugClean}`,
+          panelUrl: `${PANEL_URL}/${slugClean}`,
         }),
       }).catch((e) => console.error("Error mail reprogramación solicitada:", e.message));
     }
@@ -3898,7 +3896,7 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       if (error.code === "23505") return res.status(409).json({ success: false, error: "El email ya está registrado." });
       throw error;
     }
-    res.status(201).json({ success: true, negocio: data, panel_url: `${PANEL_URL}?u=${slug}` });
+    res.status(201).json({ success: true, negocio: data, panel_url: `${PANEL_URL}/${slug}` });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo crear el negocio." });
   }
@@ -4987,158 +4985,6 @@ async function procesarPagoConfirmado({
     turno: turnoInsertado
   };
 }
-
-// ══════════════════════════════════════════════════════════════
-// RETORNO DE MERCADO PAGO
-// ══════════════════════════════════════════════════════════════
-app.get("/api/mp/success", async (req, res) => {
-  try {
-    const paymentId = String(
-      req.query.payment_id ||
-      req.query.collection_id ||
-      ""
-    ).trim();
-
-    if (!paymentId) {
-      return res.status(400).send("Falta payment_id");
-    }
-
-    const paymentResponse = await fetch(
-      `https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${MP_PLATFORM_TOKEN}`
-        }
-      }
-    );
-
-    if (!paymentResponse.ok) {
-  const detalleError = await paymentResponse.text();
-
-  console.error(
-    "No se pudo consultar el pago en Mercado Pago:",
-    paymentResponse.status,
-    detalleError
-  );
-
-  return res.status(502).send(
-    `No se pudo verificar el pago. HTTP ${paymentResponse.status}`
-  );
-}
-
-    const payment = await paymentResponse.json();
-
-    const externalReference = String(
-      payment.external_reference || ""
-    ).trim();
-
-    let pendiente = null;
-
-    if (externalReference) {
-      const { data, error } = await supabase
-        .from("pagos_pendientes")
-        .select("*")
-        .eq("id", externalReference)
-        .maybeSingle();
-
-      if (error) {
-        console.error(
-          "Error buscando pago pendiente:",
-          error.message
-        );
-      }
-
-      pendiente = data || null;
-    }
-
-    const estadoMercadoPago = String(
-      payment.status || ""
-    ).toLowerCase();
-
-    const estadoTurnits =
-      estadoMercadoPago === "approved"
-        ? "aprobado"
-        : estadoMercadoPago === "pending" ||
-          estadoMercadoPago === "in_process"
-          ? "pendiente"
-          : "rechazado";
-
-    let resultado = null;
-
-    if (pendiente) {
-      resultado = await procesarPagoConfirmado({
-        slug: pendiente.slug,
-        nombre: pendiente.nombre,
-        apellido: pendiente.apellido || null,
-        telefono: pendiente.telefono,
-        email: pendiente.email,
-        fecha: pendiente.fecha,
-        hora: pendiente.hora,
-        servicio_id: pendiente.servicio_id || null,
-        servicio_nombre: pendiente.servicio_nombre || null,
-        equipo_id: pendiente.equipo_id || null,
-        equipo_nombre: pendiente.equipo_nombre || null,
-        monto: Number(
-          payment.transaction_amount ||
-          pendiente.monto ||
-          0
-        ),
-        moneda: payment.currency_id || pendiente.moneda || "ARS",
-        tipo_cobro:
-          pendiente.metodo_pago === "sena" ||
-          pendiente.metodo_pago === "total"
-            ? pendiente.metodo_pago
-            : null,
-        precio_servicio: pendiente.precio_servicio || 0,
-        payment_id: paymentId,
-        estado: estadoTurnits,
-        porcentaje_sena: pendiente.porcentaje_sena,
-        extras: pendiente.extras || [],
-        monto_extras: pendiente.monto_extras || 0
-      });
-
-      await supabase
-        .from("pagos_pendientes")
-        .update({
-          estado: estadoTurnits,
-          payment_id: paymentId
-        })
-        .eq("id", pendiente.id);
-    }
-
-    const destino = new URL(SUCCESS_URL);
-
-    destino.searchParams.set(
-      "slug",
-      pendiente?.slug ||
-      String(req.query.slug || "")
-    );
-
-    destino.searchParams.set("payment_id", paymentId);
-    destino.searchParams.set(
-      "status",
-      estadoMercadoPago || "unknown"
-    );
-
-    if (resultado?.turno?.id) {
-      destino.searchParams.set(
-        "turno_id",
-        String(resultado.turno.id)
-      );
-    }
-
-    return res.redirect(303, destino.toString());
-  } catch (error) {
-    console.error(
-      "Error en /api/mp/success:",
-      error
-    );
-
-    return res.status(500).send(
-      "Error procesando el retorno de Mercado Pago"
-    );
-  }
-});
 
 app.post("/webhook/mp", async (req, res) => {
   const { query, body } = req;
