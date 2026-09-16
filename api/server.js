@@ -4601,220 +4601,390 @@ app.get("/oauth-callback", async (req, res) => {
 // función solo procesa pagos de Mercado Pago, así que el canal real es
 // siempre "mercadopago"; lo que llega en tipo_cobro es lo que antes se
 // guardaba (mal) en la columna metodo_pago del turno.
-async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, equipo_id, equipo_nombre, monto, moneda, tipo_cobro, precio_servicio, payment_id, estado, porcentaje_sena, extras, monto_extras }) {
-  const { data: turnoExistente } = await supabase
-    .from("turnos").select("id").eq("payment_id", String(payment_id)).maybeSingle();
-  if (turnoExistente) { console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`); return; }
+async function procesarPagoConfirmado({
+  slug,
+  nombre,
+  apellido,
+  telefono,
+  email,
+  fecha,
+  hora,
+  servicio_id,
+  servicio_nombre,
+  equipo_id,
+  equipo_nombre,
+  monto,
+  moneda,
+  tipo_cobro,
+  precio_servicio,
+  payment_id,
+  estado,
+  porcentaje_sena,
+  extras,
+  monto_extras,
+  pendienteId = null
+}) {
+  const paymentId = String(payment_id || "").trim();
 
-  const { data: user } = await supabase.from("usuarios")
-    .select("email, business_name, porcentaje_sena, capacidad_por_turno").eq("slug", slug).maybeSingle();
+  if (!paymentId) {
+    throw new Error("No se recibió payment_id");
+  }
 
-  const porcSena   = porcentaje_sena || user?.porcentaje_sena || 30;
-  const pagoEstado = estado === "aprobado" ? "aprobado" : estado === "pendiente" ? "pendiente" : "rechazado";
+  const pagoEstado =
+    estado === "aprobado"
+      ? "aprobado"
+      : estado === "pendiente"
+        ? "pendiente"
+        : "rechazado";
 
-  if (estado === "aprobado") {
-    const capacidad = user?.capacidad_por_turno || 1;
-    const { count } = await supabase.from("turnos").select("id", { count: "exact" })
-      .eq("slug", slug).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
+  /*
+   * 1. Evitar duplicados.
+   * Si el webhook y /api/mp/success llegan juntos,
+   * solamente uno debe crear el turno.
+   */
+  const { data: turnoExistente, error: errorBusqueda } = await supabase
+    .from("turnos")
+    .select("id, slug, payment_id, estado")
+    .eq("payment_id", paymentId)
+    .maybeSingle();
 
-    if (count >= capacidad) {
-      console.error(`🚫 SOBREVENTA bloqueada: turno ${fecha} ${hora} lleno para ${slug}, payment_id ${payment_id}. NO se confirma el turno, requiere intervención manual.`);
+  if (errorBusqueda) {
+    throw errorBusqueda;
+  }
+
+  if (turnoExistente) {
+    console.log(
+      `⚠️ Pago ${paymentId} ya procesado. No se crea otro turno.`
+    );
+
+    if (pendienteId) {
+      await supabase
+        .from("pagos_pendientes")
+        .update({
+          estado: pagoEstado,
+          payment_id: paymentId
+        })
+        .eq("id", pendienteId);
+    }
+
+    return {
+      ok: true,
+      duplicado: true,
+      turno: turnoExistente,
+      pago_estado: pagoEstado
+    };
+  }
+
+  /*
+   * 2. Recuperar la configuración del negocio.
+   */
+  const { data: user, error: errorUsuario } = await supabase
+    .from("usuarios")
+    .select(
+      "email, business_name, porcentaje_sena, capacidad_por_turno"
+    )
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (errorUsuario) {
+    throw errorUsuario;
+  }
+
+  const porcSena = Number(
+    porcentaje_sena ??
+    user?.porcentaje_sena ??
+    30
+  );
+
+  const precioTotalReserva =
+    Number(precio_servicio || 0) +
+    Number(monto_extras || 0);
+
+  const montoRealmentePagado = Number(monto || 0);
+
+  /*
+   * 3. Actualizar pagos_pendientes incluso si el pago
+   * quedó pendiente o fue rechazado.
+   */
+  if (pendienteId) {
+    const { error: errorPendiente } = await supabase
+      .from("pagos_pendientes")
+      .update({
+        estado: pagoEstado,
+        payment_id: paymentId
+      })
+      .eq("id", pendienteId);
+
+    if (errorPendiente) {
+      console.error(
+        "Error actualizando pagos_pendientes:",
+        errorPendiente.message
+      );
+    }
+  }
+
+  /*
+   * 4. Los pagos pendientes o rechazados no crean
+   * un turno confirmado.
+   */
+  if (pagoEstado !== "aprobado") {
+    console.log(
+      `ℹ️ Pago ${paymentId} quedó en estado ${pagoEstado}.`
+    );
+
+    invalidateCache(slug);
+
+    return {
+      ok: true,
+      creado: false,
+      pago_estado: pagoEstado,
+      turno: null
+    };
+  }
+
+  /*
+   * 5. Verificar capacidad antes de crear el turno.
+   */
+  const capacidad = Number(
+    user?.capacidad_por_turno || 1
+  );
+
+  const { count, error: errorCapacidad } = await supabase
+    .from("turnos")
+    .select("id", {
+      count: "exact",
+      head: true
+    })
+    .eq("slug", slug)
+    .eq("fecha", fecha)
+    .eq("hora", hora)
+    .neq("estado", "cancelado");
+
+  if (errorCapacidad) {
+    throw errorCapacidad;
+  }
+
+  if (Number(count || 0) >= capacidad) {
+    console.error(
+      `🚫 Sobreventa bloqueada: ${fecha} ${hora} para ${slug}. ` +
+      `payment_id=${paymentId}`
+    );
+
+    if (user?.email) {
       enviarMailConflictoTurno({
-        adminEmail: user?.email,
+        adminEmail: user.email,
         nombreCliente: nombre?.trim() || "Cliente",
         fechaHora: `${fecha} ${hora}`,
-        slug, payment_id, monto,
-      });
-
-      crearNotificacion({
         slug,
-        tipo: "sistema",
-        titulo: "⚠️ Conflicto de sobreventa",
-        mensaje: `Un pago de ${nombre?.trim() || "un cliente"} se aprobó para el ${fecha} ${hora}hs pero el cupo ya estaba lleno. Requiere que lo revises manualmente.`,
-        // FIX: hay que revisar el turno en cuestión → agenda, no "inicio"
-        // (el default genérico de tipo "sistema").
-        data: { fecha, hora, payment_id, monto, seccion: "agenda" },
+        payment_id: paymentId,
+        monto: montoRealmentePagado
       });
-
-      invalidateCache(slug);
-      return;
     }
 
-    const { data: turnoInsertado, error: turnoError } = await supabase.from("turnos").insert([{
-      slug, nombre: nombre?.trim() || "Cliente", apellido: apellido?.trim() || null,
-      telefono: cleanPhone(telefono?.toString() || "0"), email: email?.trim().toLowerCase() || null,
-      fecha, hora, servicio_id: servicio_id || null, servicio_nombre: servicio_nombre || null,
-      equipo_id: equipo_id || null, equipo_nombre: equipo_nombre || null,
-      precio_cobrado: Number(precio_servicio || 0) + Number(monto_extras || 0),
-      monto_pagado: monto,
-      extras: extras || [],
-      monto_extras: monto_extras || 0,
-      porcentaje_sena: tipo_cobro === "sena" ? porcSena : null,
-      tipo_cobro: tipo_cobro || null,
-      metodo_pago: "mercadopago", pago_estado: pagoEstado, fecha_pago: new Date().toISOString(),
-      moneda: moneda || "ARS", estado: "confirmado", payment_id: String(payment_id),
-    }]).select().single();
+    crearNotificacion({
+      slug,
+      tipo: "sistema",
+      titulo: "⚠️ Conflicto de sobreventa",
+      mensaje:
+        `Un pago de ${nombre?.trim() || "un cliente"} ` +
+        `se aprobó para el ${fecha} ${hora}hs, ` +
+        `pero el cupo ya estaba lleno. Requiere revisión manual.`,
+      data: {
+        fecha,
+        hora,
+        payment_id: paymentId,
+        monto: montoRealmentePagado,
+        seccion: "agenda"
+      }
+    });
 
+    invalidateCache(slug);
 
-    if (turnoError) {
-      if (turnoError.code === "23505") { console.log(`⚠️ Turno duplicado bloqueado por DB: ${payment_id}`); }
-      else throw turnoError;
-    } else {
-      if (user?.email) {
-  enviarMailTurno({
-    adminEmail:    user.email,
-    emailCliente:  email?.trim().toLowerCase() || "",
-    nombreCliente: nombre?.trim() || "Cliente",
-    fechaHora:     `${fecha} ${hora}`,
-    slug, servicio: servicio_nombre || "",
-    profesional:   equipo_nombre || "",
-    precioTotal:   Number(precio_servicio || 0) + Number(monto_extras || 0),
-    montoOnline:   Number(monto || 0),
-    metodoPago:    "mercadopago",
-    tipoCobro:     tipo_cobro || null,
-    extras:        extras || [],
-    reprogramarUrl: armarReprogramarUrl(turnoInsertado.id, turnoInsertado.gestion_token, slug),
-  });
-}
-
-      enviarWhatsapp(telefono, WHATSAPP_TEMPLATES.TURNO_NUEVO, [
-        nombre?.trim() || "Cliente", user?.business_name || slug, fecha, hora.slice(0, 5), servicio_nombre || "turno",
-      ]).catch((e) => console.error("Error WhatsApp turno nuevo (pago):", e.message));
-
-      // Notificación in-app: turno pagado (una sola, con servicio + monto)
-      crearNotificacion({
-        slug,
-        tipo: "pago_aprobado",
-        titulo: "Turno pagado",
-        mensaje: `${nombre?.trim() || "Cliente"} pagó ${tipo_cobro === "sena" ? "la seña" : "el turno completo"} (${servicio_nombre ? servicio_nombre + " — " : ""}$${monto}) para el ${fecha} a las ${hora}hs.`,
-        data: { fecha, hora, monto },
-      });
-    }
+    return {
+      ok: false,
+      creado: false,
+      sobreventa: true,
+      pago_estado: pagoEstado,
+      turno: null
+    };
   }
 
-  invalidateCache(slug);
-  console.log(`✅ Pago procesado: ${payment_id} — slug: ${slug} — estado: ${pagoEstado}`);
-}
-
-app.get("/api/mp/success", async (req, res) => {
-  try {
-    const paymentId = String(
-      req.query.payment_id ||
-      req.query.collection_id ||
-      ""
-    ).trim();
-
-    if (!paymentId) {
-      return res.status(400).send("Falta payment_id");
-    }
-
-    const paymentResponse = await fetch(
-      `https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`,
+  /*
+   * 6. Crear el turno usando los valores congelados
+   * de pagos_pendientes.
+   */
+  const { data: turnoInsertado, error: turnoError } = await supabase
+    .from("turnos")
+    .insert([
       {
-        headers: {
-          Authorization: `Bearer ${MP_PLATFORM_TOKEN}`
-        }
+        slug,
+        nombre: nombre?.trim() || "Cliente",
+        apellido: apellido?.trim() || null,
+        telefono: cleanPhone(
+          telefono?.toString() || "0"
+        ),
+        email: email?.trim().toLowerCase() || null,
+
+        fecha,
+        hora,
+
+        servicio_id: servicio_id || null,
+        servicio_nombre: servicio_nombre || null,
+
+        equipo_id: equipo_id || null,
+        equipo_nombre: equipo_nombre || null,
+
+        /*
+         * precio_cobrado = precio total de la reserva.
+         * monto_pagado = importe efectivamente abonado.
+         */
+        precio_cobrado: precioTotalReserva,
+        monto_pagado: montoRealmentePagado,
+
+        extras: extras || [],
+        monto_extras: Number(monto_extras || 0),
+
+        porcentaje_sena:
+          tipo_cobro === "sena"
+            ? porcSena
+            : null,
+
+        tipo_cobro: tipo_cobro || null,
+        metodo_pago: "mercadopago",
+        pago_estado: "aprobado",
+        fecha_pago: new Date().toISOString(),
+        moneda: moneda || "ARS",
+        estado: "confirmado",
+        payment_id: paymentId
       }
-    );
+    ])
+    .select()
+    .single();
 
-    if (!paymentResponse.ok) {
-      console.error(
-        "No se pudo consultar el pago en Mercado Pago:",
-        paymentResponse.status
-      );
-
-      return res.status(502).send("No se pudo verificar el pago");
-    }
-
-    const payment = await paymentResponse.json();
-
-    const externalReference = String(
-      payment.external_reference || ""
-    ).trim();
-
-    let pendiente = null;
-
-    if (externalReference) {
-      const { data, error } = await supabase
-        .from("pagos_pendientes")
-        .select("*")
-        .eq("id", externalReference)
+  /*
+   * 7. Si existe una restricción UNIQUE sobre payment_id,
+   * una carrera simultánea queda bloqueada por la base.
+   */
+  if (turnoError) {
+    if (turnoError.code === "23505") {
+      const { data: turnoDuplicado } = await supabase
+        .from("turnos")
+        .select("id, slug, payment_id, estado")
+        .eq("payment_id", paymentId)
         .maybeSingle();
 
-      if (error) {
-        console.error(
-          "Error buscando pago pendiente:",
-          error.message
-        );
-      }
-
-      pendiente = data || null;
-    }
-
-    const estadoMercadoPago = String(
-      payment.status || ""
-    ).toLowerCase();
-
-    let estadoTurnits = "rechazado";
-
-    if (estadoMercadoPago === "approved") {
-      estadoTurnits = "aprobado";
-    } else if (
-      estadoMercadoPago === "pending" ||
-      estadoMercadoPago === "in_process"
-    ) {
-      estadoTurnits = "pendiente";
-    }
-
-    let resultado = null;
-
-    if (pendiente) {
-      resultado = await procesarPagoConfirmado({
-        ...pendiente,
-        monto: Number(payment.transaction_amount || pendiente.monto || 0),
-        moneda: payment.currency_id || pendiente.moneda || "ARS",
-        payment_id: paymentId,
-        estado: estadoTurnits,
-        pendienteId: pendiente.id
-      });
-    }
-
-    const destino = new URL(SUCCESS_URL);
-
-    if (pendiente?.slug) {
-      destino.searchParams.set("slug", pendiente.slug);
-    } else if (req.query.slug) {
-      destino.searchParams.set(
-        "slug",
-        String(req.query.slug)
+      console.log(
+        `⚠️ Inserción duplicada bloqueada por la base: ${paymentId}`
       );
+
+      return {
+        ok: true,
+        duplicado: true,
+        turno: turnoDuplicado || null,
+        pago_estado: pagoEstado
+      };
     }
 
-    destino.searchParams.set("payment_id", paymentId);
-    destino.searchParams.set(
-      "status",
-      estadoMercadoPago || "unknown"
-    );
-
-    if (resultado?.turno?.id) {
-      destino.searchParams.set(
-        "turno_id",
-        String(resultado.turno.id)
-      );
-    }
-
-    return res.redirect(303, destino.toString());
-  } catch (error) {
-    console.error(
-      "Error en /api/mp/success:",
-      error
-    );
-
-    return res.status(500).send(
-      "Error procesando el retorno de Mercado Pago"
-    );
+    throw turnoError;
   }
-});
+
+  /*
+   * 8. Confirmar pagos_pendientes después de crear el turno.
+   */
+  if (pendienteId) {
+    const { error: errorPendienteFinal } = await supabase
+      .from("pagos_pendientes")
+      .update({
+        estado: "aprobado",
+        payment_id: paymentId
+      })
+      .eq("id", pendienteId);
+
+    if (errorPendienteFinal) {
+      console.error(
+        "Error confirmando pagos_pendientes:",
+        errorPendienteFinal.message
+      );
+    }
+  }
+
+  /*
+   * 9. Enviar notificaciones y comunicaciones existentes.
+   */
+  if (user?.email) {
+    enviarMailTurno({
+      adminEmail: user.email,
+      emailCliente: email?.trim().toLowerCase() || "",
+      nombreCliente: nombre?.trim() || "Cliente",
+      fechaHora: `${fecha} ${hora}`,
+      slug,
+      servicio: servicio_nombre || "",
+      profesional: equipo_nombre || "",
+      precioTotal: precioTotalReserva,
+      montoOnline: montoRealmentePagado,
+      metodoPago: "mercadopago",
+      tipoCobro: tipo_cobro || null,
+      extras: extras || [],
+      reprogramarUrl: armarReprogramarUrl(
+        turnoInsertado.id,
+        turnoInsertado.gestion_token,
+        slug
+      )
+    });
+  }
+
+  enviarWhatsapp(
+    telefono,
+    WHATSAPP_TEMPLATES.TURNO_NUEVO,
+    [
+      nombre?.trim() || "Cliente",
+      user?.business_name || slug,
+      fecha,
+      hora.slice(0, 5),
+      servicio_nombre || "turno"
+    ]
+  ).catch((error) => {
+    console.error(
+      "Error WhatsApp turno nuevo por Mercado Pago:",
+      error.message
+    );
+  });
+
+  crearNotificacion({
+    slug,
+    tipo: "pago_aprobado",
+    titulo: "Turno pagado",
+    mensaje:
+      `${nombre?.trim() || "Cliente"} pagó ` +
+      `${tipo_cobro === "sena" ? "la seña" : "el turno completo"} ` +
+      `(${servicio_nombre ? servicio_nombre + " — " : ""}` +
+      `$${montoRealmentePagado}) para el ${fecha} a las ${hora}hs.`,
+    data: {
+      fecha,
+      hora,
+      monto: montoRealmentePagado,
+      payment_id: paymentId
+    }
+  });
+
+  /*
+   * 10. Actualizar la agenda inmediatamente.
+   */
+  invalidateCache(slug);
+
+  console.log(
+    `✅ Pago procesado: ${paymentId} — ` +
+    `slug: ${slug} — estado: aprobado`
+  );
+
+  return {
+    ok: true,
+    creado: true,
+    duplicado: false,
+    pago_estado: "aprobado",
+    turno: turnoInsertado
+  };
+}
 
 app.post("/webhook/mp", async (req, res) => {
   const { query, body } = req;
