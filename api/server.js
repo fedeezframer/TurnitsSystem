@@ -4888,6 +4888,39 @@ async function procesarRenovacion(payData) {
   if (payData.status !== "approved") return;
   const slug = cleanSlug(payData.metadata?.slug || "");
   if (!slug) return;
+
+  // FIX-IDEMPOTENCIA: MercadoPago puede (y suele) reintentar la notificación
+  // de un mismo pago varias veces. Sin este chequeo, cada reintento volvía
+  // a sumar 30 días de más al vencimiento del negocio.
+  //
+  // Se "reserva" el payment_id primero con un insert en una tabla con
+  // columna UNIQUE (payment_id). Si el insert falla por conflicto, es
+  // porque este pago ya fue procesado antes → se corta acá sin tocar
+  // fecha_vencimiento. Esto también cubre el caso de dos webhooks para el
+  // mismo pago llegando casi al mismo tiempo: sólo uno de los dos gana el
+  // insert, el otro se corta.
+  //
+  // Requiere la tabla (crear una sola vez en Supabase):
+  //   create table renovaciones_procesadas (
+  //     payment_id text primary key,
+  //     slug text not null,
+  //     created_at timestamptz not null default now()
+  //   );
+  const paymentId = String(payData.id || "");
+  if (paymentId) {
+    const { error: claimError } = await supabase
+      .from("renovaciones_procesadas")
+      .insert([{ payment_id: paymentId, slug }]);
+    if (claimError) {
+      if (claimError.code === "23505") {
+        console.log(`↩️  Renovación ${paymentId} ya había sido procesada, se ignora el duplicado.`);
+      } else {
+        console.error("Error registrando renovación procesada:", claimError.message);
+      }
+      return;
+    }
+  }
+
   const { data: user } = await supabase.from("usuarios")
     .select("id, email, nombre_persona, plan, fecha_vencimiento").eq("slug", slug).maybeSingle();
   if (!user) return;
