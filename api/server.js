@@ -3875,6 +3875,104 @@ const turnosHoyDetalle = turnosData
 });
 
 // ══════════════════════════════════════════════════════════════
+// RENDIMIENTO POR INTEGRANTE DEL EQUIPO — Solo plan Premium
+// Permite a negocios con varios profesionales (ej. barberías) ver
+// cuántos turnos hizo cada integrante y cuánto facturó, filtrado
+// por día / semana / mes. Reutiliza el mismo criterio de "turno
+// contable" que /admin-stats: se excluyen los cancelados y los
+// pendientes de aprobación (transferencia/efectivo sin confirmar),
+// porque todavía no representan trabajo realizado ni cobrado.
+// ══════════════════════════════════════════════════════════════
+app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+
+    const { equipo_id } = req.query;
+    if (!equipo_id || !UUID_REGEX.test(equipo_id)) {
+      return res.status(400).json({ success: false, error: "equipo_id inválido." });
+    }
+
+    const PERIODOS_VALIDOS = ["dia", "semana", "mes"];
+    const periodo = PERIODOS_VALIDOS.includes(req.query.periodo) ? req.query.periodo : "dia";
+
+    const { data: user, error: userError } = await supabase.from("usuarios")
+      .select("plan").eq("slug", slug).maybeSingle();
+    if (userError) throw userError;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    if (user.plan !== "premium") {
+      return res.status(403).json({
+        success: false,
+        error: "premium_required",
+        mensaje: "El rendimiento por integrante es una función Premium.",
+      });
+    }
+
+    const { data: integrante, error: equipoError } = await supabase.from("equipo")
+      .select("id, nombre").eq("id", equipo_id).eq("slug", slug).maybeSingle();
+    if (equipoError) throw equipoError;
+    if (!integrante) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
+
+    // "Hoy" en horario de Argentina, igual criterio que /admin-stats.
+    const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+    const fmtISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    let desde, hasta;
+    if (periodo === "dia") {
+      desde = hasta = fmtISO(ahoraArg);
+    } else if (periodo === "semana") {
+      const diaSemana   = ahoraArg.getDay(); // 0 = domingo
+      const offsetLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+      const lunes   = new Date(ahoraArg); lunes.setDate(ahoraArg.getDate() + offsetLunes);
+      const domingo = new Date(lunes);    domingo.setDate(lunes.getDate() + 6);
+      desde = fmtISO(lunes);
+      hasta = fmtISO(domingo);
+    } else {
+      const primerDia = new Date(ahoraArg.getFullYear(), ahoraArg.getMonth(), 1);
+      const ultimoDia = new Date(ahoraArg.getFullYear(), ahoraArg.getMonth() + 1, 0);
+      desde = fmtISO(primerDia);
+      hasta = fmtISO(ultimoDia);
+    }
+
+    const { data: turnosPeriodo, error: turnosError } = await supabase.from("turnos")
+      .select("id, fecha, hora, estado, servicio_nombre, nombre, apellido, precio_cobrado")
+      .eq("slug", slug).eq("equipo_id", equipo_id)
+      .gte("fecha", desde).lte("fecha", hasta)
+      .neq("estado", "cancelado")
+      .order("fecha", { ascending: true }).order("hora", { ascending: true });
+    if (turnosError) throw turnosError;
+
+    const turnosContables = (turnosPeriodo || []).filter((t) => t.estado !== "pendiente");
+
+    const cantidadTurnos = turnosContables.length;
+    const facturacion    = turnosContables.reduce((acc, t) => acc + Number(t.precio_cobrado || 0), 0);
+
+    res.json({
+      success: true,
+      integrante: { id: integrante.id, nombre: integrante.nombre },
+      periodo,
+      desde,
+      hasta,
+      cantidadTurnos,
+      facturacion,
+      detalle: turnosContables.map((t) => ({
+        id:       t.id,
+        fecha:    t.fecha,
+        hora:     (t.hora || "").slice(0, 5),
+        cliente:  [t.nombre, t.apellido].filter(Boolean).join(" "),
+        servicio: t.servicio_nombre,
+        monto:    Number(t.precio_cobrado || 0),
+        estado:   t.estado,
+      })),
+    });
+  } catch (e) {
+    console.error("Error en /admin/rendimiento-equipo:", e.message);
+    res.status(500).json({ success: false, error: "Error al obtener el rendimiento del integrante." });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // SUPERADMIN — CRUD DE NEGOCIOS
 // ══════════════════════════════════════════════════════════════
 app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
