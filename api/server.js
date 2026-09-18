@@ -15,6 +15,9 @@ import webpush        from "web-push";
 // ══════════════════════════════════════════════════════════════
 const app = express();
 app.set("trust proxy", 1);
+// FIX-CACHE: la API nunca devuelve ETag/304. Junto con el "no-store" de más
+// abajo, evita que el navegador o una PWA reutilicen respuestas viejas.
+app.disable("etag");
 
 // FIX-SEC: APPS_SCRIPT_URL sacada del código fuente y movida a env var.
 // Antes estaba hardcodeada -> si el repo se filtra, cualquiera puede
@@ -30,6 +33,10 @@ const CACHE_DURATION = 20_000;
 // si un token se filtra (XSS, dispositivo compartido, etc).
 const JWT_EXPIRY     = process.env.JWT_EXPIRY || "1d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
+// Versión vigente del panel (componente de Framer). OPCIONAL: si no está
+// seteada, el panel solo usa la detección por huella de scripts. Ver
+// GET /panel-version más abajo.
+const PANEL_VERSION  = (process.env.PANEL_VERSION || "").trim();
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "21000");
@@ -627,6 +634,20 @@ const corsPanel = cors({
   allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
 });
 
+// FIX-CACHE: ninguna respuesta de la API debe quedar cacheada (ni en el
+// navegador, ni en una PWA instalada, ni en un proxy/CDN intermedio). Los
+// datos del panel (turnos, stats, settings) cambian todo el tiempo y una
+// respuesta vieja acá es exactamente lo que hace que "se quede en la versión
+// de ayer". Va antes del rate limit para que también aplique a los 429.
+app.use((req, res, next) => {
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma":        "no-cache",
+    "Expires":       "0",
+  });
+  next();
+});
+
 app.use(express.json({ limit: "10mb" }));
 app.use(limiterAPI);
 
@@ -841,6 +862,21 @@ function enviarMailConflictoTurno({ adminEmail, nombreCliente, fechaHora, slug, 
 // ══════════════════════════════════════════════════════════════
 app.get("/",       (_, res) => res.json({ status: "online", version: "13.8-sec", timestamp: new Date().toISOString() }));
 app.get("/health", (_, res) => res.json({ status: "ok",     timestamp: new Date().toISOString() }));
+
+// ══════════════════════════════════════════════════════════════
+// PANEL — Versión vigente (auto-actualización del panel)
+// GET /panel-version
+// El panel (componente de Framer) consulta esto al abrir, cada pocos
+// minutos y cuando la app vuelve a primer plano. Si "version" es distinta
+// de PANEL_BUILD_VERSION (constante dentro del componente), sabe que
+// quedó una versión vieja en caché y se recarga sola.
+// OPCIONAL: sin PANEL_VERSION devuelve version "" y el panel se apoya solo
+// en la detección por huella de scripts (no requiere mantenimiento).
+// Uso para forzar la actualización de todos: subir PANEL_BUILD_VERSION en el
+// código del componente, PUBLICAR en Framer, y recién ahí poner el mismo
+// valor en PANEL_VERSION en Render.
+// ══════════════════════════════════════════════════════════════
+app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_VERSION }));
 
 // ══════════════════════════════════════════════════════════════
 // REGISTRO — PASO 1
