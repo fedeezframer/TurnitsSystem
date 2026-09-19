@@ -4572,6 +4572,89 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// CUENTA — Eliminar cuenta (la pide el propio dueño desde el panel)
+// POST /cuenta/eliminar/:slug   body: { password }
+//
+// Borra el negocio y todo lo que cuelga de él (mismo criterio que
+// DELETE /superadmin/negocios/:slug) y limpia sus imágenes de Storage.
+// Es IRREVERSIBLE, así que además del JWT pide la contraseña de nuevo
+// (un panel abierto en una compu compartida no alcanza) y reusa el
+// bloqueo por intentos fallidos del login.
+//
+// Se deja a propósito la tabla "renovaciones_procesadas": es el registro
+// de pagos ya acreditados y sirve de comprobante / idempotencia.
+// ══════════════════════════════════════════════════════════════
+app.post("/cuenta/eliminar/:slug", limiterAuth, requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+
+    // requireAuth ya verificó que el token sea de este negocio. Los
+    // superadmin tienen su propia ruta (DELETE /superadmin/negocios/:slug).
+    if (req.auth.rol === "superadmin") {
+      return res.status(403).json({ success: false, error: "No autorizado para eliminar esta cuenta." });
+    }
+
+    const password = req.body?.password;
+    if (!password) return res.status(400).json({ success: false, error: "Ingresá tu contraseña para confirmar." });
+
+    const estadoBloqueo = chequearBloqueoLogin(slug);
+    if (estadoBloqueo.bloqueado) {
+      return res.status(429).json({
+        success: false,
+        error: `Demasiados intentos fallidos. Probá de nuevo en ${estadoBloqueo.minutosRestantes} minuto(s).`,
+      });
+    }
+
+    const { data: user, error: userError } = await supabase.from("usuarios")
+      .select("id, slug, password").eq("slug", slug).maybeSingle();
+    if (userError) throw userError;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const passwordOk = await verificarPassword(password, user.password, user.id);
+    if (!passwordOk) {
+      registrarIntentoFallidoLogin(slug);
+      // 403 (no 401) para que el panel no lo confunda con "sesión expirada".
+      return res.status(403).json({ success: false, error: "Contraseña incorrecta." });
+    }
+    limpiarIntentosLogin(slug);
+
+    // Borra todo lo que no tiene ON DELETE CASCADE hacia usuarios
+    // (el resto — equipo, extras, pagos_pendientes, notificaciones,
+    // lista_espera — cascadea solo al borrar el usuario).
+    for (const tabla of ["turnos", "reprogramaciones", "servicios", "push_subscriptions"]) {
+      const { error: delErr } = await supabase.from(tabla).delete().eq("slug", slug);
+      if (delErr) throw delErr;
+    }
+    const { error: delUserErr } = await supabase.from("usuarios").delete().eq("slug", slug);
+    if (delUserErr) throw delUserErr;
+
+    // Imágenes en Storage (logo, comprobantes, fotos de servicios / equipo /
+    // extras). Es limpieza "best effort": la cuenta ya está borrada, así que
+    // si algo falla acá solo se loguea y no se le devuelve error al usuario.
+    for (const bucket of ["logos", "comprobantes", "servicios", "equipo", "extras"]) {
+      try {
+        for (let i = 0; i < 20; i++) {
+          const { data: archivos, error: listErr } = await supabase.storage.from(bucket).list(slug, { limit: 100 });
+          if (listErr || !archivos?.length) break;
+          const { error: rmErr } = await supabase.storage.from(bucket).remove(archivos.map((a) => `${slug}/${a.name}`));
+          if (rmErr) break;
+        }
+      } catch (e) {
+        console.warn(`⚠️  No se pudo limpiar el bucket "${bucket}" de ${slug}:`, e?.message || e);
+      }
+    }
+
+    invalidateCache(slug);
+    console.log(`🗑️  Cuenta eliminada por su dueño: ${slug}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("❌ Error eliminando cuenta:", e?.message || e);
+    res.status(500).json({ success: false, error: "No se pudo eliminar la cuenta. Probá de nuevo." });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // SEGURIDAD DE CREDENCIALES DE MERCADO PAGO
 //
 // FIX-SEC: antes se guardaba el access_token de cada negocio en texto
