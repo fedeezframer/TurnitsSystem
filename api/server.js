@@ -4882,6 +4882,16 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
   const { data: user } = await supabase.from("usuarios")
     .select("email, business_name, porcentaje_sena, capacidad_por_turno").eq("slug", slug).maybeSingle();
 
+  // El negocio ya no existe (cuenta eliminada mientras el cliente pagaba, o
+  // webhook que llega tarde). No se crea el turno: quedaría huérfano y, como
+  // los slugs se reutilizan, lo heredaría el próximo negocio con ese nombre.
+  // El pago ya se acreditó en la cuenta de Mercado Pago del negocio, así que
+  // queda logueado para revisarlo a mano (contactar / devolver al cliente).
+  if (!user) {
+    console.error(`🚫 Pago ${payment_id} (${estado}) para un negocio que ya no existe (${slug}). NO se crea el turno. Cliente: ${nombre || "?"} ${telefono || ""} — requiere revisión manual.`);
+    return;
+  }
+
   const porcSena   = porcentaje_sena || user?.porcentaje_sena || 30;
   const pagoEstado = estado === "aprobado" ? "aprobado" : estado === "pendiente" ? "pendiente" : "rechazado";
 
