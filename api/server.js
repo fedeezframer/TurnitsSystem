@@ -309,6 +309,60 @@ async function generarSlugUnico(businessName) {
   return slug;
 }
 
+// Borra un negocio y TODO lo que cuelga de su slug. Se usa al eliminar la
+// cuenta (dueño) y desde el superadmin.
+//
+// Los slugs se REUTILIZAN: al borrar un negocio su slug queda libre y
+// generarSlugUnico() se lo da al próximo registro con ese nombre. Por eso no
+// se puede dejar ninguna fila huérfana con ese slug: la cuenta nueva la
+// "heredaría" (servicios, extras, equipo, notificaciones —y como los tips se
+// deduplican por slug, ni siquiera se generarían los nuevos—, etc.).
+// No se confía en que existan ON DELETE CASCADE en la base: se borra todo
+// explícitamente, hijos primero. Si ya cascadea, estos deletes no hacen nada.
+async function borrarNegocioCompleto(slug) {
+  const borrarPor = async (tabla, columna, valor) => {
+    const { error } = await supabase.from(tabla).delete().eq(columna, valor);
+    if (error) throw new Error(`${tabla}: ${error.message}`);
+  };
+
+  // ids de servicios: hacen falta para limpiar las tablas de vínculo
+  const { data: servs, error: servsErr } = await supabase.from("servicios").select("id").eq("slug", slug);
+  if (servsErr) throw new Error(`servicios: ${servsErr.message}`);
+  const servicioIds = (servs || []).map((s) => s.id);
+
+  for (const tabla of ["reprogramaciones", "turnos", "lista_espera", "notificaciones", "pagos_pendientes", "push_subscriptions"]) {
+    await borrarPor(tabla, "slug", slug);
+  }
+  if (servicioIds.length) {
+    for (const tabla of ["servicio_extras", "servicio_equipo"]) {
+      const { error } = await supabase.from(tabla).delete().in("servicio_id", servicioIds);
+      if (error) throw new Error(`${tabla}: ${error.message}`);
+    }
+  }
+  for (const tabla of ["servicios", "extras", "equipo"]) {
+    await borrarPor(tabla, "slug", slug);
+  }
+  await borrarPor("usuarios", "slug", slug);
+
+  // Imágenes en Storage (logo, comprobantes, fotos de servicios / equipo /
+  // extras). "Best effort": el negocio ya está borrado, si algo falla acá
+  // solo se loguea.
+  for (const bucket of ["logos", "comprobantes", "servicios", "equipo", "extras"]) {
+    try {
+      for (let i = 0; i < 20; i++) {
+        const { data: archivos, error: listErr } = await supabase.storage.from(bucket).list(slug, { limit: 100 });
+        if (listErr || !archivos?.length) break;
+        const { error: rmErr } = await supabase.storage.from(bucket).remove(archivos.map((a) => `${slug}/${a.name}`));
+        if (rmErr) break;
+      }
+    } catch (e) {
+      console.warn(`⚠️  No se pudo limpiar el bucket "${bucket}" de ${slug}:`, e?.message || e);
+    }
+  }
+
+  invalidateCache(slug);
+}
+
 const validateEmail    = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const validatePassword = (p) => p && p.length >= 6;
 const validatePhone    = (p) => /^[0-9]{7,15}$/.test(p.toString().replace(/\s/g, ""));
@@ -4128,14 +4182,7 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
 app.delete("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   const slug = cleanSlug(req.params.slug);
   try {
-    // Borra todo lo que no tiene ON DELETE CASCADE hacia usuarios
-    await supabase.from("turnos").delete().eq("slug", slug);
-    await supabase.from("reprogramaciones").delete().eq("slug", slug);
-    await supabase.from("servicios").delete().eq("slug", slug);
-    // el resto (equipo, extras, pagos_pendientes, notificaciones,
-    // lista_espera) ya cascadea solo al borrar el usuario
-    const { error } = await supabase.from("usuarios").delete().eq("slug", slug);
-    if (error) throw error;
+    await borrarNegocioCompleto(slug);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -4575,8 +4622,8 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
 // CUENTA — Eliminar cuenta (la pide el propio dueño desde el panel)
 // POST /cuenta/eliminar/:slug   body: { password }
 //
-// Borra el negocio y todo lo que cuelga de él (mismo criterio que
-// DELETE /superadmin/negocios/:slug) y limpia sus imágenes de Storage.
+// Borra el negocio y todo lo que cuelga de él (borrarNegocioCompleto, el
+// mismo helper que usa DELETE /superadmin/negocios/:slug).
 // Es IRREVERSIBLE, así que además del JWT pide la contraseña de nuevo
 // (un panel abierto en una compu compartida no alcanza) y reusa el
 // bloqueo por intentos fallidos del login.
@@ -4619,33 +4666,7 @@ app.post("/cuenta/eliminar/:slug", limiterAuth, requireAuth, async (req, res) =>
     }
     limpiarIntentosLogin(slug);
 
-    // Borra todo lo que no tiene ON DELETE CASCADE hacia usuarios
-    // (el resto — equipo, extras, pagos_pendientes, notificaciones,
-    // lista_espera — cascadea solo al borrar el usuario).
-    for (const tabla of ["turnos", "reprogramaciones", "servicios", "push_subscriptions"]) {
-      const { error: delErr } = await supabase.from(tabla).delete().eq("slug", slug);
-      if (delErr) throw delErr;
-    }
-    const { error: delUserErr } = await supabase.from("usuarios").delete().eq("slug", slug);
-    if (delUserErr) throw delUserErr;
-
-    // Imágenes en Storage (logo, comprobantes, fotos de servicios / equipo /
-    // extras). Es limpieza "best effort": la cuenta ya está borrada, así que
-    // si algo falla acá solo se loguea y no se le devuelve error al usuario.
-    for (const bucket of ["logos", "comprobantes", "servicios", "equipo", "extras"]) {
-      try {
-        for (let i = 0; i < 20; i++) {
-          const { data: archivos, error: listErr } = await supabase.storage.from(bucket).list(slug, { limit: 100 });
-          if (listErr || !archivos?.length) break;
-          const { error: rmErr } = await supabase.storage.from(bucket).remove(archivos.map((a) => `${slug}/${a.name}`));
-          if (rmErr) break;
-        }
-      } catch (e) {
-        console.warn(`⚠️  No se pudo limpiar el bucket "${bucket}" de ${slug}:`, e?.message || e);
-      }
-    }
-
-    invalidateCache(slug);
+    await borrarNegocioCompleto(slug);
     console.log(`🗑️  Cuenta eliminada por su dueño: ${slug}`);
     res.json({ success: true });
   } catch (e) {
