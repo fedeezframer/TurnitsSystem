@@ -604,7 +604,13 @@ function limpiarIntentosLogin(key) {
 // ══════════════════════════════════════════════════════════════
 const limiterAuth    = rateLimit({ windowMs: 15 * 60 * 1000, max: 20,  message: "Demasiados intentos.",  standardHeaders: true, legacyHeaders: false });
 const limiterBooking = rateLimit({ windowMs: 60 * 1000,       max: 20,  message: "Demasiadas reservas." });
-const limiterAPI     = rateLimit({ windowMs: 60 * 1000,       max: 200 });
+// FIX-429: antes respondía texto plano (no JSON), y el panel lo mostraba como
+// "Error de conexión" en todos los widgets a la vez. Ahora responde JSON y con
+// más margen (una carga del panel dispara decenas de requests).
+const limiterAPI     = rateLimit({
+  windowMs: 60 * 1000, max: 600,
+  message: { success: false, error: "Demasiadas solicitudes. Probá de nuevo en un momento." },
+});
 const limiterCodigo  = rateLimit({ windowMs: 15 * 60 * 1000, max: 10,  message: "Demasiados intentos. Probá de nuevo en unos minutos.", standardHeaders: true, legacyHeaders: false });
 
 // ══════════════════════════════════════════════════════════════
@@ -1751,7 +1757,10 @@ app.post("/admin/servicios/upload-imagen", requireAuth, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    const slug = cleanSlug(req.body.slug || req.auth.slug);
+    // FIX-SEC: en multipart requireAuth no ve req.body.slug (multer corre después),
+    // así que había que no confiar en él: se usa el slug del token.
+    const slug = cleanSlug(req.auth.rol === "superadmin" ? (req.body.slug || "") : req.auth.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Falta el negocio." });
     if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
 
     const ext      = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/webp" ? "webp" : "jpg";
@@ -1995,6 +2004,13 @@ app.post("/admin/equipo/:id/servicios", requireAuth, async (req, res) => {
 app.delete("/admin/equipo/:id/servicios/:servicio_id", requireAuth, async (req, res) => {
   try {
     const { id, servicio_id } = req.params;
+    // FIX-SEC: verificar que el miembro del equipo sea de ESTE negocio
+    // (antes cualquier negocio logueado podía desvincular los de otro).
+    if (req.auth.rol !== "superadmin") {
+      const { data: propio } = await supabase.from("equipo")
+        .select("id").eq("id", id).eq("slug", req.auth.slug).maybeSingle();
+      if (!propio) return res.status(404).json({ success: false, error: "No encontrado." });
+    }
     const { error } = await supabase.from("servicio_equipo")
       .delete().eq("equipo_id", id).eq("servicio_id", servicio_id);
     if (error) throw error;
@@ -2011,7 +2027,10 @@ app.post("/admin/equipo/upload-foto", requireAuth, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    const slug = cleanSlug(req.body.slug || req.auth.slug);
+    // FIX-SEC: en multipart requireAuth no ve req.body.slug (multer corre después),
+    // así que había que no confiar en él: se usa el slug del token.
+    const slug = cleanSlug(req.auth.rol === "superadmin" ? (req.body.slug || "") : req.auth.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Falta el negocio." });
     if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
 
     const ext = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/webp" ? "webp" : "jpg";
@@ -2155,7 +2174,10 @@ app.post("/admin/extras/upload-imagen", requireAuth, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    const slug = cleanSlug(req.body.slug || req.auth.slug);
+    // FIX-SEC: en multipart requireAuth no ve req.body.slug (multer corre después),
+    // así que había que no confiar en él: se usa el slug del token.
+    const slug = cleanSlug(req.auth.rol === "superadmin" ? (req.body.slug || "") : req.auth.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Falta el negocio." });
     if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
  
     const ext = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/webp" ? "webp" : "jpg";
@@ -2236,6 +2258,12 @@ app.post("/admin/servicios/:id/extras", requireAuth, async (req, res) => {
 app.delete("/admin/servicios/:id/extras/:extra_id", requireAuth, async (req, res) => {
   try {
     const { id, extra_id } = req.params;
+    // FIX-SEC: verificar que el servicio sea de ESTE negocio.
+    if (req.auth.rol !== "superadmin") {
+      const { data: propio } = await supabase.from("servicios")
+        .select("id").eq("id", id).eq("slug", req.auth.slug).maybeSingle();
+      if (!propio) return res.status(404).json({ success: false, error: "No encontrado." });
+    }
     const { error } = await supabase.from("servicio_extras")
       .delete().eq("servicio_id", id).eq("extra_id", extra_id);
     if (error) throw error;
