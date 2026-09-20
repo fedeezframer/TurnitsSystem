@@ -2983,6 +2983,129 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// TURNOS — CARGA MANUAL (turnos acordados por fuera de la app)
+// POST /admin/turnos/manual
+// Body: { slug, nombre, fecha, hora, servicio_id?, forzar? }
+//
+// Es para que el negocio anote en su agenda un turno que cerró por
+// WhatsApp, en persona, por teléfono, etc. Solo lleva nombre, día,
+// hora y servicio. Se guarda SIN teléfono ni email, y eso es a
+// propósito: así no dispara mails/WhatsApp al cliente (no hay a
+// quién avisar), el cron de recordatorios lo saltea (filtra
+// telefono not null) y no se cuela en la sección de Clientes.
+// Ocupa el horario como cualquier turno confirmado, así que el link
+// público deja de ofrecer ese slot.
+//
+// Si el horario ya está lleno responde 409 { conflicto: true }; el
+// panel le pregunta al dueño y, si confirma, reenvía con forzar:true
+// (el dueño puede querer sobreagendar a propósito).
+// ══════════════════════════════════════════════════════════════
+app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
+  try {
+    const { nombre, fecha, hora, servicio_id, forzar } = req.body || {};
+    const slugClean = cleanSlug(req.body?.slug || req.auth?.slug || "");
+    if (!slugClean) return res.status(400).json({ success: false, error: "Falta el negocio." });
+
+    const nombreClean = typeof nombre === "string" ? nombre.trim() : "";
+    if (nombreClean.length < 2 || nombreClean.length > 80) {
+      return res.status(400).json({ success: false, error: "Ingresá el nombre del cliente (2 a 80 caracteres)." });
+    }
+    if (typeof fecha !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || isNaN(new Date(fecha + "T12:00:00").getTime())) {
+      return res.status(400).json({ success: false, error: "Fecha inválida." });
+    }
+    if (typeof hora !== "string" || !HORA_REGEX.test(hora)) {
+      return res.status(400).json({ success: false, error: "Hora inválida." });
+    }
+    if (servicio_id && !UUID_REGEX.test(String(servicio_id))) {
+      return res.status(400).json({ success: false, error: "Servicio inválido." });
+    }
+
+    // No se puede anotar en el pasado (horario de Argentina, mismo criterio que /slots-disponibles).
+    const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+    const hoyISO   = ahoraArg.toISOString().split("T")[0];
+    const horaAhora = `${String(ahoraArg.getHours()).padStart(2, "0")}:${String(ahoraArg.getMinutes()).padStart(2, "0")}`;
+    if (fecha < hoyISO || (fecha === hoyISO && hora <= horaAhora)) {
+      return res.status(400).json({ success: false, error: "Ese horario ya pasó. Elegí uno a futuro." });
+    }
+
+    const { data: user, error: userError } = await supabase.from("usuarios")
+      .select("activo, duracion_turno, capacidad_por_turno").eq("slug", slugClean).maybeSingle();
+    if (userError) throw userError;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    let servicioNombre = null;
+    let precio         = 0;
+    let duracion       = user.duracion_turno      || 30;
+    let capacidad      = user.capacidad_por_turno || 1;
+    if (servicio_id) {
+      const { data: srv, error: srvError } = await supabase.from("servicios")
+        .select("nombre, precio, duracion, capacidad").eq("id", servicio_id).eq("slug", slugClean).maybeSingle();
+      if (srvError) throw srvError;
+      if (!srv) return res.status(400).json({ success: false, error: "Servicio no encontrado." });
+      servicioNombre = srv.nombre;
+      precio         = Number(srv.precio || 0);
+      duracion       = srv.duracion  || duracion;
+      capacidad      = srv.capacidad || capacidad;
+    }
+
+    // Chequeo de solapamiento (misma lógica que /slots-disponibles).
+    if (forzar !== true) {
+      const toMin = (t) => { const [h, m] = String(t).slice(0, 5).split(":").map(Number); return h * 60 + m; };
+      const [{ data: turnosDia }, { data: todosServicios }] = await Promise.all([
+        supabase.from("turnos").select("hora, servicio_id")
+          .eq("slug", slugClean).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]),
+        supabase.from("servicios").select("id, duracion").eq("slug", slugClean),
+      ]);
+      const duracionPorServicio = Object.fromEntries((todosServicios || []).map((s) => [s.id, s.duracion]));
+      const ini = toMin(hora), fin = ini + duracion;
+      const solapados = (turnosDia || []).filter((t) => {
+        const tIni = toMin(t.hora);
+        const tFin = tIni + ((t.servicio_id && duracionPorServicio[t.servicio_id]) || user.duracion_turno || 30);
+        return ini < tFin && fin > tIni;
+      }).length;
+      if (solapados >= capacidad) {
+        return res.status(409).json({
+          success: false, conflicto: true,
+          error: "Ya hay un turno en ese horario. ¿Querés agendarlo igual?",
+        });
+      }
+    }
+
+    const { data: turno, error: insertError } = await supabase.from("turnos").insert([{
+      slug:            slugClean,
+      nombre:          nombreClean,
+      telefono:        null,
+      email:           null,
+      fecha,
+      hora,
+      servicio_id:     servicio_id || null,
+      servicio_nombre: servicioNombre,
+      precio_cobrado:  precio,
+      extras:          [],
+      monto_extras:    0,
+      monto_pagado:    0,
+      estado:          "confirmado",
+      metodo_pago:     "none",
+      pago_estado:     "sin_pago",
+    }]).select().single();
+
+    if (insertError) {
+      if (insertError.code === "23502") {
+        console.error("❌ turnos.telefono / turnos.email tienen NOT NULL. Correr en Supabase: alter table turnos alter column telefono drop not null; alter table turnos alter column email drop not null;");
+      }
+      throw insertError;
+    }
+
+    invalidateCache(slugClean);
+    console.log(`✅ Turno manual ${turno.id} (${slugClean}) ${fecha} ${hora}`);
+    res.status(201).json({ success: true, turno_id: turno.id });
+  } catch (e) {
+    console.error("Error en POST /admin/turnos/manual:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo agendar el turno." });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // AGENDA — Próximos 30 días
 // GET /agenda/:slug
 // ══════════════════════════════════════════════════════════════
