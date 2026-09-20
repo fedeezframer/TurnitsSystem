@@ -3071,7 +3071,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
       }
     }
 
-    const { data: turno, error: insertError } = await supabase.from("turnos").insert([{
+    const filaTurno = {
       slug:            slugClean,
       nombre:          nombreClean,
       telefono:        null,
@@ -3087,20 +3087,26 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
       estado:          "confirmado",
       metodo_pago:     "none",
       pago_estado:     "sin_pago",
-    }]).select().single();
+    };
 
-    if (insertError) {
-      if (insertError.code === "23502") {
-        console.error("❌ turnos.telefono / turnos.email tienen NOT NULL. Correr en Supabase: alter table turnos alter column telefono drop not null; alter table turnos alter column email drop not null;");
-      }
-      throw insertError;
+    let { data: turno, error: insertError } = await supabase.from("turnos")
+      .insert([filaTurno]).select().single();
+
+    // Si la tabla exige teléfono/email (NOT NULL), reintentamos con texto
+    // vacío. Todo el código trata "" igual que null (se chequea por
+    // truthiness), así que el turno sigue sin contacto y sin avisos.
+    if (insertError?.code === "23502") {
+      console.warn(`⚠️  turnos exige NOT NULL (${insertError.message}). Reintento con telefono/email vacíos.`);
+      ({ data: turno, error: insertError } = await supabase.from("turnos")
+        .insert([{ ...filaTurno, telefono: "", email: "" }]).select().single());
     }
+    if (insertError) throw insertError;
 
     invalidateCache(slugClean);
     console.log(`✅ Turno manual ${turno.id} (${slugClean}) ${fecha} ${hora}`);
     res.status(201).json({ success: true, turno_id: turno.id });
   } catch (e) {
-    console.error("Error en POST /admin/turnos/manual:", e.message);
+    console.error("Error en POST /admin/turnos/manual:", e.code || "", e.message);
     res.status(500).json({ success: false, error: "No se pudo agendar el turno." });
   }
 });
@@ -5340,7 +5346,8 @@ app.get("/cron/recordatorios-turno", requireAdminKey, async (req, res) => {
       .eq("fecha", fechaObjetivo)
       .in("estado", ["confirmado", "pendiente"])
       .eq("recordatorio_enviado", false)
-      .not("telefono", "is", null);
+      .not("telefono", "is", null)
+      .neq("telefono", "");
     if (error) throw error;
 
     if (!turnos?.length) {
