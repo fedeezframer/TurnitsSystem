@@ -39,7 +39,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 const PANEL_VERSION  = (process.env.PANEL_VERSION || "").trim();
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "22499");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 // FIX-SEC: secret propio para validar la firma de los webhooks de MP.
 const MP_WEBHOOK_SECRET  = process.env.MP_WEBHOOK_SECRET          || "";
