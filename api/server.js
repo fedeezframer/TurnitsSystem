@@ -39,7 +39,12 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 const PANEL_VERSION  = (process.env.PANEL_VERSION || "").trim();
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "22499");
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
+// Meta del logro "Facturaste $500 USD" (Tus logros, panel > Inicio). Se
+// fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
+// cambio de referencia. Se compara contra la facturación histórica total
+// (pagos aprobados de todos los tiempos), no contra un período.
+const LOGRO_FACTURACION_META_ARS = parseInt(process.env.LOGRO_FACTURACION_META_ARS || "600000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 // FIX-SEC: secret propio para validar la firma de los webhooks de MP.
 const MP_WEBHOOK_SECRET  = process.env.MP_WEBHOOK_SECRET          || "";
@@ -835,6 +840,104 @@ function agruparPagos(turnos, hoyISO) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// HELPERS DE MÉTRICAS — widgets del dashboard nuevo del panel
+//  · "Servicios más pedidos"        -> stats.serviciosMasPedidos
+//  · "¿Cuándo vuelven tus clientes?" -> stats.diasRecurrentes
+// Ambos devuelven [{ nombre, cantidad, porcentaje }] ordenado de mayor a menor.
+// ══════════════════════════════════════════════════════════════
+const NOMBRES_DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+// Cuenta reservas por servicio. `porcentaje` es sobre el total de turnos que
+// tienen servicio asignado (los turnos sin servicio no entran en la cuenta).
+function calcularServiciosMasPedidos(turnos, limite = 5) {
+  const conteo = {};
+  let total = 0;
+  (turnos || []).forEach((t) => {
+    const nombre = String(t.servicio_nombre || "").trim();
+    if (!nombre || nombre === "null") return;
+    conteo[nombre] = (conteo[nombre] || 0) + 1;
+    total += 1;
+  });
+  return Object.entries(conteo)
+    .map(([nombre, cantidad]) => ({ nombre, cantidad, porcentaje: Math.round((cantidad / total) * 100) }))
+    .sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre))
+    .slice(0, limite);
+}
+
+// Días de la semana en los que los clientes VUELVEN. Una "visita de retorno" es
+// cualquier turno de un cliente que no sea su primero (confirmado/completado).
+// Los pendientes de aprobación, cancelados y no-shows no cuentan como visita.
+// Los turnos cargados a mano (sin teléfono ni email) no se pueden atribuir a
+// un cliente, así que se ignoran.
+function calcularDiasRecurrentes(turnos) {
+  const ESTADOS_VISITA = ["confirmado", "completado"];
+  const porCliente = {};
+  (turnos || []).forEach((t) => {
+    if (!ESTADOS_VISITA.includes(t.estado) || !t.fecha) return;
+    const key = t.telefono || t.email?.toLowerCase();
+    if (!key) return;
+    if (!porCliente[key]) porCliente[key] = [];
+    porCliente[key].push(`${t.fecha} ${(t.hora || "").slice(0, 5)}`);
+  });
+
+  const cantidadPorDia = {};
+  let total = 0;
+  Object.values(porCliente).forEach((visitas) => {
+    visitas.sort().slice(1).forEach((f) => {   // se descarta la primera visita
+      const dia = new Date(f.slice(0, 10) + "T12:00:00").getDay();
+      cantidadPorDia[dia] = (cantidadPorDia[dia] || 0) + 1;
+      total += 1;
+    });
+  });
+
+  return Object.entries(cantidadPorDia)
+    .map(([dia, cantidad]) => ({ nombre: NOMBRES_DIAS_SEMANA[dia], cantidad, porcentaje: Math.round((cantidad / total) * 100) }))
+    .sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
+}
+
+// El panel guarda la imagen del servicio DENTRO de la descripción con el
+// formato "[img:URL]texto". Para el límite de largo se mide solo el texto.
+function largoDescripcionServicio(descripcion) {
+  return String(descripcion ?? "").replace(/^\[img:.*?\]/s, "").length;
+}
+
+// ══════════════════════════════════════════════════════════════
+// COMPARATIVAS "Cómo venís respecto al período anterior" (panel)
+// Se compara el MISMO TRAMO de cada período, no el período completo anterior:
+// si hoy es el 20, el mes en curso (1 al 20) se compara contra el 1 al 20 del
+// mes pasado. Comparar contra el mes anterior entero haría que los primeros
+// días de cada mes siempre den "negativo". Lo mismo para la semana (lunes a
+// hoy vs. lunes al mismo día de la semana pasada).
+// Todo con fechas ISO "YYYY-MM-DD" (sin husos horarios de por medio).
+// ══════════════════════════════════════════════════════════════
+const sumarDiasISO = (iso, n) => {
+  const d = new Date(iso + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+function rangosComparativos(hoyISO) {
+  const ini = (iso) => iso.slice(0, 8) + "01";
+  const inicioMes    = ini(hoyISO);
+  const diaDelMes    = Number(hoyISO.slice(8, 10));
+  const finMesAnt    = sumarDiasISO(inicioMes, -1);
+  const inicioMesAnt = ini(finMesAnt);
+  // Si el mes pasado tuvo menos días (ej. hoy 31/3 vs febrero), se recorta al último día.
+  const hastaMesAnt  = (() => { const h = sumarDiasISO(inicioMesAnt, diaDelMes - 1); return h > finMesAnt ? finMesAnt : h; })();
+
+  const dow            = new Date(hoyISO + "T12:00:00Z").getUTCDay(); // 0 = domingo
+  const diasDesdeLunes = dow === 0 ? 6 : dow - 1;
+  const inicioSem      = sumarDiasISO(hoyISO, -diasDesdeLunes);
+  const inicioSemAnt   = sumarDiasISO(inicioSem, -7);
+  const hastaSemAnt    = sumarDiasISO(inicioSemAnt, diasDesdeLunes);
+
+  return {
+    mes:    { actual: { desde: inicioMes, hasta: hoyISO },    anterior: { desde: inicioMesAnt, hasta: hastaMesAnt } },
+    semana: { actual: { desde: inicioSem, hasta: hoyISO },    anterior: { desde: inicioSemAnt, hasta: hastaSemAnt } },
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
 // HELPER: ENVIAR MAIL DE TURNO
 // ══════════════════════════════════════════════════════════════
 // FIX-SEÑA: se agrega "tipoCobro" (sena | total | null), separado de
@@ -944,7 +1047,7 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 // ══════════════════════════════════════════════════════════════
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
   try {
-    const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan } = req.body;
+    const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan, ref } = req.body;
 
     if (!nombre_persona || !email || !password || !business_name)
       return res.status(400).json({ success: false, error: "Faltan campos obligatorios." });
@@ -986,6 +1089,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       business_name:  business_name.trim(),
       password_hash,
       plan:           plan === "premium" ? "premium" : "gratis",
+      referral_code:  normalizarReferralCode(ref),
       horarios:       horarios && typeof horarios === "object" ? horarios : null,
       duracion_turno: parseInt(duracion_turno) || 30,
       codigo,
@@ -1087,6 +1191,9 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
     }
 
     await supabase.from("registros_pendientes").delete().eq("email", emailClean);
+
+    registrarReferido(nuevo, pendiente).catch((e) => console.error("Error registrando referido:", e.message));
+    asegurarReferralCode(nuevo.slug).catch((e) => console.error("Error generando referral_code:", e.message));
 
     try {
   await supabase.from("equipo").insert([{
@@ -1892,7 +1999,7 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
 
     const errorValidacion = validarServicioBody({ nombre, precio });
     if (errorValidacion) return res.status(400).json({ success: false, error: errorValidacion });
-    if (descripcion !== undefined && descripcion !== null && String(descripcion).length > 1000) {
+    if (descripcion !== undefined && descripcion !== null && largoDescripcionServicio(descripcion) > 1000) {
       return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
     }
 
@@ -1942,7 +2049,7 @@ app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
       update.precio = p;
     }
     if (descripcion !== undefined) {
-      if (descripcion !== null && String(descripcion).length > 1000) {
+      if (descripcion !== null && largoDescripcionServicio(descripcion) > 1000) {
         return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
       }
       update.descripcion = descripcion?.trim() || null;
@@ -3144,6 +3251,8 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
         apellido:       t.apellido || null,
         hora:           t.hora.slice(0, 5),
         servicio:       t.servicio_nombre || null,
+        equipo_id:      t.equipo_id       || null,
+        equipo_nombre:  t.equipo_nombre   || null,
         precio_cobrado: t.precio_cobrado  || 0,
         monto_pagado:   t.monto_pagado    || 0,
         monto_pendiente_local: Math.max((t.precio_cobrado || 0) - (t.monto_pagado || 0), 0),
@@ -3922,7 +4031,13 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
 
     const [{ data: turnosMes }, { data: serviciosNegocio }, { count: turnosMesAnteriorTotal }] = await Promise.all([
       supabase.from("turnos").select("*")
-        .eq("slug", slug).gte("fecha", inicioMes).neq("estado", "cancelado")
+        // FIX-METRICA-MES: se agrega el tope en hoyISO para que "turnos este mes"
+        // cuente lo mismo acá que en `comparativas.mes` (WeeklySummary). Antes esta
+        // consulta no tenía límite superior y sumaba también los turnos ya
+        // reservados para lo que resta del mes, mientras que el comparador de
+        // mes/semana solo cuenta hasta hoy — dos números de "turnos del mes"
+        // distintos en el mismo panel.
+        .eq("slug", slug).gte("fecha", inicioMes).lte("fecha", hoyISO).neq("estado", "cancelado")
         .order("fecha", { ascending: true }).order("hora", { ascending: true }),
       supabase.from("servicios").select("id, duracion")
         .eq("slug", slug).eq("activo", "true"),
@@ -4015,7 +4130,8 @@ const turnosHoyDetalle = turnosData
     }));
 
     const { data: todosLosTurnos } = await supabase.from("turnos")
-      .select("telefono, email, created_at").eq("slug", slug).neq("estado", "cancelado");
+      .select("telefono, email, created_at, fecha, hora, estado, monto_pagado, pago_estado")
+      .eq("slug", slug).neq("estado", "cancelado");
     const inicioMesDate = new Date(inicioMes + "T00:00:00");
 
     // Métricas de clientes reales.
@@ -4052,18 +4168,115 @@ const turnosHoyDetalle = turnosData
         }
       }
     });
+    let clientesFieles = 0; // 5 o más turnos históricos: logro "Cliente fiel"
     Object.values(conteoPorCliente).forEach((cantidad) => {
       if (cantidad >= 3) clientesFrecuentes++;
+      if (cantidad >= 5) clientesFieles++;
     });
 
+    // ── "Tus logros" (panel > Inicio): a diferencia de turnosMes/turnosHoy
+    // (que son del mes/día en curso y se reinician solos), estos salen de
+    // TODO el historial del negocio, para que un logro ganado no se "pierda"
+    // al cambiar el mes o el día. Se excluyen pendientes, mismo criterio de
+    // "turno contable" que el resto del panel.
+    const turnosLogros      = (todosLosTurnos || []).filter((t) => t.estado !== "pendiente");
+    const turnosHistoricos  = turnosLogros.length;
+
+    const turnosPorDia = {};
+    turnosLogros.forEach((t) => {
+      turnosPorDia[t.fecha] = (turnosPorDia[t.fecha] || 0) + 1;
+    });
+    const maxTurnosPorDia = Object.values(turnosPorDia).reduce((max, n) => Math.max(max, n), 0);
+
+    const diasSemanaConTurno = new Set(
+      turnosLogros.map((t) => new Date(`${t.fecha}T12:00:00`).getDay())
+    ).size; // 0 a 7: cuántos días distintos de la semana tuvieron al menos un turno
+
+    const facturacionHistorica = turnosLogros.reduce(
+      (acc, t) => acc + (t.pago_estado === "aprobado" ? Number(t.monto_pagado || 0) : 0),
+      0
+    );
+
+    // Programa de afiliados: ¿ya completó al menos un grupo de referidos
+    // (los 3 invitados llegaron a los turnos mínimos y cobraron el premio)?
+    // Lectura liviana (sin recalcular ni entregar premios, eso lo hace
+    // evaluarGrupoReferidos); alcanza con mirar si algún grupo ya quedó
+    // completo en su momento.
+    let programaAfiliadosCompleto = false;
+    const { data: referidosPropios } = await supabase.from("referidos")
+      .select("grupo_nro, premio_entregado_at").eq("referidor_slug", slug);
+    if (referidosPropios && referidosPropios.length) {
+      const gruposPorNro = {};
+      referidosPropios.forEach((r) => {
+        (gruposPorNro[r.grupo_nro] || (gruposPorNro[r.grupo_nro] = [])).push(r);
+      });
+      programaAfiliadosCompleto = Object.values(gruposPorNro).some(
+        (miembros) => miembros.length >= REFERIDOS_GRUPO_SIZE && miembros.every((m) => m.premio_entregado_at)
+      );
+    }
+
+    // El panel grafica ingresos de los últimos 7/30 días y arma un sparkline: si
+    // solo se mandaba el mes en curso, en los primeros días del mes todo lo
+    // anterior llegaba en cero. Se cubre el mes actual O los últimos 30 días,
+    // lo que sea más largo.
+    const hace29 = new Date(hoyISO + "T12:00:00");
+    hace29.setDate(hace29.getDate() - 29);
+    const hace29ISO    = hace29.toISOString().split("T")[0];
+    const inicioVentas = hace29ISO < inicioMes ? hace29ISO : inicioMes;
+    const diasVentas   = Math.round((new Date(hoyISO + "T12:00:00") - new Date(inicioVentas + "T12:00:00")) / 86400000) + 1;
+
     const pagosPorDia = {};
-    generarRangoDias(inicioMes, diaHoyNum).forEach((d) => {
+    generarRangoDias(inicioVentas, diasVentas).forEach((d) => {
       pagosPorDia[d] = metricas.porDia[d] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
     });
 
     const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estadoSuscripcion  = user.estado_suscripcion || "trial";
     const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
+
+    // Widgets del dashboard nuevo. Servicios: solo turnos del mes que cuentan
+    // como métrica (sin cancelados ni pendientes). Días recurrentes: historial
+    // completo de cada cliente, porque para saber si "volvió" hay que ver
+    // sus turnos anteriores, no solo los de este mes.
+    // Comparativas mes / semana contra el mismo tramo del período anterior.
+    //  · turnos: mismo criterio que turnosMes (sin cancelados ni pendientes).
+    //    COUNT en la base, así no depende del tope de 1000 filas.
+    //  · ingresos: mismo criterio que ventas.volumenMes (por fecha de pago).
+    //  · clientes_nuevos: su primer turno histórico cae dentro del tramo
+    //    (fecha en horario de Argentina).
+    const fechaArgDe = (d) => d.toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
+    const contarTurnosRango = async (desde, hasta) => {
+      const { count, error } = await supabase.from("turnos").select("id", { count: "exact", head: true })
+        .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
+        .not("estado", "in", "(cancelado,pendiente)");
+      if (error) throw error;
+      return count || 0;
+    };
+    const ingresosRango = (desde, hasta) => {
+      const cantDias = Math.round((new Date(hasta + "T12:00:00Z") - new Date(desde + "T12:00:00Z")) / 86400000) + 1;
+      return generarRangoDias(desde, cantDias).reduce((acc, d) => acc + Number(metricas.porDia[d]?.volumen || 0), 0);
+    };
+    const nuevosRango = (desde, hasta) =>
+      Object.values(primeraVezPorCliente).filter((f) => { const d = fechaArgDe(f); return d >= desde && d <= hasta; }).length;
+    const armarTramo = async ({ desde, hasta }) => ({
+      desde, hasta,
+      turnos:          await contarTurnosRango(desde, hasta),
+      clientes_nuevos: nuevosRango(desde, hasta),
+      ingresos:        ingresosRango(desde, hasta),
+    });
+
+    const rangosCmp = rangosComparativos(hoyISO);
+    const [mesActual_, mesAnterior_, semActual_, semAnterior_] = await Promise.all([
+      armarTramo(rangosCmp.mes.actual),    armarTramo(rangosCmp.mes.anterior),
+      armarTramo(rangosCmp.semana.actual), armarTramo(rangosCmp.semana.anterior),
+    ]);
+    const comparativas = {
+      mes:    { actual: mesActual_, anterior: mesAnterior_ },
+      semana: { actual: semActual_, anterior: semAnterior_ },
+    };
+
+    const serviciosMasPedidos = calcularServiciosMasPedidos(turnosParaMetricas);
+    const diasRecurrentes     = calcularDiasRecurrentes(todosLosTurnos);
 
     const finalData = {
       turnosHoy, turnosMes: turnosMesTotal, turnosMesAnterior: turnosMesAnteriorTotal || 0, turnosHoyDetalle,
@@ -4074,6 +4287,20 @@ const turnosHoyDetalle = turnosData
       clientesNuevosMesAnterior: clientesNuevosMesAnterior,
       clientesRecurrentes:       clientesRecurrentes,
       clientesFrecuentes:        clientesFrecuentes,
+      // Histórico de todos los tiempos, usado por "Tus logros" en Inicio
+      // (a diferencia de los campos de arriba, estos nunca se reinician).
+      logros: {
+        turnosHistoricos,
+        clientesFieles,
+        maxTurnosPorDia,
+        diasSemanaConTurno,
+        facturacionHistorica,
+        facturacionMeta:        LOGRO_FACTURACION_META_ARS,
+        programaAfiliadosCompleto,
+      },
+      serviciosMasPedidos,
+      diasRecurrentes,
+      comparativas,
       ventas: {
         volumenTotal:   metricas.volumenTotal,
         volumenHoy:     pagosHoy.volumen,
@@ -4130,6 +4357,31 @@ const turnosHoyDetalle = turnosData
 // pendientes de aprobación (transferencia/efectivo sin confirmar),
 // porque todavía no representan trabajo realizado ni cobrado.
 // ══════════════════════════════════════════════════════════════
+const PERIODOS_RENDIMIENTO = ["dia", "semana", "mes"];
+
+// Rango de fechas (ISO, ambos inclusivos) de "hoy" / esta semana (lunes a
+// domingo) / este mes, según el horario de Argentina. Lo comparten
+// /admin/rendimiento-equipo y /admin/rendimiento-equipo-resumen.
+function rangoPeriodoArg(periodo) {
+  const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+  const fmtISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  if (periodo === "dia") {
+    const hoy = fmtISO(ahoraArg);
+    return { desde: hoy, hasta: hoy };
+  }
+  if (periodo === "semana") {
+    const diaSemana   = ahoraArg.getDay(); // 0 = domingo
+    const offsetLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+    const lunes   = new Date(ahoraArg); lunes.setDate(ahoraArg.getDate() + offsetLunes);
+    const domingo = new Date(lunes);    domingo.setDate(lunes.getDate() + 6);
+    return { desde: fmtISO(lunes), hasta: fmtISO(domingo) };
+  }
+  const primerDia = new Date(ahoraArg.getFullYear(), ahoraArg.getMonth(), 1);
+  const ultimoDia = new Date(ahoraArg.getFullYear(), ahoraArg.getMonth() + 1, 0);
+  return { desde: fmtISO(primerDia), hasta: fmtISO(ultimoDia) };
+}
+
 app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -4161,26 +4413,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
     if (equipoError) throw equipoError;
     if (!integrante) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
 
-    // "Hoy" en horario de Argentina, igual criterio que /admin-stats.
-    const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
-    const fmtISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-    let desde, hasta;
-    if (periodo === "dia") {
-      desde = hasta = fmtISO(ahoraArg);
-    } else if (periodo === "semana") {
-      const diaSemana   = ahoraArg.getDay(); // 0 = domingo
-      const offsetLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
-      const lunes   = new Date(ahoraArg); lunes.setDate(ahoraArg.getDate() + offsetLunes);
-      const domingo = new Date(lunes);    domingo.setDate(lunes.getDate() + 6);
-      desde = fmtISO(lunes);
-      hasta = fmtISO(domingo);
-    } else {
-      const primerDia = new Date(ahoraArg.getFullYear(), ahoraArg.getMonth(), 1);
-      const ultimoDia = new Date(ahoraArg.getFullYear(), ahoraArg.getMonth() + 1, 0);
-      desde = fmtISO(primerDia);
-      hasta = fmtISO(ultimoDia);
-    }
+    const { desde, hasta } = rangoPeriodoArg(periodo);
 
     const { data: turnosPeriodo, error: turnosError } = await supabase.from("turnos")
       .select("id, fecha, hora, estado, servicio_nombre, nombre, apellido, precio_cobrado")
@@ -4216,6 +4449,188 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("Error en /admin/rendimiento-equipo:", e.message);
     res.status(500).json({ success: false, error: "Error al obtener el rendimiento del integrante." });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// RENDIMIENTO DEL EQUIPO — RESUMEN DE TODOS LOS INTEGRANTES (Premium)
+// GET /admin/rendimiento-equipo-resumen/:slug?periodo=dia|semana|mes
+//
+// Lo consume el panel lateral del dashboard ("Rendimiento por profesional").
+// Devuelve una fila por cada integrante ACTIVO (también los que no tuvieron
+// actividad en el período: el panel los muestra como "Sin actividad") y los
+// totales. Mismo criterio de "turno contable" que /admin-stats y
+// /admin/rendimiento-equipo: sin cancelados ni pendientes de aprobación.
+//
+// Los turnos sin profesional asignado (ej. negocios de una sola persona, donde
+// el widget salta el paso "elegir profesional", o turnos cargados a mano) no se
+// le atribuyen a nadie: no suman a ningún integrante ni a `totales` (así los
+// porcentajes de la barra del panel cierran contra el total mostrado) y se
+// informan aparte en `sin_asignar`.
+// ══════════════════════════════════════════════════════════════
+app.get("/admin/rendimiento-equipo-resumen/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+
+    // El panel arranca en "mes" si no se elige otro período.
+    const periodo = PERIODOS_RENDIMIENTO.includes(req.query.periodo) ? req.query.periodo : "mes";
+
+    const { data: user, error: userError } = await supabase.from("usuarios")
+      .select("plan").eq("slug", slug).maybeSingle();
+    if (userError) throw userError;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    if (user.plan !== "premium") {
+      return res.status(403).json({
+        success: false,
+        error: "premium_required",
+        mensaje: "El rendimiento por integrante es una función Premium.",
+      });
+    }
+
+    const { desde, hasta } = rangoPeriodoArg(periodo);
+
+    const { data: equipo, error: equipoError } = await supabase.from("equipo")
+      .select("id, nombre, apellido, rol")
+      .eq("slug", slug).eq("activo", true)
+      .order("es_dueño", { ascending: false }).order("created_at", { ascending: true });
+    if (equipoError) throw equipoError;
+
+    // PostgREST corta en 1000 filas por consulta: se pagina para que un mes de
+    // un negocio grande con varios profesionales no quede truncado.
+    const turnos = [];
+    for (let pagina = 0; pagina < 50; pagina++) {
+      const { data: lote, error: turnosError } = await supabase.from("turnos")
+        .select("id, equipo_id, estado, precio_cobrado")
+        .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
+        .neq("estado", "cancelado")
+        .order("id", { ascending: true })
+        .range(pagina * 1000, pagina * 1000 + 999);
+      if (turnosError) throw turnosError;
+      turnos.push(...(lote || []));
+      if (!lote || lote.length < 1000) break;
+    }
+
+    const acumulado = new Map((equipo || []).map((m) => [m.id, { turnos: 0, facturacion: 0 }]));
+    const sinAsignar = { turnos: 0, facturacion: 0 };
+
+    turnos.filter((t) => t.estado !== "pendiente").forEach((t) => {
+      const monto = Number(t.precio_cobrado || 0);
+      const fila  = t.equipo_id ? acumulado.get(t.equipo_id) : null;
+      const destino = fila || sinAsignar;   // sin profesional, o profesional ya desactivado
+      destino.turnos      += 1;
+      destino.facturacion += monto;
+    });
+
+    const integrantes = (equipo || []).map((m) => {
+      const a = acumulado.get(m.id);
+      return {
+        id: m.id, nombre: m.nombre, apellido: m.apellido || null, rol: m.rol,
+        turnos: a.turnos,
+        facturacion: a.facturacion,
+        ticket_promedio: a.turnos > 0 ? Math.round(a.facturacion / a.turnos) : 0,
+      };
+    }).sort((x, y) => y.facturacion - x.facturacion || y.turnos - x.turnos);   // sort estable: empates conservan el orden dueño -> antigüedad
+
+    const totalTurnos      = integrantes.reduce((acc, m) => acc + m.turnos, 0);
+    const totalFacturacion = integrantes.reduce((acc, m) => acc + m.facturacion, 0);
+
+    res.json({
+      success: true,
+      periodo, desde, hasta,
+      integrantes,
+      totales: {
+        turnos: totalTurnos,
+        facturacion: totalFacturacion,
+        ticket_promedio: totalTurnos > 0 ? Math.round(totalFacturacion / totalTurnos) : 0,
+      },
+      sin_asignar: sinAsignar,
+    });
+  } catch (e) {
+    console.error("Error en /admin/rendimiento-equipo-resumen:", e.message);
+    res.status(500).json({ success: false, error: "Error al obtener el resumen del equipo." });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// INGRESOS NETOS POR INTEGRANTE
+// GET /admin/equipo/:id/neto?periodo=dia|semana|mes
+//
+// Lo consume TeamManager (formulario de edición del miembro, debajo de
+// "Servicios que ofrece"). Mismo criterio de "turno contable" que el resto
+// del rendimiento (sin cancelados ni pendientes de aprobación).
+//
+//   bruto  = suma de precio_cobrado (lo que valen los turnos)
+//   neto   = bruto - comision_mp - comision_plataforma
+//
+// Las comisiones son las REALES que devolvió Mercado Pago en cada pago
+// (fee_details, guardadas en turnos.comision_mp / comision_plataforma), así que
+// ya reflejan el plazo de acreditación que tenga configurado cada negocio.
+// Los turnos en efectivo / transferencia no tienen comisión (neto = bruto).
+// Los turnos de MP anteriores a este cambio no tienen comisión guardada: se
+// cuentan sin descuento y se informan en `turnos_sin_comision`.
+//
+// Requiere (correr ANTES de desplegar este archivo):
+//   alter table turnos
+//     add column if not exists comision_mp numeric(12,2),
+//     add column if not exists comision_plataforma numeric(12,2);
+// ══════════════════════════════════════════════════════════════
+app.get("/admin/equipo/:id/neto", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX.test(id)) return res.status(400).json({ success: false, error: "Integrante inválido." });
+
+    const periodo = PERIODOS_RENDIMIENTO.includes(req.query.periodo) ? req.query.periodo : "mes";
+
+    const { data: miembro, error: miembroError } = await supabase.from("equipo")
+      .select("id, slug").eq("id", id).maybeSingle();
+    if (miembroError) throw miembroError;
+    // Mismo criterio que DELETE /admin/equipo/:id/servicios: no revelar si existe en otro negocio.
+    if (!miembro || (req.auth.rol !== "superadmin" && miembro.slug !== req.auth.slug)) {
+      return res.status(404).json({ success: false, error: "Integrante no encontrado." });
+    }
+
+    const { desde, hasta } = rangoPeriodoArg(periodo);
+
+    const turnos = [];
+    for (let pagina = 0; pagina < 20; pagina++) {
+      const { data: lote, error: turnosError } = await supabase.from("turnos")
+        .select("id, estado, precio_cobrado, metodo_pago, comision_mp, comision_plataforma")
+        .eq("slug", miembro.slug).eq("equipo_id", id)
+        .gte("fecha", desde).lte("fecha", hasta)
+        .neq("estado", "cancelado")
+        .order("id", { ascending: true })
+        .range(pagina * 1000, pagina * 1000 + 999);
+      if (turnosError) throw turnosError;
+      turnos.push(...(lote || []));
+      if (!lote || lote.length < 1000) break;
+    }
+
+    let bruto = 0, comisionMp = 0, comisionPlataforma = 0, sinComision = 0, cantidad = 0;
+    for (const t of turnos) {
+      if (t.estado === "pendiente") continue;
+      cantidad += 1;
+      bruto              += Number(t.precio_cobrado || 0);
+      comisionMp         += Number(t.comision_mp || 0);
+      comisionPlataforma += Number(t.comision_plataforma || 0);
+      if (t.metodo_pago === "mercadopago" && t.comision_mp == null) sinComision += 1;
+    }
+
+    const r2 = (n) => Math.round(n * 100) / 100;
+    res.json({
+      success: true,
+      periodo, desde, hasta,
+      turnos: cantidad,
+      bruto: r2(bruto),
+      comision_mp: r2(comisionMp),
+      comision_plataforma: r2(comisionPlataforma),
+      neto: r2(bruto - comisionMp - comisionPlataforma),
+      turnos_sin_comision: sinComision,
+    });
+  } catch (e) {
+    console.error("Error en /admin/equipo/:id/neto:", e.message);
+    res.status(500).json({ success: false, error: "Error al calcular los ingresos netos." });
   }
 });
 
@@ -4736,6 +5151,7 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
       metodo_pago:          "total",
       acepta_transferencia: false,
       acepta_efectivo:      false,
+      premium_promo:        false,
     }).eq("slug", slug);
 
     if (updateError) throw updateError;
@@ -5003,7 +5419,7 @@ app.get("/oauth-callback", async (req, res) => {
 // función solo procesa pagos de Mercado Pago, así que el canal real es
 // siempre "mercadopago"; lo que llega en tipo_cobro es lo que antes se
 // guardaba (mal) en la columna metodo_pago del turno.
-async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, equipo_id, equipo_nombre, monto, moneda, tipo_cobro, precio_servicio, payment_id, estado, porcentaje_sena, extras, monto_extras }) {
+async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, equipo_id, equipo_nombre, monto, moneda, tipo_cobro, precio_servicio, payment_id, estado, porcentaje_sena, extras, monto_extras, comision_mp, comision_plataforma }) {
   const { data: turnoExistente } = await supabase
     .from("turnos").select("id").eq("payment_id", String(payment_id)).maybeSingle();
   if (turnoExistente) { console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`); return; }
@@ -5064,6 +5480,8 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
       porcentaje_sena: tipo_cobro === "sena" ? porcSena : null,
       tipo_cobro: tipo_cobro || null,
       metodo_pago: "mercadopago", pago_estado: pagoEstado, fecha_pago: new Date().toISOString(),
+      // Comisiones reales cobradas por MP en este pago (null = no se pudo leer). Base de los ingresos netos.
+      comision_mp: comision_mp ?? null, comision_plataforma: comision_plataforma ?? null,
       moneda: moneda || "ARS", estado: "confirmado", payment_id: String(payment_id),
     }]).select().single();
 
@@ -5140,12 +5558,13 @@ app.post("/webhook/mp", async (req, res) => {
 
       // 3) Releer el pago con el token del vendedor para confirmar estado/monto reales
       let finalPayData = payData;
+      let leidoConTokenVendedor = false;
       const tokenVendedor = userNegocio ? await obtenerTokenMpVigente(slug, userNegocio) : null;
       if (tokenVendedor) {
         try {
           const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${tokenVendedor}` } });
           const vendorData = await vendorRes.json();
-          if (vendorData?.id) finalPayData = vendorData;
+          if (vendorData?.id) { finalPayData = vendorData; leidoConTokenVendedor = true; }
         } catch (e) {
           console.error("No se pudo releer el pago con token del vendedor, se usa data de plataforma:", e.message);
         }
@@ -5153,6 +5572,24 @@ app.post("/webhook/mp", async (req, res) => {
 
       const meta   = pendiente || finalPayData.metadata || {};
       const estado = finalPayData.status === "approved" ? "aprobado" : finalPayData.status === "pending" ? "pendiente" : "rechazado";
+
+      // Comisiones que se le descuentan al negocio (para mostrar ingresos NETOS).
+      // Solo se guardan si el pago se leyó con el token del vendedor: con el token
+      // de la plataforma MP puede no devolver la comisión de procesamiento y
+      // quedaría un neto inflado. Sin dato -> null (el panel lo avisa).
+      // fee_payer "payer" (ej. financiación al cliente) no lo paga el negocio.
+      let comisionMp = null, comisionPlataforma = null;
+      if (leidoConTokenVendedor && Array.isArray(finalPayData.fee_details)) {
+        comisionMp = 0; comisionPlataforma = 0;
+        for (const f of finalPayData.fee_details) {
+          if (f?.fee_payer === "payer") continue;
+          const monto = Number(f?.amount || 0);
+          if (f?.type === "application_fee") comisionPlataforma += monto;
+          else comisionMp += monto;
+        }
+        comisionMp = Math.round(comisionMp * 100) / 100;
+        comisionPlataforma = Math.round(comisionPlataforma * 100) / 100;
+      }
 
       await procesarPagoConfirmado({
   slug,
@@ -5175,7 +5612,9 @@ app.post("/webhook/mp", async (req, res) => {
   payment_id:       paymentId,
   estado,
   extras: meta.extras || [],
-  monto_extras: meta.monto_extras || 0
+  monto_extras: meta.monto_extras || 0,
+  comision_mp: comisionMp,
+  comision_plataforma: comisionPlataforma
 });
 
       if (pendiente) {
@@ -5235,7 +5674,7 @@ async function procesarRenovacion(payData) {
   const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
 
-  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "premium" }).eq("slug", slug);
+  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "premium", premium_promo: false }).eq("slug", slug);
   invalidateCache(slug);
   console.log(`✅ Renovación aprobada: ${slug} → vence ${nuevaFecha}`);
 
@@ -5273,6 +5712,322 @@ app.post("/webhook/renovacion", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// PROGRAMA DE REFERIDOS
+//
+// Los negocios que se registran con el mismo código forman grupos de
+// REFERIDOS_GRUPO_SIZE (3). Cuando TODOS los del grupo tienen al menos
+// REFERIDOS_TURNOS_MIN (25) turnos reales, cada uno recibe
+// REFERIDOS_DIAS_PREMIO (30) días de Premium. El premio se entrega una
+// sola vez por invitado (referidos.premio_entregado_at).
+//
+// "Turno real" = confirmado/completado, con teléfono o email del cliente,
+// que no sea del propio dueño, y que ya pasó (o esté completado). Así no
+// valen los turnos cargados a mano por el dueño ni las reservas de prueba
+// hechas con sus propios datos.
+//
+// Requiere correr referidos_migracion.sql en Supabase.
+// ══════════════════════════════════════════════════════════════
+const REFERIDOS_GRUPO_SIZE  = parseInt(process.env.REFERIDOS_GRUPO_SIZE  || "3");
+const REFERIDOS_TURNOS_MIN  = parseInt(process.env.REFERIDOS_TURNOS_MIN  || "25");
+const REFERIDOS_DIAS_PREMIO = parseInt(process.env.REFERIDOS_DIAS_PREMIO || "30");
+// Página de registro donde llega el invitado (tiene que leer ?ref= y mandarlo
+// como "ref" a POST /registro/iniciar).
+const REFERIDOS_REGISTRO_URL = process.env.REFERIDOS_REGISTRO_URL || "https://turnits.com/register";
+
+// Para pruebas: permite que el invitado use el mismo teléfono/email que quien lo invita.
+// En producción dejar sin definir (evita que alguien se invite a sí mismo).
+const REFERIDOS_PERMITIR_MISMO_CONTACTO = process.env.REFERIDOS_PERMITIR_MISMO_CONTACTO === "true";
+
+const REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin 0/O/1/I
+
+function generarReferralCode() {
+  const bytes = crypto.randomBytes(8);
+  return Array.from(bytes, (b) => REF_ALPHABET[b % REF_ALPHABET.length]).join("");
+}
+
+function normalizarReferralCode(raw) {
+  const c = String(raw || "").trim().toUpperCase();
+  return /^[A-Z0-9]{6,12}$/.test(c) ? c : null;
+}
+
+async function asegurarReferralCode(slug) {
+  const { data: u, error } = await supabase.from("usuarios")
+    .select("referral_code").eq("slug", slug).maybeSingle();
+  if (error) throw error;
+  if (!u) return null;
+  if (u.referral_code) return u.referral_code;
+
+  for (let i = 0; i < 5; i++) {
+    const { error: upErr } = await supabase.from("usuarios")
+      .update({ referral_code: generarReferralCode() })
+      .eq("slug", slug).is("referral_code", null);
+    if (!upErr) break;
+    if (upErr.code !== "23505") throw upErr; // 23505 = código repetido, reintenta
+  }
+  const { data: u2 } = await supabase.from("usuarios")
+    .select("referral_code").eq("slug", slug).maybeSingle();
+  return u2?.referral_code || null;
+}
+
+async function contarTurnosValidos(slug, emailDueno, telefonoDueno) {
+  const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+  const hoyISO   = ahoraArg.toISOString().split("T")[0];
+
+  const { data, error } = await supabase.from("turnos")
+    .select("estado, fecha, email, telefono")
+    .eq("slug", slug).in("estado", ["confirmado", "completado"]).limit(1000);
+  if (error) throw error;
+
+  const emailD = String(emailDueno || "").trim().toLowerCase();
+  const telD   = telefonoDueno ? cleanPhone(String(telefonoDueno)) : "";
+
+  return (data || []).filter((t) => {
+    const email = String(t.email || "").trim().toLowerCase();
+    const tel   = t.telefono ? cleanPhone(String(t.telefono)) : "";
+    if (!email && !tel) return false;                                  // turno cargado a mano
+    if ((emailD && email === emailD) || (telD && tel === telD)) return false; // el dueño reservándose
+    return t.estado === "completado" || String(t.fecha).slice(0, 10) < hoyISO;
+  }).length;
+}
+
+// Estado de un grupo: [{ slug, turnos, completo, premio_entregado }]
+async function progresoGrupoReferidos(referidorSlug, grupoNro) {
+  const { data: miembros, error } = await supabase.from("referidos")
+    .select("invitado_slug, premio_entregado_at, created_at")
+    .eq("referidor_slug", referidorSlug).eq("grupo_nro", grupoNro)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  const detalle = [];
+  for (const m of miembros || []) {
+    const { data: u } = await supabase.from("usuarios")
+      .select("slug, email, telefono, business_name").eq("slug", m.invitado_slug).maybeSingle();
+    if (!u) continue;
+    const turnos = await contarTurnosValidos(u.slug, u.email, u.telefono);
+    detalle.push({
+      slug: u.slug,
+      negocio: u.business_name || null,
+      registrado_at: m.created_at,
+      turnos: Math.min(turnos, REFERIDOS_TURNOS_MIN),
+      completo: turnos >= REFERIDOS_TURNOS_MIN,
+      premio_entregado: !!m.premio_entregado_at,
+    });
+  }
+  return detalle;
+}
+
+async function otorgarMesGratis(slug) {
+  const { data: u, error } = await supabase.from("usuarios")
+    .select("id, email, nombre_persona, plan, estado_suscripcion, fecha_vencimiento")
+    .eq("slug", slug).maybeSingle();
+  if (error) throw error;
+  if (!u) return;
+
+  const vigente    = u.fecha_vencimiento && new Date(u.fecha_vencimiento) > new Date();
+  const nuevaFecha = calcularVencimiento(REFERIDOS_DIAS_PREMIO, vigente ? u.fecha_vencimiento : null);
+  const eraPremium = u.plan === "premium";
+
+  const upd = {
+    plan: "premium",
+    // Un Premium en trial sigue en trial (el fee de MP depende de eso).
+    estado_suscripcion: eraPremium && u.estado_suscripcion === "trial" ? "trial" : "activo",
+    fecha_vencimiento: nuevaFecha,
+  };
+  if (!eraPremium) upd.premium_promo = true; // al vencer vuelve a gratis, no se suspende
+
+  const { error: upErr } = await supabase.from("usuarios").update(upd).eq("slug", slug);
+  if (upErr) throw upErr;
+  invalidateCache(slug);
+
+  crearNotificacion({
+    slug,
+    tipo: "sistema",
+    titulo: "¡Ganaste 1 mes de Premium!",
+    mensaje: `Tu grupo de referidos completó los ${REFERIDOS_TURNOS_MIN} turnos. Tu Premium gratis vence el ${nuevaFecha}.`,
+    data: { nuevaFecha, seccion: "pagos", clave: "referidos_premio" },
+  });
+  console.log(`🎁 Referidos: +${REFERIDOS_DIAS_PREMIO} días Premium para ${slug} (vence ${nuevaFecha})`);
+}
+
+// Si los 3 llegaron a la meta, entrega el premio a los que todavía no lo tienen.
+// El "claim" (update ... WHERE premio_entregado_at IS NULL) hace que dos
+// ejecuciones simultáneas (cron + panel) nunca den el mes dos veces.
+async function evaluarGrupoReferidos(referidorSlug, grupoNro) {
+  const detalle  = await progresoGrupoReferidos(referidorSlug, grupoNro);
+  const completo = detalle.length >= REFERIDOS_GRUPO_SIZE && detalle.every((d) => d.completo);
+  if (!completo) return { completo: false, detalle, entregados: [] };
+
+  const entregados = [];
+  for (const d of detalle) {
+    if (d.premio_entregado) continue;
+    const { data: claim, error } = await supabase.from("referidos")
+      .update({ premio_entregado_at: new Date().toISOString() })
+      .eq("invitado_slug", d.slug).is("premio_entregado_at", null)
+      .select("invitado_slug");
+    if (error || !claim?.length) continue; // otro proceso ya lo reclamó
+
+    try {
+      await otorgarMesGratis(d.slug);
+      d.premio_entregado = true;
+      entregados.push(d.slug);
+    } catch (e) {
+      console.error(`Error entregando premio de referidos a ${d.slug}:`, e.message);
+      // se devuelve el claim para que el próximo intento lo reintente
+      await supabase.from("referidos").update({ premio_entregado_at: null }).eq("invitado_slug", d.slug);
+    }
+  }
+  return { completo: true, detalle, entregados };
+}
+
+// Se llama al verificar el registro: si vino con un código válido, lo asigna a un grupo.
+async function registrarReferido(nuevo, pendiente) {
+  const code = normalizarReferralCode(pendiente?.referral_code);
+  if (!code) return;
+
+  const { data: referidor, error: refErr } = await supabase.from("usuarios")
+    .select("slug, email, telefono").eq("referral_code", code).maybeSingle();
+  if (refErr) throw refErr;
+  if (!referidor) {
+    console.log(`⚠️  Referido ignorado: no existe ningún negocio con el código ${code} (${nuevo.slug})`);
+    return;
+  }
+  if (referidor.slug === nuevo.slug) return;
+
+  const mismoEmail = referidor.email && nuevo.email &&
+    String(referidor.email).toLowerCase() === String(nuevo.email).toLowerCase();
+  const mismoTel = referidor.telefono && pendiente.telefono &&
+    cleanPhone(String(referidor.telefono)) === cleanPhone(String(pendiente.telefono));
+  if ((mismoEmail || mismoTel) && !REFERIDOS_PERMITIR_MISMO_CONTACTO) {
+    console.log(`⚠️  Referido descartado: ${nuevo.slug} usa el mismo ${mismoTel ? "teléfono" : "email"} que el referidor ${referidor.slug}. (Para pruebas: REFERIDOS_PERMITIR_MISMO_CONTACTO=true)`);
+    return;
+  }
+
+  const { data: ultimo, error: ultErr } = await supabase.from("referidos")
+    .select("grupo_nro").eq("referidor_slug", referidor.slug)
+    .order("grupo_nro", { ascending: false }).limit(1).maybeSingle();
+  if (ultErr) throw ultErr; // p. ej. la tabla "referidos" no existe: correr la migración
+  let grupoNro = ultimo?.grupo_nro || 1;
+  if (ultimo) {
+    const { count } = await supabase.from("referidos")
+      .select("id", { count: "exact", head: true })
+      .eq("referidor_slug", referidor.slug).eq("grupo_nro", grupoNro);
+    if ((count || 0) >= REFERIDOS_GRUPO_SIZE) grupoNro += 1;
+  }
+
+  const { error } = await supabase.from("referidos").insert([{
+    referidor_slug: referidor.slug, invitado_slug: nuevo.slug, grupo_nro: grupoNro,
+  }]);
+  if (error) throw error;
+
+  crearNotificacion({
+    slug: referidor.slug,
+    tipo: "sistema",
+    titulo: "Se sumó un negocio con tu código",
+    mensaje: "Alguien se registró en Turnits con tu código de referidos. Mirá el avance en Crecer.",
+    data: { clave: "referido_nuevo", seccion: "inicio" },
+  });
+  crearNotificacion({
+    slug: nuevo.slug,
+    tipo: "sistema",
+    titulo: "Tenés 1 mes de Premium en juego",
+    mensaje: `Cuando los ${REFERIDOS_GRUPO_SIZE} negocios de tu grupo lleguen a ${REFERIDOS_TURNOS_MIN} turnos, cada uno gana ${REFERIDOS_DIAS_PREMIO} días de Premium.`,
+    data: { clave: "referido_bienvenida", seccion: "inicio" },
+  });
+  console.log(`🤝 Referido: ${nuevo.slug} → ${referidor.slug} (grupo ${grupoNro})`);
+}
+
+// GET /referidos/:slug — datos para la tarjeta del panel
+app.get("/referidos/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug   = cleanSlug(req.params.slug);
+    const codigo = await asegurarReferralCode(slug);
+    if (!codigo) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const etiquetar = (detalle) => detalle.map((d, i) => ({
+      label: d.slug === slug ? "Tu negocio" : `Negocio ${i + 1}`,
+      turnos: d.turnos,
+      completo: d.completo,
+      propio: d.slug === slug,
+    }));
+
+    // 1) Como invitado: el grupo al que pertenece
+    let comoInvitado = null;
+    const { data: miRef, error: miRefErr } = await supabase.from("referidos")
+      .select("referidor_slug, grupo_nro").eq("invitado_slug", slug).maybeSingle();
+    if (miRefErr) throw miRefErr;
+    if (miRef) {
+      const g = await evaluarGrupoReferidos(miRef.referidor_slug, miRef.grupo_nro);
+      const yo = g.detalle.find((d) => d.slug === slug);
+      comoInvitado = {
+        completo: g.completo,
+        faltan_invitados: Math.max(0, REFERIDOS_GRUPO_SIZE - g.detalle.length),
+        premio_entregado: !!yo?.premio_entregado,
+        miembros: etiquetar(g.detalle),
+      };
+    }
+
+    // 2) Como referidor: sus grupos (los 12 más recientes)
+    const { data: invitados, error: invErr } = await supabase.from("referidos")
+      .select("grupo_nro").eq("referidor_slug", slug);
+    if (invErr) throw invErr;
+    const nros = [...new Set((invitados || []).map((r) => r.grupo_nro))].sort((a, b) => b - a).slice(0, 12);
+    const grupos = [];
+    for (const nro of nros) {
+      const g = await evaluarGrupoReferidos(slug, nro);
+      grupos.push({
+        nro,
+        completo: g.completo,
+        faltan_invitados: Math.max(0, REFERIDOS_GRUPO_SIZE - g.detalle.length),
+        premio_entregado: g.detalle.length > 0 && g.detalle.every((d) => d.premio_entregado),
+        miembros: g.detalle.map((d, i) => ({ label: d.negocio || `Negocio ${i + 1}`, turnos: d.turnos, completo: d.completo, propio: false, registrado_at: d.registrado_at })),
+      });
+    }
+
+    res.json({
+      success: true,
+      codigo,
+      link: `${REFERIDOS_REGISTRO_URL}?ref=${codigo}`,
+      reglas: { grupo: REFERIDOS_GRUPO_SIZE, turnos_min: REFERIDOS_TURNOS_MIN, dias_premio: REFERIDOS_DIAS_PREMIO },
+      como_invitado: comoInvitado,
+      total_invitados: (invitados || []).length,
+      resumen: {
+        registrados: (invitados || []).length,
+        con_turnos:  grupos.reduce((n, g) => n + g.miembros.filter((m) => m.turnos > 0).length, 0),
+        completaron: grupos.reduce((n, g) => n + g.miembros.filter((m) => m.completo).length, 0),
+      },
+      grupos,
+    });
+  } catch (e) {
+    console.error("Error en GET /referidos:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo cargar el programa de referidos." });
+  }
+});
+
+// CRON — evalúa todos los grupos con premios pendientes (1 vez por día alcanza).
+app.get("/cron/referidos", requireAdminKey, async (req, res) => {
+  try {
+    const { data: pend, error } = await supabase.from("referidos")
+      .select("referidor_slug, grupo_nro").is("premio_entregado_at", null);
+    if (error) throw error;
+
+    const claves = [...new Set((pend || []).map((r) => `${r.referidor_slug}|${r.grupo_nro}`))];
+    const entregados = [];
+    for (const k of claves) {
+      const [ref, nro] = k.split("|");
+      try {
+        const r = await evaluarGrupoReferidos(ref, parseInt(nro));
+        entregados.push(...r.entregados);
+      } catch (e) {
+        console.error(`Cron referidos: falló el grupo ${k}:`, e.message);
+      }
+    }
+    res.json({ success: true, grupos_revisados: claves.length, premios_entregados: entregados });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // CRON — Verificación de vencimientos
 // ══════════════════════════════════════════════════════════════
 app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
@@ -5280,11 +6035,23 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
     const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toISOString().split("T")[0];
 
     const { data: vencidos, error } = await supabase.from("usuarios")
-      .select("id, slug").eq("activo", "true").neq("estado_suscripcion", "suspendido")
+      .select("id, slug, premium_promo").eq("activo", "true").neq("estado_suscripcion", "suspendido")
       .not("fecha_vencimiento", "is", null).lt("fecha_vencimiento", hoyISO);
     if (error) throw error;
 
-    const slugs = (vencidos || []).map((u) => u.slug);
+    // REFERIDOS: quien tenía Premium solo por el mes de regalo vuelve al plan
+    // gratis (igual que /renovacion/downgrade) en vez de quedar suspendido.
+    const promoVencidos = (vencidos || []).filter((u) => u.premium_promo).map((u) => u.slug);
+    if (promoVencidos.length > 0) {
+      await supabase.from("usuarios").update({
+        plan: "gratis", estado_suscripcion: "activo", fecha_vencimiento: null,
+        metodo_pago: "total", acepta_transferencia: false, acepta_efectivo: false,
+        premium_promo: false,
+      }).in("slug", promoVencidos);
+      promoVencidos.forEach((s) => invalidateCache(s));
+    }
+
+    const slugs = (vencidos || []).filter((u) => !u.premium_promo).map((u) => u.slug);
     if (slugs.length > 0) {
       await supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).in("slug", slugs);
       slugs.forEach((s) => invalidateCache(s));
