@@ -1656,9 +1656,11 @@ const { data: user, error } = await supabase.from("usuarios")
     }
  
     const esPremium               = user.plan === "premium";
-    const mpDisponible            = !!user.mp_access_token && ["sena", "total"].includes(user.metodo_pago);
-    const transferenciaDisponible = esPremium && !!user.acepta_transferencia;
-    const efectivoDisponible      = esPremium && !!user.acepta_efectivo;
+    const esTrialPremium          = esPremium && user.estado_suscripcion === "trial";
+    const metodoPagoEfectivo      = esTrialPremium && user.metodo_pago === "none" ? "total" : user.metodo_pago;
+    const mpDisponible            = !!user.mp_access_token && ["sena", "total"].includes(metodoPagoEfectivo);
+    const transferenciaDisponible = esPremium && !esTrialPremium && !!user.acepta_transferencia;
+    const efectivoDisponible      = esPremium && !esTrialPremium && !!user.acepta_efectivo;
  
     const metodos_pago_disponibles = [
       ...(mpDisponible            ? ["mercadopago"]  : []),
@@ -1676,7 +1678,7 @@ const { data: user, error } = await supabase.from("usuarios")
         excepciones:         user.excepciones         || [],
         duracion_turno:      user.duracion_turno      || 30,
         capacidad_por_turno: user.capacidad_por_turno || 1,
-        metodo_pago:         user.metodo_pago         || "none",
+        metodo_pago:         metodoPagoEfectivo         || "none",
         porcentaje_sena:     user.porcentaje_sena     || 30,
         tiene_mp:            !!user.mp_access_token,
         plan:                user.plan                || "gratis",
@@ -2558,8 +2560,14 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
     const esPlanGratis = user.plan === "gratis";
+    const esTrialPremium = user.plan === "premium" && user.estado_suscripcion === "trial";
     const tieneMP      = !!user.mp_access_token;
-    const requierePago = tieneMP && (user.metodo_pago === "sena" || user.metodo_pago === "total");
+    const metodoPagoEfectivo = esTrialPremium && user.metodo_pago === "none" ? "total" : user.metodo_pago;
+    const requierePago = tieneMP && (metodoPagoEfectivo === "sena" || metodoPagoEfectivo === "total");
+
+    if (esTrialPremium && !tieneMP) {
+      return res.status(403).json({ success: false, error: "trial_requires_online_payment", message: "Durante la prueba solo se permiten reservas con pago online." });
+    }
 
     if (esPlanGratis && !tieneMP) {
       return res.status(403).json({
@@ -2726,7 +2734,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     // FIX-SEC: transferencia/efectivo son exclusivos de premium. Se
     // revalida acá (no solo confiar en lo que muestra el front) por
     // si el negocio bajó de plan después de haber tenido esto activo.
-    if (user.plan !== "premium") {
+    if (user.plan !== "premium" || user.estado_suscripcion === "trial") {
       return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
     }
     if (metodo_pago === "transferencia" && !user.acepta_transferencia) {
@@ -3318,7 +3326,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         plan:                user.plan || "gratis",
         duracion_turno:      user.duracion_turno,
         capacidad_por_turno: user.capacidad_por_turno,
-        metodo_pago:         user.metodo_pago,
+        metodo_pago:         user.plan === "premium" && user.estado_suscripcion === "trial" && user.metodo_pago === "none" ? "total" : user.metodo_pago,
         porcentaje_sena:     user.porcentaje_sena,
         horarios:            user.horarios    || {},
         excepciones:         user.excepciones || [],
@@ -3328,9 +3336,9 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         mp_status:           user.mp_access_token ? "Conectado" : "Desconectado",
         dias_restantes:      diasRestantes,
         alerta_vencimiento:  diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
-        acepta_transferencia: !!user.acepta_transferencia,
-        acepta_efectivo:      !!user.acepta_efectivo,
-        datos_bancarios:      user.datos_bancarios || {},
+        acepta_transferencia: !(user.plan === "premium" && user.estado_suscripcion === "trial") && !!user.acepta_transferencia,
+        acepta_efectivo:      !(user.plan === "premium" && user.estado_suscripcion === "trial") && !!user.acepta_efectivo,
+        datos_bancarios:      user.plan === "premium" && user.estado_suscripcion === "trial" ? {} : (user.datos_bancarios || {}),
       },
     });
   } catch (e) {
@@ -3403,10 +3411,16 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Formato de excepciones inválido." });
     }
 
-    if (update.acepta_transferencia !== undefined || update.acepta_efectivo !== undefined || update.datos_bancarios !== undefined) {
-      const { data: negocioActual } = await supabase.from("usuarios").select("plan").eq("slug", slug).maybeSingle();
+    if (update.metodo_pago !== undefined || update.acepta_transferencia !== undefined || update.acepta_efectivo !== undefined || update.datos_bancarios !== undefined) {
+      const { data: negocioActual } = await supabase.from("usuarios").select("plan, estado_suscripcion").eq("slug", slug).maybeSingle();
       if (!negocioActual) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-      if (negocioActual.plan !== "premium") {
+      const esTrialPremium = negocioActual.plan === "premium" && negocioActual.estado_suscripcion === "trial";
+      if (esTrialPremium) {
+        if (update.metodo_pago === "none") update.metodo_pago = "total";
+        if (update.acepta_transferencia !== undefined) update.acepta_transferencia = false;
+        if (update.acepta_efectivo !== undefined) update.acepta_efectivo = false;
+        if (update.datos_bancarios !== undefined) update.datos_bancarios = {};
+      } else if ((update.acepta_transferencia !== undefined || update.acepta_efectivo !== undefined || update.datos_bancarios !== undefined) && negocioActual.plan !== "premium") {
         return res.status(403).json({ success: false, error: "Transferencia y efectivo son exclusivos del plan Premium." });
       }
     }
@@ -4982,7 +4996,8 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
 
-    const metodo    = user.metodo_pago || "none";
+    const esTrialPremium = user.plan === "premium" && user.estado_suscripcion === "trial";
+    const metodo    = esTrialPremium && user.metodo_pago === "none" ? "total" : (user.metodo_pago || "none");
     const debePagar = metodo === "sena" || metodo === "total";
     if (!debePagar || (precioServicio <= 0 && montoExtras <= 0)) return res.json({ isFree: true });
 
@@ -4995,8 +5010,8 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
 const esPremium = user.plan === "premium";
 const enTrial = user.estado_suscripcion === "trial";
-const fee = esPremium
-  ? (enTrial ? 300 : 0)
+const fee = esPremium && !enTrial
+  ? 0
   : Math.max(300, Math.round(montoACobrar * 0.02));
 
     if (user.mp_access_token) {
