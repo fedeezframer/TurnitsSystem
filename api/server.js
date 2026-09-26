@@ -2983,14 +2983,39 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
   try {
     const { id }    = req.params;
     const slugClean = cleanSlug(req.body?.slug || req.auth?.slug || "");
-    const { estado, notas } = req.body;
+    const { estado, notas, equipo_id } = req.body;
 
+    // estado y notas siguen siendo opcionales entre sí, pero ahora también
+    // se puede mandar solo equipo_id (asignar/reasignar profesional desde
+    // la agenda, sin tocar el estado del turno).
     const ESTADOS_VALIDOS = ["confirmado", "pendiente", "cancelado", "completado", "no_asistio"];
-    if (!estado || !ESTADOS_VALIDOS.includes(estado)) {
+    if (estado !== undefined && !ESTADOS_VALIDOS.includes(estado)) {
       return res.status(400).json({ success: false, error: `Estado inválido. Debe ser uno de: ${ESTADOS_VALIDOS.join(", ")}` });
     }
     if (notas !== undefined && notas !== null && String(notas).length > 1000) {
       return res.status(400).json({ success: false, error: "Las notas son demasiado largas." });
+    }
+    if (estado === undefined && notas === undefined && equipo_id === undefined) {
+      return res.status(400).json({ success: false, error: "No se recibió ningún cambio para aplicar." });
+    }
+
+    // Asignación de profesional: equipo_id debe pertenecer al mismo negocio
+    // y estar activo. Mandar equipo_id null/"" desasigna (turno sin profesional).
+    let equipoAsignado; // undefined = no tocar este campo
+    if (equipo_id !== undefined) {
+      if (equipo_id === null || equipo_id === "") {
+        equipoAsignado = { id: null, nombre: null };
+      } else if (UUID_REGEX.test(equipo_id)) {
+        const { data: prof } = await supabase.from("equipo")
+          .select("id, nombre, apellido")
+          .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
+        if (!prof) {
+          return res.status(400).json({ success: false, error: "Profesional inválido." });
+        }
+        equipoAsignado = { id: prof.id, nombre: `${prof.nombre}${prof.apellido ? " " + prof.apellido : ""}` };
+      } else {
+        return res.status(400).json({ success: false, error: "Profesional inválido." });
+      }
     }
 
   const { data: turnoExistente, error: fetchError } = await supabase
@@ -3007,8 +3032,13 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       turnoExistente.estado === "pendiente" &&
       ["transferencia", "efectivo"].includes(turnoExistente.metodo_pago);
 
-    const updateData = { estado };
+    const updateData = {};
+    if (estado !== undefined) updateData.estado = estado;
     if (notas !== undefined) updateData.notas = notas;
+    if (equipoAsignado !== undefined) {
+      updateData.equipo_id     = equipoAsignado.id;
+      updateData.equipo_nombre = equipoAsignado.nombre;
+    }
 
     // FIX-SEÑA: antes se marcaba monto_pagado = precio_cobrado siempre,
     // como si toda aprobación manual (transferencia/efectivo) implicara
@@ -3034,7 +3064,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
     if (updateError) throw updateError;
 
     const ESTADOS_OCUPAN = ["confirmado", "pendiente"];
-    const liberaCupo = ESTADOS_OCUPAN.includes(turnoExistente.estado) && !ESTADOS_OCUPAN.includes(estado);
+    const liberaCupo = estado !== undefined && ESTADOS_OCUPAN.includes(turnoExistente.estado) && !ESTADOS_OCUPAN.includes(estado);
     if (liberaCupo) {
       notificarListaEspera(slugClean, turnoExistente.fecha).catch((e) => console.error("Error notificando lista de espera:", e.message));
     }
@@ -3089,7 +3119,11 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 }
 
     invalidateCache(slugClean);
-    console.log(`✅ Turno ${id} → ${estado} (${slugClean})`);
+    const logCambio = [
+      estado !== undefined ? `estado=${estado}` : null,
+      equipoAsignado !== undefined ? `profesional=${equipoAsignado.nombre || "sin asignar"}` : null,
+    ].filter(Boolean).join(", ");
+    console.log(`✅ Turno ${id} → ${logCambio} (${slugClean})`);
     res.json({ success: true, turno: turnoActualizado });
   } catch (e) {
     console.error("Error en PUT /turnos/:id:", e.message);
