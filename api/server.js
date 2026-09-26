@@ -5735,10 +5735,21 @@ app.post("/webhook/renovacion", async (req, res) => {
 // REFERIDOS_DIAS_PREMIO (30) días de Premium. El premio se entrega una
 // sola vez por invitado (referidos.premio_entregado_at).
 //
-// "Turno real" = confirmado/completado, con teléfono o email del cliente,
-// que no sea del propio dueño, y que ya pasó (o esté completado). Así no
-// valen los turnos cargados a mano por el dueño ni las reservas de prueba
-// hechas con sus propios datos.
+// La barra de progreso que ve el usuario suma apenas un turno queda
+// "confirmado" (y baja sola si se cancela), para que el avance se sienta
+// inmediato — ver contarTurnosValidos.
+//
+// Pero el premio en sí (el que sí o sí hay que entregar) es más estricto:
+// solo cuenta como "turno cumplido" uno que ya pasó su fecha sin haberse
+// cancelado, o que quedó marcado "completado" a mano — ver
+// contarTurnosCumplidos. Así, si agendan los 25 turnos y los cancelan antes
+// de la fecha para forzar el premio sin haber generado el negocio real, la
+// barra puede haber llegado a mostrarse llena un rato, pero el grupo nunca
+// queda "completo" de verdad y evaluarGrupoReferidos no entrega nada.
+//
+// En ambos casos se exige teléfono o email del cliente que no sea del
+// propio dueño, para que no valgan los turnos cargados a mano ni las
+// reservas de prueba hechas con sus propios datos.
 //
 // Requiere correr referidos_migracion.sql en Supabase.
 // ══════════════════════════════════════════════════════════════
@@ -5784,11 +5795,13 @@ async function asegurarReferralCode(slug) {
   return u2?.referral_code || null;
 }
 
+// Turnos que cuentan para la BARRA VISUAL: suma apenas el turno queda
+// "confirmado", sin esperar a que pase la fecha ni a que se marque
+// "completado". Si después se cancela, se descuenta solo: al no matchear
+// más el filtro de estado de abajo, esta consulta (siempre en vivo, nunca
+// cacheada) deja de contarlo. OJO: esto es solo para mostrar progreso; no
+// alcanza por sí solo para habilitar el premio (ver contarTurnosCumplidos).
 async function contarTurnosValidos(slug, emailDueno, telefonoDueno) {
-  // Suma apenas el turno queda "confirmado" (no hace falta esperar a que
-  // pase la fecha ni a que se marque "completado"). Si después se cancela,
-  // se descuenta solo: al no matchear más el filtro de estado de abajo,
-  // esta consulta (siempre en vivo, nunca cacheada) deja de contarlo.
   const { data, error } = await supabase.from("turnos")
     .select("estado, email, telefono")
     .eq("slug", slug).in("estado", ["confirmado", "completado"]).limit(1000);
@@ -5806,7 +5819,36 @@ async function contarTurnosValidos(slug, emailDueno, telefonoDueno) {
   }).length;
 }
 
+// Turnos que cuentan para HABILITAR EL PREMIO: a diferencia de la barra
+// visual, acá un turno solo suma si ya "se cumplió" de verdad — o quedó
+// marcado "completado" a mano, o llegó su fecha sin haberse cancelado antes.
+// Así, si agendan los 25 y los cancelan antes de la fecha, nunca llegan a
+// "completo" acá (aunque la barra visual haya llegado a mostrar 25/25 un
+// rato) y evaluarGrupoReferidos nunca entrega el mes gratis.
+async function contarTurnosCumplidos(slug, emailDueno, telefonoDueno) {
+  const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+  const hoyISO   = ahoraArg.toISOString().split("T")[0];
+
+  const { data, error } = await supabase.from("turnos")
+    .select("estado, fecha, email, telefono")
+    .eq("slug", slug).in("estado", ["confirmado", "completado"]).limit(1000);
+  if (error) throw error;
+
+  const emailD = String(emailDueno || "").trim().toLowerCase();
+  const telD   = telefonoDueno ? cleanPhone(String(telefonoDueno)) : "";
+
+  return (data || []).filter((t) => {
+    const email = String(t.email || "").trim().toLowerCase();
+    const tel   = t.telefono ? cleanPhone(String(t.telefono)) : "";
+    if (!email && !tel) return false;                                  // turno cargado a mano
+    if ((emailD && email === emailD) || (telD && tel === telD)) return false; // el dueño reservándose
+    return t.estado === "completado" || String(t.fecha).slice(0, 10) < hoyISO;
+  }).length;
+}
+
 // Estado de un grupo: [{ slug, turnos, completo, premio_entregado }]
+// "turnos" es el número que se muestra en la barra (relajado, en vivo).
+// "completo" es el que decide si se entrega el premio (exige turnos cumplidos).
 async function progresoGrupoReferidos(referidorSlug, grupoNro) {
   const { data: miembros, error } = await supabase.from("referidos")
     .select("invitado_slug, premio_entregado_at, created_at")
@@ -5819,13 +5861,14 @@ async function progresoGrupoReferidos(referidorSlug, grupoNro) {
     const { data: u } = await supabase.from("usuarios")
       .select("slug, email, telefono, business_name").eq("slug", m.invitado_slug).maybeSingle();
     if (!u) continue;
-    const turnos = await contarTurnosValidos(u.slug, u.email, u.telefono);
+    const turnos    = await contarTurnosValidos(u.slug, u.email, u.telefono);
+    const cumplidos = await contarTurnosCumplidos(u.slug, u.email, u.telefono);
     detalle.push({
       slug: u.slug,
       negocio: u.business_name || null,
       registrado_at: m.created_at,
       turnos: Math.min(turnos, REFERIDOS_TURNOS_MIN),
-      completo: turnos >= REFERIDOS_TURNOS_MIN,
+      completo: cumplidos >= REFERIDOS_TURNOS_MIN,
       premio_entregado: !!m.premio_entregado_at,
     });
   }
