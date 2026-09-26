@@ -5785,11 +5785,12 @@ async function asegurarReferralCode(slug) {
 }
 
 async function contarTurnosValidos(slug, emailDueno, telefonoDueno) {
-  const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
-  const hoyISO   = ahoraArg.toISOString().split("T")[0];
-
+  // Suma apenas el turno queda "confirmado" (no hace falta esperar a que
+  // pase la fecha ni a que se marque "completado"). Si después se cancela,
+  // se descuenta solo: al no matchear más el filtro de estado de abajo,
+  // esta consulta (siempre en vivo, nunca cacheada) deja de contarlo.
   const { data, error } = await supabase.from("turnos")
-    .select("estado, fecha, email, telefono")
+    .select("estado, email, telefono")
     .eq("slug", slug).in("estado", ["confirmado", "completado"]).limit(1000);
   if (error) throw error;
 
@@ -5801,7 +5802,7 @@ async function contarTurnosValidos(slug, emailDueno, telefonoDueno) {
     const tel   = t.telefono ? cleanPhone(String(t.telefono)) : "";
     if (!email && !tel) return false;                                  // turno cargado a mano
     if ((emailD && email === emailD) || (telD && tel === telD)) return false; // el dueño reservándose
-    return t.estado === "completado" || String(t.fecha).slice(0, 10) < hoyISO;
+    return true;
   }).length;
 }
 
