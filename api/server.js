@@ -44,7 +44,7 @@ const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
 // cambio de referencia. Se compara contra la facturación histórica total
 // (pagos aprobados de todos los tiempos), no contra un período.
-const LOGRO_FACTURACION_META_ARS = parseInt(process.env.LOGRO_FACTURACION_META_ARS || "600000");
+const LOGRO_FACTURACION_META_ARS = parseInt(process.env.LOGRO_FACTURACION_META_ARS || "750000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 // FIX-SEC: secret propio para validar la firma de los webhooks de MP.
 const MP_WEBHOOK_SECRET  = process.env.MP_WEBHOOK_SECRET          || "";
