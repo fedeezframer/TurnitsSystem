@@ -4289,29 +4289,40 @@ const turnosHoyDetalle = turnosData
     // Comparativas mes / semana contra el mismo tramo del período anterior.
     //  · turnos: mismo criterio que turnosMes (sin cancelados ni pendientes).
     //    COUNT en la base, así no depende del tope de 1000 filas.
-    //  · ingresos: mismo criterio que ventas.volumenMes (por fecha de pago).
+    //  · ingresos: suma el precio cobrado de esos mismos turnos, por fecha
+    //    del turno. Así ingresos y cantidad comparan exactamente el mismo tramo.
     //  · clientes_nuevos: su primer turno histórico cae dentro del tramo
     //    (fecha en horario de Argentina).
     const fechaArgDe = (d) => d.toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
-    const contarTurnosRango = async (desde, hasta) => {
-      const { count, error } = await supabase.from("turnos").select("id", { count: "exact", head: true })
-        .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
-        .not("estado", "in", "(cancelado,pendiente)");
-      if (error) throw error;
-      return count || 0;
-    };
-    const ingresosRango = (desde, hasta) => {
-      const cantDias = Math.round((new Date(hasta + "T12:00:00Z") - new Date(desde + "T12:00:00Z")) / 86400000) + 1;
-      return generarRangoDias(desde, cantDias).reduce((acc, d) => acc + Number(metricas.porDia[d]?.volumen || 0), 0);
+    const resumenTurnosRango = async (desde, hasta) => {
+      const turnosRango = [];
+      for (let pagina = 0; pagina < 50; pagina++) {
+        const { data, error } = await supabase.from("turnos")
+          .select("id, precio_cobrado")
+          .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
+          .not("estado", "in", "(cancelado,pendiente)")
+          .order("id", { ascending: true })
+          .range(pagina * 1000, pagina * 1000 + 999);
+        if (error) throw error;
+        turnosRango.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return {
+        turnos: turnosRango.length,
+        ingresos: turnosRango.reduce((total, t) => total + Number(t.precio_cobrado || 0), 0),
+      };
     };
     const nuevosRango = (desde, hasta) =>
       Object.values(primeraVezPorCliente).filter((f) => { const d = fechaArgDe(f); return d >= desde && d <= hasta; }).length;
-    const armarTramo = async ({ desde, hasta }) => ({
-      desde, hasta,
-      turnos:          await contarTurnosRango(desde, hasta),
-      clientes_nuevos: nuevosRango(desde, hasta),
-      ingresos:        ingresosRango(desde, hasta),
-    });
+    const armarTramo = async ({ desde, hasta }) => {
+      const resumen = await resumenTurnosRango(desde, hasta);
+      return {
+        desde, hasta,
+        turnos: resumen.turnos,
+        clientes_nuevos: nuevosRango(desde, hasta),
+        ingresos: resumen.ingresos,
+      };
+    };
 
     const rangosCmp = rangosComparativos(hoyISO);
     const [mesActual_, mesAnterior_, semActual_, semAnterior_] = await Promise.all([
