@@ -1878,6 +1878,34 @@ app.get("/servicios/:slug", async (req, res) => {
     const { equipo_id } = req.query;
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
+    // "Cualquiera" puede ofrecer la unión de los servicios asignados al
+    // equipo activo, pero no servicios que nadie tiene configurados.
+    if (equipo_id === "cualquiera") {
+      const { data: equipo, error: equipoError } = await supabase.from("equipo")
+        .select("id").eq("slug", slug).eq("activo", true);
+      if (equipoError) throw equipoError;
+      const equipoIds = (equipo || []).map((miembro) => miembro.id);
+      if (!equipoIds.length) return res.json({ success: true, servicios: [] });
+
+      const { data: vinculos, error } = await supabase.from("servicio_equipo")
+        .select("servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug)")
+        .in("equipo_id", equipoIds)
+        .eq("servicios.slug", slug)
+        .eq("servicios.activo", "true");
+      if (error) throw error;
+
+      const serviciosUnicos = new Map();
+      (vinculos || []).forEach((v) => {
+        const servicio = v.servicios;
+        if (servicio && !serviciosUnicos.has(servicio.id)) {
+          serviciosUnicos.set(servicio.id, servicio);
+        }
+      });
+      const servicios = Array.from(serviciosUnicos.values())
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+      return res.json({ success: true, servicios });
+    }
+
     // Filtrado por profesional: solo servicios vinculados a ese equipo_id
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: vinculos, error } = await supabase.from("servicio_equipo")
