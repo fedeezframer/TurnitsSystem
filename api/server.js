@@ -44,7 +44,7 @@ const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
 // cambio de referencia. Se compara contra la facturación histórica total
 // (pagos aprobados de todos los tiempos), no contra un período.
-const LOGRO_FACTURACION_META_ARS = parseInt(process.env.LOGRO_FACTURACION_META_ARS || "750000");
+const LOGRO_FACTURACION_META_ARS = parseInt(process.env.LOGRO_FACTURACION_META_ARS || "600000");
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 // FIX-SEC: secret propio para validar la firma de los webhooks de MP.
 const MP_WEBHOOK_SECRET  = process.env.MP_WEBHOOK_SECRET          || "";
@@ -4463,8 +4463,15 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
 
     const { desde, hasta } = rangoPeriodoArg(periodo);
 
+    const [{ data: userConfig }, { data: servicios }] = await Promise.all([
+      supabase.from("usuarios").select("duracion_turno").eq("slug", slug).maybeSingle(),
+      supabase.from("servicios").select("id, duracion").eq("slug", slug),
+    ]);
+    const duracionPorServicio = new Map((servicios || []).map((s) => [s.id, Number(s.duracion) || 0]));
+    const duracionDefault = Number(userConfig?.duracion_turno) || 30;
+
     const { data: turnosPeriodo, error: turnosError } = await supabase.from("turnos")
-      .select("id, fecha, hora, estado, servicio_nombre, nombre, apellido, precio_cobrado")
+      .select("id, fecha, hora, estado, servicio_id, servicio_nombre, nombre, apellido, precio_cobrado")
       .eq("slug", slug).eq("equipo_id", equipo_id)
       .gte("fecha", desde).lte("fecha", hasta)
       .neq("estado", "cancelado")
@@ -4475,6 +4482,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
 
     const cantidadTurnos = turnosContables.length;
     const facturacion    = turnosContables.reduce((acc, t) => acc + Number(t.precio_cobrado || 0), 0);
+    const minutosTrabajados = turnosContables.reduce((acc, t) => acc + (duracionPorServicio.get(t.servicio_id) || duracionDefault), 0);
 
     res.json({
       success: true,
@@ -4484,6 +4492,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
       hasta,
       cantidadTurnos,
       facturacion,
+      minutosTrabajados,
       detalle: turnosContables.map((t) => ({
         id:       t.id,
         fecha:    t.fecha,
@@ -4491,6 +4500,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
         cliente:  [t.nombre, t.apellido].filter(Boolean).join(" "),
         servicio: t.servicio_nombre,
         monto:    Number(t.precio_cobrado || 0),
+        duracion: duracionPorServicio.get(t.servicio_id) || duracionDefault,
         estado:   t.estado,
       })),
     });
