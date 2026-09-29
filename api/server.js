@@ -4444,10 +4444,10 @@ const turnosHoyDetalle = turnosData
 // pendientes de aprobación (transferencia/efectivo sin confirmar),
 // porque todavía no representan trabajo realizado ni cobrado.
 // ══════════════════════════════════════════════════════════════
-const PERIODOS_RENDIMIENTO = ["dia", "semana", "mes"];
+const PERIODOS_RENDIMIENTO = ["dia", "semana", "mes", "proximos30"];
 
 // Rango de fechas (ISO, ambos inclusivos) de "hoy" / esta semana (lunes a
-// domingo) / este mes, según el horario de Argentina. Lo comparten
+// domingo) / este mes / los próximos 30 días, según el horario de Argentina. Lo comparten
 // /admin/rendimiento-equipo y /admin/rendimiento-equipo-resumen.
 function rangoPeriodoArg(periodo) {
   const ahoraArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
@@ -4456,6 +4456,12 @@ function rangoPeriodoArg(periodo) {
   if (periodo === "dia") {
     const hoy = fmtISO(ahoraArg);
     return { desde: hoy, hasta: hoy };
+  }
+  if (periodo === "proximos30") {
+    const hoy = new Date(ahoraArg);
+    const hasta = new Date(ahoraArg);
+    hasta.setDate(ahoraArg.getDate() + 29);
+    return { desde: fmtISO(hoy), hasta: fmtISO(hasta) };
   }
   if (periodo === "semana") {
     const diaSemana   = ahoraArg.getDay(); // 0 = domingo
@@ -4479,7 +4485,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "equipo_id inválido." });
     }
 
-    const PERIODOS_VALIDOS = ["dia", "semana", "mes"];
+    const PERIODOS_VALIDOS = ["dia", "semana", "mes", "proximos30"];
     const periodo = PERIODOS_VALIDOS.includes(req.query.periodo) ? req.query.periodo : "dia";
 
     const { data: user, error: userError } = await supabase.from("usuarios")
