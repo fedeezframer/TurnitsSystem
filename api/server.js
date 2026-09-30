@@ -5388,7 +5388,7 @@ async function obtenerTokenMpVigente(slug, userRow) {
 
   try {
     const response = await fetch("https://api.mercadopago.com/oauth/token", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Accept": "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({
         client_id: process.env.MP_TURNERO_CLIENT_ID,
         client_secret: process.env.MP_TURNERO_CLIENT_SECRET,
@@ -5498,13 +5498,14 @@ app.get("/oauth-callback", async (req, res) => {
   try {
     const slugClean = slug;
     const response  = await fetch("https://api.mercadopago.com/oauth/token", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: process.env.MP_TURNERO_CLIENT_ID, client_secret: process.env.MP_TURNERO_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: `${API_URL}/oauth-callback` }),
+      method: "POST", headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: process.env.MP_TURNERO_CLIENT_ID, client_secret: process.env.MP_TURNERO_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: `${API_URL}/oauth-callback`, state }),
     });
     const data = await response.json();
     // FIX-SEC: nunca loguear la respuesta completa (traía access_token y
     // refresh_token en texto plano). Solo dejamos rastro de si vino bien o mal.
-    console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${data.error || data.message || "sin access_token"})`} — refresh_token: ${data.refresh_token ? "sí" : "no"}`);
+    const tieneOfflineAccess = String(data.scope || "").split(/\s+/).includes("offline_access");
+    console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${data.error || data.message || "sin access_token"})`} — refresh_token: ${data.refresh_token ? "sí" : "no"} — offline_access: ${tieneOfflineAccess ? "sí" : "no"}`);
     if (data.access_token) {
       const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
 
