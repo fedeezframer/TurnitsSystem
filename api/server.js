@@ -5422,6 +5422,38 @@ async function obtenerTokenMpVigente(slug, userRow) {
 // OAUTH — Mercado Pago
 // ══════════════════════════════════════════════════════════════
 
+// El state de OAuth debe ser único, impredecible y verificable al volver
+// desde Mercado Pago. Se firma con el secret de la aplicación para evitar
+// que alguien cambie el slug y vincule una cuenta a otro negocio.
+function crearMpOAuthState(slug) {
+  const payload = Buffer.from(JSON.stringify({
+    slug,
+    issuedAt: Date.now(),
+    nonce: crypto.randomBytes(24).toString("base64url"),
+  })).toString("base64url");
+  const signature = crypto.createHmac("sha256", process.env.MP_TURNERO_CLIENT_SECRET)
+    .update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function leerMpOAuthState(state) {
+  if (typeof state !== "string" || state.length > 2048 || !process.env.MP_TURNERO_CLIENT_SECRET) return null;
+  const [payload, signature, extra] = state.split(".");
+  if (!payload || !signature || extra !== undefined) return null;
+  const expected = crypto.createHmac("sha256", process.env.MP_TURNERO_CLIENT_SECRET)
+    .update(payload).digest();
+  let received;
+  try { received = Buffer.from(signature, "base64url"); } catch { return null; }
+  if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const age = Date.now() - Number(data.issuedAt);
+    if (!data.slug || !data.nonce || !Number.isFinite(age) || age < 0 || age > 30 * 60 * 1000) return null;
+    const slug = cleanSlug(data.slug);
+    return slug && slug === data.slug ? slug : null;
+  } catch { return null; }
+}
+
 // FIX-SEC (pedido del usuario): el frontend ya no arma la URL de
 // autorización de MP a mano (eso obligaba a cargar el client_id como
 // propiedad de Framer y mantenerlo sincronizado a mano con Render;
@@ -5432,24 +5464,39 @@ async function obtenerTokenMpVigente(slug, userRow) {
 app.get("/mp/connect/:slug", (req, res) => {
   const slug = cleanSlug(req.params.slug);
   if (!slug) return res.status(400).send("Slug inválido.");
-  if (!process.env.MP_TURNERO_CLIENT_ID) {
-    return res.status(500).send("Mercado Pago no está configurado (falta MP_TURNERO_CLIENT_ID en el servidor).");
+  if (!process.env.MP_TURNERO_CLIENT_ID || !process.env.MP_TURNERO_CLIENT_SECRET) {
+    return res.status(500).send("Mercado Pago no está configurado correctamente en el servidor.");
   }
   const redirectUri = encodeURIComponent(`${API_URL}/oauth-callback`);
-  // FIX: sin pedir el scope "offline_access" acá, MP no manda refresh_token
-  // en la respuesta de /oauth/token -> por eso quedaba vacío. Con esto,
-  // además de leer/cobrar (scopes por defecto), pedimos permiso para
-  // poder renovar el access_token sin que el negocio tenga que reconectar
-  // cada 180 días.
-  const authUrl = `https://auth.mercadopago.com/authorization?client_id=${process.env.MP_TURNERO_CLIENT_ID}&response_type=code&platform_id=mp&state=${slug}&scope=offline_access&redirect_uri=${redirectUri}`;
+  // Marketplace autoriza los alcances configurados en la aplicación.
+  // No forzar scope=offline_access: Mercado Pago documenta la autorización
+  // del Marketplace sin ese query param y el intercambio devuelve los scopes
+  // habilitados (incluidos pagos/escritura y offline si están autorizados).
+  const state = encodeURIComponent(crearMpOAuthState(slug));
+  const authUrl = `https://auth.mercadopago.com.ar/authorization?client_id=${encodeURIComponent(process.env.MP_TURNERO_CLIENT_ID)}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${redirectUri}`;
   res.redirect(authUrl);
 });
 
 app.get("/oauth-callback", async (req, res) => {
-  const { code, state: slug } = req.query;
-  if (!code || !slug) return res.status(400).send("Parámetros inválidos.");
+  const { code, state, error: oauthError } = req.query;
+  const slug = leerMpOAuthState(state);
+  if (!slug) {
+    console.warn("⚠️ Callback OAuth de MP rechazado: state inválido o vencido.");
+    return res.status(400).send("La solicitud de conexión venció o no es válida. Volvé al panel e intentá nuevamente.");
+  }
+  if (oauthError) {
+    // MP puede devolver el error antes de emitir un authorization code.
+    // Registrar solo el código de error, nunca query completa ni tokens.
+    const errorSeguro = String(oauthError).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || "authorization_denied";
+    console.warn(`⚠️ OAuth MP denegado para ${slug}: ${errorSeguro}`);
+    return res.redirect(`${PANEL_URL}/${slug}?status=mp_error&reason=${encodeURIComponent(errorSeguro)}`);
+  }
+  if (typeof code !== "string" || !code) {
+    console.warn(`⚠️ Callback OAuth de MP sin código para ${slug}.`);
+    return res.redirect(`${PANEL_URL}/${slug}?status=mp_error&reason=missing_code`);
+  }
   try {
-    const slugClean = cleanSlug(slug);
+    const slugClean = slug;
     const response  = await fetch("https://api.mercadopago.com/oauth/token", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ client_id: process.env.MP_TURNERO_CLIENT_ID, client_secret: process.env.MP_TURNERO_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: `${API_URL}/oauth-callback` }),
