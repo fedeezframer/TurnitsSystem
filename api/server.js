@@ -5365,7 +5365,7 @@ app.post("/cuenta/eliminar/:slug", limiterAuth, requireAuth, async (req, res) =>
 // ══════════════════════════════════════════════════════════════
 function encryptMpSecret(plainText) {
   if (!plainText) return null;
-  if (!MP_TOKEN_ENC_KEY) return plainText; // sin clave configurada, no rompemos el flujo (ver warning al boot)
+  if (!MP_TOKEN_ENC_KEY) throw new Error("MP_TOKEN_ENC_KEY no configurada; se bloquea el guardado inseguro de credenciales.");
   const key = crypto.createHash("sha256").update(MP_TOKEN_ENC_KEY).digest();
   const iv  = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
@@ -5377,11 +5377,11 @@ function encryptMpSecret(plainText) {
 
 function decryptMpSecret(storedValue) {
   if (!storedValue) return null;
-  if (!storedValue.startsWith("enc:v1:")) return storedValue; // valor viejo sin cifrar (ver migración)
   if (!MP_TOKEN_ENC_KEY) {
     console.error("❌ No se puede descifrar el token de MP: falta MP_TOKEN_ENC_KEY.");
     return null;
   }
+  if (!storedValue.startsWith("enc:v1:")) return storedValue; // token legado: se cifra en obtenerTokenMpVigente
   try {
     const [, , ivB64, tagB64, dataB64] = storedValue.split(":");
     const key = crypto.createHash("sha256").update(MP_TOKEN_ENC_KEY).digest();
@@ -5395,12 +5395,77 @@ function decryptMpSecret(storedValue) {
   }
 }
 
+// Migra los tokens de filas creadas por versiones anteriores que los
+// guardaban en texto plano. Solo registra cuántas filas migró, nunca valores.
+async function migrarTokensMpLegados() {
+  if (!MP_TOKEN_ENC_KEY) return;
+  const pageSize = 200;
+  let offset = 0;
+  let migrados = 0;
+
+  while (true) {
+    const { data: usuarios, error } = await supabase.from("usuarios")
+      .select("slug, mp_access_token, mp_refresh_token")
+      .not("mp_access_token", "is", null)
+      .order("slug", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) {
+      console.error("❌ No se pudo revisar la migración de tokens MP:", error.message);
+      return;
+    }
+    if (!usuarios?.length) break;
+
+    for (const usuario of usuarios) {
+      const update = {};
+      if (usuario.mp_access_token && !String(usuario.mp_access_token).startsWith("enc:v1:")) {
+        update.mp_access_token = encryptMpSecret(usuario.mp_access_token);
+      }
+      if (usuario.mp_refresh_token && !String(usuario.mp_refresh_token).startsWith("enc:v1:")) {
+        update.mp_refresh_token = encryptMpSecret(usuario.mp_refresh_token);
+      }
+      if (!Object.keys(update).length) continue;
+
+      const { error: updateError } = await supabase.from("usuarios")
+        .update(update).eq("slug", usuario.slug);
+      if (updateError) {
+        console.error(`❌ No se pudo cifrar el token MP legado de ${usuario.slug}:`, updateError.message);
+        continue;
+      }
+      migrados++;
+    }
+
+    if (usuarios.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  if (migrados) console.log(`🔐 Tokens MP legados migrados a cifrado: ${migrados} cuentas.`);
+}
+
 // Devuelve un access_token de MP listo para usar, renovándolo primero si
 // está vencido o a menos de 15 días de vencer. Si no hace falta renovar,
 // simplemente descifra y devuelve el que ya estaba guardado.
 async function obtenerTokenMpVigente(slug, userRow) {
   const accessTokenPlano = decryptMpSecret(userRow.mp_access_token);
   if (!accessTokenPlano) return null;
+
+  // Migra de forma transparente credenciales de versiones anteriores que
+  // quedaron en texto plano. Si no se puede persistir el cifrado, no se usa
+  // el token para iniciar un cobro.
+  const migracion = {};
+  if (!String(userRow.mp_access_token).startsWith("enc:v1:")) {
+    migracion.mp_access_token = encryptMpSecret(accessTokenPlano);
+  }
+  if (userRow.mp_refresh_token && !String(userRow.mp_refresh_token).startsWith("enc:v1:")) {
+    migracion.mp_refresh_token = encryptMpSecret(decryptMpSecret(userRow.mp_refresh_token));
+  }
+  if (Object.keys(migracion).length) {
+    const { error } = await supabase.from("usuarios").update(migracion).eq("slug", slug);
+    if (error) {
+      console.error(`❌ No se pudo migrar credenciales MP a cifrado para ${slug}:`, error.message);
+      return null;
+    }
+    invalidateCache(slug);
+  }
 
   const vencePronto = userRow.mp_token_expires_at
     ? new Date(userRow.mp_token_expires_at).getTime() - Date.now() < 15 * 24 * 60 * 60 * 1000
@@ -5422,7 +5487,8 @@ async function obtenerTokenMpVigente(slug, userRow) {
     });
     const data = await response.json();
     if (!data.access_token) {
-      console.error(`⚠️  No se pudo renovar el token de MP para ${slug}: ${data.error || data.message || "respuesta sin access_token"}`);
+      const errorSeguro = String(data.error || "refresh_failed").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+      console.error(`⚠️ No se pudo renovar el token de MP para ${slug}: ${errorSeguro || "refresh_failed"}`);
       return accessTokenPlano; // usamos el viejo mientras siga vivo
     }
 
@@ -5482,10 +5548,10 @@ function leerMpOAuthState(state) {
 // autorización de MP a mano (eso obligaba a cargar el client_id como
 // propiedad de Framer y mantenerlo sincronizado a mano con Render;
 // justamente ESO causó el invalid_grant de hoy: quedó desactualizado
-// después de rotar credenciales). Ahora el panel solo navega a esta
-// ruta con el slug, y el backend arma la URL con el client_id que
+// después de rotar credenciales). El panel solicita la URL a esta ruta
+// con su JWT; el backend valida el slug y la arma con el client_id que
 // vive en una sola fuente de verdad: la env var de Render.
-app.get("/mp/connect/:slug", (req, res) => {
+app.post("/mp/connect/:slug", requireAuth, (req, res) => {
   const slug = cleanSlug(req.params.slug);
   if (!slug) return res.status(400).send("Slug inválido.");
   if (!process.env.MP_TURNERO_CLIENT_ID || !process.env.MP_TURNERO_CLIENT_SECRET) {
@@ -5498,7 +5564,7 @@ app.get("/mp/connect/:slug", (req, res) => {
   // habilitados (incluidos pagos/escritura y offline si están autorizados).
   const state = encodeURIComponent(crearMpOAuthState(slug));
   const authUrl = `https://auth.mercadopago.com.ar/authorization?client_id=${encodeURIComponent(process.env.MP_TURNERO_CLIENT_ID)}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${redirectUri}`;
-  res.redirect(authUrl);
+  res.json({ success: true, authorization_url: authUrl });
 });
 
 app.get("/oauth-callback", async (req, res) => {
@@ -5529,7 +5595,8 @@ app.get("/oauth-callback", async (req, res) => {
     // FIX-SEC: nunca loguear la respuesta completa (traía access_token y
     // refresh_token en texto plano). Solo dejamos rastro de si vino bien o mal.
     const tieneOfflineAccess = String(data.scope || "").split(/\s+/).includes("offline_access");
-    console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${data.error || data.message || "sin access_token"})`} — refresh_token: ${data.refresh_token ? "sí" : "no"} — offline_access: ${tieneOfflineAccess ? "sí" : "no"}`);
+    const errorOAuthSeguro = String(data.error || "token_exchange_failed").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+    console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${errorOAuthSeguro || "token_exchange_failed"})`} — refresh_token: ${data.refresh_token ? "sí" : "no"} — offline_access: ${tieneOfflineAccess ? "sí" : "no"}`);
     if (data.access_token) {
       const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
 
@@ -6500,7 +6567,9 @@ app.get("/cron/generar-tips", requireAdminKey, async (req, res) => {
 // 404 Y ERROR HANDLER
 // ══════════════════════════════════════════════════════════════
 app.use("*", (req, res) => {
-  res.status(404).json({ success: false, error: "Ruta no encontrada.", path: req.originalUrl });
+  // No reflejar query strings: pueden contener códigos temporales OAuth u
+  // otros datos de un flujo de autenticación.
+  res.status(404).json({ success: false, error: "Ruta no encontrada.", path: req.path });
 });
 app.use((err, req, res, _next) => {
   console.error("Error no manejado:", err.message);
@@ -6522,6 +6591,13 @@ app.listen(PORT, () => {
   ║   Puerto: ${PORT}                              ║
   ╚═══════════════════════════════════════════════╝
   `);
+  if (MP_TOKEN_ENC_KEY) {
+    migrarTokensMpLegados().catch((e) => {
+      console.error("❌ Falló la migración de tokens MP legados:", e?.message || "error");
+    });
+  } else {
+    console.error("❌ MP_TOKEN_ENC_KEY no configurada: no se podrán guardar ni descifrar credenciales de Mercado Pago.");
+  }
 });
 
 export default app;
