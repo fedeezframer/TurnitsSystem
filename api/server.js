@@ -5043,7 +5043,12 @@ app.get("/auth/reset-token-info", async (req, res) => {
 // POST /api/create-preference
 // ══════════════════════════════════════════════════════════════
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
-  console.log("📥 create-preference body:", JSON.stringify(req.body));
+  console.log("📥 create-preference:", JSON.stringify({
+    slug: req.body?.slug,
+    fecha: req.body?.fecha,
+    hora: req.body?.hora,
+    servicio_id: req.body?.servicio_id || null,
+  }));
   try {
     const { nombre, telefono, email, fecha, hora, slug, servicio_id, apellido, extra_ids, equipo_id } = req.body;
     const slugClean = cleanSlug(slug || "");
@@ -5140,8 +5145,20 @@ const fee = esPremium && !enTrial
           { title: tituloItem, description: descripcionItem, unit_price: montoACobrar, quantity: 1, currency_id: "ARS" },
         ];
 
+        // Mercado Pago recomienda enviar los datos reales del comprador
+        // disponibles en el formulario. El teléfono llega internacionalizado
+        // desde BookingFlow (por ejemplo, +549...), así que se conserva como
+        // número completo y no se inventa un código de área.
+        const payer = {
+          name: nombre.trim(),
+          ...(apellido?.trim() ? { surname: apellido.trim() } : {}),
+          ...(email?.trim() ? { email: email.trim().toLowerCase() } : {}),
+          phone: { number: cleanPhone(telefono) },
+        };
+
         const prefBody = {
           items,
+          payer,
           metadata: metaPendiente,
           external_reference: pendiente.id,
           notification_url: `${API_URL}/webhook/mp`,
