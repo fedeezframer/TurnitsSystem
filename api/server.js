@@ -5129,8 +5129,15 @@ const fee = esPremium && !enTrial
           ? `${nombreServicio} + ${nombresExtras} (${conceptoPago}): ${fecha} - ${hora}hs`
           : `${nombreServicio} (${conceptoPago}): ${fecha} - ${hora}hs`;
 
+        const descripcionServicio = extrasResueltos.length
+          ? `${nombreServicio} + ${nombresExtras}`
+          : nombreServicio;
+        const descripcionItem = metodo === "sena"
+          ? `Seña del ${user.porcentaje_sena || 30}% para reservar ${descripcionServicio} el ${fecha} a las ${hora} hs. Saldo restante a pagar al negocio: $${Math.max(baseCalculo - montoACobrar, 0)}.`
+          : `Pago total de ${descripcionServicio}, con turno para el ${fecha} a las ${hora} hs.`;
+
         const items = [
-          { title: tituloItem, unit_price: montoACobrar, quantity: 1, currency_id: "ARS" },
+          { title: tituloItem, description: descripcionItem, unit_price: montoACobrar, quantity: 1, currency_id: "ARS" },
         ];
 
         const prefBody = {
