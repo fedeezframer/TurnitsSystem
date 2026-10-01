@@ -5563,7 +5563,7 @@ app.post("/mp/connect/:slug", requireAuth, (req, res) => {
   // del Marketplace sin ese query param y el intercambio devuelve los scopes
   // habilitados (incluidos pagos/escritura y offline si están autorizados).
   const state = encodeURIComponent(crearMpOAuthState(slug));
-  const authUrl = `https://auth.mercadopago.com.ar/authorization?client_id=${encodeURIComponent(process.env.MP_TURNERO_CLIENT_ID)}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${redirectUri}`;
+  const authUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(process.env.MP_TURNERO_CLIENT_ID)}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${redirectUri}`;
   res.json({ success: true, authorization_url: authUrl });
 });
 
