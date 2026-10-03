@@ -446,10 +446,42 @@ async function validarReservasPorComisiones(slug, comisionNueva = 0) {
   if (estado.saldo_vencido > 0) {
     return { permitido: false, codigo: "comision_vencida", estado };
   }
-  if (estado.saldo_pendiente >= estado.limite || estado.saldo_pendiente + Number(comisionNueva || 0) > estado.limite) {
+  // El tope se puede cruzar UNA sola vez: si antes de esta reserva el saldo
+  // todavía está por debajo del límite, la reserva entra aunque con su
+  // comisión el total lo supere (ej: 22.000 + 1.000 → 23.000, permitido).
+  // Apenas el saldo queda en o sobre el límite, no entra ninguna más hasta
+  // que se pague. Por eso NO se suma comisionNueva en la comparación.
+  if (estado.saldo_pendiente >= estado.limite) {
     return { permitido: false, codigo: "limite_comisiones", estado };
   }
   return { permitido: true, estado };
+}
+
+// ¿La agenda pública del negocio está pausada por deuda de comisiones?
+// (límite alcanzado o deuda vencida). VIP nunca. Se usa para mostrar el
+// mismo 404/"suspendido" que cuando no se paga el plan.
+async function agendaPausadaPorComisiones(slug, plan) {
+  if (esPlanVip(plan)) return false;
+  try {
+    const estado = await obtenerEstadoComisionesTurnits(slug);
+    return estado.bloqueada === true;
+  } catch (e) {
+    // Si falla la consulta no se tira abajo la agenda por un error nuestro.
+    console.error("Error evaluando pausa por comisiones:", e.message);
+    return false;
+  }
+}
+
+// Un cobro pendiente solo se puede reutilizar si sigue representando
+// EXACTAMENTE la deuda actual (mismas comisiones pendientes, mismo importe).
+// Si entró una comisión nueva o se anuló/pagó alguna, el preference quedó viejo.
+function cobroCoincideConDeuda(cobro, estado) {
+  if (!cobro || !cobro.init_point) return false;
+  const idsCobro = (Array.isArray(cobro.comision_ids) ? cobro.comision_ids : []).map(String).sort();
+  const idsDeuda = (estado.movimientos || []).map((m) => String(m.id)).sort();
+  if (idsCobro.length !== idsDeuda.length) return false;
+  if (idsCobro.some((id, i) => id !== idsDeuda[i])) return false;
+  return Math.abs(Number(cobro.importe || 0) - Number(estado.saldo_pendiente || 0)) < 0.01;
 }
 
 // FIX-SEC: helper de sanitización estricta para valores que van a
@@ -873,8 +905,12 @@ app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
     const totalComisionesMes = comisionMpReal + comisionTurnitsMes;
 
     const { data: cobroPendiente } = await supabase.from("turnits_comision_cobros")
-      .select("id, importe, init_point, created_at").eq("slug", slug).eq("estado", "pendiente")
+      .select("id, importe, init_point, created_at, comision_ids").eq("slug", slug).eq("estado", "pendiente")
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    // Si el preference ya no coincide con la deuda actual (entró una comisión
+    // nueva, se anuló o se pagó otra) no se ofrece "continuar pago pendiente":
+    // el botón vuelve a "Pagar saldo" y se genera uno nuevo con el saldo real.
+    const cobroPendienteVigente = cobroCoincideConDeuda(cobroPendiente, estado) ? cobroPendiente : null;
 
     res.json({
       success: true,
@@ -897,7 +933,9 @@ app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
         ingreso_neto_estimado: r2(ingresoBruto - totalComisionesMes),
         turnos_mp_sin_detalle: turnosMpSinDetalle,
       },
-      cobro_pendiente: cobroPendiente || null,
+      cobro_pendiente: cobroPendienteVigente
+        ? { id: cobroPendienteVigente.id, importe: cobroPendienteVigente.importe, init_point: cobroPendienteVigente.init_point, created_at: cobroPendienteVigente.created_at }
+        : null,
       movimientos: estado.movimientos.map((m) => ({
         id: m.id, turno_id: m.turno_id, importe: Number(m.importe || 0),
         estado: m.estado, periodo: m.periodo, fecha_turno: m.fecha_turno,
@@ -920,33 +958,40 @@ app.post("/comisiones-turnits/:slug/pagar", requireAuth, async (req, res) => {
     const { data: cobroExistente } = await supabase.from("turnits_comision_cobros")
       .select("id, importe, init_point, preference_id, comision_ids")
       .eq("slug", slug).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (cobroExistente?.init_point) {
-      return res.json({ success: true, payment_url: cobroExistente.init_point, importe: Number(cobroExistente.importe), reutilizado: true });
-    }
 
+    // La deuda real se calcula SIEMPRE antes de decidir si se reutiliza algo.
     const estado = await obtenerEstadoComisionesTurnits(slug);
     if (estado.saldo_pendiente <= 0 || !estado.movimientos.length) {
+      // Ya no se debe nada: un cobro pendiente viejo no puede seguir abierto.
+      if (cobroExistente) {
+        await supabase.from("turnits_comision_cobros").update({ estado: "rechazada" })
+          .eq("id", cobroExistente.id).eq("estado", "pendiente");
+      }
       return res.status(400).json({ success: false, error: "No tenés comisiones pendientes para pagar." });
     }
 
-    let cobro = cobroExistente;
-    if (!cobro) {
-      const { data, error } = await supabase.from("turnits_comision_cobros").insert([{
-        slug,
-        importe: estado.saldo_pendiente,
-        comision_ids: estado.movimientos.map((m) => m.id),
-      }]).select("id, importe, comision_ids").single();
-      if (error) throw error;
-      cobro = data;
-      cobroCreado = data;
-    } else {
-      const { data, error } = await supabase.from("turnits_comision_cobros").update({
-        importe: estado.saldo_pendiente,
-        comision_ids: estado.movimientos.map((m) => m.id),
-      }).eq("id", cobro.id).eq("estado", "pendiente").select("id, importe, comision_ids").single();
-      if (error) throw error;
-      cobro = data;
+    // Solo se reutiliza el link si representa exactamente la deuda actual.
+    if (cobroCoincideConDeuda(cobroExistente, estado)) {
+      return res.json({ success: true, payment_url: cobroExistente.init_point, importe: Number(cobroExistente.importe), reutilizado: true });
     }
+
+    // Preference viejo (cambió la deuda): se descarta y se crea uno nuevo con
+    // el saldo actual. Se libera primero porque hay un índice único de un
+    // solo cobro pendiente por negocio.
+    if (cobroExistente) {
+      const { error: descarteError } = await supabase.from("turnits_comision_cobros")
+        .update({ estado: "rechazada" }).eq("id", cobroExistente.id).eq("estado", "pendiente");
+      if (descarteError) throw descarteError;
+    }
+
+    const { data: cobroNuevo, error: cobroNuevoError } = await supabase.from("turnits_comision_cobros").insert([{
+      slug,
+      importe: estado.saldo_pendiente,
+      comision_ids: estado.movimientos.map((m) => m.id),
+    }]).select("id, importe, comision_ids").single();
+    if (cobroNuevoError) throw cobroNuevoError;
+    const cobro = cobroNuevo;
+    cobroCreado = cobroNuevo;
 
     const client = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
     const preference = new Preference(client);
@@ -1897,7 +1942,14 @@ const { data: user, error } = await supabase.from("usuarios")
       }
       return res.json({ success: true, suspendido: true, negocio: { slug: user.slug, business_name: user.business_name } });
     }
- 
+
+    // Deuda de comisiones (límite alcanzado o vencida): misma respuesta que
+    // cuando no se paga el plan, así la página pública cae en el 404.
+    // No toca estado_suscripcion: al pagar, la agenda vuelve sola.
+    if (await agendaPausadaPorComisiones(slug, user.plan)) {
+      return res.json({ success: true, suspendido: true, motivo: "comisiones", negocio: { slug: user.slug, business_name: user.business_name } });
+    }
+
     const esPremium               = user.plan === "premium";
     const esTrialPremium          = esPremium && user.estado_suscripcion === "trial";
     const metodoPagoEfectivo      = esTrialPremium && user.metodo_pago === "none" ? "total" : user.metodo_pago;
@@ -2042,7 +2094,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return res.status(400).json({ success: false, error: "Formato de fecha inválido." });
 
     const { data: user, error: userError } = await supabase.from("usuarios")
-      .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo, estado_suscripcion, fecha_vencimiento")
+      .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo, estado_suscripcion, fecha_vencimiento, plan")
       .eq("slug", slug).maybeSingle();
     if (userError) throw userError;
     if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
@@ -2050,6 +2102,9 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.json({ success: true, slots: [], suspendido: true, puede_anotarse_espera: false });
+    if (await agendaPausadaPorComisiones(slug, user.plan)) {
+      return res.json({ success: true, slots: [], suspendido: true, motivo: "comisiones", puede_anotarse_espera: false });
+    }
 
     let duracionSolicitada = user.duracion_turno      || 30;
     let capacidad          = user.capacidad_por_turno || 1;
@@ -6194,15 +6249,29 @@ app.post("/webhook/mp", async (req, res) => {
             const aprobado = payData.status === "approved" && Math.abs(Number(payData.transaction_amount || 0) - Number(cobro.importe || 0)) < 1;
             if (aprobado) {
               const ids = Array.isArray(cobro.comision_ids) ? cobro.comision_ids : [];
+              let totalDescontado = 0;
               if (ids.length) {
-                const { error: comisionesError } = await supabase.from("turnits_comisiones")
+                // Descuenta de la deuda solo lo que sigue pendiente (si alguna
+                // comisión se anuló mientras tanto, no se marca como pagada).
+                const { data: saldadas, error: comisionesError } = await supabase.from("turnits_comisiones")
                   .update({ estado: "pagada", paid_at: new Date().toISOString(), cobro_id: cobro.id })
-                  .in("id", ids).eq("slug", cobro.slug).eq("estado", "pendiente");
+                  .in("id", ids).eq("slug", cobro.slug).eq("estado", "pendiente")
+                  .select("id, importe");
                 if (comisionesError) throw comisionesError;
+                totalDescontado = (saldadas || []).reduce((sum, r) => sum + Number(r.importe || 0), 0);
               }
               await supabase.from("turnits_comision_cobros")
                 .update({ estado: "pagada", payment_id: String(paymentId), paid_at: new Date().toISOString() })
                 .eq("id", cobro.id);
+              // Cualquier otro cobro pendiente del negocio quedó desactualizado
+              // (se pagó parte de lo que incluía): se descarta para que el
+              // próximo "Pagar saldo" genere un preference con la deuda real.
+              await supabase.from("turnits_comision_cobros")
+                .update({ estado: "rechazada" })
+                .eq("slug", cobro.slug).eq("estado", "pendiente").neq("id", cobro.id);
+              if (totalDescontado + 1 < Number(cobro.importe || 0)) {
+                console.warn(`⚠️ Pago de comisiones de ${cobro.slug} (payment ${paymentId}) por ${cobro.importe} pero solo se descontaron ${totalDescontado}: revisar saldo a favor / reintegro.`);
+              }
               invalidateCache(cobro.slug);
               console.log(`✅ Saldo de comisiones Turnits pagado para ${cobro.slug}: ${cobro.importe}`);
             } else if (["rejected", "cancelled", "refunded", "charged_back"].includes(payData.status)) {
