@@ -3501,10 +3501,8 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       }
     }
 
-    if (["cancelado", "no_asistio"].includes(estado)) {
-      await supabase.from("turnits_comisiones").update({ estado: "anulada", annulled_at: new Date().toISOString() })
-        .eq("turno_id", turnoExistente.id).eq("slug", slugClean).eq("estado", "pendiente");
-    }
+    // La comisión de Turnits se genera al AGENDAR el turno y se mantiene
+    // aunque después se cancele, no asista o se rechace: ya no se anula.
 
     const ESTADOS_OCUPAN = ["confirmado", "pendiente"];
     const liberaCupo = estado !== undefined && ESTADOS_OCUPAN.includes(turnoExistente.estado) && !ESTADOS_OCUPAN.includes(estado);
@@ -3621,7 +3619,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     }
 
     const { data: user, error: userError } = await supabase.from("usuarios")
-      .select("activo, duracion_turno, capacidad_por_turno").eq("slug", slugClean).maybeSingle();
+      .select("activo, duracion_turno, capacidad_por_turno, plan, telefono, business_name").eq("slug", slugClean).maybeSingle();
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
@@ -3638,6 +3636,25 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
       precio         = Number(srv.precio || 0);
       duracion       = srv.duracion  || duracion;
       capacidad      = srv.capacidad || capacidad;
+    }
+
+    // Comisión de Turnits: los turnos cargados a mano también la suman. Solo
+    // si el servicio tiene precio (un turno sin servicio/precio, ej. para
+    // bloquear un horario, no genera cargo porque se cobraría el mínimo).
+    const importeComisionTurnits = planCobraComision(user.plan) && precio > 0
+      ? calcularComisionTurnits(precio, user.plan)
+      : 0;
+    if (importeComisionTurnits > 0) {
+      const validacionComision = await validarReservasPorComisiones(slugClean, importeComisionTurnits);
+      if (!validacionComision.permitido) {
+        return res.status(403).json({
+          success: false,
+          codigo: validacionComision.codigo,
+          error: validacionComision.codigo === "comision_vencida"
+            ? "Tenés un saldo de Turnits vencido y no podés agendar turnos. Pagalo desde Comisiones y deudas."
+            : "Alcanzaste el límite de saldo de Turnits y no podés agendar turnos. Pagá lo acumulado desde Comisiones y deudas.",
+        });
+      }
     }
 
     // Chequeo de solapamiento (misma lógica que /slots-disponibles).
@@ -3693,6 +3710,30 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
         .insert([{ ...filaTurno, telefono: "", email: "" }]).select().single());
     }
     if (insertError) throw insertError;
+
+    if (importeComisionTurnits > 0) {
+      const { error: comisionError } = await supabase.from("turnits_comisiones").insert([{
+        slug: slugClean,
+        turno_id: turno.id,
+        telefono_negocio: user.telefono || null,
+        nombre_negocio: user.business_name || slugClean,
+        fecha_turno: fecha,
+        servicio: servicioNombre || "Turno",
+        // El turno manual se registra con metodo_pago "none"; en la comisión
+        // se guarda "efectivo" (cobro en persona) para respetar los valores
+        // que ya usa la tabla y cómo los rotula el panel.
+        metodo_pago: "efectivo",
+        base_calculo: precio,
+        tasa: configComisionPlan(user.plan).tasa,
+        importe: importeComisionTurnits,
+        periodo: periodoArgentina(),
+      }]);
+      if (comisionError) {
+        // No dejar el turno agendado sin su cargo asociado.
+        await supabase.from("turnos").delete().eq("id", turno.id).eq("slug", slugClean);
+        throw comisionError;
+      }
+    }
 
     invalidateCache(slugClean);
     console.log(`✅ Turno manual ${turno.id} (${slugClean}) ${fecha} ${hora}`);
