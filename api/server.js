@@ -39,7 +39,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 const PANEL_VERSION  = (process.env.PANEL_VERSION || "").trim();
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "22499");
 // Tope de saldo del plan Gratis: equivalente a un mes de Premium.
 const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 9000);
 const TURNITS_COMISION_MINIMA_ARS = 300;
