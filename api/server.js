@@ -40,6 +40,10 @@ const PANEL_VERSION  = (process.env.PANEL_VERSION || "").trim();
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
+// Tope de saldo del plan Gratis: equivalente a un mes de Premium.
+const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 22500);
+const TURNITS_COMISION_MINIMA_ARS = 300;
+const TURNITS_COMISION_TASA = 0.02;
 // Meta del logro "Facturaste $500 USD" (Tus logros, panel > Inicio). Se
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
 // cambio de referencia. Se compara contra la facturación histórica total
@@ -372,6 +376,68 @@ const validateEmail    = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const validatePassword = (p) => p && p.length >= 6;
 const validatePhone    = (p) => /^[0-9]{7,15}$/.test(p.toString().replace(/\s/g, ""));
 const cleanPhone = (p) => p.toString().replace(/\s/g, "").replace(/^\+/, "").trim();
+
+function fechaArgentinaISO(fecha = new Date()) {
+  const local = new Date(fecha.toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+}
+
+function periodoArgentina(fecha = new Date()) {
+  return `${fechaArgentinaISO(fecha).slice(0, 7)}-01`;
+}
+
+function fechaVencimientoComision(periodo) {
+  const [year, month] = String(periodo || "").slice(0, 7).split("-").map(Number);
+  if (!year || !month) return null;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return `${nextYear}-${String(nextMonth).padStart(2, "0")}-05`;
+}
+
+function calcularComisionTurnits(base) {
+  return Math.max(TURNITS_COMISION_MINIMA_ARS, Math.round(Number(base || 0) * TURNITS_COMISION_TASA));
+}
+
+async function obtenerEstadoComisionesTurnits(slug) {
+  const { data, error } = await supabase.from("turnits_comisiones")
+    .select("id, importe, estado, periodo, created_at, metodo_pago, servicio, fecha_turno, turno_id")
+    .eq("slug", slug).eq("estado", "pendiente")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const filas = data || [];
+  const saldoPendiente = filas.reduce((sum, row) => sum + Number(row.importe || 0), 0);
+  const hoy = fechaArgentinaISO();
+  const periodoActual = periodoArgentina();
+  const vencidas = filas.filter((row) => {
+    const vencimiento = fechaVencimientoComision(row.periodo);
+    return String(row.periodo) < periodoActual && vencimiento && hoy > vencimiento;
+  });
+  const saldoVencido = vencidas.reduce((sum, row) => sum + Number(row.importe || 0), 0);
+  return {
+    movimientos: filas,
+    saldo_pendiente: saldoPendiente,
+    saldo_mes_actual: filas.filter((row) => String(row.periodo).slice(0, 10) === periodoActual)
+      .reduce((sum, row) => sum + Number(row.importe || 0), 0),
+    saldo_vencido: saldoVencido,
+    cantidad_pendiente: filas.length,
+    limite: TURNITS_COMISION_TOPE_ARS,
+    bloqueada: saldoPendiente >= TURNITS_COMISION_TOPE_ARS || saldoVencido > 0,
+    motivo_bloqueo: saldoVencido > 0 ? "deuda_vencida" : saldoPendiente >= TURNITS_COMISION_TOPE_ARS ? "limite_alcanzado" : null,
+    vencimiento_proximo: filas.map((row) => fechaVencimientoComision(row.periodo)).filter(Boolean).sort()[0] || null,
+  };
+}
+
+async function validarReservasPorComisiones(slug, comisionNueva = 0) {
+  const estado = await obtenerEstadoComisionesTurnits(slug);
+  if (estado.saldo_vencido > 0) {
+    return { permitido: false, codigo: "comision_vencida", estado };
+  }
+  if (estado.saldo_pendiente >= estado.limite || estado.saldo_pendiente + Number(comisionNueva || 0) > estado.limite) {
+    return { permitido: false, codigo: "limite_comisiones", estado };
+  }
+  return { permitido: true, estado };
+}
 
 // FIX-SEC: helper de sanitización estricta para valores que van a
 // construirse dentro de filtros PostgREST (.or()). Rechaza cualquier
@@ -745,6 +811,159 @@ function requireAuth(req, res, next) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// COMISIONES TURNITS — saldo mensual por efectivo / transferencia
+// ══════════════════════════════════════════════════════════════
+app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const [{ data: user, error: userError }, estado] = await Promise.all([
+      supabase.from("usuarios").select("plan, estado_suscripcion").eq("slug", slug).maybeSingle(),
+      obtenerEstadoComisionesTurnits(slug),
+    ]);
+    if (userError) throw userError;
+    if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    const periodoActual = periodoArgentina();
+    const { desde, hasta } = rangoPeriodoArg("mes");
+    const [{ data: turnosMes, error: turnosError }, { data: comisionesOfflineMes, error: comisionesMesError }] = await Promise.all([
+      supabase.from("turnos")
+        .select("fecha, estado, pago_estado, metodo_pago, precio_cobrado, monto_pagado, comision_mp, comision_plataforma")
+        .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).neq("estado", "cancelado"),
+      supabase.from("turnits_comisiones")
+        .select("importe, estado").eq("slug", slug).eq("periodo", periodoActual).neq("estado", "anulada"),
+    ]);
+    if (turnosError) throw turnosError;
+    if (comisionesMesError) throw comisionesMesError;
+
+    let ingresoBruto = 0, ingresoMp = 0, ingresoMpConDetalle = 0, ingresoOffline = 0;
+    let comisionMpReal = 0, comisionTurnitsOnline = 0, turnosMpSinDetalle = 0, turnosMpConDetalle = 0;
+    for (const turno of turnosMes || []) {
+      if (turno.estado === "pendiente" || turno.pago_estado !== "aprobado") continue;
+      const montoCobrado = Number(turno.monto_pagado || 0);
+      ingresoBruto += montoCobrado;
+      comisionTurnitsOnline += Number(turno.comision_plataforma || 0);
+      if (turno.metodo_pago === "mercadopago") {
+        ingresoMp += montoCobrado;
+        if (turno.comision_mp == null) turnosMpSinDetalle++;
+        else {
+          turnosMpConDetalle++;
+          ingresoMpConDetalle += montoCobrado;
+          comisionMpReal += Number(turno.comision_mp || 0);
+        }
+      } else if (["efectivo", "transferencia"].includes(turno.metodo_pago)) {
+        ingresoOffline += montoCobrado;
+      }
+    }
+    const comisionTurnitsOfflineMes = (comisionesOfflineMes || []).reduce((sum, row) => sum + Number(row.importe || 0), 0);
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const comisionTurnitsMes = comisionTurnitsOnline + comisionTurnitsOfflineMes;
+    const totalComisionesMes = comisionMpReal + comisionTurnitsMes;
+
+    const { data: cobroPendiente } = await supabase.from("turnits_comision_cobros")
+      .select("id, importe, init_point, created_at").eq("slug", slug).eq("estado", "pendiente")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+    res.json({
+      success: true,
+      ...estado,
+      plan: user.plan || "gratis",
+      periodo_actual: periodoArgentina(),
+      metricas_mes: {
+        desde, hasta,
+        ingreso_bruto: r2(ingresoBruto),
+        ingreso_mercado_pago: r2(ingresoMp),
+        ingreso_mercado_pago_con_detalle: r2(ingresoMpConDetalle),
+        ingreso_efectivo_transferencia: r2(ingresoOffline),
+        turnos_mp_con_detalle: turnosMpConDetalle,
+        comision_mercado_pago: r2(comisionMpReal),
+        comision_turnits_online: r2(comisionTurnitsOnline),
+        comision_turnits_efectivo_transferencia: r2(comisionTurnitsOfflineMes),
+        comision_turnits_total: r2(comisionTurnitsMes),
+        total_comisiones: r2(totalComisionesMes),
+        ingreso_neto_estimado: r2(ingresoBruto - totalComisionesMes),
+        turnos_mp_sin_detalle: turnosMpSinDetalle,
+      },
+      cobro_pendiente: cobroPendiente || null,
+      movimientos: estado.movimientos.map((m) => ({
+        id: m.id, turno_id: m.turno_id, importe: Number(m.importe || 0),
+        estado: m.estado, periodo: m.periodo, fecha_turno: m.fecha_turno,
+        servicio: m.servicio, metodo_pago: m.metodo_pago,
+        vencimiento: fechaVencimientoComision(m.periodo),
+      })),
+    });
+  } catch (e) {
+    console.error("Error GET /comisiones-turnits:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo cargar el saldo de comisiones." });
+  }
+});
+
+app.post("/comisiones-turnits/:slug/pagar", requireAuth, async (req, res) => {
+  let cobroCreado = null;
+  try {
+    const slug = cleanSlug(req.params.slug);
+    if (!MP_PLATFORM_TOKEN) return res.status(503).json({ success: false, error: "El pago de saldos no está disponible todavía. Contactá a Turnits." });
+
+    const { data: cobroExistente } = await supabase.from("turnits_comision_cobros")
+      .select("id, importe, init_point, preference_id, comision_ids")
+      .eq("slug", slug).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (cobroExistente?.init_point) {
+      return res.json({ success: true, payment_url: cobroExistente.init_point, importe: Number(cobroExistente.importe), reutilizado: true });
+    }
+
+    const estado = await obtenerEstadoComisionesTurnits(slug);
+    if (estado.saldo_pendiente <= 0 || !estado.movimientos.length) {
+      return res.status(400).json({ success: false, error: "No tenés comisiones pendientes para pagar." });
+    }
+
+    let cobro = cobroExistente;
+    if (!cobro) {
+      const { data, error } = await supabase.from("turnits_comision_cobros").insert([{
+        slug,
+        importe: estado.saldo_pendiente,
+        comision_ids: estado.movimientos.map((m) => m.id),
+      }]).select("id, importe, comision_ids").single();
+      if (error) throw error;
+      cobro = data;
+      cobroCreado = data;
+    } else {
+      const { data, error } = await supabase.from("turnits_comision_cobros").update({
+        importe: estado.saldo_pendiente,
+        comision_ids: estado.movimientos.map((m) => m.id),
+      }).eq("id", cobro.id).eq("estado", "pendiente").select("id, importe, comision_ids").single();
+      if (error) throw error;
+      cobro = data;
+    }
+
+    const client = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
+    const preference = new Preference(client);
+    const pref = await preference.create({ body: {
+      items: [{
+        title: "Saldo de comisiones Turnits",
+        description: `Comisiones acumuladas del negocio ${slug}`,
+        quantity: 1,
+        unit_price: Number(cobro.importe),
+        currency_id: "ARS",
+      }],
+      external_reference: cobro.id,
+      metadata: { tipo: "comision_turnits", slug, comision_cobro_id: cobro.id },
+      notification_url: `${API_URL}/webhook/mp`,
+      back_urls: { success: `${PANEL_URL}/${slug}?status=comisiones_ok`, failure: `${PANEL_URL}/${slug}?status=comisiones_error`, pending: `${PANEL_URL}/${slug}?status=comisiones_pendientes` },
+      auto_return: "approved",
+    } });
+
+    const { error: updateError } = await supabase.from("turnits_comision_cobros")
+      .update({ preference_id: pref.id, init_point: pref.init_point })
+      .eq("id", cobro.id).eq("estado", "pendiente");
+    if (updateError) throw updateError;
+    res.json({ success: true, payment_url: pref.init_point, importe: Number(cobro.importe) });
+  } catch (e) {
+    if (cobroCreado?.id) await supabase.from("turnits_comision_cobros").update({ estado: "rechazada" }).eq("id", cobroCreado.id);
+    console.error("Error POST /comisiones-turnits/pagar:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo generar el pago del saldo." });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // MIDDLEWARE: ADMIN KEY
 // FIX-SEC: comparación en tiempo constante (crypto.timingSafeEqual)
 // en vez de "===", para no filtrar por timing cuánto del secret
@@ -1076,6 +1295,16 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       .from("usuarios").select("id").eq("email", emailClean).maybeSingle();
     if (yaExiste)
       return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
+
+    if (telefono) {
+      const telefonoClean = cleanPhone(telefono);
+      const { data: deudaPrevia, error: deudaError } = await supabase.from("turnits_comisiones")
+        .select("slug").eq("telefono_negocio", telefonoClean).eq("estado", "pendiente").limit(1);
+      if (deudaError) throw deudaError;
+      if (deudaPrevia?.length) {
+        return res.status(409).json({ success: false, error: "deuda_turnits_existente", message: "Este teléfono ya está asociado a un negocio con saldo pendiente de Turnits. Iniciá sesión en esa cuenta para regularizarlo." });
+      }
+    }
 
     const password_hash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
     const codigo        = Math.floor(100000 + Math.random() * 900000).toString();
@@ -1659,8 +1888,8 @@ const { data: user, error } = await supabase.from("usuarios")
     const esTrialPremium          = esPremium && user.estado_suscripcion === "trial";
     const metodoPagoEfectivo      = esTrialPremium && user.metodo_pago === "none" ? "total" : user.metodo_pago;
     const mpDisponible            = !!user.mp_access_token && ["sena", "total"].includes(metodoPagoEfectivo);
-    const transferenciaDisponible = esPremium && !esTrialPremium && !!user.acepta_transferencia;
-    const efectivoDisponible      = esPremium && !esTrialPremium && !!user.acepta_efectivo;
+    const transferenciaDisponible = !esTrialPremium && !!user.acepta_transferencia;
+    const efectivoDisponible      = !esTrialPremium && !!user.acepta_efectivo;
  
     const metodos_pago_disponibles = [
       ...(mpDisponible            ? ["mercadopago"]  : []),
@@ -2499,6 +2728,11 @@ app.post("/turnos/lista-espera", limiterBooking, async (req, res) => {
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
+    const estadoComisiones = await validarReservasPorComisiones(slugClean);
+    if (!estadoComisiones.permitido) {
+      return res.status(403).json({ success: false, error: estadoComisiones.codigo, message: "La agenda está pausada por un saldo pendiente de Turnits. El negocio puede regularizarlo desde Comisiones y deudas." });
+    }
+
     const intervalosDia = obtenerIntervalosDia(user.horarios, user.excepciones, fecha);
     if (!intervalosDia) return res.status(400).json({ success: false, error: "Ese día no es un día laboral." });
 
@@ -2595,14 +2829,6 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 
     if (esTrialPremium && !tieneMP) {
       return res.status(403).json({ success: false, error: "trial_requires_online_payment", message: "Durante la prueba solo se permiten reservas con pago online." });
-    }
-
-    if (esPlanGratis && !tieneMP) {
-      return res.status(403).json({
-        success: false,
-        error:   "free_no_payment_method",
-        message: "Este negocio aún no configuró un método de pago.",
-      });
     }
 
     if (requierePago) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
@@ -2716,7 +2942,7 @@ const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean,
 });
 
 // ══════════════════════════════════════════════════════════════
-// TURNOS — RESERVA MANUAL (transferencia / efectivo, solo premium)
+// TURNOS — RESERVA MANUAL (transferencia / efectivo)
 // POST /turnos/reservar-manual
 // Siempre queda estado = "pendiente" hasta que el vendedor la
 // apruebe o rechace desde el panel.
@@ -2759,10 +2985,9 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
-    // FIX-SEC: transferencia/efectivo son exclusivos de premium. Se
-    // revalida acá (no solo confiar en lo que muestra el front) por
-    // si el negocio bajó de plan después de haber tenido esto activo.
-    if (user.plan !== "premium" || user.estado_suscripcion === "trial") {
+    // Durante el trial Premium se mantienen los medios online; el plan
+    // Gratis ya puede aceptar efectivo/transferencia con comisión mensual.
+    if (user.plan === "premium" && user.estado_suscripcion === "trial") {
       return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
     }
     if (metodo_pago === "transferencia" && !user.acepta_transferencia) {
@@ -2770,6 +2995,11 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     }
     if (metodo_pago === "efectivo" && !user.acepta_efectivo) {
       return res.status(403).json({ success: false, error: "Este negocio no acepta pagos en efectivo." });
+    }
+
+    const estadoComisiones = await validarReservasPorComisiones(slugClean);
+    if (!estadoComisiones.permitido) {
+      return res.status(403).json({ success: false, error: estadoComisiones.codigo, message: "La agenda está pausada por un saldo pendiente de Turnits. El negocio puede regularizarlo desde Comisiones y deudas." });
     }
 
     const emailClean = email?.trim().toLowerCase();
@@ -2795,6 +3025,19 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     }
     
     const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds);
+    const importeComisionTurnits = user.plan === "gratis"
+      ? calcularComisionTurnits(precioCobrado + montoExtras)
+      : 0;
+    const validacionComisionReserva = await validarReservasPorComisiones(slugClean, importeComisionTurnits);
+    if (!validacionComisionReserva.permitido) {
+      return res.status(403).json({
+        success: false,
+        error: validacionComisionReserva.codigo,
+        message: validacionComisionReserva.codigo === "comision_vencida"
+          ? "El negocio tiene un saldo de Turnits vencido y no puede recibir nuevas reservas."
+          : "El negocio alcanzó el límite de saldo de Turnits y no puede recibir nuevas reservas.",
+      });
+    }
 
     // FIX-SEÑA: el tipo de cobro (seña vs. total) es una configuración del
     // negocio (user.metodo_pago / user.porcentaje_sena), NO algo que
@@ -2837,6 +3080,26 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
       comprobante_path: comprobantePath,
     }]).select().single();
     if (turnoError) throw turnoError;
+
+    if (importeComisionTurnits > 0) {
+      const { error: comisionError } = await supabase.from("turnits_comisiones").insert([{
+        slug: slugClean,
+        turno_id: turno.id,
+        telefono_negocio: user.telefono || null,
+        nombre_negocio: user.business_name || slugClean,
+        fecha_turno: fecha,
+        servicio: servicioNombre || "Turno",
+        metodo_pago,
+        base_calculo: precioCobrado + montoExtras,
+        tasa: TURNITS_COMISION_TASA,
+        importe: importeComisionTurnits,
+        periodo: periodoArgentina(),
+      }]);
+      if (comisionError) {
+        await supabase.from("turnos").delete().eq("id", turno.id).eq("slug", slugClean);
+        throw comisionError;
+      }
+    }
 
     if (APPS_SCRIPT_URL) {
   fetch(APPS_SCRIPT_URL, {
@@ -3060,6 +3323,37 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       turnoExistente.estado === "pendiente" &&
       ["transferencia", "efectivo"].includes(turnoExistente.metodo_pago);
 
+    let comisionManualNueva = 0;
+    let usuarioComision = null;
+    let comisionExistenteManual = null;
+    if (esAprobacionManual) {
+      const { data: negocioComision, error: negocioComisionError } = await supabase.from("usuarios")
+        .select("plan, estado_suscripcion, telefono, business_name").eq("slug", slugClean).maybeSingle();
+      if (negocioComisionError) throw negocioComisionError;
+      usuarioComision = negocioComision;
+      if (negocioComision?.plan === "gratis") {
+        const { data: comision, error: comisionLookupError } = await supabase.from("turnits_comisiones")
+          .select("id, estado").eq("turno_id", turnoExistente.id).maybeSingle();
+        if (comisionLookupError) throw comisionLookupError;
+        comisionExistenteManual = comision;
+        // En reservas nuevas el saldo ya se genera al agendar. Este fallback
+        // completa reservas anteriores al cambio o reactivadas tras anularse.
+        if (!comision || comision.estado === "anulada") {
+          comisionManualNueva = calcularComisionTurnits(turnoExistente.precio_cobrado);
+          const validacionComision = await validarReservasPorComisiones(slugClean, comisionManualNueva);
+          if (!validacionComision.permitido) {
+            return res.status(403).json({
+              success: false,
+              error: validacionComision.codigo,
+              message: validacionComision.codigo === "comision_vencida"
+                ? "No se puede confirmar el turno porque hay un saldo de Turnits vencido. Pagalo desde Comisiones y deudas."
+                : "Este turno supera el límite de saldo de Turnits. Pagá lo acumulado desde Comisiones y deudas para seguir confirmando reservas.",
+            });
+          }
+        }
+      }
+    }
+
     const updateData = {};
     if (estado !== undefined) updateData.estado = estado;
     if (notas !== undefined) updateData.notas = notas;
@@ -3090,6 +3384,42 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       .from("turnos").update(updateData).eq("id", id).eq("slug", slugClean).select().single();
 
     if (updateError) throw updateError;
+
+    if (esAprobacionManual && usuarioComision?.plan === "gratis" && comisionManualNueva > 0) {
+      const datosComision = {
+        slug: slugClean,
+        turno_id: turnoExistente.id,
+        telefono_negocio: usuarioComision.telefono || null,
+        nombre_negocio: usuarioComision.business_name || slugClean,
+        fecha_turno: turnoExistente.fecha,
+        servicio: turnoExistente.servicio_nombre || "Turno",
+        metodo_pago: turnoExistente.metodo_pago,
+        base_calculo: Number(turnoExistente.precio_cobrado || 0),
+        tasa: TURNITS_COMISION_TASA,
+        importe: comisionManualNueva,
+        periodo: periodoArgentina(),
+      };
+      let comisionError = null;
+      if (comisionExistenteManual?.estado === "anulada") {
+        const { error } = await supabase.from("turnits_comisiones").update({
+          ...datosComision, estado: "pendiente", annulled_at: null, paid_at: null, cobro_id: null,
+        }).eq("id", comisionExistenteManual.id);
+        comisionError = error;
+      } else if (!comisionExistenteManual) {
+        const { error } = await supabase.from("turnits_comisiones").insert([datosComision]);
+        comisionError = error;
+      }
+      if (comisionError) {
+        // No dejar la reserva confirmada sin su cargo asociado.
+        await supabase.from("turnos").update({ estado: "pendiente", pago_estado: turnoExistente.pago_estado }).eq("id", id).eq("slug", slugClean);
+        throw comisionError;
+      }
+    }
+
+    if (["cancelado", "no_asistio"].includes(estado)) {
+      await supabase.from("turnits_comisiones").update({ estado: "anulada", annulled_at: new Date().toISOString() })
+        .eq("turno_id", turnoExistente.id).eq("slug", slugClean).eq("estado", "pendiente");
+    }
 
     const ESTADOS_OCUPAN = ["confirmado", "pendiente"];
     const liberaCupo = estado !== undefined && ESTADOS_OCUPAN.includes(turnoExistente.estado) && !ESTADOS_OCUPAN.includes(estado);
@@ -3482,8 +3812,6 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
         if (update.acepta_transferencia !== undefined) update.acepta_transferencia = false;
         if (update.acepta_efectivo !== undefined) update.acepta_efectivo = false;
         if (update.datos_bancarios !== undefined) update.datos_bancarios = {};
-      } else if ((update.acepta_transferencia !== undefined || update.acepta_efectivo !== undefined || update.datos_bancarios !== undefined) && negocioActual.plan !== "premium") {
-        return res.status(403).json({ success: false, error: "Transferencia y efectivo son exclusivos del plan Premium." });
       }
     }
     if (update.acepta_transferencia !== undefined) {
@@ -5060,6 +5388,11 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
+    const estadoComisiones = await validarReservasPorComisiones(slugClean);
+    if (!estadoComisiones.permitido) {
+      return res.status(403).json({ success: false, error: estadoComisiones.codigo, message: "La agenda está pausada por un saldo pendiente de Turnits. El negocio puede regularizarlo desde Comisiones y deudas." });
+    }
+
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
@@ -5332,6 +5665,11 @@ app.post("/cuenta/eliminar/:slug", limiterAuth, requireAuth, async (req, res) =>
       return res.status(403).json({ success: false, error: "Contraseña incorrecta." });
     }
     limpiarIntentosLogin(slug);
+
+    const estadoComisiones = await obtenerEstadoComisionesTurnits(slug);
+    if (estadoComisiones.saldo_pendiente > 0) {
+      return res.status(409).json({ success: false, error: "saldo_turnits_pendiente", message: "Antes de eliminar la cuenta, pagá el saldo pendiente de Turnits desde Comisiones y deudas." });
+    }
 
     await borrarNegocioCompleto(slug);
     console.log(`🗑️  Cuenta eliminada por su dueño: ${slug}`);
@@ -5772,6 +6110,35 @@ app.post("/webhook/mp", async (req, res) => {
 
       const payRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` } });
       const payData = await payRes.json();
+
+      if (payData.metadata?.tipo === "comision_turnits") {
+        const cobroId = String(payData.metadata?.comision_cobro_id || payData.external_reference || "");
+        if (cobroId) {
+          const { data: cobro } = await supabase.from("turnits_comision_cobros")
+            .select("id, slug, estado, comision_ids, importe").eq("id", cobroId).maybeSingle();
+          if (cobro) {
+            const aprobado = payData.status === "approved" && Math.abs(Number(payData.transaction_amount || 0) - Number(cobro.importe || 0)) < 1;
+            if (aprobado) {
+              const ids = Array.isArray(cobro.comision_ids) ? cobro.comision_ids : [];
+              if (ids.length) {
+                const { error: comisionesError } = await supabase.from("turnits_comisiones")
+                  .update({ estado: "pagada", paid_at: new Date().toISOString(), cobro_id: cobro.id })
+                  .in("id", ids).eq("slug", cobro.slug).eq("estado", "pendiente");
+                if (comisionesError) throw comisionesError;
+              }
+              await supabase.from("turnits_comision_cobros")
+                .update({ estado: "pagada", payment_id: String(paymentId), paid_at: new Date().toISOString() })
+                .eq("id", cobro.id);
+              invalidateCache(cobro.slug);
+              console.log(`✅ Saldo de comisiones Turnits pagado para ${cobro.slug}: ${cobro.importe}`);
+            } else if (["rejected", "cancelled", "refunded", "charged_back"].includes(payData.status)) {
+              await supabase.from("turnits_comision_cobros")
+                .update({ estado: "rechazada", payment_id: String(paymentId) }).eq("id", cobro.id).eq("estado", "pendiente");
+            }
+          }
+        }
+        return res.sendStatus(200);
+      }
 
       if (payData.metadata?.tipo === "renovacion_associe") { await procesarRenovacion(payData); return res.sendStatus(200); }
 
