@@ -3692,10 +3692,16 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
       precio_cobrado:  precio,
       extras:          [],
       monto_extras:    0,
-      monto_pagado:    0,
+      // Un turno cargado a mano con servicio de precio se asienta como cobrado
+      // en efectivo (se acordó por fuera y se cobra en persona), igual que
+      // cuando el dueño aprueba un turno por efectivo: así el ingreso suma en
+      // el canal Efectivo, en el balance y en las métricas. Sin servicio o con
+      // precio 0 no hay nada que asentar y queda como "sin pago".
+      monto_pagado:    precio > 0 ? precio : 0,
       estado:          "confirmado",
-      metodo_pago:     "none",
-      pago_estado:     "sin_pago",
+      metodo_pago:     precio > 0 ? "efectivo" : "none",
+      pago_estado:     precio > 0 ? "aprobado" : "sin_pago",
+      ...(precio > 0 ? { fecha_pago: new Date().toISOString() } : {}),
     };
 
     let { data: turno, error: insertError } = await supabase.from("turnos")
@@ -3719,9 +3725,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
         nombre_negocio: user.business_name || slugClean,
         fecha_turno: fecha,
         servicio: servicioNombre || "Turno",
-        // El turno manual se registra con metodo_pago "none"; en la comisión
-        // se guarda "efectivo" (cobro en persona) para respetar los valores
-        // que ya usa la tabla y cómo los rotula el panel.
+        // Mismo método con el que se asienta el turno manual (cobro en persona).
         metodo_pago: "efectivo",
         base_calculo: precio,
         tasa: configComisionPlan(user.plan).tasa,
