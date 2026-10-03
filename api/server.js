@@ -41,7 +41,7 @@ const PANEL_VERSION  = (process.env.PANEL_VERSION || "").trim();
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
 // Tope de saldo del plan Gratis: equivalente a un mes de Premium.
-const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 22500);
+const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 9000);
 const TURNITS_COMISION_MINIMA_ARS = 300;
 const TURNITS_COMISION_TASA = 0.02;
 
