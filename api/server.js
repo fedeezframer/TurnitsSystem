@@ -405,8 +405,23 @@ function fechaVencimientoComision(periodo) {
   return `${nextYear}-${String(nextMonth).padStart(2, "0")}-05`;
 }
 
-function calcularComisionTurnits(base) {
-  return Math.max(TURNITS_COMISION_MINIMA_ARS, Math.round(Number(base || 0) * TURNITS_COMISION_TASA));
+// Comisión de Turnits según el plan del negocio (aplica a cobros online y a
+// efectivo/transferencia): se cobra la mayor entre el mínimo y el porcentaje.
+//  · Gratis:  mínimo $300 o 2%
+//  · Premium: mínimo $100 o 0,8%
+//  · VIP:     no paga (se asigna a mano a amigos, familiares y socios)
+const COMISION_POR_PLAN = {
+  gratis:  { tasa: TURNITS_COMISION_TASA, minima: TURNITS_COMISION_MINIMA_ARS },
+  premium: { tasa: 0.008,                 minima: 100 },
+  vip:     { tasa: 0,                     minima: 0 },
+};
+function configComisionPlan(plan) {
+  return COMISION_POR_PLAN[plan] || COMISION_POR_PLAN.gratis;
+}
+function calcularComisionTurnits(base, plan = "gratis") {
+  const cfg = configComisionPlan(plan);
+  if (!(cfg.tasa > 0) && !(cfg.minima > 0)) return 0;
+  return Math.max(cfg.minima, Math.round(Number(base || 0) * cfg.tasa));
 }
 
 async function obtenerEstadoComisionesTurnits(slug) {
@@ -3096,7 +3111,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     
     const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds);
     const importeComisionTurnits = planCobraComision(user.plan)
-      ? calcularComisionTurnits(precioCobrado + montoExtras)
+      ? calcularComisionTurnits(precioCobrado + montoExtras, user.plan)
       : 0;
     const validacionComisionReserva = await validarReservasPorComisiones(slugClean, importeComisionTurnits);
     if (!validacionComisionReserva.permitido) {
@@ -3161,7 +3176,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
         servicio: servicioNombre || "Turno",
         metodo_pago,
         base_calculo: precioCobrado + montoExtras,
-        tasa: TURNITS_COMISION_TASA,
+        tasa: configComisionPlan(user.plan).tasa,
         importe: importeComisionTurnits,
         periodo: periodoArgentina(),
       }]);
@@ -3409,7 +3424,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
         // En reservas nuevas el saldo ya se genera al agendar. Este fallback
         // completa reservas anteriores al cambio o reactivadas tras anularse.
         if (!comision || comision.estado === "anulada") {
-          comisionManualNueva = calcularComisionTurnits(turnoExistente.precio_cobrado);
+          comisionManualNueva = calcularComisionTurnits(turnoExistente.precio_cobrado, negocioComision.plan);
           const validacionComision = await validarReservasPorComisiones(slugClean, comisionManualNueva);
           if (!validacionComision.permitido) {
             return res.status(403).json({
@@ -3465,7 +3480,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
         servicio: turnoExistente.servicio_nombre || "Turno",
         metodo_pago: turnoExistente.metodo_pago,
         base_calculo: Number(turnoExistente.precio_cobrado || 0),
-        tasa: TURNITS_COMISION_TASA,
+        tasa: configComisionPlan(usuarioComision.plan).tasa,
         importe: comisionManualNueva,
         periodo: periodoArgentina(),
       };
@@ -5563,9 +5578,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : baseCalculo;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
 
-// Todos los planes pagan la comisión de Turnits por cobros online, salvo VIP.
+// Gratis y Premium pagan la comisión de Turnits por cobros online (distinta tasa por plan); VIP no.
 const fee = planCobraComision(user.plan)
-  ? Math.max(300, Math.round(montoACobrar * 0.02))
+  ? calcularComisionTurnits(montoACobrar, user.plan)
   : 0;
 
     if (user.mp_access_token) {
