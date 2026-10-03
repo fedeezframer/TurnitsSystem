@@ -39,9 +39,9 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 const PANEL_VERSION  = (process.env.PANEL_VERSION || "").trim();
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "22499");
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
 // Tope de saldo del plan Gratis: equivalente a un mes de Premium.
-const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 15000);
+const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 22500);
 const TURNITS_COMISION_MINIMA_ARS = 300;
 const TURNITS_COMISION_TASA = 0.02;
 
@@ -50,6 +50,7 @@ const TURNITS_COMISION_TASA = 0.02;
 //  · Premium: todas las funciones. Cobra comisión de Turnits.
 //  · VIP: todas las funciones y SIN comisiones. Solo se asigna a mano desde
 //    superadmin a los mejores negocios (ver /superadmin/candidatos-vip).
+//    Puede tener fecha de vencimiento; al vencer vuelve a gratis (cron).
 const PLANES_VALIDOS = ["gratis", "premium", "vip"];
 const esPlanVip = (plan) => plan === "vip";
 const planTieneFuncionesPremium = (plan) => plan === "premium" || plan === "vip";
@@ -5260,11 +5261,14 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
       update.fecha_vencimiento  = calcularVencimiento(parseInt(req.body.sumar_dias), base);
       update.estado_suscripcion = "activo";
     }
-    // VIP no vence, no tiene prueba ni renovación: se pisa cualquier fecha/estado enviado.
+    // VIP es un plan más: puede tener fecha de vencimiento (fecha_vencimiento
+    // o sumar_dias en este mismo PUT). Si no se manda ninguna, queda sin
+    // vencimiento (null). Nunca es prueba ni promo de referidos.
     if (update.plan === "vip") {
       update.estado_suscripcion = "activo";
-      update.fecha_vencimiento  = null;
       update.premium_promo      = false;
+      const mandoFecha = req.body.fecha_vencimiento !== undefined || (req.body.sumar_dias && !isNaN(parseInt(req.body.sumar_dias)));
+      if (!mandoFecha) update.fecha_vencimiento = null;
     }
     const { error } = await supabase.from("usuarios").update(update).eq("slug", slug);
     if (error) throw error;
@@ -6831,13 +6835,15 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
     const hoyISO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toISOString().split("T")[0];
 
     const { data: vencidos, error } = await supabase.from("usuarios")
-      .select("id, slug, premium_promo").eq("activo", "true").neq("estado_suscripcion", "suspendido")
+      .select("id, slug, premium_promo, plan").eq("activo", "true").neq("estado_suscripcion", "suspendido")
       .not("fecha_vencimiento", "is", null).lt("fecha_vencimiento", hoyISO);
     if (error) throw error;
 
     // REFERIDOS: quien tenía Premium solo por el mes de regalo vuelve al plan
     // gratis (igual que /renovacion/downgrade) en vez de quedar suspendido.
-    const promoVencidos = (vencidos || []).filter((u) => u.premium_promo).map((u) => u.slug);
+    // VIP vencido: tampoco se compra (no tiene checkout), así que al vencer
+    // vuelve a gratis en vez de quedar suspendido esperando un pago de Premium.
+    const promoVencidos = (vencidos || []).filter((u) => u.premium_promo || esPlanVip(u.plan)).map((u) => u.slug);
     if (promoVencidos.length > 0) {
       await supabase.from("usuarios").update({
         plan: "gratis", estado_suscripcion: "activo", fecha_vencimiento: null,
@@ -6847,7 +6853,7 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
       promoVencidos.forEach((s) => invalidateCache(s));
     }
 
-    const slugs = (vencidos || []).filter((u) => !u.premium_promo).map((u) => u.slug);
+    const slugs = (vencidos || []).filter((u) => !u.premium_promo && !esPlanVip(u.plan)).map((u) => u.slug);
     if (slugs.length > 0) {
       await supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).in("slug", slugs);
       slugs.forEach((s) => invalidateCache(s));
@@ -6863,7 +6869,7 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
     }
 
     const { data: porVencer } = await supabase.from("usuarios")
-      .select("slug, fecha_vencimiento").eq("activo", "true").eq("estado_suscripcion", "activo")
+      .select("slug, fecha_vencimiento, plan").eq("activo", "true").eq("estado_suscripcion", "activo")
       .not("fecha_vencimiento", "is", null);
 
     const avisados = [];
@@ -6873,10 +6879,12 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
         await crearNotificacion({
           slug: u.slug,
           tipo: "vencimiento",
-          titulo: "Tu suscripción está por vencer",
-          mensaje: dias === 1
-            ? "Tu plan Premium vence mañana. Renová para no perder acceso al panel."
-            : "Tu plan Premium vence en 5 días. Renová cuando quieras desde el panel.",
+          titulo: esPlanVip(u.plan) ? "Tu plan VIP está por vencer" : "Tu suscripción está por vencer",
+          mensaje: esPlanVip(u.plan)
+            ? (dias === 1 ? "Tu plan VIP vence mañana." : "Tu plan VIP vence en 5 días.")
+            : dias === 1
+              ? "Tu plan Premium vence mañana. Renová para no perder acceso al panel."
+              : "Tu plan Premium vence en 5 días. Renová cuando quieras desde el panel.",
           data: { fecha_vencimiento: u.fecha_vencimiento, dias_restantes: dias },
         });
         avisados.push(u.slug);
