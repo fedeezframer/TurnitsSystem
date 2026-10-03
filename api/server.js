@@ -44,6 +44,16 @@ const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "25999");
 const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 22500);
 const TURNITS_COMISION_MINIMA_ARS = 300;
 const TURNITS_COMISION_TASA = 0.02;
+
+// Planes: gratis < premium < vip.
+//  · Gratis: funciones limitadas. Cobra comisión de Turnits.
+//  · Premium: todas las funciones. Cobra comisión de Turnits.
+//  · VIP: todas las funciones y SIN comisiones. Solo se asigna a mano desde
+//    superadmin a los mejores negocios (ver /superadmin/candidatos-vip).
+const PLANES_VALIDOS = ["gratis", "premium", "vip"];
+const esPlanVip = (plan) => plan === "vip";
+const planTieneFuncionesPremium = (plan) => plan === "premium" || plan === "vip";
+const planCobraComision = (plan) => !esPlanVip(plan);
 // Meta del logro "Facturaste $500 USD" (Tus logros, panel > Inicio). Se
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
 // cambio de referencia. Se compara contra la facturación histórica total
@@ -429,7 +439,10 @@ async function obtenerEstadoComisionesTurnits(slug) {
 }
 
 async function validarReservasPorComisiones(slug, comisionNueva = 0) {
+  const { data: negocioPlan } = await supabase.from("usuarios").select("plan").eq("slug", slug).maybeSingle();
   const estado = await obtenerEstadoComisionesTurnits(slug);
+  // VIP nunca se pausa por saldo de comisiones (aunque tenga deuda anterior).
+  if (esPlanVip(negocioPlan?.plan)) return { permitido: true, estado };
   if (estado.saldo_vencido > 0) {
     return { permitido: false, codigo: "comision_vencida", estado };
   }
@@ -867,6 +880,7 @@ app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
       success: true,
       ...estado,
       plan: user.plan || "gratis",
+      ...(esPlanVip(user.plan) ? { bloqueada: false, motivo_bloqueo: null } : {}),
       periodo_actual: periodoArgentina(),
       metricas_mes: {
         desde, hasta,
@@ -3025,7 +3039,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     }
     
     const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds);
-    const importeComisionTurnits = user.plan === "gratis"
+    const importeComisionTurnits = planCobraComision(user.plan)
       ? calcularComisionTurnits(precioCobrado + montoExtras)
       : 0;
     const validacionComisionReserva = await validarReservasPorComisiones(slugClean, importeComisionTurnits);
@@ -3331,7 +3345,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
         .select("plan, estado_suscripcion, telefono, business_name").eq("slug", slugClean).maybeSingle();
       if (negocioComisionError) throw negocioComisionError;
       usuarioComision = negocioComision;
-      if (negocioComision?.plan === "gratis") {
+      if (negocioComision && planCobraComision(negocioComision.plan)) {
         const { data: comision, error: comisionLookupError } = await supabase.from("turnits_comisiones")
           .select("id, estado").eq("turno_id", turnoExistente.id).maybeSingle();
         if (comisionLookupError) throw comisionLookupError;
@@ -3385,7 +3399,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 
     if (updateError) throw updateError;
 
-    if (esAprobacionManual && usuarioComision?.plan === "gratis" && comisionManualNueva > 0) {
+    if (esAprobacionManual && usuarioComision && planCobraComision(usuarioComision.plan) && comisionManualNueva > 0) {
       const datosComision = {
         slug: slugClean,
         turno_id: turnoExistente.id,
@@ -4815,7 +4829,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    if (user.plan !== "premium") {
+    if (!planTieneFuncionesPremium(user.plan)) {
       return res.status(403).json({
         success: false,
         error: "premium_required",
@@ -4906,7 +4920,7 @@ app.get("/admin/rendimiento-equipo-resumen/:slug", requireAuth, async (req, res)
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    if (user.plan !== "premium") {
+    if (!planTieneFuncionesPremium(user.plan)) {
       return res.status(403).json({
         success: false,
         error: "premium_required",
@@ -5124,6 +5138,58 @@ app.get("/superadmin/negocios", requireSuperadmin, async (req, res) => {
   }
 });
 
+// GET /superadmin/candidatos-vip — ranking para elegir a quién darle el plan VIP.
+// Combina recaudación histórica (turnos con pago aprobado) y antigüedad.
+//   ?orden=combinado|recaudacion|antiguedad   ?limite=25   ?incluir_vip=true
+// Para asignarlo: PUT /superadmin/negocios/:slug con { "plan": "vip" }.
+app.get("/superadmin/candidatos-vip", requireSuperadmin, async (req, res) => {
+  try {
+    const orden      = ["combinado", "recaudacion", "antiguedad"].includes(req.query.orden) ? req.query.orden : "combinado";
+    const limite     = Math.min(Math.max(parseInt(req.query.limite, 10) || 25, 1), 100);
+    const incluirVip = req.query.incluir_vip === "true";
+
+    const filas = [];
+    for (let pagina = 0; pagina < 20; pagina++) {
+      const { data, error } = await supabase.from("turnits_vip_candidatos")
+        .select("slug, business_name, email, plan, created_at, recaudacion_total, turnos_confirmados")
+        .order("slug", { ascending: true })
+        .range(pagina * 1000, pagina * 1000 + 999);
+      if (error) throw error;
+      filas.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+
+    const base = filas.map((f) => ({
+      ...f,
+      recaudacion_total:  Number(f.recaudacion_total || 0),
+      turnos_confirmados: Number(f.turnos_confirmados || 0),
+    }));
+    const porRecaudacion = [...base].sort((a, b) => b.recaudacion_total - a.recaudacion_total);
+    const porAntiguedad  = [...base].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const rankRec = new Map(porRecaudacion.map((f, i) => [f.slug, i + 1]));
+    const rankAnt = new Map(porAntiguedad.map((f, i) => [f.slug, i + 1]));
+
+    let lista = base.map((f) => ({
+      ...f,
+      ranking_recaudacion: rankRec.get(f.slug),
+      ranking_antiguedad:  rankAnt.get(f.slug),
+      puntaje:             rankRec.get(f.slug) + rankAnt.get(f.slug), // menor = mejor
+    }));
+    if (!incluirVip) lista = lista.filter((f) => f.plan !== "vip");
+
+    lista.sort((a, b) => {
+      if (orden === "recaudacion") return a.ranking_recaudacion - b.ranking_recaudacion;
+      if (orden === "antiguedad")  return a.ranking_antiguedad - b.ranking_antiguedad;
+      return (a.puntaje - b.puntaje) || (b.recaudacion_total - a.recaudacion_total);
+    });
+
+    res.json({ success: true, orden, total: lista.length, candidatos: lista.slice(0, limite) });
+  } catch (e) {
+    console.error("Error GET /superadmin/candidatos-vip:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo armar el ranking de candidatos VIP." });
+  }
+});
+
 app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
   try {
     const slug    = cleanSlug(req.params.slug);
@@ -5131,13 +5197,19 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
     const update  = {};
     allowed.forEach((key) => { if (req.body[key] !== undefined) update[key] = req.body[key]; });
     if (req.body.activo   !== undefined) update.activo = req.body.activo === true || req.body.activo === "true" ? "true" : "false";
-    if (req.body.plan     !== undefined) update.plan   = ["gratis", "premium"].includes(req.body.plan) ? req.body.plan : "gratis";
+    if (req.body.plan     !== undefined) update.plan   = PLANES_VALIDOS.includes(req.body.plan) ? req.body.plan : "gratis";
     if (req.body.password)               update.password = await bcrypt.hash(String(req.body.password), BCRYPT_ROUNDS);
     if (req.body.sumar_dias && !isNaN(parseInt(req.body.sumar_dias))) {
       const { data: actual } = await supabase.from("usuarios").select("fecha_vencimiento").eq("slug", slug).maybeSingle();
       const base = actual?.fecha_vencimiento && new Date(actual.fecha_vencimiento) > new Date() ? actual.fecha_vencimiento : null;
       update.fecha_vencimiento  = calcularVencimiento(parseInt(req.body.sumar_dias), base);
       update.estado_suscripcion = "activo";
+    }
+    // VIP no vence, no tiene prueba ni renovación: se pisa cualquier fecha/estado enviado.
+    if (update.plan === "vip") {
+      update.estado_suscripcion = "activo";
+      update.fecha_vencimiento  = null;
+      update.premium_promo      = false;
     }
     const { error } = await supabase.from("usuarios").update(update).eq("slug", slug);
     if (error) throw error;
@@ -5207,12 +5279,15 @@ app.get("/internal/resumen", requireSuperadmin, async (req, res) => {
       supabase.from("usuarios").select("slug, business_name, plan, created_at").order("created_at", { ascending: false }).limit(10),
     ]);
 
+    const { count: negociosVip } = await supabase.from("usuarios").select("id", { count: "exact", head: true }).eq("plan", "vip");
+
     res.json({
       success: true,
       resumen: {
         total_negocios:   totalNegocios   || 0,
         negocios_activos: negociosActivos || 0,
         negocios_premium: negociosPremium || 0,
+        negocios_vip:     negociosVip     || 0,
         turnos_hoy:       turnosHoy       || 0,
         registros_hoy:    registrosHoy?.length || 0,
         ultimos_negocios: ultimosNegocios || [],
@@ -5429,11 +5504,10 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : baseCalculo;
     const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
 
-const esPremium = user.plan === "premium";
-const enTrial = user.estado_suscripcion === "trial";
-const fee = esPremium && !enTrial
-  ? 0
-  : Math.max(300, Math.round(montoACobrar * 0.02));
+// Todos los planes pagan la comisión de Turnits por cobros online, salvo VIP.
+const fee = planCobraComision(user.plan)
+  ? Math.max(300, Math.round(montoACobrar * 0.02))
+  : 0;
 
     if (user.mp_access_token) {
       try {
@@ -5563,6 +5637,7 @@ app.post("/renovacion/checkout/:slug", async (req, res) => {
 
     if (error) throw error;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    if (esPlanVip(user.plan)) return res.status(400).json({ success: false, error: "Tu cuenta VIP no requiere renovación." });
 
     const client   = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
     const pref     = new Preference(client);
@@ -5587,10 +5662,11 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
     const { data: user, error: fetchError } = await supabase.from("usuarios")
-      .select("id, slug").eq("slug", slug).maybeSingle();
+      .select("id, slug, plan").eq("slug", slug).maybeSingle();
 
     if (fetchError) throw fetchError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    if (esPlanVip(user.plan)) return res.status(400).json({ success: false, error: "Tu cuenta VIP no se puede cambiar de plan desde el panel." });
 
     // FIX-UX/COMISIONES: acepta_transferencia/acepta_efectivo quedaban en
     // true después de bajar a gratis. El booking ya los rechaza igual
@@ -5604,8 +5680,6 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
       estado_suscripcion:   "activo",
       fecha_vencimiento:    null,
       metodo_pago:          "total",
-      acepta_transferencia: false,
-      acepta_efectivo:      false,
       premium_promo:        false,
     }).eq("slug", slug);
 
@@ -6274,6 +6348,10 @@ async function procesarRenovacion(payData) {
   const { data: user } = await supabase.from("usuarios")
     .select("id, email, nombre_persona, plan, fecha_vencimiento").eq("slug", slug).maybeSingle();
   if (!user) return;
+  if (esPlanVip(user.plan)) {
+    console.log(`ℹ️  Renovación ignorada: ${slug} es VIP y no vence.`);
+    return;
+  }
 
   const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
@@ -6470,6 +6548,7 @@ async function otorgarMesGratis(slug) {
     .eq("slug", slug).maybeSingle();
   if (error) throw error;
   if (!u) return;
+  if (esPlanVip(u.plan)) return; // VIP ya tiene todo; no se lo pisa con un Premium con vencimiento
 
   const vigente    = u.fecha_vencimiento && new Date(u.fecha_vencimiento) > new Date();
   const nuevaFecha = calcularVencimiento(REFERIDOS_DIAS_PREMIO, vigente ? u.fecha_vencimiento : null);
@@ -6693,7 +6772,7 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
     if (promoVencidos.length > 0) {
       await supabase.from("usuarios").update({
         plan: "gratis", estado_suscripcion: "activo", fecha_vencimiento: null,
-        metodo_pago: "total", acepta_transferencia: false, acepta_efectivo: false,
+        metodo_pago: "total",
         premium_promo: false,
       }).in("slug", promoVencidos);
       promoVencidos.forEach((s) => invalidateCache(s));
