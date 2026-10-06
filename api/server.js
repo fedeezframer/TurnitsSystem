@@ -1197,11 +1197,8 @@ function largoDescripcionServicio(descripcion) {
 
 // ══════════════════════════════════════════════════════════════
 // COMPARATIVAS "Cómo venís respecto al período anterior" (panel)
-// Se compara el MISMO TRAMO de cada período, no el período completo anterior:
-// si hoy es el 20, el mes en curso (1 al 20) se compara contra el 1 al 20 del
-// mes pasado. Comparar contra el mes anterior entero haría que los primeros
-// días de cada mes siempre den "negativo". Lo mismo para la semana (lunes a
-// hoy vs. lunes al mismo día de la semana pasada).
+// Se comparan los períodos calendario completos: las reservas futuras ya
+// confirmadas cuentan desde que se agendan dentro del mes/semana.
 // Todo con fechas ISO "YYYY-MM-DD" (sin husos horarios de por medio).
 // ══════════════════════════════════════════════════════════════
 const sumarDiasISO = (iso, n) => {
@@ -1213,21 +1210,21 @@ const sumarDiasISO = (iso, n) => {
 function rangosComparativos(hoyISO) {
   const ini = (iso) => iso.slice(0, 8) + "01";
   const inicioMes    = ini(hoyISO);
-  const diaDelMes    = Number(hoyISO.slice(8, 10));
   const finMesAnt    = sumarDiasISO(inicioMes, -1);
   const inicioMesAnt = ini(finMesAnt);
-  // Si el mes pasado tuvo menos días (ej. hoy 31/3 vs febrero), se recorta al último día.
-  const hastaMesAnt  = (() => { const h = sumarDiasISO(inicioMesAnt, diaDelMes - 1); return h > finMesAnt ? finMesAnt : h; })();
+  const finMesActual = sumarDiasISO(inicioMes, 32).slice(0, 8) + "01";
+  const ultimoDiaMesActual = sumarDiasISO(finMesActual, -1);
 
   const dow            = new Date(hoyISO + "T12:00:00Z").getUTCDay(); // 0 = domingo
   const diasDesdeLunes = dow === 0 ? 6 : dow - 1;
   const inicioSem      = sumarDiasISO(hoyISO, -diasDesdeLunes);
   const inicioSemAnt   = sumarDiasISO(inicioSem, -7);
-  const hastaSemAnt    = sumarDiasISO(inicioSemAnt, diasDesdeLunes);
+  const finSemActual   = sumarDiasISO(inicioSem, 6);
+  const finSemAnt      = sumarDiasISO(inicioSemAnt, 6);
 
   return {
-    mes:    { actual: { desde: inicioMes, hasta: hoyISO },    anterior: { desde: inicioMesAnt, hasta: hastaMesAnt } },
-    semana: { actual: { desde: inicioSem, hasta: hoyISO },    anterior: { desde: inicioSemAnt, hasta: hastaSemAnt } },
+    mes:    { actual: { desde: inicioMes, hasta: ultimoDiaMesActual }, anterior: { desde: inicioMesAnt, hasta: finMesAnt } },
+    semana: { actual: { desde: inicioSem, hasta: finSemActual }, anterior: { desde: inicioSemAnt, hasta: finSemAnt } },
   };
 }
 
@@ -4572,6 +4569,8 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     const diaHoyNum  = ahoraArg.getDate();
     const hoyISO     = `${anioActual}-${String(mesActual).padStart(2, "0")}-${String(diaHoyNum).padStart(2, "0")}`;
     const inicioMes  = `${anioActual}-${String(mesActual).padStart(2, "0")}-01`;
+    const inicioMesSiguiente = sumarDiasISO(inicioMes, 32).slice(0, 8) + "01";
+    const finMesActual = sumarDiasISO(inicioMesSiguiente, -1);
 
     // Rango del mes anterior, usado para comparar tendencias (turnos y clientes nuevos vs mes pasado).
     const mesAnteriorRef        = new Date(anioActual, mesActual - 2, 1);
@@ -4583,13 +4582,8 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
 
     const [{ data: turnosMes }, { data: serviciosNegocio }, { count: turnosMesAnteriorTotal }] = await Promise.all([
       supabase.from("turnos").select("*")
-        // FIX-METRICA-MES: se agrega el tope en hoyISO para que "turnos este mes"
-        // cuente lo mismo acá que en `comparativas.mes` (WeeklySummary). Antes esta
-        // consulta no tenía límite superior y sumaba también los turnos ya
-        // reservados para lo que resta del mes, mientras que el comparador de
-        // mes/semana solo cuenta hasta hoy — dos números de "turnos del mes"
-        // distintos en el mismo panel.
-        .eq("slug", slug).gte("fecha", inicioMes).lte("fecha", hoyISO).neq("estado", "cancelado")
+        // Contar también las reservas futuras ya agendadas en el mes actual.
+        .eq("slug", slug).gte("fecha", inicioMes).lte("fecha", finMesActual).neq("estado", "cancelado")
         .order("fecha", { ascending: true }).order("hora", { ascending: true }),
       supabase.from("servicios").select("id, duracion")
         .eq("slug", slug).eq("activo", "true"),
