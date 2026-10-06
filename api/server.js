@@ -1228,8 +1228,9 @@ function largoDescripcionServicio(descripcion) {
 
 // ══════════════════════════════════════════════════════════════
 // COMPARATIVAS "Cómo venís respecto al período anterior" (panel)
-// Se comparan los períodos calendario completos: las reservas futuras ya
-// confirmadas cuentan desde que se agendan dentro del mes/semana.
+// El mes compara el acumulado hasta hoy con los mismos días del mes anterior;
+// la semana compara semanas calendario completas. Las reservas futuras ya
+// confirmadas cuentan dentro del rango que les corresponde.
 // Todo con fechas ISO "YYYY-MM-DD" (sin husos horarios de por medio).
 // ══════════════════════════════════════════════════════════════
 const sumarDiasISO = (iso, n) => {
@@ -1243,8 +1244,12 @@ function rangosComparativos(hoyISO) {
   const inicioMes    = ini(hoyISO);
   const finMesAnt    = sumarDiasISO(inicioMes, -1);
   const inicioMesAnt = ini(finMesAnt);
-  const finMesActual = sumarDiasISO(inicioMes, 32).slice(0, 8) + "01";
-  const ultimoDiaMesActual = sumarDiasISO(finMesActual, -1);
+  // En la comparación mensual, alinea el avance de ambos meses por día del
+  // calendario: el 5 de octubre se compara con el 5 de septiembre, no con el
+  // cierre completo de septiembre.
+  const diaActual = Number(hoyISO.slice(8, 10));
+  const diaMaximoMesAnterior = Number(finMesAnt.slice(8, 10));
+  const finMesAntComparable = `${inicioMesAnt.slice(0, 8)}${String(Math.min(diaActual, diaMaximoMesAnterior)).padStart(2, "0")}`;
 
   const dow            = new Date(hoyISO + "T12:00:00Z").getUTCDay(); // 0 = domingo
   const diasDesdeLunes = dow === 0 ? 6 : dow - 1;
@@ -1254,7 +1259,7 @@ function rangosComparativos(hoyISO) {
   const finSemAnt      = sumarDiasISO(inicioSemAnt, 6);
 
   return {
-    mes:    { actual: { desde: inicioMes, hasta: ultimoDiaMesActual }, anterior: { desde: inicioMesAnt, hasta: finMesAnt } },
+    mes:    { actual: { desde: inicioMes, hasta: hoyISO }, anterior: { desde: inicioMesAnt, hasta: finMesAntComparable } },
     semana: { actual: { desde: inicioSem, hasta: finSemActual }, anterior: { desde: inicioSemAnt, hasta: finSemAnt } },
   };
 }
@@ -4621,9 +4626,11 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     const mesAnteriorRef        = new Date(anioActual, mesActual - 2, 1);
     const inicioMesAnterior     = `${mesAnteriorRef.getFullYear()}-${String(mesAnteriorRef.getMonth() + 1).padStart(2, "0")}-01`;
     const finMesAnteriorRef     = new Date(anioActual, mesActual - 1, 0);
-    const finMesAnterior        = `${finMesAnteriorRef.getFullYear()}-${String(finMesAnteriorRef.getMonth() + 1).padStart(2, "0")}-${String(finMesAnteriorRef.getDate()).padStart(2, "0")}`;
+    const diaLimiteMesAnterior = Math.min(diaHoyNum, finMesAnteriorRef.getDate());
+    const finMesAnteriorComparable = `${inicioMesAnterior.slice(0, 8)}${String(diaLimiteMesAnterior).padStart(2, "0")}`;
     const inicioMesAnteriorDate = new Date(inicioMesAnterior + "T00:00:00");
-    const finMesAnteriorDate    = new Date(finMesAnterior + "T23:59:59");
+    const finMesAnteriorDate    = new Date(finMesAnteriorComparable + "T23:59:59");
+    const finMesActualDate      = new Date(hoyISO + "T23:59:59");
 
     const [{ data: turnosMes }, { data: serviciosNegocio }, { count: turnosMesAnteriorTotal }] = await Promise.all([
       supabase.from("turnos").select("*")
@@ -4633,7 +4640,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       supabase.from("servicios").select("id, duracion")
         .eq("slug", slug).eq("activo", "true"),
       supabase.from("turnos").select("id", { count: "exact", head: true })
-        .eq("slug", slug).gte("fecha", inicioMesAnterior).lte("fecha", finMesAnterior)
+        .eq("slug", slug).gte("fecha", inicioMesAnterior).lte("fecha", finMesAnteriorComparable)
         .not("estado", "in", "(cancelado,pendiente)"),
     ]);
 
@@ -4770,7 +4777,7 @@ const turnosHoyDetalle = turnosData
     let clientesFrecuentes        = 0; // 3 o más turnos históricos: clientes fieles/frecuentes reales
 
     Object.entries(primeraVezPorCliente).forEach(([key, primeraFecha]) => {
-      if (primeraFecha >= inicioMesDate) {
+      if (primeraFecha >= inicioMesDate && primeraFecha <= finMesActualDate) {
         clientesNuevosMes++;
       } else {
         clientesRecurrentes++;
