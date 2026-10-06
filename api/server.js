@@ -1940,7 +1940,7 @@ const { data: user, error } = await supabase.from("usuarios")
   .select(
     "slug, business_name, horarios, excepciones, duracion_turno, capacidad_por_turno, " +
     "metodo_pago, porcentaje_sena, mp_access_token, activo, plan, estado_suscripcion, " +
-    "fecha_vencimiento, tema, logo_url, acepta_transferencia, acepta_efectivo, datos_bancarios, telefono"
+    "fecha_vencimiento, tema, logo_url, acepta_transferencia, acepta_efectivo, datos_bancarios, telefono, agenda_sin_pagos"
   )
   .eq("slug", slug)
   .maybeSingle();
@@ -1968,10 +1968,11 @@ const { data: user, error } = await supabase.from("usuarios")
 
     const esPremium               = user.plan === "premium";
     const esTrialPremium          = esPremium && user.estado_suscripcion === "trial";
+    const agendaSinPagos          = planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true;
     const metodoPagoEfectivo      = esTrialPremium && user.metodo_pago === "none" ? "total" : user.metodo_pago;
-    const mpDisponible            = !!user.mp_access_token && ["sena", "total"].includes(metodoPagoEfectivo);
-    const transferenciaDisponible = !esTrialPremium && !!user.acepta_transferencia;
-    const efectivoDisponible      = !esTrialPremium && !!user.acepta_efectivo;
+    const mpDisponible            = !agendaSinPagos && !!user.mp_access_token && ["sena", "total"].includes(metodoPagoEfectivo);
+    const transferenciaDisponible = !agendaSinPagos && !esTrialPremium && !!user.acepta_transferencia;
+    const efectivoDisponible      = !agendaSinPagos && !esTrialPremium && !!user.acepta_efectivo;
  
     const metodos_pago_disponibles = [
       ...(mpDisponible            ? ["mercadopago"]  : []),
@@ -1993,6 +1994,7 @@ const { data: user, error } = await supabase.from("usuarios")
         porcentaje_sena:     user.porcentaje_sena     || 30,
         tiene_mp:            !!user.mp_access_token,
         plan:                user.plan                || "gratis",
+        agenda_sin_pagos:    agendaSinPagos,
         tema:                user.tema                || null,
         logo_url:            user.logo_url            || null,
         metodos_pago_disponibles,
@@ -2908,15 +2910,16 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 
     const esPlanGratis = user.plan === "gratis";
     const esTrialPremium = user.plan === "premium" && user.estado_suscripcion === "trial";
+    const agendaSinPagos = planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true;
     const tieneMP      = !!user.mp_access_token;
     const metodoPagoEfectivo = esTrialPremium && user.metodo_pago === "none" ? "total" : user.metodo_pago;
     const requierePago = tieneMP && (metodoPagoEfectivo === "sena" || metodoPagoEfectivo === "total");
 
-    if (esTrialPremium && !tieneMP) {
+    if (esTrialPremium && !tieneMP && !agendaSinPagos) {
       return res.status(403).json({ success: false, error: "trial_requires_online_payment", message: "Durante la prueba solo se permiten reservas con pago online." });
     }
 
-    if (requierePago) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
+    if (requierePago && !agendaSinPagos) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
 
     const hoy = new Date().toISOString().split("T")[0];
     const emailClean = email?.trim().toLowerCase();
@@ -3827,7 +3830,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         "plan, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, " +
         "horarios, excepciones, mp_access_token, " +
         "estado_suscripcion, fecha_vencimiento, activo, " +
-        "acepta_transferencia, acepta_efectivo, datos_bancarios"
+        "acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos"
       )
       .eq("slug", slug).maybeSingle();
 
@@ -3860,6 +3863,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         alerta_vencimiento:  diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
         acepta_transferencia: !(user.plan === "premium" && user.estado_suscripcion === "trial") && !!user.acepta_transferencia,
         acepta_efectivo:      !(user.plan === "premium" && user.estado_suscripcion === "trial") && !!user.acepta_efectivo,
+        agenda_sin_pagos:     planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true,
         datos_bancarios:      user.plan === "premium" && user.estado_suscripcion === "trial" ? {} : (user.datos_bancarios || {}),
       },
     });
@@ -3879,6 +3883,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       "metodo_pago", "porcentaje_sena",
       "horarios", "excepciones",
       "acepta_transferencia", "acepta_efectivo", "datos_bancarios",
+      "agenda_sin_pagos",
     ];
 
     const update = {};
@@ -3900,6 +3905,18 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       const p = parseInt(update.porcentaje_sena);
       if (!Number.isFinite(p) || p < 1 || p > 100) return res.status(400).json({ success: false, error: "Porcentaje de seña inválido." });
       update.porcentaje_sena = p;
+    }
+    if (update.agenda_sin_pagos !== undefined) {
+      if (typeof update.agenda_sin_pagos !== "boolean") {
+        return res.status(400).json({ success: false, error: "Valor inválido para agenda_sin_pagos." });
+      }
+      const { data: negocioActual, error: negocioError } = await supabase.from("usuarios")
+        .select("plan").eq("slug", slug).maybeSingle();
+      if (negocioError) throw negocioError;
+      if (!negocioActual) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+      if (update.agenda_sin_pagos && !planTieneFuncionesPremium(negocioActual.plan)) {
+        return res.status(403).json({ success: false, error: "Esta opción está disponible en el plan Premium." });
+      }
     }
     if (update.metodo_pago !== undefined && !["none", "sena", "total"].includes(update.metodo_pago)) {
       return res.status(400).json({ success: false, error: "Método de pago inválido." });
@@ -4543,10 +4560,11 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     }
 
     const { data: user, error: userError } = await supabase.from("usuarios")
-      .select("id, slug, business_name, nombre_persona, apellido, email, activo, plan, metodo_pago, porcentaje_sena, duracion_turno, capacidad_por_turno, horarios, excepciones, mp_access_token, estado_suscripcion, fecha_vencimiento")
+      .select("id, slug, business_name, nombre_persona, apellido, email, activo, plan, metodo_pago, porcentaje_sena, duracion_turno, capacidad_por_turno, horarios, excepciones, mp_access_token, estado_suscripcion, fecha_vencimiento, agenda_sin_pagos")
       .eq("slug", slug).maybeSingle();
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    const agendaSinPagos = planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true;
 
     const ahoraArg   = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
     const anioActual = ahoraArg.getFullYear();
@@ -4648,13 +4666,30 @@ const turnosHoyDetalle = turnosData
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
     const { data: turnosPago } = await supabase.from("turnos")
-      .select("monto_pagado, pago_estado, fecha_pago, fecha, email, telefono, created_at")
+      .select("monto_pagado, pago_estado, fecha_pago, fecha, email, telefono, created_at, precio_cobrado, estado")
       .eq("slug", slug)
       .gte("fecha", desde90.toISOString().split("T")[0])
       .lte("fecha", hasta7.toISOString().split("T")[0])
       .neq("pago_estado", "sin_pago");
 
-    const metricas  = agruparPagos(turnosPago || [], hoyISO);
+    let turnosMetricasPago = turnosPago || [];
+    if (agendaSinPagos) {
+      const { data: turnosGratuitos, error: turnosGratuitosError } = await supabase.from("turnos")
+        .select("precio_cobrado, fecha, email, telefono, estado")
+        .eq("slug", slug)
+        .gte("fecha", desde90.toISOString().split("T")[0])
+        .lte("fecha", hasta7.toISOString().split("T")[0])
+        .not("estado", "in", "(cancelado,pendiente)");
+      if (turnosGratuitosError) throw turnosGratuitosError;
+      turnosMetricasPago = (turnosGratuitos || []).map((t) => ({
+        fecha_pago: t.fecha,
+        monto_pagado: t.precio_cobrado,
+        pago_estado: "aprobado",
+        email: t.email,
+        telefono: t.telefono,
+      }));
+    }
+    const metricas  = agruparPagos(turnosMetricasPago, hoyISO);
     const mesKey    = `${anioActual}-${String(mesActual).padStart(2, "0")}`;
     const pagosHoy  = metricas.porDia[hoyISO] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 };
     const pagosMes  = metricas.porMes.find((m) => m.label === mesKey) || { volumen: 0, cantidad: 0 };
@@ -4664,7 +4699,7 @@ const turnosHoyDetalle = turnosData
     }));
 
     const { data: todosLosTurnos } = await supabase.from("turnos")
-      .select("telefono, email, created_at, fecha, hora, estado, monto_pagado, pago_estado")
+      .select("telefono, email, created_at, fecha, hora, estado, monto_pagado, pago_estado, precio_cobrado")
       .eq("slug", slug).neq("estado", "cancelado");
     const inicioMesDate = new Date(inicioMes + "T00:00:00");
 
@@ -4727,7 +4762,9 @@ const turnosHoyDetalle = turnosData
     ).size; // 0 a 7: cuántos días distintos de la semana tuvieron al menos un turno
 
     const facturacionHistorica = turnosLogros.reduce(
-      (acc, t) => acc + (t.pago_estado === "aprobado" ? Number(t.monto_pagado || 0) : 0),
+      (acc, t) => acc + (agendaSinPagos
+        ? Number(t.precio_cobrado || 0)
+        : (t.pago_estado === "aprobado" ? Number(t.monto_pagado || 0) : 0)),
       0
     );
 
@@ -4866,6 +4903,7 @@ const turnosHoyDetalle = turnosData
         duracion:            user.duracion_turno      || 30,
         capacidad_por_turno: user.capacidad_por_turno || 1,
         metodo_pago:         user.metodo_pago         || "none",
+        agenda_sin_pagos:    agendaSinPagos,
         porcentaje_sena:     user.porcentaje_sena     || 30,
         mp_status:           user.mp_access_token ? "Conectado" : "Desconectado",
         excepciones:         user.excepciones         || [],
