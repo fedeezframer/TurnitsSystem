@@ -616,6 +616,37 @@ function horaDentroDeIntervalos(horarios, excepciones, fecha, hora) {
   return intervalos.some(([ini, fin]) => minutos >= ini && minutos < fin);
 }
 
+const ANTICIPACION_MINUTOS_DEFAULT = 30;
+const ANTICIPACION_MINUTOS_MAX = 43200; // 30 días
+
+function fechaHoraArgentinaEnMinutos(fecha, hora) {
+  const [anio, mes, dia] = String(fecha || "").split("-").map(Number);
+  const [horas, minutos] = String(hora || "").slice(0, 5).split(":").map(Number);
+  if (![anio, mes, dia, horas, minutos].every(Number.isFinite)) return NaN;
+  return Date.UTC(anio, mes - 1, dia, horas, minutos) / 60000;
+}
+
+function ahoraArgentinaEnMinutos() {
+  const partes = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date());
+  const valores = Object.fromEntries(partes.map(({ type, value }) => [type, value]));
+  return fechaHoraArgentinaEnMinutos(
+    `${valores.year}-${valores.month}-${valores.day}`,
+    `${valores.hour}:${valores.minute}`
+  );
+}
+
+function cumpleAnticipacionReserva(fecha, hora, anticipacionMinutos) {
+  const valor = Number(anticipacionMinutos);
+  const limite = Number.isInteger(valor) && valor >= 1
+    ? Math.min(valor, ANTICIPACION_MINUTOS_MAX)
+    : ANTICIPACION_MINUTOS_DEFAULT;
+  return fechaHoraArgentinaEnMinutos(fecha, hora) >= ahoraArgentinaEnMinutos() + limite;
+}
+
 // ══════════════════════════════════════════════════════════════
 // HELPER: NOTIFICACIONES IN-APP (bandeja de entrada del panel)
 // Inserta una fila en `notificaciones`. Nunca bloquea el flujo
@@ -1945,7 +1976,6 @@ const { data: user, error } = await supabase.from("usuarios")
     if (error) throw error;
     if (!user)              return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
- 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
  
@@ -2109,7 +2139,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return res.status(400).json({ success: false, error: "Formato de fecha inválido." });
 
     const { data: user, error: userError } = await supabase.from("usuarios")
-      .select("horarios, duracion_turno, capacidad_por_turno, excepciones, activo, estado_suscripcion, fecha_vencimiento, plan")
+      .select("horarios, duracion_turno, capacidad_por_turno, anticipacion_minutos, excepciones, activo, estado_suscripcion, fecha_vencimiento, plan")
       .eq("slug", slug).maybeSingle();
     if (userError) throw userError;
     if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
@@ -2158,13 +2188,10 @@ intervalosDia.forEach(([ini, fin]) => {
       return { inicio: inicioTurno, fin: inicioTurno + durTurno };
     });
 
-    const ahoraArg      = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
-    const hoyISO         = ahoraArg.toISOString().split("T")[0];
-    const esHoy           = fecha === hoyISO;
-    const minutosAhora    = esHoy ? (ahoraArg.getHours() * 60 + ahoraArg.getMinutes()) : null;
+    const anticipacionMinutos = Number(user.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT;
 
     const slots = slotsGenerados
-      .filter((slotInicio) => !esHoy || slotInicio > minutosAhora)
+      .filter((slotInicio) => cumpleAnticipacionReserva(fecha, fromMin(slotInicio), anticipacionMinutos))
       .map((slotInicio) => {
         const slotFin   = slotInicio + duracionSolicitada;
         const solapados = rangosOcupados.filter(({ inicio, fin }) => slotInicio < fin && slotFin > inicio).length;
@@ -2172,7 +2199,7 @@ intervalosDia.forEach(([ini, fin]) => {
         return { hora: fromMin(slotInicio), disponibles, lleno: disponibles <= 0 };
       });
 
-    const puedeAnotarseEspera = slots.every((s) => s.lleno);
+    const puedeAnotarseEspera = slots.length > 0 && slots.every((s) => s.lleno);
 
     res.json({ success: true, slots, puede_anotarse_espera: puedeAnotarseEspera });
   } catch (e) {
@@ -2900,6 +2927,9 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     if (userError) throw userError;
     if (!user)              return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
+    if (!cumpleAnticipacionReserva(fecha, hora, user.anticipacion_minutos)) {
+      return res.status(400).json({ success: false, codigo: "anticipacion_minima", error: "Este turno debe reservarse con más anticipación. Elegí otro horario." });
+    }
 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
@@ -3065,6 +3095,10 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
+
+    if (!cumpleAnticipacionReserva(fecha, hora, user.anticipacion_minutos)) {
+      return res.status(400).json({ success: false, codigo: "anticipacion_minima", error: "Este turno debe reservarse con más anticipación. Elegí otro horario." });
+    }
 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
@@ -3824,7 +3858,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
     const { data: user, error } = await supabase.from("usuarios")
       .select(
         "slug, business_name, nombre_persona, apellido, email, telefono, " +
-        "plan, duracion_turno, capacidad_por_turno, metodo_pago, porcentaje_sena, " +
+        "plan, duracion_turno, capacidad_por_turno, anticipacion_minutos, metodo_pago, porcentaje_sena, " +
         "horarios, excepciones, mp_access_token, " +
         "estado_suscripcion, fecha_vencimiento, activo, " +
         "acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos"
@@ -3848,6 +3882,10 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         plan:                user.plan || "gratis",
         duracion_turno:      user.duracion_turno,
         capacidad_por_turno: user.capacidad_por_turno,
+        anticipacion_minutos: Math.min(
+          Math.max(Number(user.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT, 1),
+          ANTICIPACION_MINUTOS_MAX
+        ),
         metodo_pago:         user.plan === "premium" && user.estado_suscripcion === "trial" && user.metodo_pago === "none" ? "total" : user.metodo_pago,
         porcentaje_sena:     user.porcentaje_sena,
         horarios:            user.horarios    || {},
@@ -3876,7 +3914,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
 
     const ALLOWED_FIELDS = [
       "business_name", "nombre_persona", "apellido", "telefono",
-      "duracion_turno", "capacidad_por_turno",
+      "duracion_turno", "capacidad_por_turno", "anticipacion_minutos",
       "metodo_pago", "porcentaje_sena",
       "horarios", "excepciones",
       "acepta_transferencia", "acepta_efectivo", "datos_bancarios",
@@ -3897,6 +3935,13 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       const c = parseInt(update.capacidad_por_turno);
       if (!Number.isFinite(c) || c <= 0 || c > 500) return res.status(400).json({ success: false, error: "Capacidad inválida." });
       update.capacidad_por_turno = c;
+    }
+    if (update.anticipacion_minutos !== undefined) {
+      const a = Number(update.anticipacion_minutos);
+      if (!Number.isInteger(a) || a < 1 || a > ANTICIPACION_MINUTOS_MAX) {
+        return res.status(400).json({ success: false, error: "La anticipación debe ser entre 1 minuto y 30 días." });
+      }
+      update.anticipacion_minutos = a;
     }
     if (update.porcentaje_sena !== undefined) {
       const p = parseInt(update.porcentaje_sena);
@@ -5616,6 +5661,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const { data: user, error: userError } = await supabase.from("usuarios").select("*").eq("slug", slugClean).maybeSingle();
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    if (!cumpleAnticipacionReserva(fecha, hora, user.anticipacion_minutos)) {
+      return res.status(400).json({ success: false, codigo: "anticipacion_minima", error: "Este turno debe reservarse con más anticipación. Elegí otro horario." });
+    }
 
     const estadoComisiones = await validarReservasPorComisiones(slugClean);
     if (!estadoComisiones.permitido) {
