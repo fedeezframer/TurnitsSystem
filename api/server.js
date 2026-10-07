@@ -4631,14 +4631,17 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
     if (error) throw error;
     if (loginEmail && APPS_SCRIPT_URL) {
       const resetUrl = `https://turnits.com/cambiar-contraseña?token=${loginResetToken}`;
+      const { data: negocio } = await supabase.from("usuarios")
+        .select("business_name").eq("slug", slugClean).maybeSingle();
       fetch(APPS_SCRIPT_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
-          action: "resetPassword",
+          action: "teamInvitation",
           email: loginEmail,
           nombre: `${data.nombre}${data.apellido ? ` ${data.apellido}` : ""}`,
           resetUrl,
+          businessName: negocio?.business_name || "el negocio",
         }),
       }).catch((e) => console.error("Error enviando invitación al equipo:", e.message));
     }
@@ -4803,6 +4806,150 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("Error cargando resumen de empleado:", e.message);
     res.status(500).json({ success: false, error: "No se pudo cargar tu panel." });
+  }
+});
+
+// El empleado administra únicamente los servicios que tiene vinculados.
+// El titular conserva acceso completo por las rutas /admin existentes.
+app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const { nombre, descripcion, duracion, precio, capacidad } = req.body || {};
+    const errorValidacion = validarServicioBody({ nombre, precio });
+    if (errorValidacion) return res.status(400).json({ success: false, error: errorValidacion });
+    if (descripcion !== undefined && descripcion !== null && largoDescripcionServicio(descripcion) > 1000)
+      return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
+    const dur = parseInt(duracion, 10);
+    const cap = parseInt(capacidad, 10);
+    const { data: servicio, error } = await supabase.from("servicios").insert([{
+      slug,
+      nombre: nombre.trim(),
+      descripcion: descripcion?.trim() || null,
+      duracion: Number.isFinite(dur) && dur > 0 ? dur : 30,
+      precio: Number(precio),
+      capacidad: Number.isFinite(cap) && cap > 0 ? cap : 1,
+      orden: 0,
+      activo: "true",
+    }]).select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden").single();
+    if (error) throw error;
+    const { error: linkError } = await supabase.from("servicio_equipo").upsert(
+      [{ servicio_id: servicio.id, equipo_id: miembro.id }],
+      { onConflict: "servicio_id,equipo_id" }
+    );
+    if (linkError) {
+      await supabase.from("servicios").delete().eq("id", servicio.id).eq("slug", slug);
+      throw linkError;
+    }
+    invalidateCache(slug);
+    res.status(201).json({ success: true, servicio: { ...servicio, activo: isActivo(servicio.activo) } });
+  } catch (e) {
+    console.error("Error creando servicio de empleado:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo crear el servicio." });
+  }
+});
+
+app.put("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { id } = req.params;
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const { data: vinculos, error: vinculoError } = await supabase.from("servicio_equipo")
+      .select("equipo_id").eq("servicio_id", id);
+    if (vinculoError) throw vinculoError;
+    if (!(vinculos || []).some((v) => v.equipo_id === miembro.id)) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
+    const { nombre, descripcion, duracion, precio, capacidad, activo } = req.body || {};
+    const update = {};
+    if (nombre !== undefined) {
+      if (typeof nombre !== "string" || !nombre.trim() || nombre.trim().length > 80) return res.status(400).json({ success: false, error: "Nombre inválido." });
+      update.nombre = nombre.trim();
+    }
+    if (descripcion !== undefined) {
+      if (descripcion !== null && largoDescripcionServicio(descripcion) > 1000) return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
+      update.descripcion = descripcion?.trim() || null;
+    }
+    if (precio !== undefined) {
+      const precioNum = Number(precio);
+      const errorPrecio = validarServicioBody({ nombre: "servicio", precio: precioNum });
+      if (errorPrecio) return res.status(400).json({ success: false, error: errorPrecio });
+      update.precio = precioNum;
+    }
+    if (duracion !== undefined) {
+      const d = parseInt(duracion, 10);
+      if (!Number.isFinite(d) || d <= 0 || d > 1440) return res.status(400).json({ success: false, error: "Duración inválida." });
+      update.duracion = d;
+    }
+    if (capacidad !== undefined) {
+      const c = parseInt(capacidad, 10);
+      if (!Number.isFinite(c) || c <= 0 || c > 500) return res.status(400).json({ success: false, error: "Capacidad inválida." });
+      update.capacidad = c;
+    }
+    if (activo !== undefined) update.activo = (activo === true || activo === "true") ? "true" : "false";
+    if (!Object.keys(update).length) return res.status(400).json({ success: false, error: "No hay campos para actualizar." });
+    let data;
+    const compartido = (vinculos || []).some((v) => v.equipo_id !== miembro.id);
+    if (compartido) {
+      // Separación por empleado: al editar un servicio compartido, se crea
+      // una copia propia para que los cambios no alteren la agenda ajena.
+      const { data: original, error: originalError } = await supabase.from("servicios")
+        .select("nombre, descripcion, duracion, precio, capacidad, activo, orden")
+        .eq("id", id).eq("slug", slug).single();
+      if (originalError) throw originalError;
+      const { data: copia, error: copiaError } = await supabase.from("servicios")
+        .insert([{ slug, ...original, ...update }])
+        .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden").single();
+      if (copiaError) throw copiaError;
+      const { error: linkError } = await supabase.from("servicio_equipo").upsert(
+        [{ servicio_id: copia.id, equipo_id: miembro.id }], { onConflict: "servicio_id,equipo_id" }
+      );
+      if (linkError) {
+        await supabase.from("servicios").delete().eq("id", copia.id).eq("slug", slug);
+        throw linkError;
+      }
+      const { error: unlinkError } = await supabase.from("servicio_equipo").delete()
+        .eq("servicio_id", id).eq("equipo_id", miembro.id);
+      if (unlinkError) throw unlinkError;
+      data = copia;
+    } else {
+      const { data: actualizado, error } = await supabase.from("servicios").update(update)
+        .eq("id", id).eq("slug", slug)
+        .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden").single();
+      if (error) throw error;
+      data = actualizado;
+    }
+    invalidateCache(slug);
+    res.json({ success: true, servicio: { ...data, activo: isActivo(data.activo) } });
+  } catch (e) {
+    console.error("Error editando servicio de empleado:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo actualizar el servicio." });
+  }
+});
+
+app.delete("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { id } = req.params;
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const { data: vinculos, error: vinculoError } = await supabase.from("servicio_equipo")
+      .select("equipo_id").eq("servicio_id", id);
+    if (vinculoError) throw vinculoError;
+    if (!(vinculos || []).some((v) => v.equipo_id === miembro.id)) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
+    // Desvinculamos al empleado y solo desactivamos si nadie más lo usa.
+    const { error } = await supabase.from("servicio_equipo").delete().eq("servicio_id", id).eq("equipo_id", miembro.id);
+    if (error) throw error;
+    const quedanOtros = (vinculos || []).some((v) => v.equipo_id !== miembro.id);
+    if (!quedanOtros) {
+      const { error: updateError } = await supabase.from("servicios").update({ activo: "false" }).eq("id", id).eq("slug", slug);
+      if (updateError) throw updateError;
+    }
+    invalidateCache(slug);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("Error eliminando servicio de empleado:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo quitar el servicio." });
   }
 });
 
@@ -5763,7 +5910,7 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
-          action: "resetPassword",
+           action: "resetPassword",
           email: miembro.login_email,
           nombre: `${miembro.nombre}${miembro.apellido ? ` ${miembro.apellido}` : ""}`,
           resetUrl,
