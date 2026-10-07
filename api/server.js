@@ -147,11 +147,17 @@ const PUSH_ICONOS_POR_TIPO = {
 // ya no es válido (404/410 → el usuario desinstaló, borró permisos,
 // cambió de navegador), se borra la suscripción vieja de la DB sola.
 // ══════════════════════════════════════════════════════════════
-async function enviarPush(slug, { titulo, mensaje, tipo = "sistema", url = null }) {
+async function enviarPush(slug, { titulo, mensaje, tipo = "sistema", url = null, equipoId = null }) {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
   try {
-    const { data: subs, error } = await supabase.from("push_subscriptions")
+    let consultaSubs = supabase.from("push_subscriptions")
       .select("id, endpoint, p256dh, auth").eq("slug", slug);
+    // Las notificaciones del negocio siguen llegando a los dispositivos del
+    // titular; los avisos de un turno del equipo sólo al titular y al empleado asignado.
+    consultaSubs = equipoId
+      ? consultaSubs.or(`equipo_id.is.null,equipo_id.eq.${equipoId}`)
+      : consultaSubs.is("equipo_id", null);
+    const { data: subs, error } = await consultaSubs;
     if (error || !subs?.length) return;
 
     const payload = JSON.stringify({
@@ -692,6 +698,7 @@ function cumpleAnticipacionReserva(fecha, hora, anticipacionMinutos) {
 // principal: si falla, solo se loguea.
 // ══════════════════════════════════════════════════════════════
 async function crearNotificacion({ slug, tipo, titulo, mensaje, data = {} }) {
+  let equipoIdPush = null;
   try {
     const datosNotificacion = { ...(data || {}) };
     if (!datosNotificacion.equipo_id && datosNotificacion.turno_id) {
@@ -699,6 +706,7 @@ async function crearNotificacion({ slug, tipo, titulo, mensaje, data = {} }) {
         .eq("id", datosNotificacion.turno_id).eq("slug", slug).maybeSingle();
       if (turnoRelacionado?.equipo_id) datosNotificacion.equipo_id = turnoRelacionado.equipo_id;
     }
+    equipoIdPush = datosNotificacion.equipo_id || null;
     const { error } = await supabase.from("notificaciones").insert([{
       slug, tipo, titulo, mensaje, data: datosNotificacion,
     }]);
@@ -706,7 +714,7 @@ async function crearNotificacion({ slug, tipo, titulo, mensaje, data = {} }) {
   } catch (e) {
     console.error("Error creando notificación:", e.message);
   }
-  enviarPush(slug, { titulo, mensaje, tipo }).catch((e) => console.error("Error enviando push:", e.message));
+  enviarPush(slug, { titulo, mensaje, tipo, equipoId: equipoIdPush }).catch((e) => console.error("Error enviando push:", e.message));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -940,7 +948,8 @@ async function requireAuth(req, res, next) {
     if (payload.rol === "empleado") {
       // Las sesiones de empleado nunca pueden entrar en rutas administrativas
       // del dueño. Sólo se habilitan las rutas privadas /empleado/.
-      if (!req.path.startsWith("/empleado/") || !payload.equipoId) {
+      const puedeGestionarPush = req.path === "/push/subscribe" && ["POST", "DELETE"].includes(req.method);
+      if ((!req.path.startsWith("/empleado/") && !puedeGestionarPush) || !payload.equipoId) {
         return res.status(403).json({ success: false, error: "Esta sección no está disponible para tu perfil." });
       }
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
@@ -8043,6 +8052,7 @@ app.post("/push/subscribe", requireAuth, async (req, res) => {
 
     const { error } = await supabase.from("push_subscriptions").upsert([{
       slug,
+      equipo_id: req.auth?.rol === "empleado" ? req.empleado.id : null,
       endpoint: subscription.endpoint,
       p256dh:   subscription.keys.p256dh,
       auth:     subscription.keys.auth,
@@ -8062,7 +8072,11 @@ app.delete("/push/subscribe", requireAuth, async (req, res) => {
   try {
     const { endpoint } = req.body;
     if (!endpoint) return res.status(400).json({ success: false, error: "Falta el endpoint." });
-    const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+    let eliminar = supabase.from("push_subscriptions").delete().eq("endpoint", endpoint).eq("slug", req.auth?.slug);
+    eliminar = req.auth?.rol === "empleado"
+      ? eliminar.eq("equipo_id", req.empleado.id)
+      : eliminar.is("equipo_id", null);
+    const { error } = await eliminar;
     if (error) throw error;
     res.json({ success: true });
   } catch (e) {
