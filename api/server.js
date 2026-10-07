@@ -946,10 +946,11 @@ async function requireAuth(req, res, next) {
       return res.status(403).json({ success: false, error: "No autorizado para este negocio." });
     }
     if (payload.rol === "empleado") {
-      // Las sesiones de empleado nunca pueden entrar en rutas administrativas
-      // del dueño. Sólo se habilitan las rutas privadas /empleado/.
+      // Las sesiones de empleado sólo entran a su panel privado y a la
+      // aprobación acotada de pagos pendientes de sus propios turnos.
       const puedeGestionarPush = req.path === "/push/subscribe" && ["POST", "DELETE"].includes(req.method);
-      if ((!req.path.startsWith("/empleado/") && !puedeGestionarPush) || !payload.equipoId) {
+      const puedeAprobarTurnoPropio = req.path === `/turnos/${req.params.id}` && req.method === "PUT" && !!req.params.id;
+      if ((!req.path.startsWith("/empleado/") && !puedeGestionarPush && !puedeAprobarTurnoPropio) || !payload.equipoId) {
         return res.status(403).json({ success: false, error: "Esta sección no está disponible para tu perfil." });
       }
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
@@ -3737,11 +3738,21 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 
   const { data: turnoExistente, error: fetchError } = await supabase
   .from("turnos")
-  .select("id, slug, estado, fecha, hora, nombre, apellido, email, telefono, servicio_nombre, equipo_nombre, metodo_pago, pago_estado, precio_cobrado, tipo_cobro, porcentaje_sena, extras, gestion_token")
+  .select("id, slug, equipo_id, estado, fecha, hora, nombre, apellido, email, telefono, servicio_nombre, equipo_nombre, metodo_pago, pago_estado, precio_cobrado, tipo_cobro, porcentaje_sena, extras, gestion_token")
   .eq("id", id).eq("slug", slugClean).maybeSingle();
 
     if (fetchError) throw fetchError;
     if (!turnoExistente) return res.status(404).json({ success: false, error: "Turno no encontrado." });
+
+    // Un empleado sólo puede aprobar pagos manuales pendientes de turnos
+    // asignados a su perfil. El resto de acciones siguen siendo exclusivas del titular.
+    if (req.auth?.rol === "empleado" && (
+      estado !== "confirmado" || notas !== undefined || equipo_id !== undefined ||
+      turnoExistente.equipo_id !== req.empleado?.id || turnoExistente.estado !== "pendiente" ||
+      !["transferencia", "efectivo"].includes(turnoExistente.metodo_pago)
+    )) {
+      return res.status(403).json({ success: false, error: "Sólo podés aprobar pagos pendientes de tus turnos asignados." });
+    }
 
     // Aprobación de un turno manual (transferencia/efectivo) pendiente
     const esAprobacionManual =
@@ -4977,7 +4988,8 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
     const hoyEmpleado = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
     const [anioEmpleado, mesEmpleado] = hoyEmpleado.slice(0, 7).split("-");
     const inicioMesEmpleado = `${anioEmpleado}-${mesEmpleado}-01`;
-    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas, precio_cobrado, metodo_pago";
+    const finMesEmpleado = new Date(Date.UTC(Number(anioEmpleado), Number(mesEmpleado), 0)).toISOString().slice(0, 10);
+    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas, precio_cobrado, monto_pagado, metodo_pago, pago_estado, tipo_cobro, porcentaje_sena, extras, equipo_nombre";
     const [turnosFuturosRes, turnosPasadosRes, vinculosRes, turnosMesRes] = await Promise.all([
       supabase.from("turnos").select(columnasTurnoEmpleado)
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
@@ -4986,9 +4998,9 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
         .lt("fecha", hoyEmpleado).order("fecha", { ascending: false }).order("hora", { ascending: false }).limit(150),
       supabase.from("servicio_equipo").select("servicio_id, precio_override, imagen_url_override, orden_override").eq("equipo_id", miembro.id),
-      supabase.from("turnos").select("id, fecha, nombre, apellido, telefono, email, precio_cobrado, estado")
+      supabase.from("turnos").select("id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, precio_cobrado, monto_pagado, metodo_pago, pago_estado, estado")
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
-        .gte("fecha", inicioMesEmpleado).lte("fecha", hoyEmpleado).limit(1000),
+        .gte("fecha", inicioMesEmpleado).lte("fecha", finMesEmpleado).limit(1000),
     ]);
     if (turnosFuturosRes.error) throw turnosFuturosRes.error;
     if (turnosPasadosRes.error) throw turnosPasadosRes.error;
@@ -5039,11 +5051,16 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
     const turnosMes = turnosMesRes.data || [];
     const ingresosMes = turnosMes.reduce((total, t) => total + Number(t.precio_cobrado || 0), 0);
     const clientesMes = new Set(turnosMes.map((t) => String(t.telefono || t.email || `${t.nombre}|${t.apellido || ""}`).toLowerCase())).size;
-    const semanas = [0, 0, 0, 0];
+    const semanas = [0, 0, 0, 0, 0];
+    const ingresosPorSemana = [0, 0, 0, 0, 0];
     const ventasPorDia = {};
     turnosMes.forEach((t) => {
       const dia = Number(String(t.fecha).slice(8, 10));
-      if (dia >= 1 && dia <= 31) semanas[Math.min(3, Math.floor((dia - 1) / 7))]++;
+      if (dia >= 1 && dia <= 31) {
+        const semana = Math.min(4, Math.floor((dia - 1) / 7));
+        semanas[semana]++;
+        ingresosPorSemana[semana] += Number(t.precio_cobrado || 0);
+      }
       if (t.fecha) {
         ventasPorDia[t.fecha] = ventasPorDia[t.fecha] || { volumen: 0 };
         ventasPorDia[t.fecha].volumen += Number(t.precio_cobrado || 0);
@@ -5073,6 +5090,14 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         servicio: turno.servicio_nombre || "Turno",
         estado: turno.estado,
         notas: turno.notas || null,
+        precio_cobrado: Number(turno.precio_cobrado || 0),
+        monto_pagado: Number(turno.monto_pagado || 0),
+        metodo_pago: turno.metodo_pago || null,
+        pago_estado: turno.pago_estado || "sin_pago",
+        tipo_cobro: turno.tipo_cobro || null,
+        porcentaje_sena: turno.porcentaje_sena || null,
+        extras: turno.extras || [],
+        equipo_nombre: turno.equipo_nombre || null,
       })),
       servicios,
       clientes: [...clientesPorClave.values()].sort((a, b) => b.ultimoTurno.localeCompare(a.ultimoTurno)),
@@ -5083,7 +5108,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         ticket_promedio: turnosMes.length ? ingresosMes / turnosMes.length : 0,
         turnos_hoy: turnosHoy.length,
         stats: {
-          chartData: semanas.map((turnos, i) => ({ label: `Sem ${i + 1}`, turnos })),
+          chartData: semanas.map((turnos, i) => ({ label: `Sem ${i + 1}`, turnos, ingresos: ingresosPorSemana[i] })),
           ventasPorDia,
           turnosLista: turnosHoy.map((t) => ({
             id: t.id, fecha: t.fecha, hora: String(t.hora || "").slice(0, 5),
