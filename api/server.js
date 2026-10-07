@@ -631,6 +631,25 @@ function configNegocioParaEquipo(user, miembro) {
   return config;
 }
 
+async function aplicarVarianteServicio(slug, servicioId, equipoId, servicio) {
+  if (!servicio || !equipoId || !UUID_REGEX.test(String(equipoId))) return servicio;
+  const { data: variante, error } = await supabase.from("servicio_equipo")
+    .select("precio_override, imagen_url_override, orden_override")
+    .eq("servicio_id", servicioId).eq("equipo_id", equipoId).maybeSingle();
+  if (error) throw error;
+  if (!variante) throw new Error("El servicio no está asignado a este profesional.");
+  return {
+    ...servicio,
+    precio: variante.precio_override !== null && variante.precio_override !== undefined
+      ? Number(variante.precio_override) : servicio.precio,
+    descripcion: variante.imagen_url_override
+      ? `[img:${variante.imagen_url_override}]${String(servicio.descripcion || "").replace(/^\[img:.*?\]/s, "")}`
+      : servicio.descripcion,
+    orden: variante.orden_override !== null && variante.orden_override !== undefined
+      ? variante.orden_override : servicio.orden,
+  };
+}
+
 const ANTICIPACION_MINUTOS_DEFAULT = 30;
 const ANTICIPACION_MINUTOS_MAX = 43200; // 30 días
 
@@ -2096,7 +2115,33 @@ const { data: user, error } = await supabase.from("usuarios")
     }
 
     let configEquipo = null;
+    let horariosEquipoUnion = null;
+    let excepcionesEquipoUnion = [];
+    let equipoCualquiera = String(req.query.equipo_id || "") === "cualquiera";
     const equipoIdQuery = String(req.query.equipo_id || "");
+    if (equipoCualquiera) {
+      const { data: miembros, error: equipoError } = await supabase.from("equipo")
+        .select("id, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
+        .eq("slug", slug).eq("activo", true).eq("es_dueño", false);
+      if (equipoError) throw equipoError;
+      horariosEquipoUnion = {};
+      const excepcionesCustom = new Map();
+      (miembros || []).forEach((miembro) => {
+        const efectivo = configNegocioParaEquipo(user, miembro);
+        Object.entries(efectivo.horarios || {}).forEach(([dia, config]) => {
+          if (config?.activo) horariosEquipoUnion[dia] = { ...(horariosEquipoUnion[dia] || config), activo: true };
+        });
+        (Array.isArray(efectivo.excepciones) ? efectivo.excepciones : []).forEach((ex) => {
+          if (ex?.type === "custom" && Array.isArray(ex.slots) && ex.slots.length) {
+            const actual = excepcionesCustom.get(ex.fecha) || { ...ex, slots: [] };
+            const hashes = new Set(actual.slots.map((slot) => JSON.stringify(slot)));
+            ex.slots.forEach((slot) => { const key = JSON.stringify(slot); if (!hashes.has(key)) { hashes.add(key); actual.slots.push(slot); } });
+            excepcionesCustom.set(ex.fecha, actual);
+          }
+        });
+      });
+      excepcionesEquipoUnion = [...excepcionesCustom.values()];
+    }
     if (UUID_REGEX.test(equipoIdQuery)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
         .select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
@@ -2105,8 +2150,8 @@ const { data: user, error } = await supabase.from("usuarios")
       if (miembro) configEquipo = miembro;
     }
     const valorConfig = (key) => configEquipo?.[key] !== null && configEquipo?.[key] !== undefined ? configEquipo[key] : user[key];
-    const horariosPublicos = valorConfig("horarios");
-    const excepcionesPublicas = valorConfig("excepciones");
+    const horariosPublicos = equipoCualquiera ? horariosEquipoUnion : valorConfig("horarios");
+    const excepcionesPublicas = equipoCualquiera ? excepcionesEquipoUnion : valorConfig("excepciones");
     const metodoPublico = valorConfig("metodo_pago");
     const porcentajeSenaPublico = valorConfig("porcentaje_sena");
     const agendaSinPagosEquipo = planTieneFuncionesPremium(user.plan) && valorConfig("agenda_sin_pagos") === true;
@@ -2267,17 +2312,6 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     if (userError) throw userError;
     if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    let miembroAgenda = null;
-    if (UUID_REGEX.test(equipoIdQuery)) {
-      const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, horarios, excepciones, anticipacion_minutos")
-        .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).eq("es_dueño", false).maybeSingle();
-      if (miembroError) throw miembroError;
-      if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
-      miembroAgenda = miembro;
-    }
-    const configAgenda = configNegocioParaEquipo(user, miembroAgenda);
-
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.json({ success: true, slots: [], suspendido: true, puede_anotarse_espera: false });
@@ -2285,55 +2319,86 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       return res.json({ success: true, slots: [], suspendido: true, motivo: "comisiones", puede_anotarse_espera: false });
     }
 
-    let duracionSolicitada = user.duracion_turno      || 30;
-    let capacidad          = user.capacidad_por_turno || 1;
-
-    if (servicio_id) {
-      const { data: srv } = await supabase.from("servicios").select("duracion, capacidad")
-        .eq("id", servicio_id).eq("slug", slug).maybeSingle();
-      if (srv) { duracionSolicitada = srv.duracion || duracionSolicitada; capacidad = srv.capacidad || capacidad; }
+    const modoCualquiera = equipoIdQuery === "cualquiera";
+    let miembrosAgenda = [];
+    if (UUID_REGEX.test(equipoIdQuery)) {
+      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+        .select("id, nombre, apellido, horarios, excepciones, anticipacion_minutos")
+        .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).eq("es_dueño", false).maybeSingle();
+      if (miembroError) throw miembroError;
+      if (!miembro) return res.status(400).json({ success: false, error: "El profesional seleccionado no está disponible." });
+      miembrosAgenda = [miembro];
+    } else if (modoCualquiera) {
+      if (!servicio_id || !UUID_REGEX.test(String(servicio_id))) return res.status(400).json({ success: false, error: "Elegí un servicio antes de buscar horarios." });
+      const { data: asignaciones, error: asignacionesError } = await supabase.from("servicio_equipo")
+        .select("equipo_id").eq("servicio_id", servicio_id);
+      if (asignacionesError) throw asignacionesError;
+      const ids = [...new Set((asignaciones || []).map((x) => x.equipo_id).filter(Boolean))];
+      if (ids.length) {
+        const { data, error: equipoError } = await supabase.from("equipo")
+          .select("id, nombre, apellido, horarios, excepciones, anticipacion_minutos")
+          .eq("slug", slug).eq("activo", true).eq("es_dueño", false).in("id", ids);
+        if (equipoError) throw equipoError;
+        miembrosAgenda = data || [];
+      }
+      if (!miembrosAgenda.length) return res.json({ success: true, slots: [], puede_anotarse_espera: false });
+    } else {
+      miembrosAgenda = [null];
     }
 
-const intervalosDia = obtenerIntervalosDia(configAgenda.horarios, configAgenda.excepciones, fecha);
-if (!intervalosDia) return res.json({ success: true, slots: [], puede_anotarse_espera: false });
+    let servicioBase = null;
+    if (servicio_id) {
+      if (!UUID_REGEX.test(String(servicio_id))) return res.status(400).json({ success: false, error: "El servicio seleccionado no es válido." });
+      const { data, error: servicioError } = await supabase.from("servicios")
+        .select("id, duracion, capacidad, slug, activo").eq("id", servicio_id).eq("slug", slug).maybeSingle();
+      if (servicioError) throw servicioError;
+      if (!data || !isActivo(data.activo)) return res.status(404).json({ success: false, error: "El servicio ya no está disponible." });
+      servicioBase = data;
+    }
+    if (UUID_REGEX.test(equipoIdQuery) && servicio_id) {
+      const { data: vinculo, error: vinculoError } = await supabase.from("servicio_equipo")
+        .select("id").eq("servicio_id", servicio_id).eq("equipo_id", equipoIdQuery).maybeSingle();
+      if (vinculoError) throw vinculoError;
+      if (!vinculo) return res.status(400).json({ success: false, error: "Ese profesional no ofrece el servicio seleccionado." });
+    }
 
-const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-const fromMin = (m) => `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
-
-const slotsGenerados = [];
-intervalosDia.forEach(([ini, fin]) => {
-  let cursor = ini;
-  while (cursor + duracionSolicitada <= fin) {
-    slotsGenerados.push(cursor);
-    cursor += duracionSolicitada;
-  }
-});
-
-    let queryTurnosDia = supabase.from("turnos").select("hora, estado, servicio_id")
-      .eq("slug", slug).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
-    if (miembroAgenda) queryTurnosDia = queryTurnosDia.eq("equipo_id", miembroAgenda.id);
-    const { data: turnosDia } = await queryTurnosDia;
-    const { data: todosServicios } = await supabase.from("servicios").select("id, duracion").eq("slug", slug);
-
+    const toMin = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const fromMin = (m) => `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
+    const { data: todosServicios, error: serviciosError } = await supabase.from("servicios").select("id, duracion").eq("slug", slug);
+    if (serviciosError) throw serviciosError;
     const duracionPorServicio = {};
     (todosServicios || []).forEach((s) => { duracionPorServicio[s.id] = s.duracion; });
-
-    const rangosOcupados = (turnosDia || []).map((t) => {
-      const inicioTurno = toMin(t.hora.slice(0, 5));
-      const durTurno    = (t.servicio_id && duracionPorServicio[t.servicio_id]) ? duracionPorServicio[t.servicio_id] : (user.duracion_turno || 30);
-      return { inicio: inicioTurno, fin: inicioTurno + durTurno };
-    });
-
-    const anticipacionMinutos = Number(configAgenda.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT;
-
-    const slots = slotsGenerados
-      .filter((slotInicio) => cumpleAnticipacionReserva(fecha, fromMin(slotInicio), anticipacionMinutos))
-      .map((slotInicio) => {
-        const slotFin   = slotInicio + duracionSolicitada;
-        const solapados = rangosOcupados.filter(({ inicio, fin }) => slotInicio < fin && slotFin > inicio).length;
-        const disponibles = Math.max(0, capacidad - solapados);
-        return { hora: fromMin(slotInicio), disponibles, lleno: disponibles <= 0 };
+    const slotsPorHora = new Map();
+    for (const miembro of miembrosAgenda) {
+      const configAgenda = configNegocioParaEquipo(user, miembro);
+      const duracionSolicitada = servicioBase?.duracion || user.duracion_turno || 30;
+      const capacidad = servicioBase?.capacidad || user.capacidad_por_turno || 1;
+      const intervalosDia = obtenerIntervalosDia(configAgenda.horarios, configAgenda.excepciones, fecha);
+      if (!intervalosDia) continue;
+      const slotsGenerados = [];
+      intervalosDia.forEach(([ini, fin]) => { for (let cursor = ini; cursor + duracionSolicitada <= fin; cursor += duracionSolicitada) slotsGenerados.push(cursor); });
+      let queryTurnosDia = supabase.from("turnos").select("hora, estado, servicio_id")
+        .eq("slug", slug).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
+      queryTurnosDia = miembro ? queryTurnosDia.eq("equipo_id", miembro.id) : queryTurnosDia.is("equipo_id", null);
+      const { data: turnosDia, error: turnosError } = await queryTurnosDia;
+      if (turnosError) throw turnosError;
+      const rangosOcupados = (turnosDia || []).map((t) => {
+        const inicio = toMin(String(t.hora || "").slice(0, 5));
+        return { inicio, fin: inicio + (t.servicio_id && duracionPorServicio[t.servicio_id] || user.duracion_turno || 30) };
       });
+      const anticipacion = Number(configAgenda.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT;
+      for (const slotInicio of slotsGenerados) {
+        if (!cumpleAnticipacionReserva(fecha, fromMin(slotInicio), anticipacion)) continue;
+        const slotFin = slotInicio + duracionSolicitada;
+        const ocupados = rangosOcupados.filter(({ inicio, fin }) => slotInicio < fin && slotFin > inicio).length;
+        const disponibles = Math.max(0, capacidad - ocupados);
+        const hora = fromMin(slotInicio);
+        const anterior = slotsPorHora.get(hora);
+        const candidato = { hora, disponibles, lleno: disponibles <= 0, equipo_id: miembro?.id || null };
+        if (!anterior || (candidato.disponibles > 0 && anterior.disponibles <= 0)) slotsPorHora.set(hora, candidato);
+      }
+    }
+    const slots = [...slotsPorHora.values()].sort((a, b) => a.hora.localeCompare(b.hora));
 
     const puedeAnotarseEspera = slots.length > 0 && slots.every((s) => s.lleno);
 
@@ -2364,7 +2429,7 @@ app.get("/servicios/:slug", async (req, res) => {
       if (!equipoIds.length) return res.json({ success: true, servicios: [] });
 
       const { data: vinculos, error } = await supabase.from("servicio_equipo")
-        .select("servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug)")
+        .select("precio_override, imagen_url_override, orden_override, servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug)")
         .in("equipo_id", equipoIds)
         .eq("servicios.slug", slug)
         .eq("servicios.activo", "true");
@@ -2385,14 +2450,19 @@ app.get("/servicios/:slug", async (req, res) => {
     // Filtrado por profesional: solo servicios vinculados a ese equipo_id
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: vinculos, error } = await supabase.from("servicio_equipo")
-        .select("servicio_id, servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug)")
+        .select("servicio_id, precio_override, imagen_url_override, orden_override, servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug)")
         .eq("equipo_id", equipo_id)
         .eq("servicios.slug", slug)
         .eq("servicios.activo", "true");
       if (error) throw error;
 
       const servicios = (vinculos || [])
-        .map((v) => v.servicios)
+        .map((v) => v.servicios ? {
+          ...v.servicios,
+          precio: v.precio_override !== null && v.precio_override !== undefined ? Number(v.precio_override) : Number(v.servicios.precio || 0),
+          imagen_url: v.imagen_url_override || null,
+          orden: v.orden_override !== null && v.orden_override !== undefined ? v.orden_override : v.servicios.orden,
+        } : null)
         .filter(Boolean)
         .sort((a, b) => (a.orden || 0) - (b.orden || 0));
 
@@ -3114,9 +3184,11 @@ let servicioNombre = null;
 let precioCobrado  = 0;
 
 if (servicio_id) {
-  const { data: srv } = await supabase.from("servicios")
-    .select("nombre, capacidad, precio")
-    .eq("id", servicio_id).maybeSingle();
+  const { data: srvBase, error: srvError } = await supabase.from("servicios")
+    .select("id, slug, nombre, descripcion, capacidad, precio, orden")
+    .eq("id", servicio_id).eq("slug", slugClean).maybeSingle();
+  if (srvError) throw srvError;
+  const srv = await aplicarVarianteServicio(slugClean, servicio_id, empleadoReserva?.id, srvBase);
   if (srv) {
     servicioNombre = srv.nombre;
     capacidad      = srv.capacidad || capacidad;
@@ -3138,8 +3210,10 @@ if (servicio_id) {
 
 const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
 
-    const { count } = await supabase.from("turnos").select("id", { count: "exact" })
+    let queryCapacidad = supabase.from("turnos").select("id", { count: "exact" })
       .eq("slug", slugClean).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
+    if (empleadoReserva?.id) queryCapacidad = queryCapacidad.eq("equipo_id", empleadoReserva.id);
+    const { count } = await queryCapacidad;
     if (count >= capacidad) return res.status(400).json({ success: false, error: "Este turno ya está lleno." });
 
     const { data: turno, error: turnoError } = await supabase.from("turnos").insert([{
@@ -3286,7 +3360,9 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     let servicioNombre = null;
     let precioCobrado  = 0;
     if (servicio_id) {
-      const { data: srv } = await supabase.from("servicios").select("nombre, capacidad, precio").eq("id", servicio_id).maybeSingle();
+      const { data: srvBase, error: srvError } = await supabase.from("servicios").select("id, slug, nombre, descripcion, capacidad, precio, orden").eq("id", servicio_id).eq("slug", slugClean).maybeSingle();
+      if (srvError) throw srvError;
+      const srv = await aplicarVarianteServicio(slugClean, servicio_id, empleadoReserva?.id, srvBase);
       if (srv) { servicioNombre = srv.nombre; capacidad = srv.capacidad || capacidad; precioCobrado = Number(srv.precio || 0); }
     }
 
@@ -3320,8 +3396,10 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
       : null;
     const porcSenaTransferencia = configReserva.porcentaje_sena || 30;
 
-    const { count } = await supabase.from("turnos").select("id", { count: "exact" })
+    let queryCapacidadManual = supabase.from("turnos").select("id", { count: "exact" })
       .eq("slug", slugClean).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
+    if (equipoIdValido) queryCapacidadManual = queryCapacidadManual.eq("equipo_id", equipoIdValido);
+    const { count } = await queryCapacidadManual;
     if (count >= capacidad) return res.status(400).json({ success: false, error: "Este turno ya está lleno." });
 
     let comprobantePath = null;
@@ -4809,7 +4887,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
       supabase.from("turnos").select(columnasTurnoEmpleado)
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
         .lt("fecha", hoyEmpleado).order("fecha", { ascending: false }).order("hora", { ascending: false }).limit(150),
-      supabase.from("servicio_equipo").select("servicio_id").eq("equipo_id", miembro.id),
+      supabase.from("servicio_equipo").select("servicio_id, precio_override, imagen_url_override, orden_override").eq("equipo_id", miembro.id),
       supabase.from("turnos").select("id, fecha, nombre, apellido, telefono, email, precio_cobrado, estado")
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
         .gte("fecha", inicioMesEmpleado).lte("fecha", hoyEmpleado).limit(1000),
@@ -4828,7 +4906,18 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         .select("id, nombre, descripcion, duracion, precio, activo")
         .eq("slug", slug).in("id", servicioIds).order("nombre", { ascending: true });
       if (error) throw error;
-      servicios = data || [];
+      const variantes = new Map(vinculos.map((v) => [v.servicio_id, v]));
+      servicios = (data || []).map((s) => {
+        const variante = variantes.get(s.id) || {};
+        const imagenBase = String(s.descripcion || "").match(/^\[img:(.*?)\]/s)?.[1]?.trim() || null;
+        return {
+          ...s,
+          descripcion: String(s.descripcion || "").replace(/^\[img:.*?\]/s, "").trim(),
+          precio: variante.precio_override !== null && variante.precio_override !== undefined ? Number(variante.precio_override) : Number(s.precio || 0),
+          imagen_url: variante.imagen_url_override || imagenBase,
+          orden: variante.orden_override !== null && variante.orden_override !== undefined ? variante.orden_override : s.orden,
+        };
+      });
     }
 
     const clientesPorClave = new Map();
@@ -4916,17 +5005,19 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
     const slug = cleanSlug(req.params.slug);
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
-    const { nombre, descripcion, duracion, precio, capacidad } = req.body || {};
+    const { nombre, descripcion, duracion, precio, capacidad, imagen_url } = req.body || {};
     const errorValidacion = validarServicioBody({ nombre, precio });
     if (errorValidacion) return res.status(400).json({ success: false, error: errorValidacion });
     if (descripcion !== undefined && descripcion !== null && largoDescripcionServicio(descripcion) > 1000)
       return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
+    if (imagen_url !== undefined && imagen_url !== null && (typeof imagen_url !== "string" || imagen_url.length > 2048 || !/^https:\/\//i.test(imagen_url)))
+      return res.status(400).json({ success: false, error: "La foto debe ser una URL HTTPS válida." });
     const dur = parseInt(duracion, 10);
     const cap = parseInt(capacidad, 10);
     const { data: servicio, error } = await supabase.from("servicios").insert([{
       slug,
       nombre: nombre.trim(),
-      descripcion: descripcion?.trim() || null,
+      descripcion: `${imagen_url ? `[img:${imagen_url}]` : ""}${descripcion?.trim() || ""}` || null,
       duracion: Number.isFinite(dur) && dur > 0 ? dur : 30,
       precio: Number(precio),
       capacidad: Number.isFinite(cap) && cap > 0 ? cap : 1,
@@ -4956,71 +5047,41 @@ app.put("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
-    const { data: vinculos, error: vinculoError } = await supabase.from("servicio_equipo")
-      .select("equipo_id").eq("servicio_id", id);
-    if (vinculoError) throw vinculoError;
-    if (!(vinculos || []).some((v) => v.equipo_id === miembro.id)) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
-    const { nombre, descripcion, duracion, precio, capacidad, activo } = req.body || {};
+    const { data: servicio, error: servicioError } = await supabase.from("servicios")
+      .select("id, slug, nombre, descripcion, duracion, precio, capacidad, activo, orden")
+      .eq("id", id).eq("slug", slug).maybeSingle();
+    if (servicioError) throw servicioError;
+    if (!servicio) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
+    const { precio, imagen_url, orden } = req.body || {};
     const update = {};
-    if (nombre !== undefined) {
-      if (typeof nombre !== "string" || !nombre.trim() || nombre.trim().length > 80) return res.status(400).json({ success: false, error: "Nombre inválido." });
-      update.nombre = nombre.trim();
-    }
-    if (descripcion !== undefined) {
-      if (descripcion !== null && largoDescripcionServicio(descripcion) > 1000) return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
-      update.descripcion = descripcion?.trim() || null;
-    }
     if (precio !== undefined) {
       const precioNum = Number(precio);
-      const errorPrecio = validarServicioBody({ nombre: "servicio", precio: precioNum });
-      if (errorPrecio) return res.status(400).json({ success: false, error: errorPrecio });
-      update.precio = precioNum;
+      if (!Number.isFinite(precioNum) || precioNum < 0 || precioNum > 100000000) return res.status(400).json({ success: false, error: "Precio inválido." });
+      update.precio_override = precioNum;
     }
-    if (duracion !== undefined) {
-      const d = parseInt(duracion, 10);
-      if (!Number.isFinite(d) || d <= 0 || d > 1440) return res.status(400).json({ success: false, error: "Duración inválida." });
-      update.duracion = d;
+    if (imagen_url !== undefined) {
+      if (imagen_url !== null && (typeof imagen_url !== "string" || imagen_url.length > 2048 || (imagen_url && !/^https:\/\//i.test(imagen_url)))) return res.status(400).json({ success: false, error: "La URL de la foto debe ser HTTPS." });
+      update.imagen_url_override = imagen_url || null;
     }
-    if (capacidad !== undefined) {
-      const c = parseInt(capacidad, 10);
-      if (!Number.isFinite(c) || c <= 0 || c > 500) return res.status(400).json({ success: false, error: "Capacidad inválida." });
-      update.capacidad = c;
+    if (orden !== undefined) {
+      const ordenNum = Number(orden);
+      if (!Number.isInteger(ordenNum) || ordenNum < 0 || ordenNum > 100000) return res.status(400).json({ success: false, error: "Orden inválido." });
+      update.orden_override = ordenNum;
     }
-    if (activo !== undefined) update.activo = (activo === true || activo === "true") ? "true" : "false";
     if (!Object.keys(update).length) return res.status(400).json({ success: false, error: "No hay campos para actualizar." });
-    let data;
-    const compartido = (vinculos || []).some((v) => v.equipo_id !== miembro.id);
-    if (compartido) {
-      // Separación por empleado: al editar un servicio compartido, se crea
-      // una copia propia para que los cambios no alteren la agenda ajena.
-      const { data: original, error: originalError } = await supabase.from("servicios")
-        .select("nombre, descripcion, duracion, precio, capacidad, activo, orden")
-        .eq("id", id).eq("slug", slug).single();
-      if (originalError) throw originalError;
-      const { data: copia, error: copiaError } = await supabase.from("servicios")
-        .insert([{ slug, ...original, ...update }])
-        .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden").single();
-      if (copiaError) throw copiaError;
-      const { error: linkError } = await supabase.from("servicio_equipo").upsert(
-        [{ servicio_id: copia.id, equipo_id: miembro.id }], { onConflict: "servicio_id,equipo_id" }
-      );
-      if (linkError) {
-        await supabase.from("servicios").delete().eq("id", copia.id).eq("slug", slug);
-        throw linkError;
-      }
-      const { error: unlinkError } = await supabase.from("servicio_equipo").delete()
-        .eq("servicio_id", id).eq("equipo_id", miembro.id);
-      if (unlinkError) throw unlinkError;
-      data = copia;
-    } else {
-      const { data: actualizado, error } = await supabase.from("servicios").update(update)
-        .eq("id", id).eq("slug", slug)
-        .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden").single();
-      if (error) throw error;
-      data = actualizado;
-    }
+    const { data: vinculo, error: vinculoError } = await supabase.from("servicio_equipo")
+      .update(update).eq("servicio_id", id).eq("equipo_id", miembro.id)
+      .select("servicio_id, precio_override, imagen_url_override, orden_override").maybeSingle();
+    if (vinculoError) throw vinculoError;
+    if (!vinculo) return res.status(404).json({ success: false, error: "Este servicio no está asignado a tu agenda." });
     invalidateCache(slug);
-    res.json({ success: true, servicio: { ...data, activo: isActivo(data.activo) } });
+    res.json({ success: true, servicio: {
+      ...servicio,
+      precio: vinculo.precio_override !== null ? Number(vinculo.precio_override) : Number(servicio.precio || 0),
+      imagen_url: vinculo.imagen_url_override || null,
+      orden: vinculo.orden_override !== null ? vinculo.orden_override : servicio.orden,
+      activo: isActivo(servicio.activo),
+    } });
   } catch (e) {
     console.error("Error editando servicio de empleado:", e.message);
     res.status(500).json({ success: false, error: "No se pudo actualizar el servicio." });
@@ -6311,7 +6372,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     let precioServicio = 0, nombreServicio = "Reserva";
     if (servicio_id) {
-      const { data: srv } = await supabase.from("servicios").select("nombre, precio").eq("id", servicio_id).eq("slug", slugClean).maybeSingle();
+      const { data: srvBase, error: srvError } = await supabase.from("servicios").select("id, slug, nombre, descripcion, precio, orden").eq("id", servicio_id).eq("slug", slugClean).maybeSingle();
+      if (srvError) throw srvError;
+      const srv = await aplicarVarianteServicio(slugClean, servicio_id, empleadoReserva?.id, srvBase);
       if (srv) { precioServicio = Number(srv.precio || 0); nombreServicio = srv.nombre; }
     }
 
@@ -6982,9 +7045,15 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
   const pagoEstado = estado === "aprobado" ? "aprobado" : estado === "pendiente" ? "pendiente" : "rechazado";
 
   if (estado === "aprobado") {
-    const capacidad = user?.capacidad_por_turno || 1;
-    const { count } = await supabase.from("turnos").select("id", { count: "exact" })
+    let capacidad = user?.capacidad_por_turno || 1;
+    if (servicio_id) {
+      const { data: servicioCapacidad } = await supabase.from("servicios").select("capacidad").eq("id", servicio_id).eq("slug", slug).maybeSingle();
+      capacidad = servicioCapacidad?.capacidad || capacidad;
+    }
+    let queryTurnosCapacidad = supabase.from("turnos").select("id", { count: "exact" })
       .eq("slug", slug).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
+    if (equipo_id) queryTurnosCapacidad = queryTurnosCapacidad.eq("equipo_id", equipo_id);
+    const { count } = await queryTurnosCapacidad;
 
     if (count >= capacidad) {
       console.error(`🚫 SOBREVENTA bloqueada: turno ${fecha} ${hora} lleno para ${slug}, payment_id ${payment_id}. NO se confirma el turno, requiere intervención manual.`);
