@@ -624,10 +624,11 @@ function configNegocioParaEquipo(user, miembro) {
   });
   // Mercado Pago es opcional por integrante: sin conexión individual usa
   // la cuenta central del negocio; con conexión, cobra en la cuenta propia.
-  config.mp_access_token = miembro.mp_access_token || user.mp_access_token;
-  config.mp_refresh_token = miembro.mp_access_token ? miembro.mp_refresh_token : user.mp_refresh_token;
-  config.mp_token_expires_at = miembro.mp_access_token ? miembro.mp_token_expires_at : user.mp_token_expires_at;
-  config.mp_public_key = miembro.mp_access_token ? miembro.mp_public_key : user.mp_public_key;
+  const usaCuentaPersonal = !!miembro.puede_recibir_pagos_personales && !!miembro.mp_access_token;
+  config.mp_access_token = usaCuentaPersonal ? miembro.mp_access_token : user.mp_access_token;
+  config.mp_refresh_token = usaCuentaPersonal ? miembro.mp_refresh_token : user.mp_refresh_token;
+  config.mp_token_expires_at = usaCuentaPersonal ? miembro.mp_token_expires_at : user.mp_token_expires_at;
+  config.mp_public_key = usaCuentaPersonal ? miembro.mp_public_key : user.mp_public_key;
   return config;
 }
 
@@ -933,7 +934,7 @@ async function requireAuth(req, res, next) {
         return res.status(403).json({ success: false, error: "Esta sección no está disponible para tu perfil." });
       }
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, slug, nombre, apellido, rol, activo, foto_url, es_dueño, login_email, login_activado")
+        .select("id, slug, nombre, apellido, rol, activo, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios")
         .eq("id", payload.equipoId).eq("slug", payload.slug).eq("es_dueño", false).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro || !isActivo(miembro.activo) || !miembro.login_activado) {
@@ -2144,7 +2145,7 @@ const { data: user, error } = await supabase.from("usuarios")
     }
     if (UUID_REGEX.test(equipoIdQuery)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
+        .select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, puede_recibir_pagos_personales")
         .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).eq("es_dueño", false).maybeSingle();
       if (miembroError) throw miembroError;
       if (miembro) configEquipo = miembro;
@@ -2691,19 +2692,29 @@ app.get("/admin/equipo/:id/servicios-disponibles", requireAuth, async (req, res)
   try {
     const { id } = req.params;
     const slugClean = cleanSlug(req.query.slug || req.auth.slug);
+    if (req.auth.rol !== "superadmin" && slugClean !== req.auth.slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const { data: miembro, error: miembroError } = await supabase.from("equipo").select("id")
+      .eq("id", id).eq("slug", slugClean).maybeSingle();
+    if (miembroError) throw miembroError;
+    if (!miembro) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
 
     const [{ data: servicios, error: e1 }, { data: vinculos, error: e2 }] = await Promise.all([
       supabase.from("servicios").select("id, nombre, precio, duracion, activo")
         .eq("slug", slugClean)
         .order("orden", { ascending: true }).order("created_at", { ascending: true }),
-      supabase.from("servicio_equipo").select("servicio_id").eq("equipo_id", id),
+      supabase.from("servicio_equipo").select("servicio_id, precio_override, imagen_url_override, orden_override").eq("equipo_id", id),
     ]);
     if (e1) throw e1;
     if (e2) throw e2;
 
-    const vinculadosSet = new Set((vinculos || []).map((v) => v.servicio_id));
+    const vinculosPorServicio = new Map((vinculos || []).map((v) => [v.servicio_id, v]));
     const resultado = (servicios || []).map((s) => ({
-      ...s, activo: isActivo(s.activo), vinculado: vinculadosSet.has(s.id),
+      ...s,
+      activo: isActivo(s.activo),
+      vinculado: vinculosPorServicio.has(s.id),
+      precio_override: vinculosPorServicio.get(s.id)?.precio_override ?? null,
+      imagen_url_override: vinculosPorServicio.get(s.id)?.imagen_url_override ?? null,
+      orden_override: vinculosPorServicio.get(s.id)?.orden_override ?? null,
     }));
 
     res.json({ success: true, servicios: resultado });
@@ -2718,6 +2729,7 @@ app.post("/admin/equipo/:id/servicios", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { servicio_id } = req.body;
     const slugClean = cleanSlug(req.body.slug || req.auth.slug);
+    if (req.auth.rol !== "superadmin" && slugClean !== req.auth.slug) return res.status(403).json({ success: false, error: "No autorizado." });
     if (!servicio_id) return res.status(400).json({ success: false, error: "Falta servicio_id." });
 
     const [{ data: miembro }, { data: servicio }] = await Promise.all([
@@ -2734,6 +2746,50 @@ app.post("/admin/equipo/:id/servicios", requireAuth, async (req, res) => {
     res.status(201).json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo vincular el servicio." });
+  }
+});
+
+// El titular puede supervisar y ajustar el precio individual del vínculo
+// sin cambiar el precio base del servicio compartido.
+app.put("/admin/equipo/:id/servicios/:servicio_id", requireAuth, async (req, res) => {
+  try {
+    const { id, servicio_id } = req.params;
+    const slug = cleanSlug(req.body?.slug || req.auth.slug);
+    if (req.auth.rol !== "superadmin" && slug !== req.auth.slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const [{ data: miembro }, { data: servicio }] = await Promise.all([
+      supabase.from("equipo").select("id").eq("id", id).eq("slug", slug).maybeSingle(),
+      supabase.from("servicios").select("id").eq("id", servicio_id).eq("slug", slug).maybeSingle(),
+    ]);
+    if (!miembro || !servicio) return res.status(404).json({ success: false, error: "Integrante o servicio no encontrado." });
+    const update = {};
+    const { precio_override: precio, imagen_url_override: imagen, orden_override: orden } = req.body || {};
+    if (precio !== undefined) {
+      if (precio !== null && (!Number.isFinite(Number(precio)) || Number(precio) < 0 || Number(precio) > 100000000))
+        return res.status(400).json({ success: false, error: "Precio propio inválido." });
+      update.precio_override = precio === null ? null : Number(precio);
+    }
+    if (imagen !== undefined) {
+      if (imagen !== null && (typeof imagen !== "string" || imagen.length > 2048 || (imagen && !/^https:\/\//i.test(imagen))))
+        return res.status(400).json({ success: false, error: "La foto debe ser una URL HTTPS válida." });
+      update.imagen_url_override = imagen || null;
+    }
+    if (orden !== undefined) {
+      if (orden !== null && (!Number.isInteger(Number(orden)) || Number(orden) < 0 || Number(orden) > 100000))
+        return res.status(400).json({ success: false, error: "Orden inválido." });
+      update.orden_override = orden === null ? null : Number(orden);
+    }
+    if (!Object.keys(update).length) return res.status(400).json({ success: false, error: "No hay cambios para guardar." });
+    const { data, error } = await supabase.from("servicio_equipo")
+      .update(update)
+      .eq("equipo_id", id).eq("servicio_id", servicio_id)
+      .select("servicio_id, precio_override, imagen_url_override, orden_override").maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, error: "El servicio no está asignado a este integrante." });
+    invalidateCache(slug);
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error("Error actualizando precio propio del servicio:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo guardar el precio propio." });
   }
 });
 
@@ -3136,7 +3192,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key")
+        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
         .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
@@ -3320,7 +3376,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key")
+        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
         .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
@@ -4712,6 +4768,11 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
   try {
     const { slug, nombre, apellido, color, rol, foto_url } = req.body;
     const loginEmail = String(req.body.login_email || "").trim().toLowerCase() || null;
+    const permisos = {
+      puede_configurar_horarios: req.body.puede_configurar_horarios === true,
+      puede_recibir_pagos_personales: req.body.puede_recibir_pagos_personales === true,
+      puede_crear_servicios: req.body.puede_crear_servicios === true,
+    };
     const slugClean = cleanSlug(slug || req.auth.slug);
 
     if (!slugClean || !nombre) {
@@ -4767,7 +4828,8 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
       login_reset_token: loginResetToken,
       login_reset_token_expiry: loginResetExpiry,
       login_activado: false,
-    }]).select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado").single();
+      ...permisos,
+    }]).select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios").single();
 
     if (error) throw error;
     if (loginEmail && APPS_SCRIPT_URL) {
@@ -4829,6 +4891,14 @@ app.put("/admin/equipo/:id", requireAuth, async (req, res) => {
     }
     if (activo !== undefined) update.activo = activo === true || activo === "true";
     if (foto_url !== undefined) update.foto_url = foto_url || null;
+    if (!actual.es_dueño) {
+      for (const key of ["puede_configurar_horarios", "puede_recibir_pagos_personales", "puede_crear_servicios"]) {
+        if (req.body[key] !== undefined) {
+          if (typeof req.body[key] !== "boolean") return res.status(400).json({ success: false, error: `Permiso inválido: ${key}.` });
+          update[key] = req.body[key];
+        }
+      }
+    }
 
     if (Object.keys(update).length === 0) {
       return res.status(400).json({ success: false, error: "No hay campos para actualizar." });
@@ -4836,7 +4906,7 @@ app.put("/admin/equipo/:id", requireAuth, async (req, res) => {
 
     const { data, error } = await supabase.from("equipo")
       .update(update).eq("id", id).eq("slug", slugClean)
-      .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado").single();
+      .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios").single();
 
     if (error) throw error;
     res.json({ success: true, miembro: data });
@@ -4903,7 +4973,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
     let servicios = [];
     if (servicioIds.length) {
       const { data, error } = await supabase.from("servicios")
-        .select("id, nombre, descripcion, duracion, precio, activo")
+        .select("id, nombre, descripcion, duracion, precio, capacidad, orden, activo")
         .eq("slug", slug).in("id", servicioIds).order("nombre", { ascending: true });
       if (error) throw error;
       const variantes = new Map(vinculos.map((v) => [v.servicio_id, v]));
@@ -4961,6 +5031,9 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         apellido: miembro.apellido,
         color: miembro.color,
         foto_url: miembro.foto_url,
+        puede_configurar_horarios: !!miembro.puede_configurar_horarios,
+        puede_recibir_pagos_personales: !!miembro.puede_recibir_pagos_personales,
+        puede_crear_servicios: !!miembro.puede_crear_servicios,
       },
       turnos: (turnos || []).map((turno) => ({
         id: turno.id,
@@ -5000,11 +5073,35 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
 
 // El empleado administra únicamente los servicios que tiene vinculados.
 // El titular conserva acceso completo por las rutas /admin existentes.
+app.post("/empleado/:slug/servicios/upload-imagen", requireAuth, (req, res, next) => {
+  upload.single("imagen")(req, res, (err) => {
+    if (err) return res.status(400).json({ success: false, error: err.message });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
+    const ext = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/webp" ? "webp" : "jpg";
+    const fileName = `${slug}/equipo/${miembro.id}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("servicios").upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from("servicios").getPublicUrl(fileName);
+    res.json({ success: true, url: data.publicUrl });
+  } catch (e) {
+    console.error("Error upload imagen servicio empleado:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo subir la imagen." });
+  }
+});
+
 app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    if (!miembro.puede_crear_servicios) return res.status(403).json({ success: false, error: "El titular no habilitó la creación de servicios." });
     const { nombre, descripcion, duracion, precio, capacidad, imagen_url } = req.body || {};
     const errorValidacion = validarServicioBody({ nombre, precio });
     if (errorValidacion) return res.status(400).json({ success: false, error: errorValidacion });
@@ -5014,7 +5111,17 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "La foto debe ser una URL HTTPS válida." });
     const dur = parseInt(duracion, 10);
     const cap = parseInt(capacidad, 10);
-    const { data: servicio, error } = await supabase.from("servicios").insert([{
+    // Si el catálogo ya tiene un servicio del mismo nombre, el empleado lo
+    // reutiliza y personaliza el vínculo; nunca crea duplicados por nombre.
+    const { data: existente, error: existenteError } = await supabase.from("servicios")
+      .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden")
+      .eq("slug", slug).ilike("nombre", nombre.trim()).limit(1).maybeSingle();
+    if (existenteError) throw existenteError;
+    let servicio = existente;
+    let servicioCreadoAhora = false;
+    let servicioError = null;
+    if (!servicio) {
+      const creado = await supabase.from("servicios").insert([{
       slug,
       nombre: nombre.trim(),
       descripcion: `${imagen_url ? `[img:${imagen_url}]` : ""}${descripcion?.trim() || ""}` || null,
@@ -5023,18 +5130,32 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
       capacidad: Number.isFinite(cap) && cap > 0 ? cap : 1,
       orden: 0,
       activo: "true",
-    }]).select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden").single();
-    if (error) throw error;
-    const { error: linkError } = await supabase.from("servicio_equipo").upsert(
-      [{ servicio_id: servicio.id, equipo_id: miembro.id }],
-      { onConflict: "servicio_id,equipo_id" }
+      }]).select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden").single();
+      servicio = creado.data;
+      servicioError = creado.error;
+      servicioCreadoAhora = !creado.error && !!creado.data;
+    }
+    if (servicioError) throw servicioError;
+    const { data: vinculoExistente, error: vinculoError } = await supabase.from("servicio_equipo")
+      .select("servicio_id").eq("servicio_id", servicio.id).eq("equipo_id", miembro.id).maybeSingle();
+    if (vinculoError) throw vinculoError;
+    if (vinculoExistente) return res.status(409).json({ success: false, error: "Ya tenés este servicio en tu agenda." });
+    const orden = Number(req.body?.orden);
+    const { error: linkError } = await supabase.from("servicio_equipo").insert(
+      [{ servicio_id: servicio.id, equipo_id: miembro.id, precio_override: Number(precio), imagen_url_override: imagen_url || null, orden_override: Number.isInteger(orden) && orden >= 0 ? orden : null }]
     );
     if (linkError) {
-      await supabase.from("servicios").delete().eq("id", servicio.id).eq("slug", slug);
+      if (servicioCreadoAhora) await supabase.from("servicios").delete().eq("id", servicio.id).eq("slug", slug);
       throw linkError;
     }
     invalidateCache(slug);
-    res.status(201).json({ success: true, servicio: { ...servicio, activo: isActivo(servicio.activo) } });
+    res.status(201).json({ success: true, servicio: {
+      ...servicio,
+      precio: Number(precio),
+      imagen_url: imagen_url || null,
+      orden: Number.isFinite(Number(req.body?.orden)) ? Number(req.body.orden) : (servicio.orden || 0),
+      activo: isActivo(servicio.activo),
+    } });
   } catch (e) {
     console.error("Error creando servicio de empleado:", e.message);
     res.status(500).json({ success: false, error: "No se pudo crear el servicio." });
@@ -5098,14 +5219,9 @@ app.delete("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
       .select("equipo_id").eq("servicio_id", id);
     if (vinculoError) throw vinculoError;
     if (!(vinculos || []).some((v) => v.equipo_id === miembro.id)) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
-    // Desvinculamos al empleado y solo desactivamos si nadie más lo usa.
+    // Desvincular a un empleado no modifica el servicio compartido.
     const { error } = await supabase.from("servicio_equipo").delete().eq("servicio_id", id).eq("equipo_id", miembro.id);
     if (error) throw error;
-    const quedanOtros = (vinculos || []).some((v) => v.equipo_id !== miembro.id);
-    if (!quedanOtros) {
-      const { error: updateError } = await supabase.from("servicios").update({ activo: "false" }).eq("id", id).eq("slug", slug);
-      if (updateError) throw updateError;
-    }
     invalidateCache(slug);
     res.json({ success: true });
   } catch (e) {
@@ -5122,7 +5238,7 @@ app.get("/empleado/:slug/config", requireAuth, async (req, res) => {
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
     const [miembroRes, negocioRes] = await Promise.all([
-      supabase.from("equipo").select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
+      supabase.from("equipo").select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios")
         .eq("id", miembro.id).eq("slug", slug).single(),
       supabase.from("usuarios").select("business_name, plan, estado_suscripcion, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
         .eq("slug", slug).single(),
@@ -5149,6 +5265,9 @@ app.get("/empleado/:slug/config", requireAuth, async (req, res) => {
     settings.mp_personal_conectado = !!personal.mp_access_token;
     settings.mp_cuenta_negocio_disponible = !!negocio.mp_access_token;
     settings.mp_status = personal.mp_access_token ? "Conectado" : "Desconectado";
+    settings.puede_configurar_horarios = !!personal.puede_configurar_horarios;
+    settings.puede_recibir_pagos_personales = !!personal.puede_recibir_pagos_personales;
+    settings.puede_crear_servicios = !!personal.puede_crear_servicios;
     settings.heredados = heredados;
     res.json({ success: true, settings });
   } catch (e) {
@@ -5195,7 +5314,10 @@ app.put("/empleado/:slug/config", requireAuth, async (req, res) => {
     const slug = cleanSlug(req.params.slug);
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
-    const result = await actualizarConfigEquipo(slug, miembro.id, req.body || {});
+    const body = req.body || {};
+    if (!miembro.puede_configurar_horarios && ["horarios", "excepciones", "anticipacion_minutos"].some((k) => body[k] !== undefined))
+      return res.status(403).json({ success: false, error: "El titular no habilitó la configuración de horarios." });
+    const result = await actualizarConfigEquipo(slug, miembro.id, body);
     if (result.error) return res.status(400).json({ success: false, error: result.error });
     res.json({ success: true });
   } catch (e) {
@@ -5209,6 +5331,7 @@ app.put("/empleado/:slug/config", requireAuth, async (req, res) => {
 app.put("/admin/equipo/:id/config", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.body?.slug || req.auth.slug);
+    if (req.auth.rol !== "superadmin" && slug !== req.auth.slug) return res.status(403).json({ success: false, error: "No autorizado." });
     const { data: miembro, error } = await supabase.from("equipo").select("id")
       .eq("id", req.params.id).eq("slug", slug).eq("es_dueño", false).maybeSingle();
     if (error) throw error;
@@ -6348,7 +6471,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key")
+        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
         .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
@@ -6919,6 +7042,7 @@ app.post("/empleado/:slug/mp/connect", requireAuth, (req, res) => {
   const slug = cleanSlug(req.params.slug);
   const miembro = req.empleado;
   if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+  if (!miembro.puede_recibir_pagos_personales) return res.status(403).json({ success: false, error: "El titular no habilitó la recepción de pagos en una cuenta personal." });
   if (!process.env.MP_TURNERO_CLIENT_ID || !process.env.MP_TURNERO_CLIENT_SECRET)
     return res.status(500).json({ success: false, error: "Mercado Pago no está configurado correctamente en el servidor." });
   const redirectUri = encodeURIComponent(`${API_URL}/oauth-callback`);
@@ -6977,8 +7101,9 @@ app.get("/oauth-callback", async (req, res) => {
       let updError;
       if (equipoId) {
         const { data: miembro, error: miembroError } = await supabase.from("equipo")
-          .select("id, metodo_pago").eq("id", equipoId).eq("slug", slugClean).eq("es_dueño", false).maybeSingle();
+          .select("id, metodo_pago, puede_recibir_pagos_personales").eq("id", equipoId).eq("slug", slugClean).eq("es_dueño", false).maybeSingle();
         if (miembroError || !miembro) return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error`);
+        if (!miembro.puede_recibir_pagos_personales) return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error&reason=permission`);
         if (!["sena", "total"].includes(miembro.metodo_pago)) updateMp.metodo_pago = "total";
         const result = await supabase.from("equipo").update(updateMp).eq("id", equipoId).eq("slug", slugClean);
         updError = result.error;
