@@ -4923,6 +4923,11 @@ app.put("/admin/equipo/:id", requireAuth, async (req, res) => {
       .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios").single();
 
     if (error) throw error;
+    // Cambiar permisos altera la disponibilidad y el perfil que consumen el
+    // panel del empleado y el booking. Evitamos servir una copia previa.
+    invalidateCache(slugClean);
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    res.set("CDN-Cache-Control", "no-store");
     res.json({ success: true, miembro: data });
   } catch (e) {
     console.error("Error actualizando miembro de equipo:", e.message);
