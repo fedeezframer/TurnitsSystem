@@ -689,8 +689,14 @@ function cumpleAnticipacionReserva(fecha, hora, anticipacionMinutos) {
 // ══════════════════════════════════════════════════════════════
 async function crearNotificacion({ slug, tipo, titulo, mensaje, data = {} }) {
   try {
+    const datosNotificacion = { ...(data || {}) };
+    if (!datosNotificacion.equipo_id && datosNotificacion.turno_id) {
+      const { data: turnoRelacionado } = await supabase.from("turnos").select("equipo_id")
+        .eq("id", datosNotificacion.turno_id).eq("slug", slug).maybeSingle();
+      if (turnoRelacionado?.equipo_id) datosNotificacion.equipo_id = turnoRelacionado.equipo_id;
+    }
     const { error } = await supabase.from("notificaciones").insert([{
-      slug, tipo, titulo, mensaje, data,
+      slug, tipo, titulo, mensaje, data: datosNotificacion,
     }]);
     if (error) console.error("Error creando notificación:", error.message);
   } catch (e) {
@@ -4757,7 +4763,7 @@ app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const { data, error } = await supabase.from("equipo")
-      .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado")
+      .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios")
       .eq("slug", slug)
       .order("es_dueño", { ascending: false })
 .order("created_at", { ascending: true });
@@ -5287,6 +5293,15 @@ async function actualizarConfigEquipo(slug, equipoId, body) {
   const fields = ["horarios", "excepciones", "anticipacion_minutos", "metodo_pago", "porcentaje_sena", "acepta_transferencia", "acepta_efectivo", "datos_bancarios", "agenda_sin_pagos"];
   const update = {};
   fields.forEach((key) => { if (body[key] !== undefined) update[key] = body[key]; });
+  // El editor trabaja con un mapa {fecha: excepción}; la base de datos y
+  // el motor de disponibilidad guardan la lista normalizada [{fecha,...}].
+  if (update.excepciones && !Array.isArray(update.excepciones) && typeof update.excepciones === "object") {
+    update.excepciones = Object.entries(update.excepciones).map(([fecha, exc]) => ({
+      fecha,
+      type: exc?.type || "block",
+      ...(Array.isArray(exc?.slots) ? { slots: exc.slots } : {}),
+    }));
+  }
   if (!Object.keys(update).length) return { error: "No hay cambios para guardar." };
   if (update.horarios !== undefined && !validarHorarios(update.horarios)) return { error: "Formato de horarios inválido." };
   if (update.excepciones !== undefined && !validarExcepciones(update.excepciones)) return { error: "Formato de excepciones inválido." };
@@ -8105,6 +8120,59 @@ app.delete("/notificaciones/:id", requireAuth, async (req, res) => {
     const slugClean = cleanSlug(req.body?.slug || req.query?.slug || req.auth.slug);
     const { error } = await supabase.from("notificaciones")
       .delete().eq("id", id).eq("slug", slugClean);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "No se pudo eliminar la notificación." });
+  }
+});
+
+// Notificaciones privadas del colaborador: solo las vinculadas a su equipoId.
+app.get("/empleado/:slug/notificaciones", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    let query = supabase.from("notificaciones").select("*").eq("slug", slug)
+      .contains("data", { equipo_id: miembro.id }).order("created_at", { ascending: false }).limit(50);
+    let countQuery = supabase.from("notificaciones").select("id", { count: "exact", head: true })
+      .eq("slug", slug).eq("leida", false).contains("data", { equipo_id: miembro.id });
+    if (req.query.no_leidas === "true") {
+      const { count, error } = await countQuery;
+      if (error) throw error;
+      return res.json({ success: true, no_leidas: count || 0 });
+    }
+    const [{ data: notificaciones, error }, { count, error: countError }] = await Promise.all([query, countQuery]);
+    if (error) throw error;
+    if (countError) throw countError;
+    res.json({ success: true, notificaciones: notificaciones || [], no_leidas: count || 0 });
+  } catch (e) {
+    console.error("Error cargando notificaciones del colaborador:", e.message);
+    res.status(500).json({ success: false, error: "No se pudieron cargar tus notificaciones." });
+  }
+});
+
+app.put("/empleado/:slug/notificaciones/:id/leida", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const { error } = await supabase.from("notificaciones").update({ leida: true })
+      .eq("id", req.params.id).eq("slug", slug).contains("data", { equipo_id: miembro.id });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "No se pudo marcar como leída." });
+  }
+});
+
+app.delete("/empleado/:slug/notificaciones/:id", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const { error } = await supabase.from("notificaciones").delete()
+      .eq("id", req.params.id).eq("slug", slug).contains("data", { equipo_id: miembro.id });
     if (error) throw error;
     res.json({ success: true });
   } catch (e) {
