@@ -2156,7 +2156,8 @@ const { data: user, error } = await supabase.from("usuarios")
     const metodoPublico = valorConfig("metodo_pago");
     const porcentajeSenaPublico = valorConfig("porcentaje_sena");
     const agendaSinPagosEquipo = planTieneFuncionesPremium(user.plan) && valorConfig("agenda_sin_pagos") === true;
-    const mpDisponibleToken = configEquipo?.mp_access_token || user.mp_access_token;
+    const configEquipoEfectiva = configEquipo ? configNegocioParaEquipo(user, configEquipo) : user;
+    const mpDisponibleToken = configEquipoEfectiva.mp_access_token;
     const aceptaTransferenciaPublico = valorConfig("acepta_transferencia");
     const aceptaEfectivoPublico = valorConfig("acepta_efectivo");
     const datosBancariosPublicos = valorConfig("datos_bancarios");
@@ -5086,6 +5087,7 @@ app.post("/empleado/:slug/servicios/upload-imagen", requireAuth, (req, res, next
     const slug = cleanSlug(req.params.slug);
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    if (!miembro.puede_crear_servicios) return res.status(403).json({ success: false, error: "El titular no habilitó la edición de servicios." });
     if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
     const ext = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/webp" ? "webp" : "jpg";
     const fileName = `${slug}/equipo/${miembro.id}/${Date.now()}.${ext}`;
@@ -5171,6 +5173,7 @@ app.put("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    if (!miembro.puede_crear_servicios) return res.status(403).json({ success: false, error: "El titular no habilitó la edición de servicios." });
     const { data: servicio, error: servicioError } = await supabase.from("servicios")
       .select("id, slug, nombre, descripcion, duracion, precio, capacidad, activo, orden")
       .eq("id", id).eq("slug", slug).maybeSingle();
@@ -5218,6 +5221,7 @@ app.delete("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    if (!miembro.puede_crear_servicios) return res.status(403).json({ success: false, error: "El titular no habilitó la edición de servicios." });
     const { data: vinculos, error: vinculoError } = await supabase.from("servicio_equipo")
       .select("equipo_id").eq("servicio_id", id);
     if (vinculoError) throw vinculoError;
@@ -5320,6 +5324,8 @@ app.put("/empleado/:slug/config", requireAuth, async (req, res) => {
     const body = req.body || {};
     if (!miembro.puede_configurar_horarios && ["horarios", "excepciones", "anticipacion_minutos"].some((k) => body[k] !== undefined))
       return res.status(403).json({ success: false, error: "El titular no habilitó la configuración de horarios." });
+    if (!miembro.puede_recibir_pagos_personales && ["metodo_pago", "porcentaje_sena", "acepta_transferencia", "acepta_efectivo", "datos_bancarios", "agenda_sin_pagos"].some((k) => body[k] !== undefined))
+      return res.status(403).json({ success: false, error: "El titular no habilitó la configuración de pagos de este integrante." });
     const result = await actualizarConfigEquipo(slug, miembro.id, body);
     if (result.error) return res.status(400).json({ success: false, error: result.error });
     res.json({ success: true });
