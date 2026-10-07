@@ -619,7 +619,11 @@ function horaDentroDeIntervalos(horarios, excepciones, fecha, hora) {
 function configNegocioParaEquipo(user, miembro) {
   if (!miembro) return user;
   const config = { ...user };
-  ["horarios", "excepciones", "anticipacion_minutos", "metodo_pago", "porcentaje_sena", "acepta_transferencia", "acepta_efectivo", "datos_bancarios", "agenda_sin_pagos"].forEach((key) => {
+  const configPersonal = [
+    ...(miembro.puede_configurar_horarios ? ["horarios", "excepciones", "anticipacion_minutos"] : []),
+    ...(miembro.puede_recibir_pagos_personales ? ["metodo_pago", "porcentaje_sena", "acepta_transferencia", "acepta_efectivo", "datos_bancarios", "agenda_sin_pagos"] : []),
+  ];
+  configPersonal.forEach((key) => {
     if (miembro[key] !== null && miembro[key] !== undefined) config[key] = miembro[key];
   });
   // Mercado Pago es opcional por integrante: sin conexión individual usa
@@ -2128,7 +2132,7 @@ const { data: user, error } = await supabase.from("usuarios")
     const equipoIdQuery = String(req.query.equipo_id || "");
     if (equipoCualquiera) {
       const { data: miembros, error: equipoError } = await supabase.from("equipo")
-        .select("id, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
+        .select("id, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, puede_configurar_horarios, puede_recibir_pagos_personales")
         .eq("slug", slug).eq("activo", true);
       if (equipoError) throw equipoError;
       horariosEquipoUnion = {};
@@ -2151,7 +2155,7 @@ const { data: user, error } = await supabase.from("usuarios")
     }
     if (UUID_REGEX.test(equipoIdQuery)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, puede_recibir_pagos_personales")
+        .select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, puede_configurar_horarios, puede_recibir_pagos_personales")
         .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (miembro) configEquipo = miembro;
@@ -2331,7 +2335,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     let miembrosAgenda = [];
     if (UUID_REGEX.test(equipoIdQuery)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, es_dueño, horarios, excepciones, anticipacion_minutos")
+        .select("id, nombre, apellido, es_dueño, horarios, excepciones, anticipacion_minutos, puede_configurar_horarios")
         .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "El profesional seleccionado no está disponible." });
@@ -2344,7 +2348,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       const ids = [...new Set((asignaciones || []).map((x) => x.equipo_id).filter(Boolean))];
       if (ids.length) {
         const { data, error: equipoError } = await supabase.from("equipo")
-          .select("id, nombre, apellido, es_dueño, horarios, excepciones, anticipacion_minutos")
+          .select("id, nombre, apellido, es_dueño, horarios, excepciones, anticipacion_minutos, puede_configurar_horarios")
           .eq("slug", slug).eq("activo", true).in("id", ids);
         if (equipoError) throw equipoError;
         miembrosAgenda = data || [];
@@ -3200,7 +3204,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
+        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_configurar_horarios, puede_recibir_pagos_personales")
         .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
@@ -3385,7 +3389,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
+        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_configurar_horarios, puede_recibir_pagos_personales")
         .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
@@ -5227,7 +5231,6 @@ app.delete("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const miembro = req.empleado;
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
-    if (!miembro.puede_crear_servicios) return res.status(403).json({ success: false, error: "El titular no habilitó la edición de servicios." });
     const { data: vinculos, error: vinculoError } = await supabase.from("servicio_equipo")
       .select("equipo_id").eq("servicio_id", id);
     if (vinculoError) throw vinculoError;
@@ -5263,8 +5266,13 @@ app.get("/empleado/:slug/config", requireAuth, async (req, res) => {
     const keys = ["horarios", "excepciones", "anticipacion_minutos", "metodo_pago", "porcentaje_sena", "acepta_transferencia", "acepta_efectivo", "datos_bancarios", "agenda_sin_pagos"];
     const settings = {};
     const heredados = {};
+    const puedeConfigurarHorarios = !!personal.puede_configurar_horarios;
+    const puedeConfigurarPagos = !!personal.puede_recibir_pagos_personales;
     keys.forEach((key) => {
-      const propio = personal[key] !== null && personal[key] !== undefined;
+      const correspondePermiso = ["horarios", "excepciones", "anticipacion_minutos"].includes(key)
+        ? puedeConfigurarHorarios
+        : puedeConfigurarPagos;
+      const propio = correspondePermiso && personal[key] !== null && personal[key] !== undefined;
       settings[key] = propio ? personal[key] : negocio[key];
       heredados[key] = !propio;
     });
@@ -6495,7 +6503,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
+        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_configurar_horarios, puede_recibir_pagos_personales")
         .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
