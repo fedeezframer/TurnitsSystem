@@ -616,6 +616,21 @@ function horaDentroDeIntervalos(horarios, excepciones, fecha, hora) {
   return intervalos.some(([ini, fin]) => minutos >= ini && minutos < fin);
 }
 
+function configNegocioParaEquipo(user, miembro) {
+  if (!miembro) return user;
+  const config = { ...user };
+  ["horarios", "excepciones", "anticipacion_minutos", "metodo_pago", "porcentaje_sena", "acepta_transferencia", "acepta_efectivo", "datos_bancarios", "agenda_sin_pagos"].forEach((key) => {
+    if (miembro[key] !== null && miembro[key] !== undefined) config[key] = miembro[key];
+  });
+  // Mercado Pago es opcional por integrante: sin conexión individual usa
+  // la cuenta central del negocio; con conexión, cobra en la cuenta propia.
+  config.mp_access_token = miembro.mp_access_token || user.mp_access_token;
+  config.mp_refresh_token = miembro.mp_access_token ? miembro.mp_refresh_token : user.mp_refresh_token;
+  config.mp_token_expires_at = miembro.mp_access_token ? miembro.mp_token_expires_at : user.mp_token_expires_at;
+  config.mp_public_key = miembro.mp_access_token ? miembro.mp_public_key : user.mp_public_key;
+  return config;
+}
+
 const ANTICIPACION_MINUTOS_DEFAULT = 30;
 const ANTICIPACION_MINUTOS_MAX = 43200; // 30 días
 
@@ -2080,13 +2095,33 @@ const { data: user, error } = await supabase.from("usuarios")
       return res.json({ success: true, suspendido: true, motivo: "comisiones", negocio: { slug: user.slug, business_name: user.business_name } });
     }
 
+    let configEquipo = null;
+    const equipoIdQuery = String(req.query.equipo_id || "");
+    if (UUID_REGEX.test(equipoIdQuery)) {
+      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+        .select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
+        .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).eq("es_dueño", false).maybeSingle();
+      if (miembroError) throw miembroError;
+      if (miembro) configEquipo = miembro;
+    }
+    const valorConfig = (key) => configEquipo?.[key] !== null && configEquipo?.[key] !== undefined ? configEquipo[key] : user[key];
+    const horariosPublicos = valorConfig("horarios");
+    const excepcionesPublicas = valorConfig("excepciones");
+    const metodoPublico = valorConfig("metodo_pago");
+    const porcentajeSenaPublico = valorConfig("porcentaje_sena");
+    const agendaSinPagosEquipo = planTieneFuncionesPremium(user.plan) && valorConfig("agenda_sin_pagos") === true;
+    const mpDisponibleToken = configEquipo?.mp_access_token || user.mp_access_token;
+    const aceptaTransferenciaPublico = valorConfig("acepta_transferencia");
+    const aceptaEfectivoPublico = valorConfig("acepta_efectivo");
+    const datosBancariosPublicos = valorConfig("datos_bancarios");
+
     const esPremium               = user.plan === "premium";
     const esTrialPremium          = esPremium && user.estado_suscripcion === "trial";
-    const agendaSinPagos          = planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true;
-    const metodoPagoEfectivo      = esTrialPremium && user.metodo_pago === "none" ? "total" : user.metodo_pago;
-    const mpDisponible            = !agendaSinPagos && !!user.mp_access_token && ["sena", "total"].includes(metodoPagoEfectivo);
-    const transferenciaDisponible = !agendaSinPagos && !esTrialPremium && !!user.acepta_transferencia;
-    const efectivoDisponible      = !agendaSinPagos && !esTrialPremium && !!user.acepta_efectivo;
+    const agendaSinPagos          = agendaSinPagosEquipo;
+    const metodoPagoEfectivo      = esTrialPremium && metodoPublico === "none" ? "total" : metodoPublico;
+    const mpDisponible            = !agendaSinPagos && !!mpDisponibleToken && ["sena", "total"].includes(metodoPagoEfectivo);
+    const transferenciaDisponible = !agendaSinPagos && !esTrialPremium && !!aceptaTransferenciaPublico;
+    const efectivoDisponible      = !agendaSinPagos && !esTrialPremium && !!aceptaEfectivoPublico;
  
     const metodos_pago_disponibles = [
       ...(mpDisponible            ? ["mercadopago"]  : []),
@@ -2100,19 +2135,19 @@ const { data: user, error } = await supabase.from("usuarios")
         slug:                user.slug,
         business_name:       user.business_name,
         telefono:            user.telefono || null,
-        horarios:            user.horarios            || {},
-        excepciones:         user.excepciones         || [],
+        horarios:            horariosPublicos         || {},
+        excepciones:         excepcionesPublicas      || [],
         duracion_turno:      user.duracion_turno      || 30,
         capacidad_por_turno: user.capacidad_por_turno || 1,
         metodo_pago:         metodoPagoEfectivo         || "none",
-        porcentaje_sena:     user.porcentaje_sena     || 30,
-        tiene_mp:            !!user.mp_access_token,
+        porcentaje_sena:     porcentajeSenaPublico     || 30,
+        tiene_mp:            !!mpDisponibleToken,
         plan:                user.plan                || "gratis",
         agenda_sin_pagos:    agendaSinPagos,
         tema:                user.tema                || null,
         logo_url:            user.logo_url            || null,
         metodos_pago_disponibles,
-        datos_bancarios:     transferenciaDisponible ? (user.datos_bancarios || {}) : null,
+        datos_bancarios:     transferenciaDisponible ? (datosBancariosPublicos || {}) : null,
       },
     });
   } catch (e) {
@@ -2222,6 +2257,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const { fecha, servicio_id } = req.query;
+    const equipoIdQuery = String(req.query.equipo_id || "");
     if (!slug || !fecha) return res.status(400).json({ success: false, error: "Faltan slug o fecha." });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return res.status(400).json({ success: false, error: "Formato de fecha inválido." });
 
@@ -2230,6 +2266,17 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       .eq("slug", slug).maybeSingle();
     if (userError) throw userError;
     if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    let miembroAgenda = null;
+    if (UUID_REGEX.test(equipoIdQuery)) {
+      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+        .select("id, horarios, excepciones, anticipacion_minutos")
+        .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).eq("es_dueño", false).maybeSingle();
+      if (miembroError) throw miembroError;
+      if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
+      miembroAgenda = miembro;
+    }
+    const configAgenda = configNegocioParaEquipo(user, miembroAgenda);
 
     const diasRestantes  = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
@@ -2247,7 +2294,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       if (srv) { duracionSolicitada = srv.duracion || duracionSolicitada; capacidad = srv.capacidad || capacidad; }
     }
 
-const intervalosDia = obtenerIntervalosDia(user.horarios, user.excepciones, fecha);
+const intervalosDia = obtenerIntervalosDia(configAgenda.horarios, configAgenda.excepciones, fecha);
 if (!intervalosDia) return res.json({ success: true, slots: [], puede_anotarse_espera: false });
 
 const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
@@ -2262,8 +2309,10 @@ intervalosDia.forEach(([ini, fin]) => {
   }
 });
 
-    const { data: turnosDia } = await supabase.from("turnos").select("hora, estado, servicio_id")
+    let queryTurnosDia = supabase.from("turnos").select("hora, estado, servicio_id")
       .eq("slug", slug).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
+    if (miembroAgenda) queryTurnosDia = queryTurnosDia.eq("equipo_id", miembroAgenda.id);
+    const { data: turnosDia } = await queryTurnosDia;
     const { data: todosServicios } = await supabase.from("servicios").select("id, duracion").eq("slug", slug);
 
     const duracionPorServicio = {};
@@ -2275,7 +2324,7 @@ intervalosDia.forEach(([ini, fin]) => {
       return { inicio: inicioTurno, fin: inicioTurno + durTurno };
     });
 
-    const anticipacionMinutos = Number(user.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT;
+    const anticipacionMinutos = Number(configAgenda.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT;
 
     const slots = slotsGenerados
       .filter((slotInicio) => cumpleAnticipacionReserva(fecha, fromMin(slotInicio), anticipacionMinutos))
@@ -3014,7 +3063,19 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     if (userError) throw userError;
     if (!user)              return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
-    if (!cumpleAnticipacionReserva(fecha, hora, user.anticipacion_minutos)) {
+    let empleadoReserva = null;
+    if (equipo_id && UUID_REGEX.test(equipo_id)) {
+      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key")
+        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
+      if (miembroError) throw miembroError;
+      if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
+      empleadoReserva = miembro;
+    }
+    const configReserva = configNegocioParaEquipo(user, empleadoReserva);
+    if (!horaDentroDeIntervalos(configReserva.horarios, configReserva.excepciones, fecha, hora))
+      return res.status(400).json({ success: false, error: "Ese horario ya no está disponible para este profesional." });
+    if (!cumpleAnticipacionReserva(fecha, hora, configReserva.anticipacion_minutos)) {
       return res.status(400).json({ success: false, codigo: "anticipacion_minima", error: "Este turno debe reservarse con más anticipación. Elegí otro horario." });
     }
 
@@ -3024,9 +3085,9 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 
     const esPlanGratis = user.plan === "gratis";
     const esTrialPremium = user.plan === "premium" && user.estado_suscripcion === "trial";
-    const agendaSinPagos = planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true;
-    const tieneMP      = !!user.mp_access_token;
-    const metodoPagoEfectivo = esTrialPremium && user.metodo_pago === "none" ? "total" : user.metodo_pago;
+    const agendaSinPagos = planTieneFuncionesPremium(user.plan) && configReserva.agenda_sin_pagos === true;
+    const tieneMP      = !!configReserva.mp_access_token;
+    const metodoPagoEfectivo = esTrialPremium && configReserva.metodo_pago === "none" ? "total" : configReserva.metodo_pago;
     const requierePago = tieneMP && (metodoPagoEfectivo === "sena" || metodoPagoEfectivo === "total");
 
     if (esTrialPremium && !tieneMP && !agendaSinPagos) {
@@ -3182,8 +3243,19 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     if (!isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no disponible." });
-
-    if (!cumpleAnticipacionReserva(fecha, hora, user.anticipacion_minutos)) {
+    let empleadoReserva = null;
+    if (equipo_id && UUID_REGEX.test(equipo_id)) {
+      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key")
+        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
+      if (miembroError) throw miembroError;
+      if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
+      empleadoReserva = miembro;
+    }
+    const configReserva = configNegocioParaEquipo(user, empleadoReserva);
+    if (!horaDentroDeIntervalos(configReserva.horarios, configReserva.excepciones, fecha, hora))
+      return res.status(400).json({ success: false, error: "Ese horario ya no está disponible para este profesional." });
+    if (!cumpleAnticipacionReserva(fecha, hora, configReserva.anticipacion_minutos)) {
       return res.status(400).json({ success: false, codigo: "anticipacion_minima", error: "Este turno debe reservarse con más anticipación. Elegí otro horario." });
     }
 
@@ -3196,10 +3268,10 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     if (user.plan === "premium" && user.estado_suscripcion === "trial") {
       return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
     }
-    if (metodo_pago === "transferencia" && !user.acepta_transferencia) {
+    if (metodo_pago === "transferencia" && !configReserva.acepta_transferencia) {
       return res.status(403).json({ success: false, error: "Este negocio no acepta pagos por transferencia." });
     }
-    if (metodo_pago === "efectivo" && !user.acepta_efectivo) {
+    if (metodo_pago === "efectivo" && !configReserva.acepta_efectivo) {
       return res.status(403).json({ success: false, error: "Este negocio no acepta pagos en efectivo." });
     }
 
@@ -3218,17 +3290,8 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
       if (srv) { servicioNombre = srv.nombre; capacidad = srv.capacidad || capacidad; precioCobrado = Number(srv.precio || 0); }
     }
 
-     let equipoIdValido = null;
-    let equipoNombre   = null;
-    if (equipo_id && UUID_REGEX.test(equipo_id)) {
-      const { data: prof } = await supabase.from("equipo")
-        .select("id, nombre, apellido")
-        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
-      if (prof) {
-        equipoIdValido = prof.id;
-        equipoNombre = `${prof.nombre}${prof.apellido ? " " + prof.apellido : ""}`;
-      }
-    }
+    const equipoIdValido = empleadoReserva?.id || null;
+    const equipoNombre = empleadoReserva ? `${empleadoReserva.nombre}${empleadoReserva.apellido ? " " + empleadoReserva.apellido : ""}` : null;
     
     const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds);
     const importeComisionTurnits = planCobraComision(user.plan)
@@ -3252,10 +3315,10 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     // "cuánto queda pendiente" salgan siempre del mismo lugar y no se
     // puedan falsear desde el front. Efectivo no usa este concepto: se
     // paga siempre el total en persona.
-    const tipoCobro = metodo_pago === "transferencia" && (user.metodo_pago === "sena" || user.metodo_pago === "total")
-      ? user.metodo_pago
+    const tipoCobro = metodo_pago === "transferencia" && (configReserva.metodo_pago === "sena" || configReserva.metodo_pago === "total")
+      ? configReserva.metodo_pago
       : null;
-    const porcSenaTransferencia = user.porcentaje_sena || 30;
+    const porcSenaTransferencia = configReserva.porcentaje_sena || 30;
 
     const { count } = await supabase.from("turnos").select("id", { count: "exact" })
       .eq("slug", slugClean).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
@@ -4736,8 +4799,10 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
     }
 
     const hoyEmpleado = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
-    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas";
-    const [turnosFuturosRes, turnosPasadosRes, vinculosRes] = await Promise.all([
+    const [anioEmpleado, mesEmpleado] = hoyEmpleado.slice(0, 7).split("-");
+    const inicioMesEmpleado = `${anioEmpleado}-${mesEmpleado}-01`;
+    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas, precio_cobrado, metodo_pago";
+    const [turnosFuturosRes, turnosPasadosRes, vinculosRes, turnosMesRes] = await Promise.all([
       supabase.from("turnos").select(columnasTurnoEmpleado)
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
         .gte("fecha", hoyEmpleado).order("fecha", { ascending: true }).order("hora", { ascending: true }).limit(150),
@@ -4745,10 +4810,14 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
         .lt("fecha", hoyEmpleado).order("fecha", { ascending: false }).order("hora", { ascending: false }).limit(150),
       supabase.from("servicio_equipo").select("servicio_id").eq("equipo_id", miembro.id),
+      supabase.from("turnos").select("id, fecha, nombre, apellido, telefono, email, precio_cobrado, estado")
+        .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
+        .gte("fecha", inicioMesEmpleado).lte("fecha", hoyEmpleado).limit(1000),
     ]);
     if (turnosFuturosRes.error) throw turnosFuturosRes.error;
     if (turnosPasadosRes.error) throw turnosPasadosRes.error;
     if (vinculosRes.error) throw vinculosRes.error;
+    if (turnosMesRes.error) throw turnosMesRes.error;
     const turnos = [...(turnosFuturosRes.data || []), ...(turnosPasadosRes.data || [])];
     const vinculos = vinculosRes.data || [];
 
@@ -4780,6 +4849,21 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
       }
     });
 
+    const turnosMes = turnosMesRes.data || [];
+    const ingresosMes = turnosMes.reduce((total, t) => total + Number(t.precio_cobrado || 0), 0);
+    const clientesMes = new Set(turnosMes.map((t) => String(t.telefono || t.email || `${t.nombre}|${t.apellido || ""}`).toLowerCase())).size;
+    const semanas = [0, 0, 0, 0];
+    const ventasPorDia = {};
+    turnosMes.forEach((t) => {
+      const dia = Number(String(t.fecha).slice(8, 10));
+      if (dia >= 1 && dia <= 31) semanas[Math.min(3, Math.floor((dia - 1) / 7))]++;
+      if (t.fecha) {
+        ventasPorDia[t.fecha] = ventasPorDia[t.fecha] || { volumen: 0 };
+        ventasPorDia[t.fecha].volumen += Number(t.precio_cobrado || 0);
+      }
+    });
+    const turnosHoy = (turnosFuturosRes.data || []).filter((t) => t.fecha === hoyEmpleado && t.estado !== "cancelado");
+
     res.json({
       success: true,
       perfil: {
@@ -4802,6 +4886,22 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
       })),
       servicios,
       clientes: [...clientesPorClave.values()].sort((a, b) => b.ultimoTurno.localeCompare(a.ultimoTurno)),
+      inicio: {
+        turnos: turnosMes.length,
+        ingresos: ingresosMes,
+        clientes: clientesMes,
+        ticket_promedio: turnosMes.length ? ingresosMes / turnosMes.length : 0,
+        turnos_hoy: turnosHoy.length,
+        stats: {
+          chartData: semanas.map((turnos, i) => ({ label: `Sem ${i + 1}`, turnos })),
+          ventasPorDia,
+          turnosLista: turnosHoy.map((t) => ({
+            id: t.id, fecha: t.fecha, hora: String(t.hora || "").slice(0, 5),
+            nombre: t.nombre, apellido: t.apellido, servicio: t.servicio_nombre,
+            precio_cobrado: Number(t.precio_cobrado || 0), estado: t.estado,
+          })),
+        },
+      },
     });
   } catch (e) {
     console.error("Error cargando resumen de empleado:", e.message);
@@ -4950,6 +5050,114 @@ app.delete("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("Error eliminando servicio de empleado:", e.message);
     res.status(500).json({ success: false, error: "No se pudo quitar el servicio." });
+  }
+});
+
+// Configuración de horarios y cobros propia del empleado. Los valores nulos
+// heredan el valor del negocio hasta que el integrante los personalice.
+app.get("/empleado/:slug/config", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const [miembroRes, negocioRes] = await Promise.all([
+      supabase.from("equipo").select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
+        .eq("id", miembro.id).eq("slug", slug).single(),
+      supabase.from("usuarios").select("business_name, plan, estado_suscripcion, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
+        .eq("slug", slug).single(),
+    ]);
+    if (miembroRes.error) throw miembroRes.error;
+    if (negocioRes.error) throw negocioRes.error;
+    const personal = miembroRes.data;
+    const negocio = negocioRes.data;
+    const keys = ["horarios", "excepciones", "anticipacion_minutos", "metodo_pago", "porcentaje_sena", "acepta_transferencia", "acepta_efectivo", "datos_bancarios", "agenda_sin_pagos"];
+    const settings = {};
+    const heredados = {};
+    keys.forEach((key) => {
+      const propio = personal[key] !== null && personal[key] !== undefined;
+      settings[key] = propio ? personal[key] : negocio[key];
+      heredados[key] = !propio;
+    });
+    settings.horarios = settings.horarios || {};
+    settings.excepciones = settings.excepciones || [];
+    settings.datos_bancarios = settings.datos_bancarios || {};
+    settings.anticipacion_minutos = Number(settings.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT;
+    settings.plan = negocio.plan;
+    settings.estado_suscripcion = negocio.estado_suscripcion;
+    settings.business_name = negocio.business_name;
+    settings.mp_personal_conectado = !!personal.mp_access_token;
+    settings.mp_cuenta_negocio_disponible = !!negocio.mp_access_token;
+    settings.mp_status = personal.mp_access_token ? "Conectado" : "Desconectado";
+    settings.heredados = heredados;
+    res.json({ success: true, settings });
+  } catch (e) {
+    console.error("Error cargando configuración del empleado:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo cargar tu configuración." });
+  }
+});
+
+async function actualizarConfigEquipo(slug, equipoId, body) {
+  const fields = ["horarios", "excepciones", "anticipacion_minutos", "metodo_pago", "porcentaje_sena", "acepta_transferencia", "acepta_efectivo", "datos_bancarios", "agenda_sin_pagos"];
+  const update = {};
+  fields.forEach((key) => { if (body[key] !== undefined) update[key] = body[key]; });
+  if (!Object.keys(update).length) return { error: "No hay cambios para guardar." };
+  if (update.horarios !== undefined && !validarHorarios(update.horarios)) return { error: "Formato de horarios inválido." };
+  if (update.excepciones !== undefined && !validarExcepciones(update.excepciones)) return { error: "Formato de excepciones inválido." };
+  if (update.anticipacion_minutos !== undefined) {
+    const val = Number(update.anticipacion_minutos);
+    if (!Number.isInteger(val) || val < 1 || val > ANTICIPACION_MINUTOS_MAX) return { error: "La anticipación debe ser entre 1 minuto y 30 días." };
+    update.anticipacion_minutos = val;
+  }
+  if (update.metodo_pago !== undefined && update.metodo_pago !== null && !["none", "sena", "total"].includes(update.metodo_pago)) return { error: "Método de pago inválido." };
+  if (update.porcentaje_sena !== undefined && update.porcentaje_sena !== null) {
+    const val = Number(update.porcentaje_sena);
+    if (!Number.isInteger(val) || val < 1 || val > 100) return { error: "Porcentaje de seña inválido." };
+    update.porcentaje_sena = val;
+  }
+  for (const key of ["acepta_transferencia", "acepta_efectivo", "agenda_sin_pagos"]) {
+    if (update[key] !== undefined && update[key] !== null && typeof update[key] !== "boolean") return { error: `Valor inválido para ${key}.` };
+  }
+  if (update.datos_bancarios !== undefined && update.datos_bancarios !== null && (typeof update.datos_bancarios !== "object" || Array.isArray(update.datos_bancarios))) return { error: "Datos bancarios inválidos." };
+  if (update.agenda_sin_pagos === true) {
+    const { data: negocio, error } = await supabase.from("usuarios").select("plan").eq("slug", slug).single();
+    if (error) throw error;
+    if (!planTieneFuncionesPremium(negocio.plan)) return { error: "Esta opción está disponible en el plan Premium." };
+  }
+  const { error } = await supabase.from("equipo").update(update).eq("id", equipoId).eq("slug", slug).eq("es_dueño", false);
+  if (error) throw error;
+  invalidateCache(slug);
+  return { success: true };
+}
+
+app.put("/empleado/:slug/config", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const result = await actualizarConfigEquipo(slug, miembro.id, req.body || {});
+    if (result.error) return res.status(400).json({ success: false, error: result.error });
+    res.json({ success: true });
+  } catch (e) {
+    console.error("Error guardando configuración del empleado:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo guardar la configuración." });
+  }
+});
+
+// El titular puede ajustar los mismos campos de cualquier integrante desde
+// Equipo; requireAuth impide que una sesión de empleado acceda a esta ruta.
+app.put("/admin/equipo/:id/config", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.body?.slug || req.auth.slug);
+    const { data: miembro, error } = await supabase.from("equipo").select("id")
+      .eq("id", req.params.id).eq("slug", slug).eq("es_dueño", false).maybeSingle();
+    if (error) throw error;
+    if (!miembro) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
+    const result = await actualizarConfigEquipo(slug, miembro.id, req.body || {});
+    if (result.error) return res.status(400).json({ success: false, error: result.error });
+    res.json({ success: true });
+  } catch (e) {
+    console.error("Error guardando configuración desde Equipo:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo guardar la configuración del integrante." });
   }
 });
 
@@ -6076,7 +6284,19 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const { data: user, error: userError } = await supabase.from("usuarios").select("*").eq("slug", slugClean).maybeSingle();
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-    if (!cumpleAnticipacionReserva(fecha, hora, user.anticipacion_minutos)) {
+    let empleadoReserva = null;
+    if (equipo_id && UUID_REGEX.test(equipo_id)) {
+      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key")
+        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
+      if (miembroError) throw miembroError;
+      if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
+      empleadoReserva = miembro;
+    }
+    const configReserva = configNegocioParaEquipo(user, empleadoReserva);
+    if (!horaDentroDeIntervalos(configReserva.horarios, configReserva.excepciones, fecha, hora))
+      return res.status(400).json({ success: false, error: "Ese horario ya no está disponible para este profesional." });
+    if (!cumpleAnticipacionReserva(fecha, hora, configReserva.anticipacion_minutos)) {
       return res.status(400).json({ success: false, codigo: "anticipacion_minima", error: "Este turno debe reservarse con más anticipación. Elegí otro horario." });
     }
 
@@ -6095,40 +6315,33 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       if (srv) { precioServicio = Number(srv.precio || 0); nombreServicio = srv.nombre; }
     }
 
-    let equipoIdValido = null;
-    let equipoNombre   = null;
-    if (equipo_id && UUID_REGEX.test(equipo_id)) {
-      const { data: prof } = await supabase.from("equipo")
-        .select("id, nombre, apellido")
-        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
-      if (prof) {
-        equipoIdValido = prof.id;
-        equipoNombre = `${prof.nombre}${prof.apellido ? " " + prof.apellido : ""}`;
-      }
-    }
+    const equipoIdValido = empleadoReserva?.id || null;
+    const equipoNombre = empleadoReserva ? `${empleadoReserva.nombre}${empleadoReserva.apellido ? " " + empleadoReserva.apellido : ""}` : null;
 
     const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
 
     const esTrialPremium = user.plan === "premium" && user.estado_suscripcion === "trial";
-    const metodo    = esTrialPremium && user.metodo_pago === "none" ? "total" : (user.metodo_pago || "none");
+    const metodo    = esTrialPremium && configReserva.metodo_pago === "none" ? "total" : (configReserva.metodo_pago || "none");
     const debePagar = metodo === "sena" || metodo === "total";
     if (!debePagar || (precioServicio <= 0 && montoExtras <= 0)) return res.json({ isFree: true });
 
     // 👇 FIX: la seña se calcula sobre (servicio + extras), no solo sobre el servicio
     const baseCalculo = precioServicio + montoExtras;
     const montoACobrar = metodo === "sena"
-      ? Math.round(baseCalculo * (user.porcentaje_sena || 30) / 100)
+      ? Math.round(baseCalculo * (configReserva.porcentaje_sena || 30) / 100)
       : baseCalculo;
-    const conceptoPago = metodo === "sena" ? `Seña ${user.porcentaje_sena || 30}%` : "Total";
+    const conceptoPago = metodo === "sena" ? `Seña ${configReserva.porcentaje_sena || 30}%` : "Total";
 
 // Gratis y Premium pagan la comisión de Turnits por cobros online (distinta tasa por plan); VIP no.
 const fee = planCobraComision(user.plan)
   ? calcularComisionTurnits(montoACobrar, user.plan)
   : 0;
 
-    if (user.mp_access_token) {
+    if (configReserva.mp_access_token) {
       try {
-        const tokenVigente = await obtenerTokenMpVigente(slugClean, user);
+        const tokenVigente = empleadoReserva?.mp_access_token
+          ? await obtenerTokenMpVigenteEquipo(slugClean, empleadoReserva.id, empleadoReserva)
+          : await obtenerTokenMpVigente(slugClean, user);
         if (!tokenVigente) {
           return res.status(500).json({ success: false, error: "No se pudo validar la conexión con Mercado Pago. Reconectá tu cuenta desde el panel." });
         }
@@ -6162,7 +6375,7 @@ const fee = planCobraComision(user.plan)
           ? `${nombreServicio} + ${nombresExtras}`
           : nombreServicio;
         const descripcionItem = metodo === "sena"
-          ? `Seña del ${user.porcentaje_sena || 30}% para reservar ${descripcionServicio} el ${fecha} a las ${hora} hs. Saldo restante a pagar al negocio: $${Math.max(baseCalculo - montoACobrar, 0)}.`
+          ? `Seña del ${configReserva.porcentaje_sena || 30}% para reservar ${descripcionServicio} el ${fecha} a las ${hora} hs. Saldo restante a pagar al negocio: $${Math.max(baseCalculo - montoACobrar, 0)}.`
           : `Pago total de ${descripcionServicio}, con turno para el ${fecha} a las ${hora} hs.`;
 
         const items = [
@@ -6537,6 +6750,46 @@ async function obtenerTokenMpVigente(slug, userRow) {
   }
 }
 
+async function obtenerTokenMpVigenteEquipo(slug, equipoId, row) {
+  const accessTokenPlano = decryptMpSecret(row?.mp_access_token);
+  if (!accessTokenPlano) return null;
+  const migracion = {};
+  if (!String(row.mp_access_token).startsWith("enc:v1:")) migracion.mp_access_token = encryptMpSecret(accessTokenPlano);
+  if (row.mp_refresh_token && !String(row.mp_refresh_token).startsWith("enc:v1:"))
+    migracion.mp_refresh_token = encryptMpSecret(decryptMpSecret(row.mp_refresh_token));
+  if (Object.keys(migracion).length) {
+    const { error } = await supabase.from("equipo").update(migracion).eq("id", equipoId).eq("slug", slug);
+    if (error) return null;
+  }
+  const vencePronto = row.mp_token_expires_at && new Date(row.mp_token_expires_at).getTime() - Date.now() < 15 * 24 * 60 * 60 * 1000;
+  const refreshTokenPlano = decryptMpSecret(row.mp_refresh_token);
+  if (!vencePronto || !refreshTokenPlano) return accessTokenPlano;
+  try {
+    const response = await fetch("https://api.mercadopago.com/oauth/token", {
+      method: "POST", headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: process.env.MP_TURNERO_CLIENT_ID,
+        client_secret: process.env.MP_TURNERO_CLIENT_SECRET,
+        grant_type: "refresh_token", refresh_token: refreshTokenPlano,
+      }),
+    });
+    const data = await response.json();
+    if (!data.access_token) return accessTokenPlano;
+    const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
+    const { error } = await supabase.from("equipo").update({
+      mp_access_token: encryptMpSecret(data.access_token),
+      mp_refresh_token: encryptMpSecret(data.refresh_token || refreshTokenPlano),
+      mp_token_expires_at: expiresAt,
+    }).eq("id", equipoId).eq("slug", slug);
+    if (error) throw error;
+    invalidateCache(slug);
+    return data.access_token;
+  } catch (e) {
+    console.error(`❌ Error renovando token MP del integrante ${equipoId}:`, e.message);
+    return accessTokenPlano;
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
 // OAUTH — Mercado Pago
 // ══════════════════════════════════════════════════════════════
@@ -6544,9 +6797,10 @@ async function obtenerTokenMpVigente(slug, userRow) {
 // El state de OAuth debe ser único, impredecible y verificable al volver
 // desde Mercado Pago. Se firma con el secret de la aplicación para evitar
 // que alguien cambie el slug y vincule una cuenta a otro negocio.
-function crearMpOAuthState(slug) {
+function crearMpOAuthState(slug, equipoId = null) {
   const payload = Buffer.from(JSON.stringify({
     slug,
+    equipoId,
     issuedAt: Date.now(),
     nonce: crypto.randomBytes(24).toString("base64url"),
   })).toString("base64url");
@@ -6569,7 +6823,9 @@ function leerMpOAuthState(state) {
     const age = Date.now() - Number(data.issuedAt);
     if (!data.slug || !data.nonce || !Number.isFinite(age) || age < 0 || age > 30 * 60 * 1000) return null;
     const slug = cleanSlug(data.slug);
-    return slug && slug === data.slug ? slug : null;
+    if (!slug || slug !== data.slug) return null;
+    if (data.equipoId && !UUID_REGEX.test(data.equipoId)) return null;
+    return { slug, equipoId: data.equipoId || null };
   } catch { return null; }
 }
 
@@ -6596,13 +6852,26 @@ app.post("/mp/connect/:slug", requireAuth, (req, res) => {
   res.json({ success: true, authorization_url: authUrl });
 });
 
+app.post("/empleado/:slug/mp/connect", requireAuth, (req, res) => {
+  const slug = cleanSlug(req.params.slug);
+  const miembro = req.empleado;
+  if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+  if (!process.env.MP_TURNERO_CLIENT_ID || !process.env.MP_TURNERO_CLIENT_SECRET)
+    return res.status(500).json({ success: false, error: "Mercado Pago no está configurado correctamente en el servidor." });
+  const redirectUri = encodeURIComponent(`${API_URL}/oauth-callback`);
+  const state = encodeURIComponent(crearMpOAuthState(slug, miembro.id));
+  const authUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(process.env.MP_TURNERO_CLIENT_ID)}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${redirectUri}`;
+  res.json({ success: true, authorization_url: authUrl });
+});
+
 app.get("/oauth-callback", async (req, res) => {
   const { code, state, error: oauthError } = req.query;
-  const slug = leerMpOAuthState(state);
-  if (!slug) {
+  const oauthState = leerMpOAuthState(state);
+  if (!oauthState) {
     console.warn("⚠️ Callback OAuth de MP rechazado: state inválido o vencido.");
     return res.status(400).send("La solicitud de conexión venció o no es válida. Volvé al panel e intentá nuevamente.");
   }
+  const { slug, equipoId } = oauthState;
   if (oauthError) {
     // MP puede devolver el error antes de emitir un authorization code.
     // Registrar solo el código de error, nunca query completa ni tokens.
@@ -6636,25 +6905,31 @@ app.get("/oauth-callback", async (req, res) => {
       // (cobro completo) para que conectar ya implique poder cobrar.
       // Si ya tenía "sena" o "total" elegido de antes (ej: reconexión
       // porque venció el token), no lo tocamos.
-      const { data: negocioPrevio } = await supabase.from("usuarios")
-        .select("metodo_pago").eq("slug", slugClean).maybeSingle();
       const updateMp = {
         mp_access_token:     encryptMpSecret(data.access_token),
         mp_refresh_token:    encryptMpSecret(data.refresh_token || null),
         mp_token_expires_at: expiresAt,
         mp_public_key:       data.public_key || null,
       };
-      if (!negocioPrevio || !["sena", "total"].includes(negocioPrevio.metodo_pago)) {
-        updateMp.metodo_pago = "total";
+      let updError;
+      if (equipoId) {
+        const { data: miembro, error: miembroError } = await supabase.from("equipo")
+          .select("id, metodo_pago").eq("id", equipoId).eq("slug", slugClean).eq("es_dueño", false).maybeSingle();
+        if (miembroError || !miembro) return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error`);
+        if (!["sena", "total"].includes(miembro.metodo_pago)) updateMp.metodo_pago = "total";
+        const result = await supabase.from("equipo").update(updateMp).eq("id", equipoId).eq("slug", slugClean);
+        updError = result.error;
+      } else {
+        const { data: negocioPrevio } = await supabase.from("usuarios")
+          .select("metodo_pago").eq("slug", slugClean).maybeSingle();
+        if (!negocioPrevio || !["sena", "total"].includes(negocioPrevio.metodo_pago)) updateMp.metodo_pago = "total";
+        const result = await supabase.from("usuarios").update(updateMp).eq("slug", slugClean);
+        updError = result.error;
       }
-
-      const { error: updError } = await supabase.from("usuarios")
-        .update(updateMp)
-        .eq("slug", slugClean);
       if (updError) { console.error("Error guardando token MP:", updError.message); return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error`); }
       invalidateCache(slugClean);
 
-      crearNotificacion({
+      if (!equipoId) crearNotificacion({
         slug: slugClean,
         tipo: "sistema",
         titulo: "Mercado Pago conectado",
@@ -6868,7 +7143,15 @@ app.post("/webhook/mp", async (req, res) => {
       // 3) Releer el pago con el token del vendedor para confirmar estado/monto reales
       let finalPayData = payData;
       let leidoConTokenVendedor = false;
-      const tokenVendedor = userNegocio ? await obtenerTokenMpVigente(slug, userNegocio) : null;
+      let tokenVendedor = null;
+      if (pendiente?.equipo_id) {
+        const { data: integrante } = await supabase.from("equipo")
+          .select("id, mp_access_token, mp_refresh_token, mp_token_expires_at")
+          .eq("id", pendiente.equipo_id).eq("slug", slug).maybeSingle();
+        if (integrante?.mp_access_token)
+          tokenVendedor = await obtenerTokenMpVigenteEquipo(slug, integrante.id, integrante);
+      }
+      if (!tokenVendedor && userNegocio) tokenVendedor = await obtenerTokenMpVigente(slug, userNegocio);
       if (tokenVendedor) {
         try {
           const vendorRes  = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${tokenVendedor}` } });
