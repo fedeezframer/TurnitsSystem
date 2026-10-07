@@ -2123,7 +2123,7 @@ const { data: user, error } = await supabase.from("usuarios")
     if (equipoCualquiera) {
       const { data: miembros, error: equipoError } = await supabase.from("equipo")
         .select("id, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token")
-        .eq("slug", slug).eq("activo", true).eq("es_dueño", false);
+        .eq("slug", slug).eq("activo", true);
       if (equipoError) throw equipoError;
       horariosEquipoUnion = {};
       const excepcionesCustom = new Map();
@@ -2146,7 +2146,7 @@ const { data: user, error } = await supabase.from("usuarios")
     if (UUID_REGEX.test(equipoIdQuery)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
         .select("horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, puede_recibir_pagos_personales")
-        .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).eq("es_dueño", false).maybeSingle();
+        .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (miembro) configEquipo = miembro;
     }
@@ -2324,8 +2324,8 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     let miembrosAgenda = [];
     if (UUID_REGEX.test(equipoIdQuery)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, horarios, excepciones, anticipacion_minutos")
-        .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).eq("es_dueño", false).maybeSingle();
+        .select("id, nombre, apellido, es_dueño, horarios, excepciones, anticipacion_minutos")
+        .eq("id", equipoIdQuery).eq("slug", slug).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "El profesional seleccionado no está disponible." });
       miembrosAgenda = [miembro];
@@ -2337,8 +2337,8 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       const ids = [...new Set((asignaciones || []).map((x) => x.equipo_id).filter(Boolean))];
       if (ids.length) {
         const { data, error: equipoError } = await supabase.from("equipo")
-          .select("id, nombre, apellido, horarios, excepciones, anticipacion_minutos")
-          .eq("slug", slug).eq("activo", true).eq("es_dueño", false).in("id", ids);
+          .select("id, nombre, apellido, es_dueño, horarios, excepciones, anticipacion_minutos")
+          .eq("slug", slug).eq("activo", true).in("id", ids);
         if (equipoError) throw equipoError;
         miembrosAgenda = data || [];
       }
@@ -2380,7 +2380,8 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       intervalosDia.forEach(([ini, fin]) => { for (let cursor = ini; cursor + duracionSolicitada <= fin; cursor += duracionSolicitada) slotsGenerados.push(cursor); });
       let queryTurnosDia = supabase.from("turnos").select("hora, estado, servicio_id")
         .eq("slug", slug).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
-      queryTurnosDia = miembro ? queryTurnosDia.eq("equipo_id", miembro.id) : queryTurnosDia.is("equipo_id", null);
+      if (miembro?.es_dueño) queryTurnosDia = queryTurnosDia.or(`equipo_id.eq.${miembro.id},equipo_id.is.null`);
+      else queryTurnosDia = miembro ? queryTurnosDia.eq("equipo_id", miembro.id) : queryTurnosDia.is("equipo_id", null);
       const { data: turnosDia, error: turnosError } = await queryTurnosDia;
       if (turnosError) throw turnosError;
       const rangosOcupados = (turnosDia || []).map((t) => {
@@ -3192,8 +3193,8 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
-        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
+        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
+        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
       empleadoReserva = miembro;
@@ -3268,7 +3269,8 @@ const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean,
 
     let queryCapacidad = supabase.from("turnos").select("id", { count: "exact" })
       .eq("slug", slugClean).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
-    if (empleadoReserva?.id) queryCapacidad = queryCapacidad.eq("equipo_id", empleadoReserva.id);
+    if (empleadoReserva?.es_dueño) queryCapacidad = queryCapacidad.or(`equipo_id.eq.${empleadoReserva.id},equipo_id.is.null`);
+    else if (empleadoReserva?.id) queryCapacidad = queryCapacidad.eq("equipo_id", empleadoReserva.id);
     const { count } = await queryCapacidad;
     if (count >= capacidad) return res.status(400).json({ success: false, error: "Este turno ya está lleno." });
 
@@ -3376,8 +3378,8 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
-        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
+        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
+        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
       empleadoReserva = miembro;
@@ -3454,7 +3456,8 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
 
     let queryCapacidadManual = supabase.from("turnos").select("id", { count: "exact" })
       .eq("slug", slugClean).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
-    if (equipoIdValido) queryCapacidadManual = queryCapacidadManual.eq("equipo_id", equipoIdValido);
+    if (empleadoReserva?.es_dueño) queryCapacidadManual = queryCapacidadManual.or(`equipo_id.eq.${empleadoReserva.id},equipo_id.is.null`);
+    else if (equipoIdValido) queryCapacidadManual = queryCapacidadManual.eq("equipo_id", equipoIdValido);
     const { count } = await queryCapacidadManual;
     if (count >= capacidad) return res.status(400).json({ success: false, error: "Este turno ya está lleno." });
 
@@ -6471,8 +6474,8 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     let empleadoReserva = null;
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, nombre, apellido, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
-        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).eq("es_dueño", false).maybeSingle();
+        .select("id, nombre, apellido, es_dueño, activo, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, acepta_transferencia, acepta_efectivo, datos_bancarios, agenda_sin_pagos, mp_access_token, mp_refresh_token, mp_token_expires_at, mp_public_key, puede_recibir_pagos_personales")
+        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
       empleadoReserva = miembro;
