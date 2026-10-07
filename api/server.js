@@ -3504,7 +3504,8 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
       tipo_cobro: tipoCobro,
       porcentaje_sena: tipoCobro === "sena" ? porcSenaTransferencia : null,
       estado: "pendiente", metodo_pago,
-      pago_estado: metodo_pago === "transferencia" ? "pendiente" : "sin_pago",
+      // Tanto efectivo como transferencia requieren aprobación del profesional.
+      pago_estado: "pendiente",
       comprobante_path: comprobantePath,
     }]).select().single();
     if (turnoError) throw turnoError;
@@ -3745,14 +3746,14 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
     if (fetchError) throw fetchError;
     if (!turnoExistente) return res.status(404).json({ success: false, error: "Turno no encontrado." });
 
-    // Un empleado sólo puede aprobar pagos manuales pendientes de turnos
+    // Un empleado sólo puede aprobar o rechazar turnos manuales pendientes
     // asignados a su perfil. El resto de acciones siguen siendo exclusivas del titular.
     if (req.auth?.rol === "empleado" && (
-      estado !== "confirmado" || notas !== undefined || equipo_id !== undefined ||
+      !["confirmado", "cancelado"].includes(estado) || notas !== undefined || equipo_id !== undefined ||
       turnoExistente.equipo_id !== req.empleado?.id || turnoExistente.estado !== "pendiente" ||
       !["transferencia", "efectivo"].includes(turnoExistente.metodo_pago)
     )) {
-      return res.status(403).json({ success: false, error: "Sólo podés aprobar pagos pendientes de tus turnos asignados." });
+      return res.status(403).json({ success: false, error: "Sólo podés aprobar o rechazar turnos pendientes asignados a tu perfil." });
     }
 
     // Aprobación de un turno manual (transferencia/efectivo) pendiente
@@ -3794,6 +3795,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 
     const updateData = {};
     if (estado !== undefined) updateData.estado = estado;
+    if (req.auth?.rol === "empleado" && estado === "cancelado") updateData.pago_estado = "rechazado";
     if (notas !== undefined) updateData.notas = notas;
     if (equipoAsignado !== undefined) {
       updateData.equipo_id     = equipoAsignado.id;
@@ -5016,6 +5018,27 @@ app.delete("/admin/equipo/:id", requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // PANEL REDUCIDO DEL EMPLEADO — sólo sus turnos, servicios y clientes
 // ══════════════════════════════════════════════════════════════
+app.get("/empleado/:slug/turnos/:id/comprobante", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    if (!req.empleado || req.empleado.slug !== slug) {
+      return res.status(403).json({ success: false, error: "No autorizado para este perfil." });
+    }
+    const { data: turno, error } = await supabase.from("turnos")
+      .select("comprobante_path").eq("id", req.params.id).eq("slug", slug)
+      .eq("equipo_id", req.empleado.id).maybeSingle();
+    if (error) throw error;
+    if (!turno?.comprobante_path) return res.status(404).json({ success: false, error: "No hay comprobante adjunto." });
+    const { data: signed, error: signError } = await supabase.storage
+      .from("comprobantes").createSignedUrl(turno.comprobante_path, 60 * 10);
+    if (signError) throw signError;
+    res.json({ success: true, url: signed.signedUrl });
+  } catch (e) {
+    console.error("Error en comprobante de turno de empleado:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo cargar el comprobante." });
+  }
+});
+
 app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -5028,7 +5051,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
     const [anioEmpleado, mesEmpleado] = hoyEmpleado.slice(0, 7).split("-");
     const inicioMesEmpleado = `${anioEmpleado}-${mesEmpleado}-01`;
     const finMesEmpleado = new Date(Date.UTC(Number(anioEmpleado), Number(mesEmpleado), 0)).toISOString().slice(0, 10);
-    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas, precio_cobrado, monto_pagado, metodo_pago, pago_estado, tipo_cobro, porcentaje_sena, extras, equipo_nombre";
+    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas, precio_cobrado, monto_pagado, metodo_pago, pago_estado, tipo_cobro, porcentaje_sena, extras, equipo_nombre, comprobante_path";
     const [turnosFuturosRes, turnosPasadosRes, vinculosRes, turnosMesRes] = await Promise.all([
       supabase.from("turnos").select(columnasTurnoEmpleado)
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
@@ -5137,6 +5160,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         porcentaje_sena: turno.porcentaje_sena || null,
         extras: turno.extras || [],
         equipo_nombre: turno.equipo_nombre || null,
+        tiene_comprobante: !!turno.comprobante_path,
       })),
       servicios,
       clientes: [...clientesPorClave.values()].sort((a, b) => b.ultimoTurno.localeCompare(a.ultimoTurno)),
