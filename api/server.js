@@ -877,7 +877,7 @@ app.use(limiterAPI);
 // ══════════════════════════════════════════════════════════════
 // MIDDLEWARE: JWT AUTH
 // ══════════════════════════════════════════════════════════════
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   try {
     const header = req.headers["authorization"];
     if (!header?.startsWith("Bearer ")) {
@@ -891,6 +891,30 @@ function requireAuth(req, res, next) {
     const slugRuta = cleanSlug(req.params.slug || req.body?.slug || req.query?.slug || "");
     if (slugRuta && payload.slug !== slugRuta) {
       return res.status(403).json({ success: false, error: "No autorizado para este negocio." });
+    }
+    if (payload.rol === "empleado") {
+      // Las sesiones de empleado nunca pueden entrar en rutas administrativas
+      // del dueño. Sólo se habilitan las rutas privadas /empleado/.
+      if (!req.path.startsWith("/empleado/") || !payload.equipoId) {
+        return res.status(403).json({ success: false, error: "Esta sección no está disponible para tu perfil." });
+      }
+      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+        .select("id, slug, nombre, apellido, rol, activo, foto_url, es_dueño, login_email, login_activado")
+        .eq("id", payload.equipoId).eq("slug", payload.slug).eq("es_dueño", false).maybeSingle();
+      if (miembroError) throw miembroError;
+      if (!miembro || !isActivo(miembro.activo) || !miembro.login_activado) {
+        return res.status(403).json({ success: false, error: "Tu acceso fue desactivado. Contactá al titular del negocio." });
+      }
+      const { data: negocio, error: negocioError } = await supabase.from("usuarios")
+        .select("activo, plan, fecha_vencimiento").eq("slug", payload.slug).maybeSingle();
+      if (negocioError) throw negocioError;
+      if (!negocio || !isActivo(negocio.activo) || !planTieneFuncionesPremium(negocio.plan) ||
+          (negocio.fecha_vencimiento && diasHastaVencer(negocio.fecha_vencimiento) <= 0)) {
+        return res.status(403).json({ success: false, error: "El acceso del equipo no está habilitado para este negocio." });
+      }
+      req.auth = payload;
+      req.empleado = miembro;
+      return next();
     }
     req.auth = payload;
     next();
@@ -1756,6 +1780,45 @@ app.post("/login", limiterAuth, async (req, res) => {
     const { data: user, error } = await query.maybeSingle();
     if (error) throw error;
     if (!user) {
+      if (email) {
+        const { data: miembro, error: miembroError } = await supabase.from("equipo")
+          .select("id, slug, nombre, apellido, activo, es_dueño, login_email, login_password, login_activado")
+          .eq("login_email", email).eq("es_dueño", false).maybeSingle();
+        if (miembroError) throw miembroError;
+        const passwordOk = miembro?.login_activado && miembro?.login_password
+          ? await bcrypt.compare(String(password), miembro.login_password)
+          : false;
+        if (miembro && passwordOk && isActivo(miembro.activo)) {
+          const { data: negocio, error: negocioError } = await supabase.from("usuarios")
+            .select("activo, plan, fecha_vencimiento").eq("slug", miembro.slug).maybeSingle();
+          if (negocioError) throw negocioError;
+          if (!negocio || !isActivo(negocio.activo) || !planTieneFuncionesPremium(negocio.plan)) {
+            registrarIntentoFallidoLogin(claveBloqueo);
+            return res.status(403).json({ success: false, error: "El acceso del equipo no está habilitado para este negocio." });
+          }
+          const diasRestantesEmpleado = negocio.fecha_vencimiento ? diasHastaVencer(negocio.fecha_vencimiento) : null;
+          if (diasRestantesEmpleado !== null && diasRestantesEmpleado <= 0) {
+            registrarIntentoFallidoLogin(claveBloqueo);
+            return res.status(403).json({ success: false, error: "El acceso del equipo está pausado. Contactá al titular del negocio." });
+          }
+          limpiarIntentosLogin(claveBloqueo);
+          const secret = process.env.JWT_SECRET;
+          if (!secret) return res.status(500).json({ success: false, error: "JWT_SECRET no configurado." });
+          const token = jwt.sign(
+            { slug: miembro.slug, equipoId: miembro.id, rol: "empleado" },
+            secret, { expiresIn: JWT_EXPIRY }
+          );
+          return res.json({
+            success: true,
+            token,
+            slug: miembro.slug,
+            rol: "empleado",
+            equipo_id: miembro.id,
+            nombre_persona: `${miembro.nombre}${miembro.apellido ? ` ${miembro.apellido}` : ""}`,
+            email,
+          });
+        }
+      }
       registrarIntentoFallidoLogin(claveBloqueo);
       return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
     }
@@ -1839,6 +1902,25 @@ app.get("/verify-session", async (req, res) => {
     if (!token) return res.json({ active: false, reason: "no_token" });
 
     const payload    = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.rol === "empleado" && payload.equipoId) {
+      const [{ data: miembro }, { data: negocio }] = await Promise.all([
+        supabase.from("equipo").select("id, slug, nombre, apellido, activo, es_dueño, login_activado")
+          .eq("id", payload.equipoId).eq("slug", payload.slug).eq("es_dueño", false).maybeSingle(),
+        supabase.from("usuarios").select("activo, plan, fecha_vencimiento").eq("slug", payload.slug).maybeSingle(),
+      ]);
+      if (!miembro || !isActivo(miembro.activo) || !miembro.login_activado || !negocio ||
+          !isActivo(negocio.activo) || !planTieneFuncionesPremium(negocio.plan) ||
+          (negocio.fecha_vencimiento && diasHastaVencer(negocio.fecha_vencimiento) <= 0)) {
+        return res.json({ active: false, reason: "employee_access_disabled" });
+      }
+      return res.json({
+        active: true,
+        slug: miembro.slug,
+        rol: "empleado",
+        equipo_id: miembro.id,
+        nombre_persona: `${miembro.nombre}${miembro.apellido ? ` ${miembro.apellido}` : ""}`,
+      });
+    }
     const { data: user } = await supabase.from("usuarios")
       .select("slug, business_name, email, nombre_persona, activo, plan, estado_suscripcion, fecha_vencimiento")
       .eq("slug", payload.slug).maybeSingle();
@@ -4474,7 +4556,7 @@ app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const { data, error } = await supabase.from("equipo")
-      .select("*")
+      .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado")
       .eq("slug", slug)
       .order("es_dueño", { ascending: false })
 .order("created_at", { ascending: true });
@@ -4488,6 +4570,7 @@ app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
 app.post("/admin/equipo", requireAuth, async (req, res) => {
   try {
     const { slug, nombre, apellido, color, rol, foto_url } = req.body;
+    const loginEmail = String(req.body.login_email || "").trim().toLowerCase() || null;
     const slugClean = cleanSlug(slug || req.auth.slug);
 
     if (!slugClean || !nombre) {
@@ -4495,6 +4578,35 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
     }
     if (nombre.trim().length < 1 || nombre.trim().length > 80) {
       return res.status(400).json({ success: false, error: "Nombre inválido." });
+    }
+    if (loginEmail && !validateEmail(loginEmail)) {
+      return res.status(400).json({ success: false, error: "El email de acceso no es válido." });
+    }
+    const { data: negocio, error: negocioError } = await supabase.from("usuarios")
+      .select("plan").eq("slug", slugClean).maybeSingle();
+    if (negocioError) throw negocioError;
+    if (!negocio || !planTieneFuncionesPremium(negocio.plan)) {
+      return res.status(403).json({ success: false, error: "El acceso individual del equipo requiere el plan Premium." });
+    }
+    if (loginEmail) {
+      const [{ data: ownerWithEmail }, { data: adminWithEmail }] = await Promise.all([
+        supabase.from("usuarios").select("id").eq("email", loginEmail).maybeSingle(),
+        supabase.from("admins").select("id").eq("email", loginEmail).maybeSingle(),
+      ]);
+      if (ownerWithEmail || adminWithEmail) {
+        return res.status(409).json({ success: false, error: "Ese email ya se usa para otra cuenta de Turnits. Usá uno distinto para el integrante." });
+      }
+    }
+
+    let loginResetToken = null;
+    let loginResetExpiry = null;
+    if (loginEmail) {
+      const { data: existente, error: existenteError } = await supabase.from("equipo")
+        .select("id").eq("login_email", loginEmail).eq("es_dueño", false).maybeSingle();
+      if (existenteError) throw existenteError;
+      if (existente) return res.status(409).json({ success: false, error: "Ese email ya está asociado a un integrante." });
+      loginResetToken = crypto.randomUUID();
+      loginResetExpiry = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
     }
 
     const COLORES_VALIDOS = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
@@ -4510,10 +4622,27 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
       rol:      rolFinal,
       foto_url: foto_url || null,
       activo:   true,
-    }]).select().single();
+      login_email: loginEmail,
+      login_reset_token: loginResetToken,
+      login_reset_token_expiry: loginResetExpiry,
+      login_activado: false,
+    }]).select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado").single();
 
     if (error) throw error;
-    res.status(201).json({ success: true, miembro: data });
+    if (loginEmail && APPS_SCRIPT_URL) {
+      const resetUrl = `https://turnits.com/cambiar-contraseña?token=${loginResetToken}`;
+      fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({
+          action: "resetPassword",
+          email: loginEmail,
+          nombre: `${data.nombre}${data.apellido ? ` ${data.apellido}` : ""}`,
+          resetUrl,
+        }),
+      }).catch((e) => console.error("Error enviando invitación al equipo:", e.message));
+    }
+    res.status(201).json({ success: true, miembro: data, invitacion_enviada: Boolean(loginEmail && APPS_SCRIPT_URL) });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo crear el miembro del equipo." });
   }
@@ -4563,7 +4692,7 @@ app.put("/admin/equipo/:id", requireAuth, async (req, res) => {
 
     const { data, error } = await supabase.from("equipo")
       .update(update).eq("id", id).eq("slug", slugClean)
-      .select().single();
+      .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado").single();
 
     if (error) throw error;
     res.json({ success: true, miembro: data });
@@ -4589,6 +4718,91 @@ app.delete("/admin/equipo/:id", requireAuth, async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo eliminar." });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// PANEL REDUCIDO DEL EMPLEADO — sólo sus turnos, servicios y clientes
+// ══════════════════════════════════════════════════════════════
+app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) {
+      return res.status(403).json({ success: false, error: "No autorizado para este perfil." });
+    }
+
+    const hoyEmpleado = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
+    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas";
+    const [turnosFuturosRes, turnosPasadosRes, vinculosRes] = await Promise.all([
+      supabase.from("turnos").select(columnasTurnoEmpleado)
+        .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
+        .gte("fecha", hoyEmpleado).order("fecha", { ascending: true }).order("hora", { ascending: true }).limit(150),
+      supabase.from("turnos").select(columnasTurnoEmpleado)
+        .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
+        .lt("fecha", hoyEmpleado).order("fecha", { ascending: false }).order("hora", { ascending: false }).limit(150),
+      supabase.from("servicio_equipo").select("servicio_id").eq("equipo_id", miembro.id),
+    ]);
+    if (turnosFuturosRes.error) throw turnosFuturosRes.error;
+    if (turnosPasadosRes.error) throw turnosPasadosRes.error;
+    if (vinculosRes.error) throw vinculosRes.error;
+    const turnos = [...(turnosFuturosRes.data || []), ...(turnosPasadosRes.data || [])];
+    const vinculos = vinculosRes.data || [];
+
+    const servicioIds = [...new Set((vinculos || []).map((v) => v.servicio_id).filter(Boolean))];
+    let servicios = [];
+    if (servicioIds.length) {
+      const { data, error } = await supabase.from("servicios")
+        .select("id, nombre, descripcion, duracion, precio, activo")
+        .eq("slug", slug).in("id", servicioIds).order("nombre", { ascending: true });
+      if (error) throw error;
+      servicios = data || [];
+    }
+
+    const clientesPorClave = new Map();
+    (turnos || []).forEach((turno) => {
+      const clave = String(turno.telefono || turno.email || `${turno.nombre}|${turno.apellido || ""}`).toLowerCase();
+      const anterior = clientesPorClave.get(clave);
+      const fechaTurno = `${turno.fecha || ""}T${String(turno.hora || "").slice(0, 5)}`;
+      if (!anterior || fechaTurno > anterior.ultimoTurno) {
+        clientesPorClave.set(clave, {
+          nombre: `${turno.nombre || ""}${turno.apellido ? ` ${turno.apellido}` : ""}`.trim() || "Cliente",
+          telefono: turno.telefono || null,
+          email: turno.email || null,
+          ultimoTurno: fechaTurno,
+          cantidadTurnos: (anterior?.cantidadTurnos || 0) + 1,
+        });
+      } else {
+        anterior.cantidadTurnos++;
+      }
+    });
+
+    res.json({
+      success: true,
+      perfil: {
+        id: miembro.id,
+        nombre: miembro.nombre,
+        apellido: miembro.apellido,
+        color: miembro.color,
+        foto_url: miembro.foto_url,
+      },
+      turnos: (turnos || []).map((turno) => ({
+        id: turno.id,
+        fecha: turno.fecha,
+        hora: String(turno.hora || "").slice(0, 5),
+        cliente: `${turno.nombre || ""}${turno.apellido ? ` ${turno.apellido}` : ""}`.trim() || "Cliente",
+        telefono: turno.telefono || null,
+        email: turno.email || null,
+        servicio: turno.servicio_nombre || "Turno",
+        estado: turno.estado,
+        notas: turno.notas || null,
+      })),
+      servicios,
+      clientes: [...clientesPorClave.values()].sort((a, b) => b.ultimoTurno.localeCompare(a.ultimoTurno)),
+    });
+  } catch (e) {
+    console.error("Error cargando resumen de empleado:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo cargar tu panel." });
   }
 });
 
@@ -5532,8 +5746,31 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
       .from("usuarios").select("id, nombre_persona, email")
       .eq("email", email).maybeSingle();
 
-    if (!user)
+    if (!user) {
+      const { data: miembro } = await supabase.from("equipo")
+        .select("id, slug, nombre, apellido, login_email, activo, es_dueño")
+        .eq("login_email", email).eq("es_dueño", false).maybeSingle();
+      if (!miembro || !isActivo(miembro.activo))
+        return res.json({ success: true, message: "Si el email existe, vas a recibir un enlace." });
+      const token = crypto.randomUUID();
+      const expiry = new Date(Date.now() + 1000 * 60 * 30);
+      await supabase.from("equipo").update({
+        login_reset_token: token,
+        login_reset_token_expiry: expiry.toISOString(),
+      }).eq("id", miembro.id);
+      const resetUrl = `https://turnits.com/cambiar-contraseña?token=${token}`;
+      if (APPS_SCRIPT_URL) fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({
+          action: "resetPassword",
+          email: miembro.login_email,
+          nombre: `${miembro.nombre}${miembro.apellido ? ` ${miembro.apellido}` : ""}`,
+          resetUrl,
+        }),
+      }).catch((e) => console.error("Error mail reset empleado:", e.message));
       return res.json({ success: true, message: "Si el email existe, vas a recibir un enlace." });
+    }
 
     const token  = crypto.randomUUID();
     const expiry = new Date(Date.now() + 1000 * 60 * 30);
@@ -5569,13 +5806,29 @@ app.post("/auth/reset-password", limiterAuth, async (req, res) => {
       .from("usuarios").select("id, reset_token_expiry")
       .eq("reset_token", token).maybeSingle();
 
-    if (!user)
-      return res.status(400).json({ success: false, error: "Token inválido o ya usado." });
-    if (new Date(user.reset_token_expiry) < new Date())
-      return res.status(400).json({ success: false, error: "El token expiró. Solicitá uno nuevo." });
-
     const hash = await bcrypt.hash(String(new_password), BCRYPT_ROUNDS);
-    await supabase.from("usuarios").update({ password: hash, reset_token: null, reset_token_expiry: null }).eq("id", user.id);
+    if (user) {
+      if (new Date(user.reset_token_expiry) < new Date())
+        return res.status(400).json({ success: false, error: "El token expiró. Solicitá uno nuevo." });
+      await supabase.from("usuarios").update({ password: hash, reset_token: null, reset_token_expiry: null }).eq("id", user.id);
+    } else {
+      const { data: miembro } = await supabase.from("equipo")
+        .select("id, login_reset_token_expiry, activo, es_dueño")
+        .eq("login_reset_token", token).eq("es_dueño", false).maybeSingle();
+      if (!miembro)
+        return res.status(400).json({ success: false, error: "Token inválido o ya usado." });
+      if (!isActivo(miembro.activo))
+        return res.status(403).json({ success: false, error: "Este acceso fue desactivado por el titular." });
+      if (!miembro.login_reset_token_expiry || new Date(miembro.login_reset_token_expiry) < new Date())
+        return res.status(400).json({ success: false, error: "El token expiró. Solicitá uno nuevo." });
+      const { error: actualizarError } = await supabase.from("equipo").update({
+        login_password: hash,
+        login_activado: true,
+        login_reset_token: null,
+        login_reset_token_expiry: null,
+      }).eq("id", miembro.id);
+      if (actualizarError) throw actualizarError;
+    }
 
     res.json({ success: true, message: "Contraseña actualizada correctamente." });
   } catch (e) {
@@ -5637,11 +5890,19 @@ app.get("/auth/reset-token-info", async (req, res) => {
       .from("usuarios").select("slug, nombre_persona, reset_token_expiry")
       .eq("reset_token", token).maybeSingle();
 
-    if (!user) return res.status(400).json({ success: false, error: "Token inválido o ya usado." });
-    if (new Date(user.reset_token_expiry) < new Date())
+    if (user) {
+      if (new Date(user.reset_token_expiry) < new Date())
+        return res.status(400).json({ success: false, error: "El token expiró." });
+      return res.json({ success: true, slug: user.slug, nombre: user.nombre_persona, tipo: "owner" });
+    }
+    const { data: miembro } = await supabase.from("equipo")
+      .select("slug, nombre, apellido, login_reset_token_expiry, activo, es_dueño")
+      .eq("login_reset_token", token).eq("es_dueño", false).maybeSingle();
+    if (!miembro || !isActivo(miembro.activo))
+      return res.status(400).json({ success: false, error: "Token inválido o ya usado." });
+    if (!miembro.login_reset_token_expiry || new Date(miembro.login_reset_token_expiry) < new Date())
       return res.status(400).json({ success: false, error: "El token expiró." });
-
-    res.json({ success: true, slug: user.slug, nombre: user.nombre_persona });
+    res.json({ success: true, slug: miembro.slug, nombre: `${miembro.nombre}${miembro.apellido ? ` ${miembro.apellido}` : ""}`, tipo: "empleado" });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
