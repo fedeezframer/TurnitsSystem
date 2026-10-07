@@ -950,11 +950,12 @@ async function requireAuth(req, res, next) {
       // aprobación acotada de pagos pendientes de sus propios turnos.
       const puedeGestionarPush = req.path === "/push/subscribe" && ["POST", "DELETE"].includes(req.method);
       const puedeAprobarTurnoPropio = req.path === `/turnos/${req.params.id}` && req.method === "PUT" && !!req.params.id;
-      if ((!req.path.startsWith("/empleado/") && !puedeGestionarPush && !puedeAprobarTurnoPropio) || !payload.equipoId) {
+      const puedeCrearTurnoManualPropio = req.path === "/admin/turnos/manual" && req.method === "POST";
+      if ((!req.path.startsWith("/empleado/") && !puedeGestionarPush && !puedeAprobarTurnoPropio && !puedeCrearTurnoManualPropio) || !payload.equipoId) {
         return res.status(403).json({ success: false, error: "Esta sección no está disponible para tu perfil." });
       }
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, slug, nombre, apellido, rol, activo, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios")
+        .select("id, slug, nombre, apellido, rol, activo, foto_url, es_dueño, login_email, login_activado, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, agenda_sin_pagos, mp_access_token, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios")
         .eq("id", payload.equipoId).eq("slug", payload.slug).eq("es_dueño", false).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro || !isActivo(miembro.activo) || !miembro.login_activado) {
@@ -3945,6 +3946,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
   try {
     const { nombre, fecha, hora, servicio_id, forzar } = req.body || {};
+    let { equipo_id } = req.body || {};
     const slugClean = cleanSlug(req.body?.slug || req.auth?.slug || "");
     if (!slugClean) return res.status(400).json({ success: false, error: "Falta el negocio." });
 
@@ -3971,19 +3973,51 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     }
 
     const { data: user, error: userError } = await supabase.from("usuarios")
-      .select("activo, duracion_turno, capacidad_por_turno, plan, telefono, business_name").eq("slug", slugClean).maybeSingle();
+      .select("activo, duracion_turno, capacidad_por_turno, plan, telefono, business_name, horarios, excepciones, agenda_sin_pagos").eq("slug", slugClean).maybeSingle();
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+
+    let miembroManual = null;
+    if (req.auth?.rol === "empleado") {
+      if (req.empleado?.slug !== slugClean || String(equipo_id || "") !== String(req.empleado.id)) {
+        return res.status(403).json({ success: false, error: "Sólo podés agendar turnos para tu propio perfil." });
+      }
+      miembroManual = req.empleado;
+      equipo_id = miembroManual.id;
+    } else if (equipo_id) {
+      if (!UUID_REGEX.test(String(equipo_id))) return res.status(400).json({ success: false, error: "Profesional inválido." });
+      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+        .select("id, slug, nombre, apellido, activo, es_dueño, horarios, excepciones, anticipacion_minutos, puede_configurar_horarios, puede_recibir_pagos_personales, metodo_pago, porcentaje_sena, agenda_sin_pagos, mp_access_token")
+        .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
+      if (miembroError) throw miembroError;
+      if (!miembro) return res.status(400).json({ success: false, error: "Profesional inválido." });
+      miembroManual = miembro;
+    }
+
+    if (req.auth?.rol === "empleado") {
+      const configEmpleado = configNegocioParaEquipo(user, miembroManual);
+      if (!horaDentroDeIntervalos(configEmpleado.horarios, configEmpleado.excepciones, fecha, hora)) {
+        return res.status(400).json({ success: false, error: "Ese horario no está dentro de tu disponibilidad." });
+      }
+    }
 
     let servicioNombre = null;
     let precio         = 0;
     let duracion       = user.duracion_turno      || 30;
     let capacidad      = user.capacidad_por_turno || 1;
     if (servicio_id) {
-      const { data: srv, error: srvError } = await supabase.from("servicios")
+      const { data: srvBase, error: srvError } = await supabase.from("servicios")
         .select("nombre, precio, duracion, capacidad").eq("id", servicio_id).eq("slug", slugClean).maybeSingle();
       if (srvError) throw srvError;
-      if (!srv) return res.status(400).json({ success: false, error: "Servicio no encontrado." });
+      if (!srvBase) return res.status(400).json({ success: false, error: "Servicio no encontrado." });
+      let srv = srvBase;
+      if (miembroManual && !miembroManual.es_dueño) {
+        const { data: variante, error: varianteError } = await supabase.from("servicio_equipo")
+          .select("precio_override").eq("servicio_id", servicio_id).eq("equipo_id", miembroManual.id).maybeSingle();
+        if (varianteError) throw varianteError;
+        if (!variante) return res.status(400).json({ success: false, error: "Ese servicio no está disponible para el profesional seleccionado." });
+        srv = { ...srvBase, precio: variante.precio_override ?? srvBase.precio };
+      }
       servicioNombre = srv.nombre;
       precio         = Number(srv.precio || 0);
       duracion       = srv.duracion  || duracion;
@@ -4012,9 +4046,12 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     // Chequeo de solapamiento (misma lógica que /slots-disponibles).
     if (forzar !== true) {
       const toMin = (t) => { const [h, m] = String(t).slice(0, 5).split(":").map(Number); return h * 60 + m; };
+      let queryTurnosDia = supabase.from("turnos").select("hora, servicio_id")
+          .eq("slug", slugClean).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
+      if (miembroManual?.es_dueño) queryTurnosDia = queryTurnosDia.or(`equipo_id.eq.${miembroManual.id},equipo_id.is.null`);
+      else if (miembroManual) queryTurnosDia = queryTurnosDia.eq("equipo_id", miembroManual.id);
       const [{ data: turnosDia }, { data: todosServicios }] = await Promise.all([
-        supabase.from("turnos").select("hora, servicio_id")
-          .eq("slug", slugClean).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]),
+        queryTurnosDia,
         supabase.from("servicios").select("id, duracion").eq("slug", slugClean),
       ]);
       const duracionPorServicio = Object.fromEntries((todosServicios || []).map((s) => [s.id, s.duracion]));
@@ -4034,6 +4071,8 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
 
     const filaTurno = {
       slug:            slugClean,
+      equipo_id:       miembroManual?.id || null,
+      equipo_nombre:   miembroManual ? `${miembroManual.nombre}${miembroManual.apellido ? " " + miembroManual.apellido : ""}` : null,
       nombre:          nombreClean,
       telefono:        null,
       email:           null,
