@@ -33,10 +33,10 @@ const CACHE_DURATION = 20_000;
 // si un token se filtra (XSS, dispositivo compartido, etc).
 const JWT_EXPIRY     = process.env.JWT_EXPIRY || "1d";
 const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
-// Versión vigente del panel (componente de Framer). OPCIONAL: si no está
-// seteada, el panel solo usa la detección por huella de scripts. Ver
-// GET /panel-version más abajo.
-const PANEL_VERSION  = (process.env.PANEL_VERSION || "").trim();
+// Versión vigente del panel (componente de Framer). Debe coincidir con
+// PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
+// automática en sesiones que quedaron abiertas.
+const PANEL_VERSION  = "2026.10.07-1";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "22499");
