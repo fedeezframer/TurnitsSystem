@@ -5510,7 +5510,7 @@ app.get("/finanzas/:slug", requireAuth, async (req, res) => {
       return filas;
     };
     const [turnos, gastosDb, { data: comisiones, error: comisionesError }] = await Promise.all([
-      cargarPaginas(() => supabase.from("turnos").select("id, fecha, precio_cobrado, estado").eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).not("estado", "in", "(cancelado,pendiente)").order("id", { ascending: true })),
+      cargarPaginas(() => supabase.from("turnos").select("id, fecha, precio_cobrado, estado, comision_mp, comision_plataforma").eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).not("estado", "in", "(cancelado,pendiente)").order("id", { ascending: true })),
       cargarPaginas(() => supabase.from("finanzas_gastos").select("id, descripcion, categoria, monto, fecha, tipo, recurrente, recurrencia_hasta, created_at").eq("slug", slug).lte("fecha", hasta).order("fecha", { ascending: true })),
       supabase.from("turnits_comisiones").select("importe, estado").eq("slug", slug).eq("periodo", desde).neq("estado", "anulada"),
     ]);
@@ -5531,22 +5531,27 @@ app.get("/finanzas/:slug", requireAuth, async (req, res) => {
     }
     const porCategoria = {};
     for (const g of gastos) porCategoria[g.categoria] = (porCategoria[g.categoria] || 0) + Number(g.monto || 0);
-    const comisionesTurnits = (comisiones || []).reduce((s, c) => s + Number(c.importe || 0), 0);
+    const comisionesMercadoPago = (turnos || []).reduce((s, t) => s + Number(t.comision_mp || 0), 0);
+    const comisionesTurnitsOnline = (turnos || []).reduce((s, t) => s + Number(t.comision_plataforma || 0), 0);
+    const comisionesTurnitsOffline = (comisiones || []).reduce((s, c) => s + Number(c.importe || 0), 0);
+    const comisionesTurnits = comisionesTurnitsOnline + comisionesTurnitsOffline;
+    const comisionesTotales = comisionesMercadoPago + comisionesTurnits;
     const ingresosBrutos = (turnos || []).reduce((s, t) => s + Number(t.precio_cobrado || 0), 0);
     const gastosManuales = gastos.reduce((s, g) => s + Number(g.monto || 0), 0);
-    const gastosTotales = gastosManuales + comisionesTurnits;
+    const gastosTotales = gastosManuales + comisionesTotales;
     const balance = ingresosBrutos - gastosTotales;
     const categorias = Object.entries(porCategoria).map(([categoria, total]) => ({ categoria, total, porcentajeGastos: gastosTotales > 0 ? Number(total) / gastosTotales * 100 : 0 }));
-    if (comisionesTurnits > 0) categorias.push({ categoria: "comisiones_turnits", total: comisionesTurnits, porcentajeGastos: gastosTotales > 0 ? comisionesTurnits / gastosTotales * 100 : 0 });
-    const etiquetas = { productos: "Productos e insumos", alquiler: "Alquiler", servicios: "Servicios", personal: "Personal y comisiones", impuestos: "Impuestos", marketing: "Marketing", mantenimiento: "Mantenimiento", otros: "Otros gastos", comisiones_turnits: "Comisiones de Turnits" };
+    if (comisionesMercadoPago > 0) categorias.push({ categoria: "comision_mercadopago", total: comisionesMercadoPago, porcentajeGastos: gastosTotales > 0 ? comisionesMercadoPago / gastosTotales * 100 : 0 });
+    if (comisionesTurnits > 0) categorias.push({ categoria: "comision_turnits", total: comisionesTurnits, porcentajeGastos: gastosTotales > 0 ? comisionesTurnits / gastosTotales * 100 : 0 });
+    const etiquetas = { productos: "Productos e insumos", alquiler: "Alquiler", servicios: "Servicios", personal: "Personal y comisiones", impuestos: "Impuestos", marketing: "Marketing", mantenimiento: "Mantenimiento", otros: "Otros gastos", comision_mercadopago: "Comisión Mercado Pago", comision_turnits: "Comisión Turnits" };
     categorias.sort((a, b) => Number(b.total) - Number(a.total));
     const mayor = categorias[0];
     const gastosFijos = gastos.filter(g => g.tipo === "fijo" || g.origen_recurrente).reduce((s, g) => s + Number(g.monto || 0), 0);
-    const gastosVariables = gastos.filter(g => g.tipo === "variable" && !g.origen_recurrente).reduce((s, g) => s + Number(g.monto || 0), 0) + comisionesTurnits;
+    const gastosVariables = gastos.filter(g => g.tipo === "variable" && !g.origen_recurrente).reduce((s, g) => s + Number(g.monto || 0), 0) + comisionesTotales;
     const ratioVariable = ingresosBrutos > 0 ? gastosVariables / ingresosBrutos : null;
     const puntoEquilibrio = ratioVariable !== null && ratioVariable < 1 ? gastosFijos / (1 - ratioVariable) : null;
     res.json({ success: true, periodo: mes, summary: {
-      ingresosBrutos, cantidadTurnos: (turnos || []).length, gastosManuales, comisionesTurnits, gastosTotales, balance,
+      ingresosBrutos, cantidadTurnos: (turnos || []).length, gastosManuales, comisionesMercadoPago, comisionesTurnits, comisionesTotales, gastosTotales, balance,
       margenOperativo: ingresosBrutos > 0 ? balance / ingresosBrutos * 100 : null,
       puntoEquilibrio, mayorGasto: mayor ? { ...mayor, label: etiquetas[mayor.categoria] || mayor.categoria } : null,
       categorias: categorias.map(c => ({ ...c, label: etiquetas[c.categoria] || c.categoria })),
