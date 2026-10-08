@@ -5480,6 +5480,151 @@ app.put("/admin/equipo/:id/config", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// FINANZAS DEL NEGOCIO — ingresos brutos, gastos y balance estimado
+// ══════════════════════════════════════════════════════════════
+const FINANZAS_CATEGORIAS = new Set(["productos", "alquiler", "servicios", "personal", "impuestos", "marketing", "mantenimiento", "otros"]);
+const fechaISOValida = (value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
+const numeroMesDias = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+app.get("/finanzas/:slug", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const mes = String(req.query.mes || "");
+    if (!/^\d{4}-\d{2}$/.test(mes) || Number(mes.slice(5)) < 1 || Number(mes.slice(5)) > 12) return res.status(400).json({ success: false, error: "Período inválido." });
+    const desde = `${mes}-01`;
+    const [anio, mesNumero] = mes.split("-").map(Number);
+    const ultimoDia = numeroMesDias(anio, mesNumero);
+    const hasta = `${mes}-${String(ultimoDia).padStart(2, "0")}`;
+    const cargarPaginas = async (crearQuery) => {
+      const filas = [];
+      for (let pagina = 0; pagina < 50; pagina++) {
+        const { data, error } = await crearQuery().range(pagina * 1000, pagina * 1000 + 999);
+        if (error) throw error;
+        filas.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return filas;
+    };
+    const [turnos, gastosDb, { data: comisiones, error: comisionesError }] = await Promise.all([
+      cargarPaginas(() => supabase.from("turnos").select("id, fecha, precio_cobrado, estado").eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).not("estado", "in", "(cancelado,pendiente)").order("id", { ascending: true })),
+      cargarPaginas(() => supabase.from("finanzas_gastos").select("id, descripcion, categoria, monto, fecha, tipo, recurrente, recurrencia_hasta, created_at").eq("slug", slug).lte("fecha", hasta).order("fecha", { ascending: true })),
+      supabase.from("turnits_comisiones").select("importe, estado").eq("slug", slug).eq("periodo", desde).neq("estado", "anulada"),
+    ]);
+    if (comisionesError) throw comisionesError;
+    const gastos = [];
+    for (const g of gastosDb || []) {
+      const inicio = String(g.fecha).slice(0, 10);
+      if (!g.recurrente) {
+        if (inicio >= desde && inicio <= hasta) gastos.push({ ...g, fecha: inicio, monto: Number(g.monto), origen_recurrente: false });
+        continue;
+      }
+      const inicioMes = inicio.slice(0, 7);
+      const fin = g.recurrencia_hasta ? String(g.recurrencia_hasta).slice(0, 10) : hasta;
+      if (inicioMes > mes || fin < desde) continue;
+      const diaBase = Number(inicio.slice(8, 10));
+      const fechaOcurrencia = `${mes}-${String(Math.min(diaBase, ultimoDia)).padStart(2, "0")}`;
+      if (fechaOcurrencia >= inicio && fechaOcurrencia <= fin) gastos.push({ ...g, fecha: fechaOcurrencia, fecha_inicio: inicio, monto: Number(g.monto), origen_recurrente: true });
+    }
+    const porCategoria = {};
+    for (const g of gastos) porCategoria[g.categoria] = (porCategoria[g.categoria] || 0) + Number(g.monto || 0);
+    const comisionesTurnits = (comisiones || []).reduce((s, c) => s + Number(c.importe || 0), 0);
+    const ingresosBrutos = (turnos || []).reduce((s, t) => s + Number(t.precio_cobrado || 0), 0);
+    const gastosManuales = gastos.reduce((s, g) => s + Number(g.monto || 0), 0);
+    const gastosTotales = gastosManuales + comisionesTurnits;
+    const balance = ingresosBrutos - gastosTotales;
+    const categorias = Object.entries(porCategoria).map(([categoria, total]) => ({ categoria, total, porcentajeGastos: gastosTotales > 0 ? Number(total) / gastosTotales * 100 : 0 }));
+    if (comisionesTurnits > 0) categorias.push({ categoria: "comisiones_turnits", total: comisionesTurnits, porcentajeGastos: gastosTotales > 0 ? comisionesTurnits / gastosTotales * 100 : 0 });
+    const etiquetas = { productos: "Productos e insumos", alquiler: "Alquiler", servicios: "Servicios", personal: "Personal y comisiones", impuestos: "Impuestos", marketing: "Marketing", mantenimiento: "Mantenimiento", otros: "Otros gastos", comisiones_turnits: "Comisiones de Turnits" };
+    categorias.sort((a, b) => Number(b.total) - Number(a.total));
+    const mayor = categorias[0];
+    const gastosFijos = gastos.filter(g => g.tipo === "fijo" || g.origen_recurrente).reduce((s, g) => s + Number(g.monto || 0), 0);
+    const gastosVariables = gastos.filter(g => g.tipo === "variable" && !g.origen_recurrente).reduce((s, g) => s + Number(g.monto || 0), 0) + comisionesTurnits;
+    const ratioVariable = ingresosBrutos > 0 ? gastosVariables / ingresosBrutos : null;
+    const puntoEquilibrio = ratioVariable !== null && ratioVariable < 1 ? gastosFijos / (1 - ratioVariable) : null;
+    res.json({ success: true, periodo: mes, summary: {
+      ingresosBrutos, cantidadTurnos: (turnos || []).length, gastosManuales, comisionesTurnits, gastosTotales, balance,
+      margenOperativo: ingresosBrutos > 0 ? balance / ingresosBrutos * 100 : null,
+      puntoEquilibrio, mayorGasto: mayor ? { ...mayor, label: etiquetas[mayor.categoria] || mayor.categoria } : null,
+      categorias: categorias.map(c => ({ ...c, label: etiquetas[c.categoria] || c.categoria })),
+    }, gastos: gastos.sort((a, b) => b.fecha.localeCompare(a.fecha)) });
+  } catch (e) {
+    console.error("Error en /finanzas:", e.message);
+    res.status(500).json({ success: false, error: "No se pudieron calcular las finanzas." });
+  }
+});
+
+app.post("/finanzas/:slug/gastos", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { descripcion, categoria, monto, fecha, tipo, recurrente } = req.body || {};
+    const importe = Number(monto);
+    if (!String(descripcion || "").trim() || String(descripcion).length > 160 || !FINANZAS_CATEGORIAS.has(categoria) || !Number.isFinite(importe) || importe <= 0 || importe > 100000000000 || !fechaISOValida(fecha) || !["fijo", "variable"].includes(tipo)) return res.status(400).json({ success: false, error: "Revisá descripción, categoría, monto, fecha y tipo de gasto." });
+    const esRecurrente = recurrente === true;
+    const { data, error } = await supabase.from("finanzas_gastos").insert({ slug, descripcion: String(descripcion).trim(), categoria, monto: importe, fecha, tipo: esRecurrente ? "fijo" : tipo, recurrente: esRecurrente }).select("id").single();
+    if (error) throw error;
+    res.status(201).json({ success: true, id: data.id });
+  } catch (e) { console.error("Error creando gasto:", e.message); res.status(500).json({ success: false, error: "No se pudo guardar el gasto." }); }
+});
+
+app.put("/finanzas/:slug/gastos/:id", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { descripcion, categoria, monto, fecha, tipo, recurrente } = req.body || {};
+    const importe = Number(monto);
+    if (!String(descripcion || "").trim() || String(descripcion).length > 160 || !FINANZAS_CATEGORIAS.has(categoria) || !Number.isFinite(importe) || importe <= 0 || importe > 100000000000 || !fechaISOValida(fecha) || !["fijo", "variable"].includes(tipo)) return res.status(400).json({ success: false, error: "Revisá descripción, categoría, monto, fecha y tipo de gasto." });
+    const esRecurrente = recurrente === true;
+    const { data: gastoActual, error: buscarError } = await supabase.from("finanzas_gastos").select("id, fecha, recurrente").eq("slug", slug).eq("id", req.params.id).maybeSingle();
+    if (buscarError) throw buscarError;
+    if (!gastoActual) return res.status(404).json({ success: false, error: "No encontramos ese gasto." });
+    const datos = { slug, descripcion: String(descripcion).trim(), categoria, monto: importe, fecha, tipo: esRecurrente ? "fijo" : tipo, recurrente: esRecurrente, recurrencia_hasta: null };
+    let data;
+    if (gastoActual.recurrente && fecha.slice(0, 7) > String(gastoActual.fecha).slice(0, 7)) {
+      const [anio, mes] = fecha.slice(0, 7).split("-").map(Number);
+      const finMesAnterior = new Date(Date.UTC(anio, mes - 1, 0)).toISOString().slice(0, 10);
+      const { error: cerrarError } = await supabase.from("finanzas_gastos").update({ recurrencia_hasta: finMesAnterior, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id);
+      if (cerrarError) throw cerrarError;
+      const { data: nuevo, error } = await supabase.from("finanzas_gastos").insert(datos).select("id").single();
+      if (error) throw error;
+      data = nuevo;
+    } else {
+      const { data: actualizado, error } = await supabase.from("finanzas_gastos").update({ ...datos, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
+      if (error) throw error;
+      data = actualizado;
+    }
+    if (!data) return res.status(404).json({ success: false, error: "No encontramos ese gasto." });
+    res.json({ success: true });
+  } catch (e) { console.error("Error actualizando gasto:", e.message); res.status(500).json({ success: false, error: "No se pudo actualizar el gasto." }); }
+});
+
+app.delete("/finanzas/:slug/gastos/:id", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { data: gastoActual, error: buscarError } = await supabase.from("finanzas_gastos").select("id, fecha, recurrente").eq("slug", slug).eq("id", req.params.id).maybeSingle();
+    if (buscarError) throw buscarError;
+    if (!gastoActual) return res.status(404).json({ success: false, error: "No encontramos ese gasto." });
+    const desdeMes = String(req.query.desde || "");
+    let data;
+    if (gastoActual.recurrente && /^\d{4}-\d{2}$/.test(desdeMes) && desdeMes > String(gastoActual.fecha).slice(0, 7)) {
+      const [anio, mes] = desdeMes.split("-").map(Number);
+      const finMesAnterior = new Date(Date.UTC(anio, mes - 1, 0)).toISOString().slice(0, 10);
+      const { data: cerrado, error } = await supabase.from("finanzas_gastos").update({ recurrencia_hasta: finMesAnterior, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
+      if (error) throw error;
+      data = cerrado;
+    } else {
+      const { data: borrado, error } = await supabase.from("finanzas_gastos").delete().eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
+      if (error) throw error;
+      data = borrado;
+    }
+    if (!data) return res.status(404).json({ success: false, error: "No encontramos ese gasto." });
+    res.json({ success: true });
+  } catch (e) { console.error("Error eliminando gasto:", e.message); res.status(500).json({ success: false, error: "No se pudo eliminar el gasto." }); }
+});
+
+// ══════════════════════════════════════════════════════════════
 // ADMIN STATS
 // GET /admin-stats/:slug
 // ══════════════════════════════════════════════════════════════
