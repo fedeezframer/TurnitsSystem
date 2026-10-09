@@ -1774,6 +1774,7 @@ app.post("/turnos/check-cliente", limiterBooking, async (req, res) => {
 // al loguear con éxito.
 // ══════════════════════════════════════════════════════════════
 // Integración Google para el servidor existente. No crea negocios automáticamente.
+// Integración Google para el servidor existente. No crea negocios automáticamente.
 function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto, JWT_EXPIRY, isActivo, diasHastaVencer, planTieneFuncionesPremium, verificarPassword, chequearBloqueoLogin, registrarIntentoFallidoLogin, limpiarIntentosLogin, verifyGoogle, env = process.env }) {
   const challenges = new Map();
   const origins = new Set((env.GOOGLE_ALLOWED_ORIGINS || 'https://turnits.com,https://www.turnits.com').split(',').map(v => v.trim()).filter(Boolean));
@@ -1794,7 +1795,7 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
   app.post('/auth/google', limiterAuth, onlyOrigin, async (req, res) => {
     try {
       if (!env.GOOGLE_CLIENT_ID || !env.JWT_SECRET) return res.status(503).json({success:false,error:'El acceso con Google todavía no está configurado.'});
-      const {credential, nonce, email:rawEmail, password} = req.body || {};
+      const {credential, nonce} = req.body || {};
       if (typeof credential !== 'string' || credential.length > 16000 || typeof nonce !== 'string' || !challenges.has(nonce) || challenges.get(nonce) < Date.now()) return res.status(401).json({success:false,error:'Volvé a seleccionar tu cuenta de Google.'});
       let google;
       try { google = await verifyGoogle(credential, env.GOOGLE_CLIENT_ID); }
@@ -1806,7 +1807,7 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
       const {data:binding,error:bindingError} = await supabase.from('google_login_accounts').select('google_sub,usuario_id,equipo_id').eq('google_sub',google.sub).maybeSingle();
       if (bindingError) throw bindingError;
       let user = null, member = null;
-      const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+      const email = typeof google.email === 'string' ? google.email.trim().toLowerCase() : '';
       if (binding) {
         const table = binding.usuario_id ? 'usuarios' : 'equipo';
         const id = binding.usuario_id || binding.equipo_id;
@@ -1814,22 +1815,18 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
         if (error) throw error;
         if (binding.usuario_id) user = data; else member = data;
       } else {
-        if (!email || typeof password !== 'string' || !password) return res.status(409).json({success:false,code:'google_link_required',error:'Para conectar Google, confirmá el correo y la contraseña de tu cuenta Turnits.'});
-        const blocked = chequearBloqueoLogin(email);
-        if (blocked.bloqueado) return res.status(429).json({success:false,error:`Probá de nuevo en ${blocked.minutosRestantes} minuto(s).`});
+        // Sólo el email del token verificado; nunca se toma un email enviado por el navegador.
+        const authoritative = email.endsWith('@gmail.com') || (typeof google.hd === 'string' && google.hd.length > 0);
+        if (!email || !authoritative) return res.status(403).json({success:false,code:'google_email_not_authoritative',error:'Para este correo, ingresá con tu acceso habitual. También podés usar una cuenta Gmail o Google Workspace.'});
         const {data:owner,error:ownerError} = await supabase.from('usuarios').select('*').eq('email',email).maybeSingle();
         if (ownerError) throw ownerError;
-        let passwordOk = false;
-        if (owner) {
-          passwordOk = await verificarPassword(password,owner.password,owner.id);
-          user = owner;
-        } else {
+        if (owner) user = owner;
+        else {
           const {data:employee,error:employeeError} = await supabase.from('equipo').select('*').eq('login_email',email).eq('es_dueño',false).maybeSingle();
           if (employeeError) throw employeeError;
           member = employee;
-          passwordOk = !!employee?.login_activado && !!employee?.login_password && await bcrypt.compare(password,employee.login_password);
         }
-        if (!passwordOk) { registrarIntentoFallidoLogin(email); return res.status(401).json({success:false,error:'El correo o la contraseña de Turnits son incorrectos.'}); }
+        if (!user && !member) return res.status(404).json({success:false,code:'google_registration_required',error:'Completá el registro de tu negocio para empezar.'});
       }
       let payload, result;
       if (user) {
@@ -1850,7 +1847,7 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
       if (!challenges.delete(nonce)) return res.status(401).json({success:false,error:'Volvé a seleccionar tu cuenta de Google.'});
       if (!binding) {
         const {error} = await supabase.from('google_login_accounts').insert({google_sub:google.sub,usuario_id:user?.id || null,equipo_id:member?.id || null});
-        if (error?.code === '23505') return res.status(409).json({success:false,error:'Esta cuenta ya tiene una conexión con Google. Ingresá con tu contraseña.'});
+        if (error?.code === '23505') return res.status(409).json({success:false,error:'Esta cuenta ya está conectada a otra cuenta de Google. Usá esa cuenta o tu acceso habitual.'});
         if (error) throw error;
         limpiarIntentosLogin(email);
       }
@@ -1862,6 +1859,7 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
     }
   });
 }
+
 
 let googleClientPromise;
 async function verifyGoogle(credential, audience) {
@@ -8599,3 +8597,4 @@ app.listen(PORT, () => {
 });
 
 export default app;
+
