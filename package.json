@@ -1,10 +1,10 @@
 {
-  "name": "negosocio",
+  "name": "Turnits",
   "version": "6.0.0",
   "type": "module",
   "main": "api/server.js",
-  "description": "NegoSocio API — Sistema de gestión de turnos multi-negocio",
-  "author": "fedeezframer",
+  "description": "Turnits API - Red de Turnos",
+  "author": "fedemartinez",
   "license": "MIT",
   "scripts": {
     "start": "node api/server.js",
@@ -18,6 +18,7 @@
     "express-rate-limit": "^7.1.5",
     "jsonwebtoken": "^9.0.2",
     "mercadopago": "^2.0.8",
+    "google-auth-library": "^10.5.0"
     "multer": "^1.4.5-lts.1",
     "node-fetch": "^3.3.2",
     "web-push": "^3.6.7"
