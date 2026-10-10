@@ -2416,6 +2416,62 @@ app.get("/equipo/:slug", async (req, res) => {
 // SLOTS DISPONIBLES
 // GET /slots-disponibles/:slug
 // ══════════════════════════════════════════════════════════════
+// Promos públicas y cálculo autorizado para reservas.
+function promoHoyArgentina() { return new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Argentina/Buenos_Aires'}).format(new Date()); }
+function promoError(message) { const error=new Error(message);error.promoValidacion=true;return error; }
+async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
+  if(!id) return null;
+  if(!UUID_REGEX.test(String(id)))throw promoError('La promoción seleccionada no es válida.');
+  const {data:p,error}=await supabase.from('promociones').select('*').eq('slug',slug).eq('id',id).maybeSingle();if(error)throw error;
+  const today=promoHoyArgentina();
+  if(!p || !p.activo || today<p.fecha_inicio || today>p.fecha_fin || (fecha && (fecha<p.fecha_inicio || fecha>p.fecha_fin)))throw promoError('La promo no está vigente para ese día. Elegí otra fecha o servicio.');
+  const servicios=p.items.filter(i=>i.tipo==='servicio');
+  if(!servicios.length || servicios[0].id !== servicioId)throw promoError('La promo no corresponde al servicio seleccionado.');
+  let duracion=0,capacidad=Infinity;
+  for(const item of p.items) {
+    const {data,error}=await supabase.from(item.tipo==='servicio' ? 'servicios':'extras').select(item.tipo==='servicio' ? 'id,activo,duracion,capacidad':'id,activo').eq('slug',slug).eq('id',item.id).maybeSingle();if(error)throw error;
+    if(!data || !isActivo(data.activo))throw promoError('Un elemento de esta promo ya no está disponible.');
+    if(item.tipo==='servicio') {
+      duracion+=Number(data.duracion || 30)*item.cantidad;capacidad=Math.min(capacidad,Number(data.capacidad || 1));
+      if(equipoId && UUID_REGEX.test(String(equipoId))) {const {data:v,error:ve}=await supabase.from('servicio_equipo').select('id').eq('servicio_id',item.id).eq('equipo_id',equipoId).maybeSingle();if(ve)throw ve;if(!v)throw promoError('Ese profesional no ofrece todos los servicios de la promo.');}
+    }
+  }
+  const total=Number(p.precio_final),ratio=total/Number(p.precio_original);
+  if(!Number.isFinite(total) || total<=0 || !Number.isFinite(ratio) || ratio<=0 || ratio>=1)throw promoError('El precio de esta promo no es válido.');
+  const extras=p.items.filter(i=>i.tipo==='producto').map(i=>({id:i.id,nombre:i.nombre,cantidad:i.cantidad,precio:Math.round(Number(i.precio)*i.cantidad*ratio*100)/100,promo_incluido:true}));
+  const montoExtras=Math.round(extras.reduce((sum,i)=>sum+i.precio,0)*100)/100;
+  return {id:p.id,nombre:p.nombre,tipo:p.tipo,items:p.items,fecha_inicio:p.fecha_inicio,fecha_fin:p.fecha_fin,precio_original:Number(p.precio_original),precio_final:total,servicio_id:servicios[0].id,duracion,capacidad,extras,montoExtras,precioServicio:Math.round((total-montoExtras)*100)/100};
+}
+async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servicioId) {
+  if(!promo){
+    const {data:srv,error}=servicioId ? await supabase.from('servicios').select('duracion,capacidad').eq('slug',slug).eq('id',servicioId).maybeSingle() : {data:null,error:null};if(error)throw error;
+    promo={duracion:Number(srv?.duracion || config.duracion_turno || 30),capacidad:Number(srv?.capacidad || config.capacidad_por_turno || 1)};
+  }
+  const minutes=t=>Number(String(t).slice(0,2))*60+Number(String(t).slice(3,5));const inicio=minutes(hora),fin=inicio+promo.duracion;
+  const intervalos=obtenerIntervalosDia(config.horarios,config.excepciones,fecha) || [];
+  if(!intervalos.some(([a,b])=>inicio>=a && fin<=b))throw promoError('No hay tiempo suficiente para el combo en ese horario.');
+  let query=supabase.from('turnos').select('hora,servicio_id,duracion_reservada').eq('slug',slug).eq('fecha',fecha).in('estado',['confirmado','pendiente']);
+  if(empleado?.es_dueño)query=query.or(`equipo_id.eq.${empleado.id},equipo_id.is.null`);else query=empleado ? query.eq('equipo_id',empleado.id) : query.is('equipo_id',null);
+  const {data:turnos,error}=await query;if(error)throw error;
+  const {data:servicios,error:se}=await supabase.from('servicios').select('id,duracion').eq('slug',slug);if(se)throw se;
+  const durations=new Map((servicios || []).map(s=>[s.id,s.duracion]));
+  const overlap=(turnos || []).filter(t=>{const a=minutes(t.hora);return inicio<a+Number(t.duracion_reservada || durations.get(t.servicio_id) || config.duracion_turno || 30)&&fin>a}).length;
+  if(overlap>=promo.capacidad)throw promoError('Ese horario ya no tiene lugar para el combo. Elegí otro.');
+}
+app.get('/promociones/:slug',limiterBooking,promocionesAsync(async(req,res)=>{
+  const slug=cleanSlug(req.params.slug),today=promoHoyArgentina();
+  const {data:negocio,error:ne}=await supabase.from('usuarios').select('activo').eq('slug',slug).maybeSingle();if(ne)throw ne;
+  if(!negocio || !isActivo(negocio.activo))return res.status(404).json({success:false,error:'Negocio no disponible.'});
+  const {data,error}=await supabase.from('promociones').select('id,items').eq('slug',slug).eq('activo',true).lte('fecha_inicio',today).gte('fecha_fin',today).order('created_at',{ascending:false});
+  if(error && ['42P01','PGRST205'].includes(error.code))return res.json({success:true,promociones:[]});if(error)throw error;
+  const promociones=[];
+  for(const p of data || []) {
+    const primary=p.items.find(i=>i.tipo==='servicio');if(!primary)continue;
+    try {const resolved=await resolverPromoBooking(slug,p.id,primary.id,null,req.query.equipo_id);promociones.push(resolved)}catch(e){if(!e.promoValidacion)throw e;}
+  }
+  res.json({success:true,promociones});
+}));
+
 app.get("/slots-disponibles/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -2480,6 +2536,8 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       if (!vinculo) return res.status(400).json({ success: false, error: "Ese profesional no ofrece el servicio seleccionado." });
     }
 
+    let promocionSlots=null;
+    try {promocionSlots=await resolverPromoBooking(slug,req.query.promocion_id,servicio_id,fecha,UUID_REGEX.test(equipoIdQuery) ? equipoIdQuery : null);}catch(e){if(e.promoValidacion)return res.status(400).json({success:false,error:e.message});throw e;}
     const toMin = (t) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
     const fromMin = (m) => `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
     const { data: todosServicios, error: serviciosError } = await supabase.from("servicios").select("id, duracion").eq("slug", slug);
@@ -2488,14 +2546,15 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     (todosServicios || []).forEach((s) => { duracionPorServicio[s.id] = s.duracion; });
     const slotsPorHora = new Map();
     for (const miembro of miembrosAgenda) {
+      if(promocionSlots && miembro) {try{await resolverPromoBooking(slug,promocionSlots.id,servicio_id,fecha,miembro.id);}catch(e){if(e.promoValidacion)continue;throw e;}}
       const configAgenda = configNegocioParaEquipo(user, miembro);
-      const duracionSolicitada = servicioBase?.duracion || user.duracion_turno || 30;
-      const capacidad = servicioBase?.capacidad || user.capacidad_por_turno || 1;
+      const duracionSolicitada = promocionSlots?.duracion || servicioBase?.duracion || user.duracion_turno || 30;
+      const capacidad = promocionSlots?.capacidad || servicioBase?.capacidad || user.capacidad_por_turno || 1;
       const intervalosDia = obtenerIntervalosDia(configAgenda.horarios, configAgenda.excepciones, fecha);
       if (!intervalosDia) continue;
       const slotsGenerados = [];
       intervalosDia.forEach(([ini, fin]) => { for (let cursor = ini; cursor + duracionSolicitada <= fin; cursor += duracionSolicitada) slotsGenerados.push(cursor); });
-      let queryTurnosDia = supabase.from("turnos").select("hora, estado, servicio_id")
+      let queryTurnosDia = supabase.from("turnos").select("hora, estado, servicio_id, duracion_reservada")
         .eq("slug", slug).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
       if (miembro?.es_dueño) queryTurnosDia = queryTurnosDia.or(`equipo_id.eq.${miembro.id},equipo_id.is.null`);
       else queryTurnosDia = miembro ? queryTurnosDia.eq("equipo_id", miembro.id) : queryTurnosDia.is("equipo_id", null);
@@ -2503,7 +2562,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       if (turnosError) throw turnosError;
       const rangosOcupados = (turnosDia || []).map((t) => {
         const inicio = toMin(String(t.hora || "").slice(0, 5));
-        return { inicio, fin: inicio + (t.servicio_id && duracionPorServicio[t.servicio_id] || user.duracion_turno || 30) };
+        return { inicio, fin: inicio + (t.duracion_reservada || t.servicio_id && duracionPorServicio[t.servicio_id] || user.duracion_turno || 30) };
       });
       const anticipacion = Number(configAgenda.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT;
       for (const slotInicio of slotsGenerados) {
@@ -3382,7 +3441,21 @@ if (servicio_id) {
       }
     }
 
-const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
+let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
+    let promoReserva=null;
+    try {
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
+      if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
+      await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
+      if(promoReserva){
+        const incluidos=new Set(promoReserva.extras.map(e=>e.id));
+        extrasResueltos=extrasResueltos.filter(e=>!incluidos.has(e.id));
+        montoExtras=extrasResueltos.reduce((sum,e)=>sum+Number(e.precio || 0),0)+promoReserva.montoExtras;
+        extrasResueltos=[...promoReserva.extras,...extrasResueltos];
+        precioCobrado=promoReserva.precioServicio;servicioNombre=promoReserva.nombre;
+        capacidad=promoReserva.capacidad;
+      }
+    }catch(e){if(e.promoValidacion)return res.status(400).json({success:false,error:e.message});throw e;}
 
     let queryCapacidad = supabase.from("turnos").select("id", { count: "exact" })
       .eq("slug", slugClean).eq("fecha", fecha).eq("hora", hora).neq("estado", "cancelado");
@@ -3403,6 +3476,7 @@ const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean,
       servicio_nombre: servicioNombre,
       equipo_id:       equipoIdValido,
       equipo_nombre:   equipoNombre,
+      ...(promoReserva ? {promocion:promoReserva,duracion_reservada:promoReserva.duracion} : {}),
       precio_cobrado:  precioCobrado + montoExtras,
       extras:          extrasResueltos,
       monto_extras:    montoExtras,
@@ -3544,7 +3618,21 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     const equipoIdValido = empleadoReserva?.id || null;
     const equipoNombre = empleadoReserva ? `${empleadoReserva.nombre}${empleadoReserva.apellido ? " " + empleadoReserva.apellido : ""}` : null;
     
-    const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds);
+    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds);
+    let promoReserva=null;
+    try {
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
+      if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
+      await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
+      if(promoReserva){
+        const incluidos=new Set(promoReserva.extras.map(e=>e.id));
+        extrasResueltos=extrasResueltos.filter(e=>!incluidos.has(e.id));
+        montoExtras=extrasResueltos.reduce((sum,e)=>sum+Number(e.precio || 0),0)+promoReserva.montoExtras;
+        extrasResueltos=[...promoReserva.extras,...extrasResueltos];
+        precioCobrado=promoReserva.precioServicio;servicioNombre=promoReserva.nombre;
+        capacidad=promoReserva.capacidad;
+      }
+    }catch(e){if(e.promoValidacion)return res.status(400).json({success:false,error:e.message});throw e;}
     const importeComisionTurnits = planCobraComision(user.plan)
       ? calcularComisionTurnits(precioCobrado + montoExtras, user.plan)
       : 0;
@@ -3592,6 +3680,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
       telefono: phoneClean, email: emailClean || null, fecha, hora,
       servicio_id: servicio_id || null, servicio_nombre: servicioNombre,
       equipo_id: equipoIdValido, equipo_nombre: equipoNombre,
+      ...(promoReserva ? {promocion:promoReserva,duracion_reservada:promoReserva.duracion} : {}),
       precio_cobrado: precioCobrado + montoExtras,
       extras: extrasResueltos,
       monto_extras: montoExtras,
@@ -6943,7 +7032,21 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const equipoIdValido = empleadoReserva?.id || null;
     const equipoNombre = empleadoReserva ? `${empleadoReserva.nombre}${empleadoReserva.apellido ? " " + empleadoReserva.apellido : ""}` : null;
 
-    const { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
+    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
+    let promoReserva=null;
+    try {
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
+      if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
+      await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
+      if(promoReserva){
+        const incluidos=new Set(promoReserva.extras.map(e=>e.id));
+        extrasResueltos=extrasResueltos.filter(e=>!incluidos.has(e.id));
+        montoExtras=extrasResueltos.reduce((sum,e)=>sum+Number(e.precio || 0),0)+promoReserva.montoExtras;
+        extrasResueltos=[...promoReserva.extras,...extrasResueltos];
+        precioServicio=promoReserva.precioServicio;nombreServicio=promoReserva.nombre;
+        
+      }
+    }catch(e){if(e.promoValidacion)return res.status(400).json({success:false,error:e.message});throw e;}
 
     const esTrialPremium = user.plan === "premium" && user.estado_suscripcion === "trial";
     const metodo    = esTrialPremium && configReserva.metodo_pago === "none" ? "total" : (configReserva.metodo_pago || "none");
@@ -6977,6 +7080,7 @@ const fee = planCobraComision(user.plan)
           apellido: apellido || "", fecha, hora,
           servicio_id: servicio_id || null, servicio_nombre: nombreServicio,
           equipo_id: equipoIdValido, equipo_nombre: equipoNombre,
+          ...(promoReserva ? {promocion:promoReserva,duracion_reservada:promoReserva.duracion} : {}),
           precio_servicio: precioServicio, metodo_pago: metodo, monto: montoACobrar,
           extras: extrasResueltos, monto_extras: montoExtras,
           estado: "pendiente",
@@ -7587,7 +7691,7 @@ app.get("/oauth-callback", async (req, res) => {
 // función solo procesa pagos de Mercado Pago, así que el canal real es
 // siempre "mercadopago"; lo que llega en tipo_cobro es lo que antes se
 // guardaba (mal) en la columna metodo_pago del turno.
-async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, equipo_id, equipo_nombre, monto, moneda, tipo_cobro, precio_servicio, payment_id, estado, porcentaje_sena, extras, monto_extras, comision_mp, comision_plataforma }) {
+async function procesarPagoConfirmado({ promocion, duracion_reservada, slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, equipo_id, equipo_nombre, monto, moneda, tipo_cobro, precio_servicio, payment_id, estado, porcentaje_sena, extras, monto_extras, comision_mp, comision_plataforma }) {
   const { data: turnoExistente } = await supabase
     .from("turnos").select("id").eq("payment_id", String(payment_id)).maybeSingle();
   if (turnoExistente) { console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`); return; }
@@ -7647,6 +7751,7 @@ async function procesarPagoConfirmado({ slug, nombre, apellido, telefono, email,
       telefono: cleanPhone(telefono?.toString() || "0"), email: email?.trim().toLowerCase() || null,
       fecha, hora, servicio_id: servicio_id || null, servicio_nombre: servicio_nombre || null,
       equipo_id: equipo_id || null, equipo_nombre: equipo_nombre || null,
+      ...(promocion ? {promocion,duracion_reservada:Number(duracion_reservada || promocion.duracion)} : {}),
       precio_cobrado: Number(precio_servicio || 0) + Number(monto_extras || 0),
       monto_pagado: monto,
       extras: extras || [],
@@ -7833,6 +7938,8 @@ app.post("/webhook/mp", async (req, res) => {
   // meta.metodo_pago viene seteado por /api/create-preference como
   // "sena" | "total" (nunca "mercadopago" en sí) -> es el tipo de cobro.
   tipo_cobro:       meta.metodo_pago === "sena" || meta.metodo_pago === "total" ? meta.metodo_pago : null,
+  promocion: meta.promocion || null,
+  duracion_reservada: meta.duracion_reservada || null,
   precio_servicio:  meta.precio_servicio || null,
   payment_id:       paymentId,
   estado,
