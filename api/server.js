@@ -5585,6 +5585,61 @@ const fechaISOValida = (value) => {
 };
 const numeroMesDias = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
 
+function promocionesAsync(handler) { return (req,res) => Promise.resolve(handler(req,res)).catch(e => { console.error("Error de promociones:",e.code || e.message);res.status(500).json({success:false,error:"No se pudo completar la operación de promociones."}); }); }
+// Gestión de promociones del titular. Precios y pertenencia verificados en el servidor.
+function promocionesValidar(body) {
+  const {nombre,tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin}=body || {};
+  if (typeof nombre !== 'string' || !nombre.trim() || nombre.trim().length > 100 || !['combo','descuento'].includes(tipo)) throw new Error('Revisá el nombre y el tipo de promoción.');
+  if (!fechaISOValida(fecha_inicio) || !fechaISOValida(fecha_fin) || fecha_fin < fecha_inicio) throw new Error('Elegí una fecha de inicio y una fecha de fin válidas.');
+  if (!Array.isArray(items) || !items.length || items.length > 30) throw new Error('Seleccioná los elementos de la promoción.');
+  const keys=new Set();
+  for(const item of items) {
+    if(!item || !['servicio','producto'].includes(item.tipo) || typeof item.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(item.id) || !Number.isInteger(item.cantidad) || item.cantidad < 1 || item.cantidad > 99 || keys.has(item.tipo+':'+item.id)) throw new Error('Revisá los elementos y sus cantidades.');
+    keys.add(item.tipo+':'+item.id);
+  }
+  if(tipo === 'descuento' && (items.length !== 1 || items[0].tipo !== 'servicio' || items[0].cantidad !== 1)) throw new Error('El descuento individual debe aplicarse a un único servicio.');
+  if(tipo === 'combo' && items.reduce((sum,item)=>sum+item.cantidad,0)<2) throw new Error('Un combo debe incluir al menos dos servicios o productos.');
+  if(!['porcentaje','precio_final'].includes(descuento_tipo) || typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0 || valor > 100000000000 || (descuento_tipo === 'porcentaje' && valor >= 100)) throw new Error('Ingresá un porcentaje entre 0 y 100 o un precio final válido.');
+  return {nombre:nombre.trim(),tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin,activo:body.activo !== false};
+}
+async function promocionesPreparar(slug,body) {
+  const datos=promocionesValidar(body), items=[];
+  for(const item of datos.items) {
+    const {data,error}=await supabase.from(item.tipo === 'servicio' ? 'servicios' : 'extras').select('id,nombre,precio,activo').eq('slug',slug).eq('id',item.id).maybeSingle();
+    if(error) throw error;
+    if(!data || !isActivo(data.activo)) {const e=new Error('Uno de los elementos ya no está disponible en tu catálogo.');e.promoValidacion=true;throw e;}
+    items.push({tipo:item.tipo,id:data.id,cantidad:item.cantidad,nombre:data.nombre,precio:Number(data.precio)});
+  }
+  const precio_original=Math.round(items.reduce((sum,item)=>sum+item.precio*item.cantidad,0)*100)/100;
+  const precio_final=Math.round((datos.descuento_tipo === 'porcentaje' ? precio_original*(1-datos.valor/100) : datos.valor)*100)/100;
+  if(!Number.isFinite(precio_original) || precio_original <= 0 || !Number.isFinite(precio_final) || precio_final <= 0 || precio_final >= precio_original) {const e=new Error('El precio promocional debe ser mayor a cero y menor al precio original.');e.promoValidacion=true;throw e;}
+  return {...datos,slug,items,precio_original,precio_final,updated_at:new Date().toISOString()};
+}
+app.get('/admin/promociones/:slug',requireAuth,promocionesAsync(async(req,res)=>{
+  const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).order('created_at',{ascending:false});
+  if(error) return res.status(500).json({success:false,error:error.code === '42P01' || error.code === 'PGRST205' ? 'Falta instalar Promociones.sql en Supabase.' : 'No se pudieron cargar las promociones.'});
+  res.json({success:true,promociones:data || []});
+}));
+async function promocionesGuardar(req,res) {
+  try {
+    const slug=cleanSlug(req.params.slug);let datos;
+    try {promocionesValidar(req.body);} catch(e) {return res.status(400).json({success:false,error:e.message});}
+    datos=await promocionesPreparar(slug,req.body);
+    const query=req.params.id ? supabase.from('promociones').update(datos).eq('slug',slug).eq('id',req.params.id) : supabase.from('promociones').insert(datos);
+    const {data,error}=await query.select('*').maybeSingle();if(error) throw error;
+    if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
+    res.status(req.params.id ? 200 : 201).json({success:true,promocion:data});
+  } catch(e) {console.error('Error guardando promoción:',e.code || e.message);res.status(e.promoValidacion ? 400 : 500).json({success:false,error:e.promoValidacion ? e.message : 'No se pudo guardar la promoción. Revisá que Promociones.sql esté instalado.'});}
+}
+app.post('/admin/promociones/:slug',requireAuth,promocionesGuardar);
+app.put('/admin/promociones/:slug/:id',requireAuth,promocionesGuardar);
+app.delete('/admin/promociones/:slug/:id',requireAuth,promocionesAsync(async(req,res)=>{
+  const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('id',req.params.id).select('id').maybeSingle();
+  if(error) return res.status(500).json({success:false,error:'No se pudo eliminar la promoción.'});
+  if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
+  res.json({success:true});
+}));
+
 app.get("/finanzas/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
