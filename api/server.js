@@ -2322,7 +2322,10 @@ const { data: user, error } = await supabase.from("usuarios")
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function resolverExtras(slugClean, servicioId, extraIdsRaw) {
+async function resolverExtras(slugClean, servicioId, extraIdsRaw, cantidadesRaw) {
+  let cantidades=cantidadesRaw || {};
+  if(typeof cantidades === "string"){try{cantidades=JSON.parse(cantidades)}catch{cantidades={}}}
+  if(!cantidades || typeof cantidades!=="object" || Array.isArray(cantidades))cantidades={};
   const ids = Array.isArray(extraIdsRaw)
     ? [...new Set(extraIdsRaw.filter((id) => typeof id === "string" && UUID_REGEX.test(id)))]
     : [];
@@ -2341,7 +2344,12 @@ async function resolverExtras(slugClean, servicioId, extraIdsRaw) {
 
   const extras = extrasDB
     .filter((e) => permitidos.has(e.id))
-    .map((e) => ({ id: e.id, nombre: e.nombre, precio: Number(e.precio) || 0 }));
+    .map((e) => {
+      const solicitada=Number(cantidades[e.id] ?? 1);
+      const cantidad=Number.isInteger(solicitada) ? Math.max(1,Math.min(99,solicitada)) : 1;
+      const precio_unitario=Number(e.precio) || 0;
+      return {id:e.id,nombre:e.nombre,cantidad,precio_unitario,precio:Math.round(precio_unitario*cantidad*100)/100};
+    });
   const montoExtras = extras.reduce((acc, e) => acc + e.precio, 0);
   return { extras, montoExtras };
 }
@@ -2369,7 +2377,7 @@ app.get("/extras/:servicio_id", async (req, res) => {
         id, nombre, descripcion, precio, imagen_url,
       }));
  
-    res.json({ success: true, extras });
+    res.json({ success: true, extras, cantidades_disponibles: true });
   } catch (e) {
     console.error("Error en /extras/:servicio_id:", e.message);
     res.status(500).json({ success: false, error: "Error al obtener los extras." });
@@ -2428,9 +2436,12 @@ async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
   const servicios=p.items.filter(i=>i.tipo==='servicio');
   if(!servicios.length || servicios[0].id !== servicioId)throw promoError('La promo no corresponde al servicio seleccionado.');
   let duracion=0,capacidad=Infinity;
+  const imagenes=[];
   for(const item of p.items) {
-    const {data,error}=await supabase.from(item.tipo==='servicio' ? 'servicios':'extras').select(item.tipo==='servicio' ? 'id,activo,duracion,capacidad':'id,activo').eq('slug',slug).eq('id',item.id).maybeSingle();if(error)throw error;
+    const {data,error}=await supabase.from(item.tipo==='servicio' ? 'servicios':'extras').select(item.tipo==='servicio' ? 'id,activo,duracion,capacidad,descripcion':'id,activo,imagen_url').eq('slug',slug).eq('id',item.id).maybeSingle();if(error)throw error;
     if(!data || !isActivo(data.activo))throw promoError('Un elemento de esta promo ya no está disponible.');
+    const image=item.tipo==='producto' ? data.imagen_url : String(data.descripcion || '').match(/^\[img:(.*?)\]/s)?.[1];
+    if(image)imagenes.push({id:item.id,tipo:item.tipo,url:image});
     if(item.tipo==='servicio') {
       duracion+=Number(data.duracion || 30)*item.cantidad;capacidad=Math.min(capacidad,Number(data.capacidad || 1));
       if(equipoId && UUID_REGEX.test(String(equipoId))) {const {data:v,error:ve}=await supabase.from('servicio_equipo').select('id').eq('servicio_id',item.id).eq('equipo_id',equipoId).maybeSingle();if(ve)throw ve;if(!v)throw promoError('Ese profesional no ofrece todos los servicios de la promo.');}
@@ -2440,7 +2451,7 @@ async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
   if(!Number.isFinite(total) || total<=0 || !Number.isFinite(ratio) || ratio<=0 || ratio>=1)throw promoError('El precio de esta promo no es válido.');
   const extras=p.items.filter(i=>i.tipo==='producto').map(i=>({id:i.id,nombre:i.nombre,cantidad:i.cantidad,precio:Math.round(Number(i.precio)*i.cantidad*ratio*100)/100,promo_incluido:true}));
   const montoExtras=Math.round(extras.reduce((sum,i)=>sum+i.precio,0)*100)/100;
-  return {id:p.id,nombre:p.nombre,tipo:p.tipo,items:p.items,fecha_inicio:p.fecha_inicio,fecha_fin:p.fecha_fin,precio_original:Number(p.precio_original),precio_final:total,servicio_id:servicios[0].id,duracion,capacidad,extras,montoExtras,precioServicio:Math.round((total-montoExtras)*100)/100};
+  return {id:p.id,nombre:p.nombre,tipo:p.tipo,items:p.items,imagenes,fecha_inicio:p.fecha_inicio,fecha_fin:p.fecha_fin,precio_original:Number(p.precio_original),precio_final:total,servicio_id:servicios[0].id,duracion,capacidad,extras,montoExtras,precioServicio:Math.round((total-montoExtras)*100)/100};
 }
 async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servicioId) {
   if(!promo){
@@ -3441,7 +3452,7 @@ if (servicio_id) {
       }
     }
 
-let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
+let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades);
     let promoReserva=null;
     try {
       promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
@@ -3618,7 +3629,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     const equipoIdValido = empleadoReserva?.id || null;
     const equipoNombre = empleadoReserva ? `${empleadoReserva.nombre}${empleadoReserva.apellido ? " " + empleadoReserva.apellido : ""}` : null;
     
-    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds);
+    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds, req.body.extra_cantidades);
     let promoReserva=null;
     try {
       promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
@@ -7032,7 +7043,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const equipoIdValido = empleadoReserva?.id || null;
     const equipoNombre = empleadoReserva ? `${empleadoReserva.nombre}${empleadoReserva.apellido ? " " + empleadoReserva.apellido : ""}` : null;
 
-    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids);
+    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades);
     let promoReserva=null;
     try {
       promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
