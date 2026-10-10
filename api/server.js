@@ -1773,6 +1773,101 @@ app.post("/turnos/check-cliente", limiterBooking, async (req, res) => {
 // fallidos (además del rate limit por IP), y limpieza del contador
 // al loguear con éxito.
 // ══════════════════════════════════════════════════════════════
+// Acceso Google integrado en el servidor principal.
+function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto, JWT_EXPIRY, isActivo, diasHastaVencer, planTieneFuncionesPremium, verificarPassword, chequearBloqueoLogin, registrarIntentoFallidoLogin, limpiarIntentosLogin, verifyGoogle, env = process.env }) {
+  const challenges = new Map();
+  const origins = new Set((env.GOOGLE_ALLOWED_ORIGINS || 'https://turnits.com,https://www.turnits.com').split(',').map(v => v.trim()).filter(Boolean));
+  function onlyOrigin(req, res, next) {
+    if (!origins.has(req.headers.origin) || !req.is('application/json')) return res.status(403).json({success:false,error:'Origen no autorizado.'});
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  }
+  function cleanup() { for (const [key, expiry] of challenges) if (expiry < Date.now()) challenges.delete(key); }
+  app.post('/auth/google/challenge', limiterAuth, onlyOrigin, (req, res) => {
+    if (!env.GOOGLE_CLIENT_ID) return res.status(503).json({success:false,error:'El acceso con Google todavía no está configurado.'});
+    cleanup();
+    if (challenges.size >= 2000) return res.status(503).json({success:false,error:'Probá de nuevo en un momento.'});
+    const nonce = crypto.randomBytes(32).toString('hex');
+    challenges.set(nonce, Date.now() + 5 * 60 * 1000);
+    return res.json({success:true,nonce});
+  });
+  app.post('/auth/google', limiterAuth, onlyOrigin, async (req, res) => {
+    try {
+      if (!env.GOOGLE_CLIENT_ID || !env.JWT_SECRET) return res.status(503).json({success:false,error:'El acceso con Google todavía no está configurado.'});
+      const {credential, nonce} = req.body || {};
+      if (typeof credential !== 'string' || credential.length > 16000 || typeof nonce !== 'string' || !challenges.has(nonce) || challenges.get(nonce) < Date.now()) return res.status(401).json({success:false,error:'Volvé a seleccionar tu cuenta de Google.'});
+      let google;
+      try { google = await verifyGoogle(credential, env.GOOGLE_CLIENT_ID); }
+      catch (error) {
+        if (error.code === 'ERR_MODULE_NOT_FOUND') return res.status(503).json({success:false,error:'Falta configurar Google en el servidor.'});
+        return res.status(401).json({success:false,error:'No pudimos verificar tu cuenta de Google. Volvé a intentar.'});
+      }
+      if (!google || google.nonce !== nonce || typeof google.sub !== 'string' || !google.sub || google.email_verified !== true) return res.status(401).json({success:false,error:'La credencial de Google no es válida.'});
+      const {data:binding,error:bindingError} = await supabase.from('google_login_accounts').select('google_sub,usuario_id,equipo_id').eq('google_sub',google.sub).maybeSingle();
+      if (bindingError) throw bindingError;
+      let user = null, member = null;
+      const email = typeof google.email === 'string' ? google.email.trim().toLowerCase() : '';
+      if (binding) {
+        const table = binding.usuario_id ? 'usuarios' : 'equipo';
+        const id = binding.usuario_id || binding.equipo_id;
+        const {data,error} = await supabase.from(table).select('*').eq('id',id).maybeSingle();
+        if (error) throw error;
+        if (binding.usuario_id) user = data; else member = data;
+      } else {
+        // Sólo el email del token verificado; nunca se toma un email enviado por el navegador.
+        const authoritative = email.endsWith('@gmail.com') || (typeof google.hd === 'string' && google.hd.length > 0);
+        if (!email || !authoritative) return res.status(403).json({success:false,code:'google_email_not_authoritative',error:'Para este correo, ingresá con tu acceso habitual. También podés usar una cuenta Gmail o Google Workspace.'});
+        const {data:owner,error:ownerError} = await supabase.from('usuarios').select('*').eq('email',email).maybeSingle();
+        if (ownerError) throw ownerError;
+        if (owner) user = owner;
+        else {
+          const {data:employee,error:employeeError} = await supabase.from('equipo').select('*').eq('login_email',email).eq('es_dueño',false).maybeSingle();
+          if (employeeError) throw employeeError;
+          member = employee;
+        }
+        if (!user && !member) return res.status(404).json({success:false,code:'google_registration_required',error:'Completá el registro de tu negocio para empezar.'});
+      }
+      let payload, result;
+      if (user) {
+        const days = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+        const expired = days !== null && days <= 0;
+        if (!isActivo(user.activo) && !expired) return res.status(403).json({success:false,error:'Este negocio está desactivado.'});
+        payload = {slug:user.slug,negocioId:user.id,rol:'owner'};
+        result = {slug:user.slug,email:user.email,business_name:user.business_name,nombre_persona:user.nombre_persona,apellido:user.apellido || '',plan:user.plan || 'gratis',suscripcion:{estado:expired?'suspendido':user.estado_suscripcion || 'trial',fecha_vencimiento:user.fecha_vencimiento,dias_restantes:days,vencida:expired}};
+        if (expired && user.plan === 'premium') result.redirect='renovar';
+      } else if (member && !member.es_dueño && member.login_activado && isActivo(member.activo)) {
+        const {data:business,error} = await supabase.from('usuarios').select('activo,plan,fecha_vencimiento').eq('slug',member.slug).maybeSingle();
+        if (error) throw error;
+        if (!business || !isActivo(business.activo) || !planTieneFuncionesPremium(business.plan) || (business.fecha_vencimiento && diasHastaVencer(business.fecha_vencimiento) <= 0)) return res.status(403).json({success:false,error:'El acceso del equipo no está habilitado para este negocio.'});
+        payload = {slug:member.slug,equipoId:member.id,rol:'empleado'};
+        result = {slug:member.slug,email:member.login_email,rol:'empleado',equipo_id:member.id,nombre_persona:`${member.nombre}${member.apellido ? ' '+member.apellido : ''}`};
+      } else return res.status(403).json({success:false,error:'El acceso a esta cuenta está desactivado.'});
+      // Consume el desafío antes de vincular/emitir la sesión: evita reutilizaciones concurrentes.
+      if (!challenges.delete(nonce)) return res.status(401).json({success:false,error:'Volvé a seleccionar tu cuenta de Google.'});
+      if (!binding) {
+        const {error} = await supabase.from('google_login_accounts').insert({google_sub:google.sub,usuario_id:user?.id || null,equipo_id:member?.id || null});
+        if (error?.code === '23505') return res.status(409).json({success:false,error:'Esta cuenta ya está conectada a otra cuenta de Google. Usá esa cuenta o tu acceso habitual.'});
+        if (error) throw error;
+        limpiarIntentosLogin(email);
+      }
+      const token = jwt.sign(payload,env.JWT_SECRET,{expiresIn:JWT_EXPIRY});
+      return res.json({success:true,...result,token});
+    } catch (error) {
+      console.error('Error de login Google:',error.code || error.name || 'unknown');
+      return res.status(500).json({success:false,error:'No pudimos completar el acceso con Google. Probá de nuevo.'});
+    }
+  });
+}
+
+
+let googleClientPromise;
+async function verifyGoogle(credential, audience) {
+  googleClientPromise ||= import('google-auth-library').then(({ OAuth2Client }) => new OAuth2Client());
+  const client = await googleClientPromise;
+  const ticket = await client.verifyIdToken({ idToken: credential, audience });
+  return ticket.getPayload();
+}
+registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto, JWT_EXPIRY, isActivo, diasHastaVencer, planTieneFuncionesPremium, verificarPassword, chequearBloqueoLogin, registrarIntentoFallidoLogin, limpiarIntentosLogin, verifyGoogle });
 app.post("/login", limiterAuth, async (req, res) => {
   try {
     const rawSlug  = cleanSlug(req.body.slug || "");
