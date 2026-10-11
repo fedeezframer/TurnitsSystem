@@ -6990,6 +6990,99 @@ app.get("/auth/reset-token-info", async (req, res) => {
 // PAGOS — Mercado Pago
 // POST /api/create-preference
 // ══════════════════════════════════════════════════════════════
+
+// Tarjetas: la clave pública pertenece a la aplicación de Turnits, no al vendedor.
+app.get("/api/card-config", (_req,res)=>res.json({enabled:!!(process.env.MP_TURNERO_PUBLIC_KEY && process.env.JWT_SECRET)}));
+
+const cardPaymentLocks = new Set();
+function verifyCardSession(value) {
+  return jwt.verify(value, process.env.JWT_SECRET + ":card-checkout", {algorithms:["HS256"], audience:"turnits-card"});
+}
+async function cardContext(session) {
+  const {data:pending,error}=await supabase.from("pagos_pendientes").select("*").eq("id",session.pending_id).maybeSingle();
+  if(error)throw error;
+  if(!pending || pending.slug!==session.slug || Number(pending.monto)!==session.amount)throw new Error("Sesión de pago inválida.");
+  const {data:user}=await supabase.from("usuarios").select("*").eq("slug",pending.slug).maybeSingle();
+  if(!user)throw new Error("El negocio ya no está disponible.");
+  let member=null;
+  if(pending.equipo_id){const {data}=await supabase.from("equipo").select("*").eq("id",pending.equipo_id).eq("slug",pending.slug).maybeSingle();member=data;}
+  const config=configNegocioParaEquipo(user,member);
+  const token=config.mp_access_token && (member?.mp_access_token ? await obtenerTokenMpVigenteEquipo(pending.slug,member.id,member) : await obtenerTokenMpVigente(pending.slug,user));
+  if(!token)throw new Error("El negocio debe reconectar Mercado Pago.");
+  return {pending,user,member,config,token};
+}
+async function findCardPayment(ctx) {
+  const url=ctx.pending.payment_id
+    ? "https://api.mercadopago.com/v1/payments/"+encodeURIComponent(ctx.pending.payment_id)
+    : "https://api.mercadopago.com/v1/payments/search?external_reference="+encodeURIComponent(ctx.pending.id)+"&sort=date_created&criteria=desc";
+  const response=await fetch(url,{headers:{Authorization:"Bearer "+ctx.token}});
+  if(!response.ok)throw new Error("No pudimos consultar el estado del pago. Intentá nuevamente.");
+  const data=await response.json();
+  return ctx.pending.payment_id ? data : data.results?.[0] || null;
+}
+async function finishCardPayment(ctx,pay,res) {
+  if(!pay || pay.external_reference!==ctx.pending.id || Number(pay.transaction_amount)!==Number(ctx.pending.monto) || pay.currency_id!=="ARS")
+    return res.status(409).json({error:"No pudimos verificar el pago."});
+  if(!["credit_card","debit_card","prepaid_card"].includes(pay.payment_type_id))return res.status(409).json({error:"Medio de pago inválido."});
+  const state=pay.status==="approved"?"aprobado":["pending","in_process","authorized","in_mediation"].includes(pay.status)?"pendiente":"rechazado";
+  await supabase.from("pagos_pendientes").update({payment_id:String(pay.id),estado:state}).eq("id",ctx.pending.id);
+  if(state==="aprobado") {
+    let mpFee=null,appFee=null;
+    if(Array.isArray(pay.fee_details)) {
+      mpFee=0;appFee=0;
+      for(const f of pay.fee_details){if(f.fee_payer==="payer")continue;if(f.type==="application_fee")appFee+=Number(f.amount||0);else mpFee+=Number(f.amount||0);}
+    }
+    await procesarPagoConfirmado({...ctx.pending,tipo_cobro:ctx.pending.metodo_pago,payment_id:pay.id,estado:state,moneda:"ARS",comision_mp:mpFee,comision_plataforma:appFee});
+    const {data:turno}=await supabase.from("turnos").select("id").eq("payment_id",String(pay.id)).maybeSingle();
+    if(turno)return res.json({status:"approved",success_url:SUCCESS_URL+"?slug="+encodeURIComponent(ctx.pending.slug)+"&turno_id="+turno.id});
+    return res.json({status:"review",message:"El pago fue aprobado, pero la reserva requiere revisión del negocio. No vuelvas a pagar."});
+  }
+  return res.json({status:state==="pendiente"?"pending":"rejected",message:state==="pendiente"?"Mercado Pago está revisando tu pago. No vuelvas a pagar.":"La tarjeta no pudo completar el pago. Podés volver e intentar con otra tarjeta."});
+}
+app.post("/api/card-payment",limiterBooking,async(req,res)=>{
+  let lock, attempted=false;
+  try {
+    let session;
+    try{session=verifyCardSession(req.body.checkout_token);}catch{return res.status(401).json({error:"La sesión de pago venció. Volvé a confirmar tus datos."});}
+    if(cardPaymentLocks.has(session.pending_id))return res.status(409).json({error:"El pago ya se está procesando. Esperá unos segundos."});
+    lock=session.pending_id;
+    cardPaymentLocks.add(lock);
+    const ctx=await cardContext(session);
+    const existing=await findCardPayment(ctx);
+    if(existing){attempted=true;return await finishCardPayment(ctx,existing,res);}
+    const card=req.body.card || {};
+    if(typeof card.token!=="string" || card.token.length>300 || !/^[a-zA-Z0-9_-]+$/.test(card.token) || typeof card.payment_method_id!=="string" || !Number.isInteger(Number(card.installments)) || Number(card.installments)<1 || Number(card.installments)>48 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(card.payer?.email || ""))
+      return res.status(400).json({status:"not_charged",error:"Revisá los datos de la tarjeta y el email."});
+    // Verificamos el tipo de medio en MP; el importe y la comisión nunca vienen del navegador.
+    const methodsRes=await fetch("https://api.mercadopago.com/v1/payment_methods",{headers:{Authorization:"Bearer "+ctx.token}});
+    if(!methodsRes.ok)throw new Error("No pudimos verificar la tarjeta.");
+    const methods=await methodsRes.json();
+    if(!methods.some(m=>m.id===card.payment_method_id && ["credit_card","debit_card","prepaid_card"].includes(m.payment_type_id)))return res.status(400).json({status:"not_charged",error:"Elegí una tarjeta de crédito o débito válida."});
+    if(!horaDentroDeIntervalos(ctx.config.horarios,ctx.config.excepciones,ctx.pending.fecha,ctx.pending.hora) || !cumpleAnticipacionReserva(ctx.pending.fecha,ctx.pending.hora,ctx.config.anticipacion_minutos))return res.status(409).json({status:"not_charged",error:"Ese horario ya no está disponible. Volvé a elegir el turno."});
+    const debt=await validarReservasPorComisiones(ctx.pending.slug);
+    if(!debt.permitido || ctx.user.estado_suscripcion==="suspendido" || (ctx.user.fecha_vencimiento && diasHastaVencer(ctx.user.fecha_vencimiento)<=0))return res.status(403).json({status:"not_charged",error:"La agenda está pausada temporalmente."});
+    await promoDisponibilidad(ctx.pending.slug,ctx.pending.fecha,ctx.pending.hora,ctx.pending.promocion || null,ctx.config,ctx.member,ctx.pending.servicio_id);
+    const body={token:card.token,payment_method_id:card.payment_method_id,installments:Number(card.installments),transaction_amount:session.amount,
+      description:ctx.pending.servicio_nombre || "Reserva Turnits",external_reference:ctx.pending.id,notification_url:API_URL+"/webhook/mp",
+      payer:{email:card.payer.email.trim().toLowerCase(),...(card.payer.identification ? {identification:{type:String(card.payer.identification.type || "").slice(0,20),number:String(card.payer.identification.number || "").slice(0,30)}}:{})},
+      ...(card.issuer_id ? {issuer_id:String(card.issuer_id).slice(0,40)}:{}),...(session.fee>0?{application_fee:session.fee}:{}),metadata:{...ctx.pending,card_checkout:true}};
+    attempted=true;
+    const response=await fetch("https://api.mercadopago.com/v1/payments",{method:"POST",headers:{Authorization:"Bearer "+ctx.token,"Content-Type":"application/json","X-Idempotency-Key":ctx.pending.id},body:JSON.stringify(body)});
+    const pay=await response.json();
+    if(!response.ok)return res.status(response.status>=500?503:400).json({error:response.status>=500?"No pudimos confirmar el resultado. Consultá el estado antes de volver a pagar.":"Mercado Pago no pudo completar el cobro. Revisá los datos o consultá el estado."});
+    return await finishCardPayment(ctx,pay,res);
+  }catch{return res.status(attempted?503:400).json({status:attempted?"unknown":"not_charged",error:attempted?"No pudimos confirmar el resultado. Consultá el estado antes de volver a pagar.":"No se inició el cobro. Volvé a elegir el turno y revisá la conexión del negocio."});}
+  finally{if(lock)cardPaymentLocks.delete(lock);}
+});
+app.post("/api/card-payment/status",limiterBooking,async(req,res)=>{
+  try {
+    const session=verifyCardSession(req.body.checkout_token);
+    const ctx=await cardContext(session),pay=await findCardPayment(ctx);
+    if(!pay)return res.json({status:"not_found",message:"Todavía no recibimos un pago. Podés volver a consultar su estado."});
+    return await finishCardPayment(ctx,pay,res);
+  }catch{return res.status(400).json({error:"No pudimos consultar el pago. Contactá al negocio antes de volver a pagar."});}
+});
+
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   console.log("📥 create-preference:", JSON.stringify({
     slug: req.body?.slug,
@@ -7101,6 +7194,11 @@ const fee = planCobraComision(user.plan)
           .from("pagos_pendientes").insert([metaPendiente]).select("id").single();
         if (pendError) throw pendError;
 
+        if(req.body.card_checkout === true) {
+          if(!process.env.MP_TURNERO_PUBLIC_KEY || !process.env.JWT_SECRET)return res.status(503).json({error:"El pago con tarjeta todavía no está configurado."});
+          const checkoutToken=jwt.sign({pending_id:pendiente.id,slug:slugClean,amount:montoACobrar,fee},process.env.JWT_SECRET+":card-checkout",{algorithm:"HS256",audience:"turnits-card",expiresIn:"2h"});
+          return res.json({card_checkout:true,checkout_token:checkoutToken,public_key:process.env.MP_TURNERO_PUBLIC_KEY,monto:montoACobrar});
+        }
         const client = new MercadoPagoConfig({ accessToken: tokenVigente });
         const pref   = new Preference(client);
 
