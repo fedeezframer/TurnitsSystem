@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.11-planes-final";
+const PANEL_VERSION  = "2026.10.11-catalogo-empleado";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -638,7 +638,11 @@ function configNegocioParaEquipo(user, miembro) {
 }
 
 async function aplicarVarianteServicio(slug, servicioId, equipoId, servicio) {
-  if (!servicio || !equipoId || !UUID_REGEX.test(String(equipoId))) return servicio;
+  if (!servicio) return servicio;
+  const {data:scope,error:scopeError}=await supabase.from("servicios").select("owner_equipo_id").eq("slug",slug).eq("id",servicioId).maybeSingle();
+  if(scopeError)throw scopeError;
+  if(scope?.owner_equipo_id && scope.owner_equipo_id !== equipoId)throw new Error("Este servicio pertenece a otro profesional.");
+  if (!equipoId || !UUID_REGEX.test(String(equipoId))) return servicio;
   const { data: variante, error } = await supabase.from("servicio_equipo")
     .select("precio_override, imagen_url_override, orden_override")
     .eq("servicio_id", servicioId).eq("equipo_id", equipoId).maybeSingle();
@@ -2245,7 +2249,7 @@ const { data: user, error } = await supabase.from("usuarios")
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function resolverExtras(slugClean, servicioId, extraIdsRaw, cantidadesRaw) {
+async function resolverExtras(slugClean, servicioId, extraIdsRaw, cantidadesRaw, equipoId = null) {
   let cantidades=cantidadesRaw || {};
   if(typeof cantidades === "string"){try{cantidades=JSON.parse(cantidades)}catch{cantidades={}}}
   if(!cantidades || typeof cantidades!=="object" || Array.isArray(cantidades))cantidades={};
@@ -2255,7 +2259,7 @@ async function resolverExtras(slugClean, servicioId, extraIdsRaw, cantidadesRaw)
   if (ids.length === 0) return { extras: [], montoExtras: 0 };
 
   const { data: extrasDB } = await supabase.from("extras")
-    .select("id, nombre, precio").eq("slug", slugClean).eq("activo", true).in("id", ids);
+    .select("id, nombre, precio, owner_equipo_id").eq("slug", slugClean).eq("activo", true).in("id", ids);
   if (!extrasDB?.length) return { extras: [], montoExtras: 0 };
 
   let permitidos = new Set(extrasDB.map((e) => e.id));
@@ -2266,7 +2270,7 @@ async function resolverExtras(slugClean, servicioId, extraIdsRaw, cantidadesRaw)
   }
 
   const extras = extrasDB
-    .filter((e) => permitidos.has(e.id))
+    .filter((e) => permitidos.has(e.id) && (!e.owner_equipo_id || e.owner_equipo_id === equipoId))
     .map((e) => {
       const solicitada=Number(cantidades[e.id] ?? 1);
       const cantidad=Number.isInteger(solicitada) ? Math.max(1,Math.min(99,solicitada)) : 1;
@@ -2286,7 +2290,7 @@ app.get("/extras/:servicio_id", async (req, res) => {
  
     const { data: vinculos, error } = await supabase
       .from("servicio_extras")
-      .select("extra_id, extras!inner(id, nombre, descripcion, precio, imagen_url, activo, orden)")
+      .select("extra_id, extras!inner(id, nombre, descripcion, precio, imagen_url, activo, orden, owner_equipo_id)")
       .eq("servicio_id", servicio_id)
       .eq("extras.activo", true);
  
@@ -2294,7 +2298,7 @@ app.get("/extras/:servicio_id", async (req, res) => {
  
     const extras = (vinculos || [])
       .map((v) => v.extras)
-      .filter(Boolean)
+      .filter(e => e && (!e.owner_equipo_id || e.owner_equipo_id === req.query.equipo_id))
       .sort((a, b) => (a.orden || 0) - (b.orden || 0))
       .map(({ id, nombre, descripcion, precio, imagen_url }) => ({
         id, nombre, descripcion, precio, imagen_url,
@@ -2359,13 +2363,15 @@ async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
   const {data:p,error}=await supabase.from('promociones').select('*').eq('slug',slug).eq('id',id).maybeSingle();if(error)throw error;
   const today=promoHoyArgentina();
   if(!p || !p.activo || today<p.fecha_inicio || today>p.fecha_fin || (fecha && (fecha<p.fecha_inicio || fecha>p.fecha_fin)))throw promoError('La promo no está vigente para ese día. Elegí otra fecha o servicio.');
+  if(p.owner_equipo_id && p.owner_equipo_id !== equipoId)throw promoError('Esta promo pertenece a otro profesional.');
   const servicios=p.items.filter(i=>i.tipo==='servicio');
   if(!servicios.length || servicios[0].id !== servicioId)throw promoError('La promo no corresponde al servicio seleccionado.');
   let duracion=0,capacidad=Infinity;
   const imagenes=[];
   for(const item of p.items) {
-    const {data,error}=await supabase.from(item.tipo==='servicio' ? 'servicios':'extras').select(item.tipo==='servicio' ? 'id,activo,duracion,capacidad,descripcion':'id,activo,imagen_url').eq('slug',slug).eq('id',item.id).maybeSingle();if(error)throw error;
+    const {data,error}=await supabase.from(item.tipo==='servicio' ? 'servicios':'extras').select(item.tipo==='servicio' ? 'id,activo,duracion,capacidad,descripcion,owner_equipo_id':'id,activo,imagen_url,owner_equipo_id').eq('slug',slug).eq('id',item.id).maybeSingle();if(error)throw error;
     if(!data || !isActivo(data.activo))throw promoError('Un elemento de esta promo ya no está disponible.');
+    if(data.owner_equipo_id && data.owner_equipo_id !== equipoId)throw promoError('Un elemento pertenece a otro profesional.');
     const image=item.tipo==='producto' ? data.imagen_url : String(data.descripcion || '').match(/^\[img:(.*?)\]/s)?.[1];
     if(image)imagenes.push({id:item.id,tipo:item.tipo,url:image});
     if(item.tipo==='servicio') {
@@ -2545,7 +2551,7 @@ app.get("/servicios/:slug", async (req, res) => {
       if (!equipoIds.length) return res.json({ success: true, servicios: [] });
 
       const { data: vinculos, error } = await supabase.from("servicio_equipo")
-        .select("precio_override, imagen_url_override, orden_override, servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug)")
+        .select("precio_override, imagen_url_override, orden_override, servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug, owner_equipo_id)")
         .in("equipo_id", equipoIds)
         .eq("servicios.slug", slug)
         .eq("servicios.activo", "true");
@@ -2554,7 +2560,7 @@ app.get("/servicios/:slug", async (req, res) => {
       const serviciosUnicos = new Map();
       (vinculos || []).forEach((v) => {
         const servicio = v.servicios;
-        if (servicio && !serviciosUnicos.has(servicio.id)) {
+        if (servicio && !servicio.owner_equipo_id && !serviciosUnicos.has(servicio.id)) {
           serviciosUnicos.set(servicio.id, servicio);
         }
       });
@@ -2566,13 +2572,14 @@ app.get("/servicios/:slug", async (req, res) => {
     // Filtrado por profesional: solo servicios vinculados a ese equipo_id
     if (equipo_id && UUID_REGEX.test(equipo_id)) {
       const { data: vinculos, error } = await supabase.from("servicio_equipo")
-        .select("servicio_id, precio_override, imagen_url_override, orden_override, servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug)")
+        .select("servicio_id, precio_override, imagen_url_override, orden_override, servicios!inner(id, nombre, descripcion, duracion, precio, capacidad, activo, orden, slug, owner_equipo_id)")
         .eq("equipo_id", equipo_id)
         .eq("servicios.slug", slug)
         .eq("servicios.activo", "true");
       if (error) throw error;
 
       const servicios = (vinculos || [])
+        .filter(v => !v.servicios?.owner_equipo_id || v.servicios.owner_equipo_id === equipo_id)
         .map((v) => v.servicios ? {
           ...v.servicios,
           precio: v.precio_override !== null && v.precio_override !== undefined ? Number(v.precio_override) : Number(v.servicios.precio || 0),
@@ -2588,7 +2595,7 @@ app.get("/servicios/:slug", async (req, res) => {
     // Sin filtro: comportamiento original
     const { data, error } = await supabase.from("servicios")
       .select("id, nombre, descripcion, duracion, precio, capacidad")
-      .eq("slug", slug).eq("activo", "true")
+      .eq("slug", slug).is("owner_equipo_id",null).eq("activo", "true")
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
     res.json({ success: true, servicios: data || [] });
@@ -2668,7 +2675,7 @@ app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
     const slug = cleanSlug(req.params.slug);
     const { data, error } = await supabase.from("servicios")
       .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden")
-      .eq("slug", slug)
+      .eq("slug", slug).is("owner_equipo_id",null)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
 
@@ -2817,7 +2824,7 @@ app.get("/admin/equipo/:id/servicios-disponibles", requireAuth, async (req, res)
 
     const [{ data: servicios, error: e1 }, { data: vinculos, error: e2 }] = await Promise.all([
       supabase.from("servicios").select("id, nombre, precio, duracion, activo")
-        .eq("slug", slugClean)
+        .eq("slug", slugClean).or(`owner_equipo_id.is.null,owner_equipo_id.eq.${id}`)
         .order("orden", { ascending: true }).order("created_at", { ascending: true }),
       supabase.from("servicio_equipo").select("servicio_id, precio_override, imagen_url_override, orden_override").eq("equipo_id", id),
     ]);
@@ -2851,9 +2858,10 @@ app.post("/admin/equipo/:id/servicios", requireAuth, async (req, res) => {
 
     const [{ data: miembro }, { data: servicio }] = await Promise.all([
       supabase.from("equipo").select("id").eq("id", id).eq("slug", slugClean).maybeSingle(),
-      supabase.from("servicios").select("id").eq("id", servicio_id).eq("slug", slugClean).maybeSingle(),
+      supabase.from("servicios").select("id, owner_equipo_id").eq("id", servicio_id).eq("slug", slugClean).maybeSingle(),
     ]);
     if (!miembro)  return res.status(404).json({ success: false, error: "Miembro no encontrado." });
+    if(servicio?.owner_equipo_id && servicio.owner_equipo_id !== id)return res.status(403).json({success:false,error:"El servicio solo puede asignarse a su creador."});
     if (!servicio) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
 
     const { error } = await supabase.from("servicio_equipo")
@@ -2969,7 +2977,7 @@ app.get("/admin/extras/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const { data, error } = await supabase.from("extras")
-      .select("*").eq("slug", slug)
+      .select("*").eq("slug", slug).is("owner_equipo_id",null)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
     res.json({ success: true, extras: data || [] });
@@ -3379,7 +3387,7 @@ if (servicio_id) {
       }
     }
 
-let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades);
+let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
       promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
@@ -3555,7 +3563,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     const equipoIdValido = empleadoReserva?.id || null;
     const equipoNombre = empleadoReserva ? `${empleadoReserva.nombre}${empleadoReserva.apellido ? " " + empleadoReserva.apellido : ""}` : null;
     
-    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds, req.body.extra_cantidades);
+    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
       promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
@@ -5163,6 +5171,161 @@ app.get("/empleado/:slug/turnos/:id/comprobante", requireAuth, async (req, res) 
   }
 });
 
+
+function requireEmployeeCatalog(req,res,next) {
+  if(!req.empleado || req.empleado.slug !== cleanSlug(req.params.slug))return res.status(403).json({success:false,error:"No autorizado para este perfil."});
+  if(!req.empleado.puede_crear_servicios)return res.status(403).json({success:false,error:"El titular no habilitó la gestión de tu catálogo."});
+  next();
+}
+app.get("/empleado/:slug/extras", requireAuth, requireEmployeeCatalog, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const { data, error } = await supabase.from("extras")
+      .select("*").eq("slug", slug).eq("owner_equipo_id", req.empleado.id)
+      .order("orden", { ascending: true }).order("created_at", { ascending: true });
+    if (error) throw error;
+    res.json({ success: true, extras: data || [] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "Error al obtener los productos." });
+  }
+});
+ 
+// POST /admin/extras  — crear producto
+app.post("/empleado/:slug/extras", requireAuth, requireEmployeeCatalog, async (req, res) => {
+  try {
+    const { slug, nombre, descripcion, precio, imagen_url, orden } = req.body;
+    const slugClean = cleanSlug(slug || req.auth.slug);
+ 
+    const errorValidacion = validarExtraBody({ nombre, precio });
+    if (errorValidacion) return res.status(400).json({ success: false, error: errorValidacion });
+    if (descripcion !== undefined && descripcion !== null && String(descripcion).length > 300) {
+      return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
+    }
+ 
+    const { data, error } = await supabase.from("extras").insert([{
+      slug: slugClean,
+      owner_equipo_id: req.empleado.id,
+      nombre: nombre.trim(),
+      descripcion: descripcion?.trim() || null,
+      precio: Number(precio),
+      imagen_url: imagen_url || null,
+      orden: parseInt(orden) || 0,
+      activo: true,
+    }]).select().single();
+ 
+    if (error) throw error;
+    const {data:links,error:le}=await supabase.from("servicio_equipo").select("servicio_id").eq("equipo_id",req.empleado.id);
+    if(le)throw le;
+    if(links?.length){const {error:linkError}=await supabase.from("servicio_extras").upsert(links.map(v=>({servicio_id:v.servicio_id,extra_id:data.id})),{onConflict:"servicio_id,extra_id"});if(linkError)throw linkError;}
+    res.status(201).json({ success: true, extra: data });
+  } catch (e) {
+    console.error("Error creando extra:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo crear el producto." });
+  }
+});
+ 
+// PUT /empleado/:slug/extras/:id  — editar producto
+app.put("/empleado/:slug/extras/:id", requireAuth, requireEmployeeCatalog, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const slugClean = cleanSlug(req.body.slug || req.auth.slug);
+    const { nombre, descripcion, precio, imagen_url, activo, orden } = req.body;
+ 
+    const update = {};
+    if (nombre !== undefined || precio !== undefined) {
+      // si se toca nombre o precio, revalidar el par completo contra
+      // lo que llegó (evita mandar un precio viejo inválido a mitad de edición)
+      const errorValidacion = validarExtraBody({
+        nombre: nombre !== undefined ? nombre : "placeholder",
+        precio: precio !== undefined ? precio : PRECIO_MINIMO_EXTRA,
+      });
+      if (nombre !== undefined && (!nombre || !nombre.trim() || nombre.trim().length > 80)) {
+        return res.status(400).json({ success: false, error: "Nombre inválido." });
+      }
+      if (precio !== undefined) {
+        const p = Number(precio);
+        if (!Number.isFinite(p) || p < PRECIO_MINIMO_EXTRA) {
+          return res.status(400).json({ success: false, error: `El precio mínimo es ${PRECIO_MINIMO_EXTRA}.` });
+        }
+        update.precio = p;
+      }
+      if (nombre !== undefined) update.nombre = nombre.trim();
+    }
+    if (descripcion !== undefined) {
+      if (descripcion !== null && String(descripcion).length > 300) {
+        return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
+      }
+      update.descripcion = descripcion?.trim() || null;
+    }
+    if (imagen_url !== undefined) update.imagen_url = imagen_url || null;
+    if (activo !== undefined) update.activo = activo === true || activo === "true";
+    if (orden !== undefined) update.orden = parseInt(orden) || 0;
+ 
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ success: false, error: "No hay campos para actualizar." });
+    }
+ 
+    const { data, error } = await supabase.from("extras")
+      .update(update).eq("id", id).eq("slug", slugClean).eq("owner_equipo_id", req.empleado.id)
+      .select().single();
+ 
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, error: "Producto no encontrado." });
+    res.json({ success: true, extra: data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "No se pudo actualizar el producto." });
+  }
+});
+ 
+// DELETE /empleado/:slug/extras/:id
+// (servicio_extras tiene ON DELETE CASCADE, así que se desvincula solo)
+app.delete("/empleado/:slug/extras/:id", requireAuth, requireEmployeeCatalog, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const slugClean = cleanSlug(req.body?.slug || req.query?.slug || req.auth.slug);
+    const { data, error } = await supabase.from("extras").delete().eq("id", id).eq("slug", slugClean).eq("owner_equipo_id", req.empleado.id).select("id").maybeSingle();
+    if (error) throw error;
+    if(!data)return res.status(404).json({success:false,error:"Producto no encontrado en tu perfil."});
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "No se pudo eliminar el producto." });
+  }
+});
+ 
+// POST /empleado/:slug/extras/upload-imagen  — mismo patrón que servicios,
+// bucket "extras" en vez de "servicios"
+app.post("/empleado/:slug/extras/upload-imagen", requireAuth, requireEmployeeCatalog, (req, res, next) => {
+  upload.single("imagen")(req, res, (err) => {
+    if (err) return res.status(400).json({ success: false, error: err.message });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    // FIX-SEC: en multipart requireAuth no ve req.body.slug (multer corre después),
+    // así que había que no confiar en él: se usa el slug del token.
+    const slug = cleanSlug(req.auth.rol === "superadmin" ? (req.body.slug || "") : req.auth.slug);
+    if (!slug) return res.status(400).json({ success: false, error: "Falta el negocio." });
+    if (!req.file) return res.status(400).json({ success: false, error: "No se recibió imagen." });
+ 
+    const ext = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/webp" ? "webp" : "jpg";
+    const fileName = `${slug}/${Date.now()}.${ext}`;
+ 
+    const { error } = await supabase.storage
+      .from("extras")
+      .upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+ 
+    if (error) throw error;
+ 
+    const { data } = supabase.storage.from("extras").getPublicUrl(fileName);
+    res.json({ success: true, url: data.publicUrl });
+  } catch (e) {
+    console.error("Error upload imagen extra:", e.message);
+    res.status(500).json({ success: false, error: "No se pudo subir la imagen." });
+  }
+});
+ 
+// ══════════════════════════════════════════════════════════════
+
 app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -5199,7 +5362,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
     let servicios = [];
     if (servicioIds.length) {
       const { data, error } = await supabase.from("servicios")
-        .select("id, nombre, descripcion, duracion, precio, capacidad, orden, activo")
+        .select("id, nombre, descripcion, duracion, precio, capacidad, orden, activo, owner_equipo_id")
         .eq("slug", slug).in("id", servicioIds).order("nombre", { ascending: true });
       if (error) throw error;
       const variantes = new Map(vinculos.map((v) => [v.servicio_id, v]));
@@ -5208,6 +5371,8 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         const imagenBase = String(s.descripcion || "").match(/^\[img:(.*?)\]/s)?.[1]?.trim() || null;
         return {
           ...s,
+          activo: isActivo(s.activo),
+          perfil_propio: s.owner_equipo_id === miembro.id,
           descripcion: String(s.descripcion || "").replace(/^\[img:.*?\]/s, "").trim(),
           precio: variante.precio_override !== null && variante.precio_override !== undefined ? Number(variante.precio_override) : Number(s.precio || 0),
           imagen_url: variante.imagen_url_override || imagenBase,
@@ -5356,7 +5521,7 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
     // reutiliza y personaliza el vínculo; nunca crea duplicados por nombre.
     const { data: existente, error: existenteError } = await supabase.from("servicios")
       .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden")
-      .eq("slug", slug).ilike("nombre", nombre.trim()).limit(1).maybeSingle();
+      .eq("slug", slug).eq("owner_equipo_id", miembro.id).ilike("nombre", nombre.trim()).limit(1).maybeSingle();
     if (existenteError) throw existenteError;
     let servicio = existente;
     let servicioCreadoAhora = false;
@@ -5364,6 +5529,7 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
     if (!servicio) {
       const creado = await supabase.from("servicios").insert([{
       slug,
+      owner_equipo_id: miembro.id,
       nombre: nombre.trim(),
       descripcion: `${imagen_url ? `[img:${imagen_url}]` : ""}${descripcion?.trim() || ""}` || null,
       duracion: Number.isFinite(dur) && dur > 0 ? dur : 30,
@@ -5389,9 +5555,12 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
       if (servicioCreadoAhora) await supabase.from("servicios").delete().eq("id", servicio.id).eq("slug", slug);
       throw linkError;
     }
+    const {data:productos,error:productosError}=await supabase.from("extras").select("id").eq("slug",slug).eq("owner_equipo_id",miembro.id);if(productosError)throw productosError;
+    if(productos?.length){const {error:pe}=await supabase.from("servicio_extras").upsert(productos.map(x=>({servicio_id:servicio.id,extra_id:x.id})),{onConflict:"servicio_id,extra_id"});if(pe)throw pe;}
     invalidateCache(slug);
     res.status(201).json({ success: true, servicio: {
       ...servicio,
+      perfil_propio: servicio.owner_equipo_id === miembro.id,
       precio: Number(precio),
       imagen_url: imagen_url || null,
       orden: Number.isFinite(Number(req.body?.orden)) ? Number(req.body.orden) : (servicio.orden || 0),
@@ -5411,10 +5580,20 @@ app.put("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
     if (!miembro.puede_crear_servicios) return res.status(403).json({ success: false, error: "El titular no habilitó la edición de servicios." });
     const { data: servicio, error: servicioError } = await supabase.from("servicios")
-      .select("id, slug, nombre, descripcion, duracion, precio, capacidad, activo, orden")
+      .select("id, slug, nombre, descripcion, duracion, precio, capacidad, activo, orden, owner_equipo_id")
       .eq("id", id).eq("slug", slug).maybeSingle();
     if (servicioError) throw servicioError;
     if (!servicio) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
+    if(servicio.owner_equipo_id && servicio.owner_equipo_id !== miembro.id)return res.status(404).json({success:false,error:"Servicio no encontrado en tu perfil."});
+    if(servicio.owner_equipo_id === miembro.id) {
+      const {data:assigned,error:assignedError}=await supabase.from("servicio_equipo").select("servicio_id").eq("servicio_id",id).eq("equipo_id",miembro.id).maybeSingle();if(assignedError)throw assignedError;if(!assigned)return res.status(404).json({success:false,error:"Servicio no asignado a tu perfil."});
+      const body=req.body || {},fields={};
+      const validation=validarServicioBody({nombre:body.nombre ?? servicio.nombre,precio:body.precio ?? servicio.precio});if(validation)return res.status(400).json({success:false,error:validation});
+      if(body.nombre!==undefined)fields.nombre=body.nombre.trim();
+      if(body.descripcion!==undefined){if(largoDescripcionServicio(body.descripcion)>1000)return res.status(400).json({success:false,error:"Descripción demasiado larga."});fields.descripcion=body.descripcion;}
+      for(const key of ["duracion","capacidad"]){if(body[key]!==undefined){const n=Number(body[key]);if(!Number.isInteger(n)||n<1||n>10000)return res.status(400).json({success:false,error:"Duración o capacidad inválida."});fields[key]=n;}}
+      if(Object.keys(fields).length){const {error:ue}=await supabase.from("servicios").update(fields).eq("slug",slug).eq("id",id).eq("owner_equipo_id",miembro.id);if(ue)throw ue;Object.assign(servicio,fields);}
+    }
     const { precio, imagen_url, orden } = req.body || {};
     const update = {};
     if (precio !== undefined) {
@@ -5440,6 +5619,7 @@ app.put("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
     invalidateCache(slug);
     res.json({ success: true, servicio: {
       ...servicio,
+      perfil_propio: servicio.owner_equipo_id === miembro.id,
       precio: vinculo.precio_override !== null ? Number(vinculo.precio_override) : Number(servicio.precio || 0),
       imagen_url: vinculo.imagen_url_override || null,
       orden: vinculo.orden_override !== null ? vinculo.orden_override : servicio.orden,
@@ -5643,12 +5823,14 @@ function promocionesValidar(body) {
   if(!['porcentaje','precio_final'].includes(descuento_tipo) || typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0 || valor > 100000000000 || (descuento_tipo === 'porcentaje' && valor >= 100)) throw new Error('Ingresá un porcentaje entre 0 y 100 o un precio final válido.');
   return {nombre:nombre.trim(),tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin,activo:body.activo !== false};
 }
-async function promocionesPreparar(slug,body) {
+async function promocionesPreparar(slug,body,equipoId=null) {
   const datos=promocionesValidar(body), items=[];
   for(const item of datos.items) {
-    const {data,error}=await supabase.from(item.tipo === 'servicio' ? 'servicios' : 'extras').select('id,nombre,precio,activo').eq('slug',slug).eq('id',item.id).maybeSingle();
+    const {data,error}=await supabase.from(item.tipo === 'servicio' ? 'servicios' : 'extras').select('id,nombre,precio,activo,owner_equipo_id').eq('slug',slug).eq('id',item.id).maybeSingle();
     if(error) throw error;
     if(!data || !isActivo(data.activo)) {const e=new Error('Uno de los elementos ya no está disponible en tu catálogo.');e.promoValidacion=true;throw e;}
+    if(data.owner_equipo_id && data.owner_equipo_id !== equipoId)throw promoError("Ese elemento pertenece a otro profesional.");
+    if(equipoId && item.tipo === "servicio") {const {data:v,error:ve}=await supabase.from("servicio_equipo").select("precio_override").eq("servicio_id",item.id).eq("equipo_id",equipoId).maybeSingle();if(ve)throw ve;if(!v)throw promoError("El servicio no está asignado a tu perfil.");if(v.precio_override != null)data.precio=Number(v.precio_override);}
     items.push({tipo:item.tipo,id:data.id,cantidad:item.cantidad,nombre:data.nombre,precio:Number(data.precio)});
   }
   const precio_original=Math.round(items.reduce((sum,item)=>sum+item.precio*item.cantidad,0)*100)/100;
@@ -5665,7 +5847,7 @@ async function requirePromocionesPlan(req,res,next) {
   }catch{return res.status(500).json({success:false,error:"No pudimos verificar tu plan."});}
 }
 app.get('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
-  const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).order('created_at',{ascending:false});
+  const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).is('owner_equipo_id',null).order('created_at',{ascending:false});
   if(error) return res.status(500).json({success:false,error:error.code === '42P01' || error.code === 'PGRST205' ? 'Falta instalar Promociones.sql en Supabase.' : 'No se pudieron cargar las promociones.'});
   res.json({success:true,promociones:data || []});
 }));
@@ -5673,8 +5855,10 @@ async function promocionesGuardar(req,res) {
   try {
     const slug=cleanSlug(req.params.slug);let datos;
     try {promocionesValidar(req.body);} catch(e) {return res.status(400).json({success:false,error:e.message});}
-    datos=await promocionesPreparar(slug,req.body);
-    const query=req.params.id ? supabase.from('promociones').update(datos).eq('slug',slug).eq('id',req.params.id) : supabase.from('promociones').insert(datos);
+    datos=await promocionesPreparar(slug,req.body,req.empleado?.id || null);
+    datos.owner_equipo_id=req.empleado?.id || null;
+    let query=req.params.id ? supabase.from('promociones').update(datos).eq('slug',slug).eq('id',req.params.id) : supabase.from('promociones').insert(datos);
+    if(req.params.id)query=req.empleado ? query.eq('owner_equipo_id',req.empleado.id) : query.is('owner_equipo_id',null);
     const {data,error}=await query.select('*').maybeSingle();if(error) throw error;
     if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
     res.status(req.params.id ? 200 : 201).json({success:true,promocion:data});
@@ -5683,10 +5867,20 @@ async function promocionesGuardar(req,res) {
 app.post('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesGuardar);
 app.put('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promocionesGuardar);
 app.delete('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
-  const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('id',req.params.id).select('id').maybeSingle();
+  const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('id',req.params.id).is('owner_equipo_id',null).select('id').maybeSingle();
   if(error) return res.status(500).json({success:false,error:'No se pudo eliminar la promoción.'});
   if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
   res.json({success:true});
+}));
+
+
+app.get('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
+ const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).eq('owner_equipo_id',req.empleado.id).order('created_at',{ascending:false});if(error)throw error;res.json({success:true,promociones:data || []});
+}));
+app.post('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
+app.put('/empleado/:slug/promociones/:id',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
+app.delete('/empleado/:slug/promociones/:id',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
+ const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('owner_equipo_id',req.empleado.id).eq('id',req.params.id).select('id').maybeSingle();if(error)throw error;if(!data)return res.status(404).json({success:false,error:'Promoción no encontrada en tu perfil.'});res.json({success:true});
 }));
 
 app.get("/finanzas/:slug", requireAuth, async (req, res) => {
@@ -7085,7 +7279,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     const equipoIdValido = empleadoReserva?.id || null;
     const equipoNombre = empleadoReserva ? `${empleadoReserva.nombre}${empleadoReserva.apellido ? " " + empleadoReserva.apellido : ""}` : null;
 
-    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades);
+    let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
       promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
