@@ -39,21 +39,21 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 const PANEL_VERSION  = "2026.10.07-1";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_RENOVACION || "22499");
-// Tope de saldo del plan Gratis: equivalente a un mes de Premium.
+const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_BASICO || "19900");
+// Tope de saldo del plan Gratis: equivalente a un mes de Básico.
 const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 9000);
 const TURNITS_COMISION_MINIMA_ARS = 300;
 const TURNITS_COMISION_TASA = 0.02;
 
-// Planes: gratis < premium < vip.
+// Planes: gratis < basico < premium.
 //  · Gratis: funciones limitadas. Cobra comisión de Turnits.
-//  · Premium: todas las funciones. Cobra comisión de Turnits.
-//  · VIP: todas las funciones y SIN comisiones. Solo se asigna a mano desde
+//  · Básico: herramientas para negocios chicos; titular + 2 miembros. Cobra comisión online.
+//  · Premium: todas las funciones y SIN comisiones. Solo se asigna a mano desde
 //    superadmin a los mejores negocios (ver /superadmin/candidatos-vip).
 //    Puede tener fecha de vencimiento; al vencer vuelve a gratis (cron).
-const PLANES_VALIDOS = ["gratis", "premium", "vip"];
-const esPlanVip = (plan) => plan === "vip";
-const planTieneFuncionesPremium = (plan) => plan === "premium" || plan === "vip";
+const PLANES_VALIDOS = ["gratis", "basico", "premium"];
+const esPlanVip = (plan) => plan === "premium";
+const planTieneFuncionesPremium = (plan) => plan === "basico" || plan === "premium";
 const planCobraComision = (plan) => !esPlanVip(plan);
 // Meta del logro "Facturaste $500 USD" (Tus logros, panel > Inicio). Se
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
@@ -412,14 +412,14 @@ function fechaVencimientoComision(periodo) {
 }
 
 // Comisión de Turnits según el plan del negocio (aplica a cobros online y a
-// efectivo/transferencia): se cobra la mayor entre el mínimo y el porcentaje.
+// cobros online): se cobra la mayor entre el mínimo y el porcentaje.
 //  · Gratis:  mínimo $300 o 2%
-//  · Premium: mínimo $100 o 0,8%
-//  · VIP:     no paga (se asigna a mano a amigos, familiares y socios)
+//  · Básico: mínimo $100 o 0,8%
+//  · Premium:     no paga (se asigna a mano a amigos, familiares y socios)
 const COMISION_POR_PLAN = {
   gratis:  { tasa: TURNITS_COMISION_TASA, minima: TURNITS_COMISION_MINIMA_ARS },
-  premium: { tasa: 0.008,                 minima: 100 },
-  vip:     { tasa: 0,                     minima: 0 },
+  basico:  { tasa: 0.008,                 minima: 100 },
+  premium: { tasa: 0,                     minima: 0 },
 };
 function configComisionPlan(plan) {
   return COMISION_POR_PLAN[plan] || COMISION_POR_PLAN.gratis;
@@ -466,7 +466,7 @@ async function validarReservasPorComisiones(slug, comisionNueva = 0) {
 }
 
 // ¿La agenda pública del negocio está pausada por deuda de comisiones?
-// (límite alcanzado o deuda vencida). VIP nunca. Se usa para mostrar el
+// (límite alcanzado o deuda vencida). Premium nunca. Se usa para mostrar el
 // mismo 404/"suspendido" que cuando no se paga el plan.
 async function agendaPausadaPorComisiones(slug, plan) {
   return false;
@@ -601,7 +601,7 @@ function horaDentroDeIntervalos(horarios, excepciones, fecha, hora) {
 }
 
 function mediosOfflinePermitidos(user) {
-  return planTieneFuncionesPremium(user?.plan) && !(user.plan === "premium" && user.estado_suscripcion === "trial");
+  return planTieneFuncionesPremium(user?.plan) && !(user.plan === "basico" && user.estado_suscripcion === "trial");
 }
 function limitarPagosPorPlan(config) {
   const result={...config};
@@ -1415,7 +1415,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       telefono:       telefono ? cleanPhone(telefono) : null,
       business_name:  business_name.trim(),
       password_hash,
-      plan:           plan === "premium" ? "premium" : "gratis",
+      plan:           plan === "basico" ? "basico" : "gratis",
       referral_code:  normalizarReferralCode(ref),
       horarios:       horarios && typeof horarios === "object" ? horarios : null,
       duracion_turno: parseInt(duracion_turno) || 30,
@@ -1478,9 +1478,9 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
 
     const slug              = await generarSlugUnico(pendiente.business_name);
-    const planFinal         = pendiente.plan === "premium" ? "premium" : "gratis";
-    const fechaVencimiento  = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
-    const estadoSuscripcion = planFinal === "premium" ? "trial" : "activo";
+    const planFinal         = pendiente.plan === "basico" ? "basico" : "gratis";
+    const fechaVencimiento  = planFinal === "basico" ? calcularVencimiento(DIAS_PRUEBA) : null;
+    const estadoSuscripcion = planFinal === "basico" ? "trial" : "activo";
 
     const insertData = {
       nombre_persona:     pendiente.nombre_persona,
@@ -1545,7 +1545,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
           nombre:      nuevo.nombre_persona,
           slug:        nuevo.slug,
           panel_url:   `${PANEL_URL}/${nuevo.slug}`,
-          dias_prueba: planFinal === "premium" ? DIAS_PRUEBA : 0,
+          dias_prueba: planFinal === "basico" ? DIAS_PRUEBA : 0,
         }),
       }).catch((e) => console.error("Error mail bienvenida:", e.message));
     }
@@ -1573,7 +1573,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       plan:              nuevo.plan,
       panel_url:         `${PANEL_URL}/${nuevo.slug}`,
       token,
-      dias_prueba:       planFinal === "premium" ? DIAS_PRUEBA : null,
+      dias_prueba:       planFinal === "basico" ? DIAS_PRUEBA : null,
       fecha_vencimiento: fechaVencimiento,
     });
 
@@ -1744,7 +1744,7 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
         if (!isActivo(user.activo) && !expired) return res.status(403).json({success:false,error:'Este negocio está desactivado.'});
         payload = {slug:user.slug,negocioId:user.id,rol:'owner'};
         result = {slug:user.slug,email:user.email,business_name:user.business_name,nombre_persona:user.nombre_persona,apellido:user.apellido || '',plan:user.plan || 'gratis',suscripcion:{estado:expired?'suspendido':user.estado_suscripcion || 'trial',fecha_vencimiento:user.fecha_vencimiento,dias_restantes:days,vencida:expired}};
-        if (expired && user.plan === 'premium') result.redirect='renovar';
+        if (expired && user.plan === 'basico') result.redirect='renovar';
       } else if (member && !member.es_dueño && member.login_activado && isActivo(member.activo)) {
         const {data:business,error} = await supabase.from('usuarios').select('activo,plan,fecha_vencimiento').eq('slug',member.slug).maybeSingle();
         if (error) throw error;
@@ -1894,7 +1894,7 @@ app.post("/login", limiterAuth, async (req, res) => {
 
     const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
-    const esPremium          = user.plan === "premium";
+    const esPremium          = user.plan === "basico";
 
     if (!isActivo(user.activo) && !suscripcionVencida) {
       return res.status(403).json({ success: false, error: "Este negocio está desactivado." });
@@ -2188,7 +2188,7 @@ const { data: user, error } = await supabase.from("usuarios")
     const aceptaEfectivoPublico = valorConfig("acepta_efectivo");
     const datosBancariosPublicos = valorConfig("datos_bancarios");
 
-    const esPremium               = user.plan === "premium";
+    const esPremium               = user.plan === "basico";
     const esTrialPremium          = esPremium && user.estado_suscripcion === "trial";
     const agendaSinPagos          = agendaSinPagosEquipo;
     const metodoPagoEfectivo      = !mediosOfflinePermitidos(user) && (!metodoPublico || metodoPublico === "none") ? "total" : metodoPublico;
@@ -3308,7 +3308,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
     const esPlanGratis = user.plan === "gratis";
-    const esTrialPremium = user.plan === "premium" && user.estado_suscripcion === "trial";
+    const esTrialPremium = user.plan === "basico" && user.estado_suscripcion === "trial";
     const agendaSinPagos = planTieneFuncionesPremium(user.plan) && configReserva.agenda_sin_pagos === true;
     const tieneMP      = !!configReserva.mp_access_token;
     const metodoPagoEfectivo = esTrialPremium && configReserva.metodo_pago === "none" ? "total" : configReserva.metodo_pago;
@@ -3508,7 +3508,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
-    // Los medios directos pertenecen a Premium/VIP activos.
+    // Los medios directos pertenecen a Básico/Premium activos.
     if (!mediosOfflinePermitidos(user)) {
       return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
     }
@@ -4346,7 +4346,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
           Math.max(Number(user.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT, 1),
           ANTICIPACION_MINUTOS_MAX
         ),
-        metodo_pago:         user.plan === "premium" && user.estado_suscripcion === "trial" && user.metodo_pago === "none" ? "total" : user.metodo_pago,
+        metodo_pago:         user.plan === "basico" && user.estado_suscripcion === "trial" && user.metodo_pago === "none" ? "total" : user.metodo_pago,
         porcentaje_sena:     user.porcentaje_sena,
         horarios:            user.horarios    || {},
         excepciones:         user.excepciones || [],
@@ -4417,7 +4417,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       if (negocioError) throw negocioError;
       if (!negocioActual) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
       if (update.agenda_sin_pagos && !planTieneFuncionesPremium(negocioActual.plan)) {
-        return res.status(403).json({ success: false, error: "Esta opción está disponible en el plan Premium." });
+        return res.status(403).json({ success: false, error: "Esta opción está disponible en el plan Básico." });
       }
     }
     if (update.metodo_pago !== undefined && !["none", "sena", "total"].includes(update.metodo_pago)) {
@@ -4455,7 +4455,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
     if (update.metodo_pago !== undefined || update.acepta_transferencia !== undefined || update.acepta_efectivo !== undefined || update.datos_bancarios !== undefined) {
       const { data: negocioActual } = await supabase.from("usuarios").select("plan, estado_suscripcion").eq("slug", slug).maybeSingle();
       if (!negocioActual) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-      const esTrialPremium = negocioActual.plan === "premium" && negocioActual.estado_suscripcion === "trial";
+      const esTrialPremium = negocioActual.plan === "basico" && negocioActual.estado_suscripcion === "trial";
       if (!mediosOfflinePermitidos(negocioActual)) {
         if (update.metodo_pago === "none") update.metodo_pago = "total";
         if (update.acepta_transferencia !== undefined) update.acepta_transferencia = false;
@@ -4964,7 +4964,12 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
       .select("plan").eq("slug", slugClean).maybeSingle();
     if (negocioError) throw negocioError;
     if (!negocio || !planTieneFuncionesPremium(negocio.plan)) {
-      return res.status(403).json({ success: false, error: "El acceso individual del equipo requiere el plan Premium." });
+      return res.status(403).json({ success: false, error: "El acceso individual del equipo requiere el plan Básico." });
+    }
+    if (negocio.plan === "basico") {
+      const {count,error:limitError}=await supabase.from("equipo").select("id",{count:"exact",head:true}).eq("slug",slugClean).eq("es_dueño",false);
+      if(limitError)throw limitError;
+      if(count>=2)return res.status(403).json({success:false,codigo:"limite_equipo_basico",error:"Básico incluye al titular y hasta 2 miembros adicionales. Para ampliar el equipo necesitás Premium."});
     }
     if (loginEmail) {
       const [{ data: ownerWithEmail }, { data: adminWithEmail }] = await Promise.all([
@@ -5538,7 +5543,7 @@ async function actualizarConfigEquipo(slug, equipoId, body) {
   if (update.agenda_sin_pagos === true) {
     const { data: negocio, error } = await supabase.from("usuarios").select("plan").eq("slug", slug).single();
     if (error) throw error;
-    if (!planTieneFuncionesPremium(negocio.plan)) return { error: "Esta opción está disponible en el plan Premium." };
+    if (!planTieneFuncionesPremium(negocio.plan)) return { error: "Esta opción está disponible en el plan Básico." };
   }
   if(["metodo_pago","acepta_transferencia","acepta_efectivo","datos_bancarios"].some(key=>update[key]!==undefined)) {
     const {data:negocio,error}=await supabase.from("usuarios").select("plan,estado_suscripcion").eq("slug",slug).single();
@@ -6191,7 +6196,7 @@ const turnosHoyDetalle = turnosData
 });
 
 // ══════════════════════════════════════════════════════════════
-// RENDIMIENTO POR INTEGRANTE DEL EQUIPO — Solo plan Premium
+// RENDIMIENTO POR INTEGRANTE DEL EQUIPO — Solo plan Básico
 // Permite a negocios con varios profesionales (ej. barberías) ver
 // cuántos turnos hizo cada integrante y cuánto facturó, filtrado
 // por día / semana / mes. Reutiliza el mismo criterio de "turno
@@ -6246,7 +6251,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
       return res.status(403).json({
         success: false,
         error: "premium_required",
-        mensaje: "El rendimiento por integrante es una función Premium.",
+        mensaje: "El rendimiento por integrante es una función Básico.",
       });
     }
 
@@ -6305,7 +6310,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// RENDIMIENTO DEL EQUIPO — RESUMEN DE TODOS LOS INTEGRANTES (Premium)
+// RENDIMIENTO DEL EQUIPO — RESUMEN DE TODOS LOS INTEGRANTES (Básico)
 // GET /admin/rendimiento-equipo-resumen/:slug?periodo=dia|semana|mes
 //
 // Lo consume el panel lateral del dashboard ("Rendimiento por profesional").
@@ -6337,7 +6342,7 @@ app.get("/admin/rendimiento-equipo-resumen/:slug", requireAuth, async (req, res)
       return res.status(403).json({
         success: false,
         error: "premium_required",
-        mensaje: "El rendimiento por integrante es una función Premium.",
+        mensaje: "El rendimiento por integrante es una función Básico.",
       });
     }
 
@@ -6498,11 +6503,11 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
     if (!validateEmail(email))       return res.status(400).json({ success: false, error: "Email inválido." });
     if (!validatePassword(password)) return res.status(400).json({ success: false, error: "Contraseña: mínimo 6 caracteres." });
 
-    const planFinal         = plan === "premium" ? "premium" : "gratis";
+    const planFinal         = plan === "basico" ? "basico" : "gratis";
     const slug              = await generarSlugUnico(business_name.trim());
     const hashedPassword    = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-    const fechaVencimiento  = planFinal === "premium" ? calcularVencimiento(DIAS_PRUEBA) : null;
-    const estadoSuscripcion = planFinal === "premium" ? "trial" : "activo";
+    const fechaVencimiento  = planFinal === "basico" ? calcularVencimiento(DIAS_PRUEBA) : null;
+    const estadoSuscripcion = planFinal === "basico" ? "trial" : "activo";
 
     const { data, error } = await supabase.from("usuarios").insert([{
       nombre_persona: nombre_persona.trim(), apellido: apellido?.trim() || "",
@@ -6551,10 +6556,10 @@ app.get("/superadmin/negocios", requireSuperadmin, async (req, res) => {
   }
 });
 
-// GET /superadmin/candidatos-vip — ranking para elegir a quién darle el plan VIP.
+// GET /superadmin/candidatos-vip — ranking para elegir a quién darle el plan Premium.
 // Combina recaudación histórica (turnos con pago aprobado) y antigüedad.
 //   ?orden=combinado|recaudacion|antiguedad   ?limite=25   ?incluir_vip=true
-// Para asignarlo: PUT /superadmin/negocios/:slug con { "plan": "vip" }.
+// Para asignarlo: PUT /superadmin/negocios/:slug con { "plan": "premium" }.
 app.get("/superadmin/candidatos-vip", requireSuperadmin, async (req, res) => {
   try {
     const orden      = ["combinado", "recaudacion", "antiguedad"].includes(req.query.orden) ? req.query.orden : "combinado";
@@ -6588,7 +6593,7 @@ app.get("/superadmin/candidatos-vip", requireSuperadmin, async (req, res) => {
       ranking_antiguedad:  rankAnt.get(f.slug),
       puntaje:             rankRec.get(f.slug) + rankAnt.get(f.slug), // menor = mejor
     }));
-    if (!incluirVip) lista = lista.filter((f) => f.plan !== "vip");
+    if (!incluirVip) lista = lista.filter((f) => f.plan !== "premium");
 
     lista.sort((a, b) => {
       if (orden === "recaudacion") return a.ranking_recaudacion - b.ranking_recaudacion;
@@ -6599,7 +6604,7 @@ app.get("/superadmin/candidatos-vip", requireSuperadmin, async (req, res) => {
     res.json({ success: true, orden, total: lista.length, candidatos: lista.slice(0, limite) });
   } catch (e) {
     console.error("Error GET /superadmin/candidatos-vip:", e.message);
-    res.status(500).json({ success: false, error: "No se pudo armar el ranking de candidatos VIP." });
+    res.status(500).json({ success: false, error: "No se pudo armar el ranking de candidatos Premium." });
   }
 });
 
@@ -6618,10 +6623,10 @@ app.put("/superadmin/negocios/:slug", requireAdminKey, async (req, res) => {
       update.fecha_vencimiento  = calcularVencimiento(parseInt(req.body.sumar_dias), base);
       update.estado_suscripcion = "activo";
     }
-    // VIP es un plan más: puede tener fecha de vencimiento (fecha_vencimiento
+    // Premium es un plan más: puede tener fecha de vencimiento (fecha_vencimiento
     // o sumar_dias en este mismo PUT). Si no se manda ninguna, queda sin
     // vencimiento (null). Nunca es prueba ni promo de referidos.
-    if (update.plan === "vip") {
+    if (update.plan === "premium") {
       update.estado_suscripcion = "activo";
       update.premium_promo      = false;
       const mandoFecha = req.body.fecha_vencimiento !== undefined || (req.body.sumar_dias && !isNaN(parseInt(req.body.sumar_dias)));
@@ -6689,13 +6694,13 @@ app.get("/internal/resumen", requireSuperadmin, async (req, res) => {
            { count: turnosHoy }, { data: registrosHoy }, { data: ultimosNegocios }] = await Promise.all([
       supabase.from("usuarios").select("id", { count: "exact", head: true }),
       supabase.from("usuarios").select("id", { count: "exact", head: true }).eq("activo", "true"),
-      supabase.from("usuarios").select("id", { count: "exact", head: true }).eq("plan", "premium"),
+      supabase.from("usuarios").select("id", { count: "exact", head: true }).eq("plan", "basico"),
       supabase.from("turnos").select("id", { count: "exact", head: true }).eq("fecha", hoyISO).neq("estado", "cancelado"),
       supabase.from("usuarios").select("id").gte("created_at", hoyISO),
       supabase.from("usuarios").select("slug, business_name, plan, created_at").order("created_at", { ascending: false }).limit(10),
     ]);
 
-    const { count: negociosVip } = await supabase.from("usuarios").select("id", { count: "exact", head: true }).eq("plan", "vip");
+    const { count: negociosVip } = await supabase.from("usuarios").select("id", { count: "exact", head: true }).eq("plan", "premium");
 
     res.json({
       success: true,
@@ -7070,7 +7075,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       }
     }catch(e){if(e.promoValidacion)return res.status(400).json({success:false,error:e.message});throw e;}
 
-    const esTrialPremium = user.plan === "premium" && user.estado_suscripcion === "trial";
+    const esTrialPremium = user.plan === "basico" && user.estado_suscripcion === "trial";
     const metodo    = esTrialPremium && configReserva.metodo_pago === "none" ? "total" : (configReserva.metodo_pago || "none");
     const debePagar = metodo === "sena" || metodo === "total";
     if (!debePagar || (precioServicio <= 0 && montoExtras <= 0)) return res.json({ isFree: true });
@@ -7082,7 +7087,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : baseCalculo;
     const conceptoPago = metodo === "sena" ? `Seña ${configReserva.porcentaje_sena || 30}%` : "Total";
 
-// Gratis y Premium pagan la comisión de Turnits por cobros online (distinta tasa por plan); VIP no.
+// Gratis y Básico pagan la comisión de Turnits por cobros online (distinta tasa por plan); Premium no.
 const fee = planCobraComision(user.plan)
   ? calcularComisionTurnits(montoACobrar, user.plan)
   : 0;
@@ -7202,6 +7207,7 @@ app.get("/renovacion/info/:slug", async (req, res) => {
     res.json({
       success: true, slug: user.slug, business_name: user.business_name,
       nombre_persona: user.nombre_persona, plan: user.plan || "gratis",
+      plan_nombre: user.plan === "premium" ? "Premium" : user.plan === "basico" ? "Básico" : "Gratis",
       estado: suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "activo"),
       fecha_vencimiento: user.fecha_vencimiento, dias_restantes: diasRestantes,
       vencida: suscripcionVencida, precio_renovacion: PRECIO_RENOVACION,
@@ -7223,12 +7229,12 @@ app.post("/renovacion/checkout/:slug", async (req, res) => {
 
     if (error) throw error;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-    if (esPlanVip(user.plan)) return res.status(400).json({ success: false, error: "Tu cuenta VIP no requiere renovación." });
+    if (esPlanVip(user.plan)) return res.status(400).json({ success: false, error: "Tu cuenta Premium no requiere renovación." });
 
     const client   = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
     const pref     = new Preference(client);
     const response = await pref.create({ body: {
-      items: [{ title: `Turnits — Suscripción Premium (${user.business_name})`, unit_price: PRECIO_RENOVACION, quantity: 1, currency_id: "ARS" }],
+      items: [{ title: `Turnits — Suscripción Básico (${user.business_name})`, unit_price: PRECIO_RENOVACION, quantity: 1, currency_id: "ARS" }],
       payer: { email: user.email, name: `${user.nombre_persona || ""} ${user.apellido || ""}`.trim() },
       metadata: { tipo: "renovacion_associe", slug, user_id: user.id },
       notification_url: `${API_URL}/webhook/renovacion`,
@@ -7252,11 +7258,11 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
 
     if (fetchError) throw fetchError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-    if (esPlanVip(user.plan)) return res.status(400).json({ success: false, error: "Tu cuenta VIP no se puede cambiar de plan desde el panel." });
+    if (esPlanVip(user.plan)) return res.status(400).json({ success: false, error: "Tu cuenta Premium no se puede cambiar de plan desde el panel." });
 
     // FIX-UX/COMISIONES: acepta_transferencia/acepta_efectivo quedaban en
     // true después de bajar a gratis. El booking ya los rechaza igual
-    // (chequeo plan !== "premium" en /reservar), pero dejarlos prendidos
+    // (chequeo plan !== "basico" en /reservar), pero dejarlos prendidos
     // en la base hace que otras pantallas (ej. el checklist de onboarding)
     // sigan mostrando esos métodos como "configurados" cuando en realidad
     // el negocio no puede cobrarlos más. Se apagan acá para que todo el
@@ -8025,14 +8031,14 @@ async function procesarRenovacion(payData) {
     .select("id, email, nombre_persona, plan, fecha_vencimiento").eq("slug", slug).maybeSingle();
   if (!user) return;
   if (esPlanVip(user.plan)) {
-    console.log(`ℹ️  Renovación ignorada: ${slug} es VIP y no vence.`);
+    console.log(`ℹ️  Renovación ignorada: ${slug} es Premium y no vence.`);
     return;
   }
 
   const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
 
-  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "premium", premium_promo: false }).eq("slug", slug);
+  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "basico", premium_promo: false }).eq("slug", slug);
   invalidateCache(slug);
   console.log(`✅ Renovación aprobada: ${slug} → vence ${nuevaFecha}`);
 
@@ -8047,7 +8053,7 @@ async function procesarRenovacion(payData) {
     slug,
     tipo: "sistema",
     titulo: "Renovación aprobada",
-    mensaje: `Tu plan Premium se renovó correctamente. Nueva fecha de vencimiento: ${nuevaFecha}.`,
+    mensaje: `Tu plan Básico se renovó correctamente. Nueva fecha de vencimiento: ${nuevaFecha}.`,
     // FIX: es sobre la suscripción/cobro → pagos, no "inicio".
     data: { nuevaFecha, seccion: "pagos" },
   });
@@ -8075,7 +8081,7 @@ app.post("/webhook/renovacion", async (req, res) => {
 // Los negocios que se registran con el mismo código forman grupos de
 // REFERIDOS_GRUPO_SIZE (3). Cuando TODOS los del grupo tienen al menos
 // REFERIDOS_TURNOS_MIN (25) turnos reales, cada uno recibe
-// REFERIDOS_DIAS_PREMIO (30) días de Premium. El premio se entrega una
+// REFERIDOS_DIAS_PREMIO (30) días de Básico. El premio se entrega una
 // sola vez por invitado (referidos.premio_entregado_at).
 //
 // La barra de progreso que ve el usuario suma apenas un turno queda
@@ -8224,15 +8230,15 @@ async function otorgarMesGratis(slug) {
     .eq("slug", slug).maybeSingle();
   if (error) throw error;
   if (!u) return;
-  if (esPlanVip(u.plan)) return; // VIP ya tiene todo; no se lo pisa con un Premium con vencimiento
+  if (esPlanVip(u.plan)) return; // Premium ya tiene todo; no se lo pisa con un Básico con vencimiento
 
   const vigente    = u.fecha_vencimiento && new Date(u.fecha_vencimiento) > new Date();
   const nuevaFecha = calcularVencimiento(REFERIDOS_DIAS_PREMIO, vigente ? u.fecha_vencimiento : null);
-  const eraPremium = u.plan === "premium";
+  const eraPremium = u.plan === "basico";
 
   const upd = {
-    plan: "premium",
-    // Un Premium en trial sigue en trial (el fee de MP depende de eso).
+    plan: "basico",
+    // Un Básico en trial sigue en trial (el fee de MP depende de eso).
     estado_suscripcion: eraPremium && u.estado_suscripcion === "trial" ? "trial" : "activo",
     fecha_vencimiento: nuevaFecha,
   };
@@ -8245,11 +8251,11 @@ async function otorgarMesGratis(slug) {
   crearNotificacion({
     slug,
     tipo: "sistema",
-    titulo: "¡Ganaste 1 mes de Premium!",
-    mensaje: `Tu grupo de referidos completó los ${REFERIDOS_TURNOS_MIN} turnos. Tu Premium gratis vence el ${nuevaFecha}.`,
+    titulo: "¡Ganaste 1 mes de Básico!",
+    mensaje: `Tu grupo de referidos completó los ${REFERIDOS_TURNOS_MIN} turnos. Tu Básico gratis vence el ${nuevaFecha}.`,
     data: { nuevaFecha, seccion: "pagos", clave: "referidos_premio" },
   });
-  console.log(`🎁 Referidos: +${REFERIDOS_DIAS_PREMIO} días Premium para ${slug} (vence ${nuevaFecha})`);
+  console.log(`🎁 Referidos: +${REFERIDOS_DIAS_PREMIO} días Básico para ${slug} (vence ${nuevaFecha})`);
 }
 
 // Si los 3 llegaron a la meta, entrega el premio a los que todavía no lo tienen.
@@ -8332,8 +8338,8 @@ async function registrarReferido(nuevo, pendiente) {
   crearNotificacion({
     slug: nuevo.slug,
     tipo: "sistema",
-    titulo: "Tenés 1 mes de Premium en juego",
-    mensaje: `Cuando los ${REFERIDOS_GRUPO_SIZE} negocios de tu grupo lleguen a ${REFERIDOS_TURNOS_MIN} turnos, cada uno gana ${REFERIDOS_DIAS_PREMIO} días de Premium.`,
+    titulo: "Tenés 1 mes de Básico en juego",
+    mensaje: `Cuando los ${REFERIDOS_GRUPO_SIZE} negocios de tu grupo lleguen a ${REFERIDOS_TURNOS_MIN} turnos, cada uno gana ${REFERIDOS_DIAS_PREMIO} días de Básico.`,
     data: { clave: "referido_bienvenida", seccion: "inicio" },
   });
   console.log(`🤝 Referido: ${nuevo.slug} → ${referidor.slug} (grupo ${grupoNro})`);
@@ -8442,10 +8448,10 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
       .not("fecha_vencimiento", "is", null).lt("fecha_vencimiento", hoyISO);
     if (error) throw error;
 
-    // REFERIDOS: quien tenía Premium solo por el mes de regalo vuelve al plan
+    // REFERIDOS: quien tenía Básico solo por el mes de regalo vuelve al plan
     // gratis (igual que /renovacion/downgrade) en vez de quedar suspendido.
-    // VIP vencido: tampoco se compra (no tiene checkout), así que al vencer
-    // vuelve a gratis en vez de quedar suspendido esperando un pago de Premium.
+    // Premium vencido: tampoco se compra (no tiene checkout), así que al vencer
+    // vuelve a gratis en vez de quedar suspendido esperando un pago de Básico.
     const promoVencidos = (vencidos || []).filter((u) => u.premium_promo || esPlanVip(u.plan)).map((u) => u.slug);
     if (promoVencidos.length > 0) {
       await supabase.from("usuarios").update({
@@ -8482,12 +8488,12 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
         await crearNotificacion({
           slug: u.slug,
           tipo: "vencimiento",
-          titulo: esPlanVip(u.plan) ? "Tu plan VIP está por vencer" : "Tu suscripción está por vencer",
+          titulo: esPlanVip(u.plan) ? "Tu plan Premium está por vencer" : "Tu suscripción está por vencer",
           mensaje: esPlanVip(u.plan)
-            ? (dias === 1 ? "Tu plan VIP vence mañana." : "Tu plan VIP vence en 5 días.")
+            ? (dias === 1 ? "Tu plan Premium vence mañana." : "Tu plan Premium vence en 5 días.")
             : dias === 1
-              ? "Tu plan Premium vence mañana. Renová para no perder acceso al panel."
-              : "Tu plan Premium vence en 5 días. Renová cuando quieras desde el panel.",
+              ? "Tu plan Básico vence mañana. Renová para no perder acceso al panel."
+              : "Tu plan Básico vence en 5 días. Renová cuando quieras desde el panel.",
           data: { fecha_vencimiento: u.fecha_vencimiento, dias_restantes: dias },
         });
         avisados.push(u.slug);
