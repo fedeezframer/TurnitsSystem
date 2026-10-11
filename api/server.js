@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.11-productos-compartidos";
+const PANEL_VERSION  = "2026.10.11-avatares-catalogo";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -2686,6 +2686,29 @@ function validarServicioBody({ nombre, precio }) {
   return null;
 }
 
+
+// Sólo información pública de profesionales activos, con sus asignaciones reales.
+async function catalogoConProfesionales(slug,items,tipo) {
+  if(!items?.length)return [];
+  const {data:equipo,error:ee}=await supabase.from('equipo').select('id,nombre,apellido,foto_url,color').eq('slug',slug).eq('activo',true).order('created_at',{ascending:true});if(ee)throw ee;
+  if(!equipo?.length)return items.map(item=>({...item,profesionales:[]}));
+  const ids=equipo.map(e=>e.id);
+  let servicios=[],promos=[];
+  if(tipo !== 'producto'){
+    const {data,error}=await supabase.from('servicio_equipo').select('servicio_id,equipo_id').in('equipo_id',ids);if(error)throw error;servicios=data || [];
+  }
+  if(tipo === 'promo'){
+    const {data,error}=await supabase.from('promocion_equipo').select('promocion_id,equipo_id').in('equipo_id',ids).in('promocion_id',items.map(i=>i.id));if(error)throw error;promos=data || [];
+  }
+  const offers=(serviceId,memberId)=>servicios.some(v=>v.servicio_id===serviceId && v.equipo_id===memberId);
+  return items.map(item=>({...item,profesionales:equipo.filter(e=>{
+    if(item.owner_equipo_id && item.owner_equipo_id !== e.id)return false;
+    if(tipo === 'producto')return true;
+    if(tipo === 'servicio')return offers(item.id,e.id);
+    return (item.owner_equipo_id === e.id || promos.some(v=>v.promocion_id===item.id && v.equipo_id===e.id)) && (item.items || []).filter(i=>i.tipo==='servicio').every(i=>offers(i.id,e.id));
+  })}));
+}
+
 // GET /admin/servicios/:slug — todos los servicios del negocio (activos e inactivos)
 app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
   try {
@@ -2702,7 +2725,7 @@ app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
     const servicios = (data || []).map((s) => ({ ...s, activo: isActivo(s.activo) }));
     const {data:negocio,error:planError}=await supabase.from("usuarios").select("plan").eq("slug",slug).maybeSingle();
     if(planError)throw planError;
-    res.json({ success: true, servicios, plan: negocio?.plan || "gratis" });
+    res.json({ success: true, servicios: await catalogoConProfesionales(slug,servicios,"servicio"), plan: negocio?.plan || "gratis" });
   } catch (e) {
     console.error("Error en GET /admin/servicios:", e.message);
     res.status(500).json({ success: false, error: "Error al obtener los servicios." });
@@ -2997,7 +3020,7 @@ app.get("/admin/extras/:slug", requireAuth, async (req, res) => {
       .select("*").eq("slug", slug).is("owner_equipo_id",null)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
-    res.json({ success: true, extras: data || [] });
+    res.json({ success: true, extras: await catalogoConProfesionales(slug,data || [],"producto") });
   } catch (e) {
     res.status(500).json({ success: false, error: "Error al obtener los productos." });
   }
@@ -3026,7 +3049,7 @@ app.post("/admin/extras", requireAuth, async (req, res) => {
     }]).select().single();
  
     if (error) throw error;
-    res.status(201).json({ success: true, extra: data });
+    res.status(201).json({ success: true, extra: (await catalogoConProfesionales(slugClean,[data],"producto"))[0] });
   } catch (e) {
     console.error("Error creando extra:", e.message);
     res.status(500).json({ success: false, error: "No se pudo crear el producto." });
@@ -3080,7 +3103,7 @@ app.put("/admin/extras/:id", requireAuth, async (req, res) => {
  
     if (error) throw error;
     if (!data) return res.status(404).json({ success: false, error: "Producto no encontrado." });
-    res.json({ success: true, extra: data });
+    res.json({ success: true, extra: (await catalogoConProfesionales(slugClean,[data],"producto"))[0] });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo actualizar el producto." });
   }
@@ -5202,7 +5225,8 @@ app.get("/empleado/:slug/extras", requireAuth, async (req, res) => {
       .select("*").eq("slug", slug).or(`owner_equipo_id.is.null,owner_equipo_id.eq.${req.empleado.id}`)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
-    res.json({ success: true, extras: (data || []).map(e=>({...e,compartido:!e.owner_equipo_id,puede_editar:!!req.empleado.puede_crear_servicios && e.owner_equipo_id === req.empleado.id})) });
+    const catalogo=await catalogoConProfesionales(slug,data || [],"producto");
+    res.json({ success: true, extras: catalogo.map(e=>({...e,compartido:!e.owner_equipo_id,puede_editar:!!req.empleado.puede_crear_servicios && e.owner_equipo_id === req.empleado.id})) });
   } catch (e) {
     res.status(500).json({ success: false, error: "Error al obtener los productos." });
   }
@@ -5235,7 +5259,7 @@ app.post("/empleado/:slug/extras", requireAuth, requireEmployeeCatalog, async (r
     const {data:links,error:le}=await supabase.from("servicio_equipo").select("servicio_id").eq("equipo_id",req.empleado.id);
     if(le)throw le;
     if(links?.length){const {error:linkError}=await supabase.from("servicio_extras").upsert(links.map(v=>({servicio_id:v.servicio_id,extra_id:data.id})),{onConflict:"servicio_id,extra_id"});if(linkError)throw linkError;}
-    res.status(201).json({ success: true, extra: data });
+    res.status(201).json({ success: true, extra: (await catalogoConProfesionales(slugClean,[data],"producto"))[0] });
   } catch (e) {
     console.error("Error creando extra:", e.message);
     res.status(500).json({ success: false, error: "No se pudo crear el producto." });
@@ -5289,7 +5313,7 @@ app.put("/empleado/:slug/extras/:id", requireAuth, requireEmployeeCatalog, async
  
     if (error) throw error;
     if (!data) return res.status(404).json({ success: false, error: "Producto no encontrado." });
-    res.json({ success: true, extra: data });
+    res.json({ success: true, extra: (await catalogoConProfesionales(slugClean,[data],"producto"))[0] });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo actualizar el producto." });
   }
@@ -5469,7 +5493,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         equipo_nombre: turno.equipo_nombre || null,
         tiene_comprobante: !!turno.comprobante_path,
       })),
-      servicios,
+      servicios: await catalogoConProfesionales(slug,servicios,"servicio"),
       clientes: [...clientesPorClave.values()].sort((a, b) => b.ultimoTurno.localeCompare(a.ultimoTurno)),
       inicio: {
         turnos: turnosMes.length,
@@ -5579,6 +5603,7 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
     res.status(201).json({ success: true, servicio: {
       ...servicio,
       perfil_propio: servicio.owner_equipo_id === miembro.id,
+      profesionales: (await catalogoConProfesionales(slug,[servicio],"servicio"))[0].profesionales,
       precio: Number(precio),
       imagen_url: imagen_url || null,
       orden: Number.isFinite(Number(req.body?.orden)) ? Number(req.body.orden) : (servicio.orden || 0),
@@ -5867,7 +5892,7 @@ async function requirePromocionesPlan(req,res,next) {
 app.get('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
   const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).is('owner_equipo_id',null).order('created_at',{ascending:false});
   if(error) return res.status(500).json({success:false,error:error.code === '42P01' || error.code === 'PGRST205' ? 'Falta instalar Promociones.sql en Supabase.' : 'No se pudieron cargar las promociones.'});
-  res.json({success:true,promociones:data || []});
+  res.json({success:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo")});
 }));
 async function promocionesGuardar(req,res) {
   try {
@@ -5879,7 +5904,7 @@ async function promocionesGuardar(req,res) {
     if(req.params.id)query=req.empleado ? query.eq('owner_equipo_id',req.empleado.id) : query.is('owner_equipo_id',null);
     const {data,error}=await query.select('*').maybeSingle();if(error) throw error;
     if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
-    res.status(req.params.id ? 200 : 201).json({success:true,promocion:data});
+    res.status(req.params.id ? 200 : 201).json({success:true,promocion:(await catalogoConProfesionales(slug,[data],"promo"))[0]});
   } catch(e) {console.error('Error guardando promoción:',e.code || e.message);res.status(e.promoValidacion ? 400 : 500).json({success:false,error:e.promoValidacion ? e.message : 'No se pudo guardar la promoción. Revisá que Promociones.sql esté instalado.'});}
 }
 app.post('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesGuardar);
@@ -5893,7 +5918,7 @@ app.delete('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,pro
 
 
 app.get('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
- const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).eq('owner_equipo_id',req.empleado.id).order('created_at',{ascending:false});if(error)throw error;res.json({success:true,promociones:data || []});
+ const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).eq('owner_equipo_id',req.empleado.id).order('created_at',{ascending:false});if(error)throw error;res.json({success:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo")});
 }));
 app.post('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
 app.put('/empleado/:slug/promociones/:id',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
