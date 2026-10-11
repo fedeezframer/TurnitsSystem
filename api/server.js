@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.11-catalogo-empleado";
+const PANEL_VERSION  = "2026.10.11-promos-equipo";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -2364,6 +2364,14 @@ async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
   const today=promoHoyArgentina();
   if(!p || !p.activo || today<p.fecha_inicio || today>p.fecha_fin || (fecha && (fecha<p.fecha_inicio || fecha>p.fecha_fin)))throw promoError('La promo no está vigente para ese día. Elegí otra fecha o servicio.');
   if(p.owner_equipo_id && p.owner_equipo_id !== equipoId)throw promoError('Esta promo pertenece a otro profesional.');
+  if(!p.owner_equipo_id) {
+    let assignedId=equipoId;
+    if(!assignedId){const {data:owner,error:oe}=await supabase.from('equipo').select('id').eq('slug',slug).eq('es_dueño',true).eq('activo',true).maybeSingle();if(oe)throw oe;assignedId=owner?.id;}
+    if(!assignedId || !UUID_REGEX.test(String(assignedId)))throw promoError('Elegí un profesional para ver esta promoción.');
+    const {data:assignment,error:ae}=await supabase.from('promocion_equipo').select('promocion_id').eq('promocion_id',p.id).eq('equipo_id',assignedId).maybeSingle();if(ae)throw ae;
+    if(!assignment)throw promoError('Esta promoción no está asignada a ese profesional.');
+    equipoId=assignedId;
+  }
   const servicios=p.items.filter(i=>i.tipo==='servicio');
   if(!servicios.length || servicios[0].id !== servicioId)throw promoError('La promo no corresponde al servicio seleccionado.');
   let duracion=0,capacidad=Infinity;
@@ -5881,6 +5889,60 @@ app.post('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,requir
 app.put('/empleado/:slug/promociones/:id',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
 app.delete('/empleado/:slug/promociones/:id',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
  const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('owner_equipo_id',req.empleado.id).eq('id',req.params.id).select('id').maybeSingle();if(error)throw error;if(!data)return res.status(404).json({success:false,error:'Promoción no encontrada en tu perfil.'});res.json({success:true});
+}));
+
+async function contextoPromocionesEquipo(req,res) {
+  const slug=cleanSlug(req.query?.slug || req.body?.slug || req.auth.slug), equipoId=req.params.id;
+  if(!UUID_REGEX.test(String(equipoId))) {res.status(400).json({success:false,error:'Profesional inválido.'});return null;}
+  if(req.auth.rol !== 'superadmin' && slug !== req.auth.slug){res.status(403).json({success:false,error:'No autorizado.'});return null;}
+  const [{data:miembro,error:me},{data:negocio,error:ne}]=await Promise.all([
+    supabase.from('equipo').select('id').eq('slug',slug).eq('id',equipoId).maybeSingle(),
+    supabase.from('usuarios').select('plan').eq('slug',slug).maybeSingle()
+  ]);
+  if(me)throw me;if(ne)throw ne;
+  if(!miembro){res.status(404).json({success:false,error:'Profesional no encontrado.'});return null;}
+  if(!negocio || !planTieneFuncionesPremium(negocio.plan)){res.status(403).json({success:false,error:'Las promociones requieren Básico o Premium.'});return null;}
+  return {slug,equipoId};
+}
+async function validarAsignacionPromo(slug,promo,equipoId) {
+  if(promo.owner_equipo_id)throw promoError('Las promociones privadas permanecen en el perfil de su creador.');
+  for(const item of promo.items || []){
+    const {data:elemento,error:ee}=await supabase.from(item.tipo==='servicio' ? 'servicios' : 'extras').select('id,owner_equipo_id').eq('slug',slug).eq('id',item.id).maybeSingle();if(ee)throw ee;
+    if(!elemento || (elemento.owner_equipo_id && elemento.owner_equipo_id !== equipoId))throw promoError('La promo contiene elementos de otro perfil o que ya no existen.');
+    if(item.tipo==='servicio'){
+      const {data:link,error:le}=await supabase.from('servicio_equipo').select('servicio_id').eq('servicio_id',item.id).eq('equipo_id',equipoId).maybeSingle();if(le)throw le;
+      if(!link)throw promoError('Primero asignale a este profesional todos los servicios que incluye la promoción.');
+    }
+  }
+}
+app.get('/admin/equipo/:id/promociones-disponibles',requireAuth,promocionesAsync(async(req,res)=>{
+  const context=await contextoPromocionesEquipo(req,res);if(!context)return;
+  const {slug,equipoId}=context;
+  const [{data:promos,error:pe},{data:links,error:le}]=await Promise.all([
+    supabase.from('promociones').select('id,nombre,precio_final,activo,items,fecha_inicio,fecha_fin').eq('slug',slug).is('owner_equipo_id',null).order('created_at',{ascending:false}),
+    supabase.from('promocion_equipo').select('promocion_id').eq('equipo_id',equipoId)
+  ]);if(pe)throw pe;if(le)throw le;
+  const selected=new Set((links || []).map(v=>v.promocion_id));
+  res.json({success:true,promociones:(promos || []).map(p=>({...p,precio:Number(p.precio_final),vinculado:selected.has(p.id)}))});
+}));
+app.post('/admin/equipo/:id/promociones',requireAuth,promocionesAsync(async(req,res)=>{
+  const context=await contextoPromocionesEquipo(req,res);if(!context)return;
+  const {slug,equipoId}=context, promocionId=req.body?.promocion_id;
+  if(!UUID_REGEX.test(String(promocionId)))return res.status(400).json({success:false,error:'Promoción inválida.'});
+  const {data:promo,error:pe}=await supabase.from('promociones').select('*').eq('slug',slug).eq('id',promocionId).maybeSingle();if(pe)throw pe;
+  if(!promo)return res.status(404).json({success:false,error:'Promoción no encontrada.'});
+  try{await validarAsignacionPromo(slug,promo,equipoId);}catch(e){if(!e.promoValidacion)throw e;return res.status(400).json({success:false,error:e.message});}
+  const {error}=await supabase.from('promocion_equipo').upsert({promocion_id:promocionId,equipo_id:equipoId},{onConflict:'promocion_id,equipo_id'});if(error)throw error;
+  invalidateCache(slug);res.status(201).json({success:true});
+}));
+app.delete('/admin/equipo/:id/promociones/:promocionId',requireAuth,promocionesAsync(async(req,res)=>{
+  const context=await contextoPromocionesEquipo(req,res);if(!context)return;
+  const {slug,equipoId}=context, promocionId=req.params.promocionId;
+  if(!UUID_REGEX.test(String(promocionId)))return res.status(400).json({success:false,error:'Promoción inválida.'});
+  const {data:promo,error:pe}=await supabase.from('promociones').select('id,owner_equipo_id').eq('slug',slug).eq('id',promocionId).maybeSingle();if(pe)throw pe;
+  if(!promo || promo.owner_equipo_id)return res.status(404).json({success:false,error:'Promoción no encontrada en el catálogo compartido.'});
+  const {error}=await supabase.from('promocion_equipo').delete().eq('equipo_id',equipoId).eq('promocion_id',promocionId);if(error)throw error;
+  invalidateCache(slug);res.json({success:true});
 }));
 
 app.get("/finanzas/:slug", requireAuth, async (req, res) => {
