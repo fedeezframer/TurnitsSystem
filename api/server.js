@@ -60,7 +60,7 @@ const TURNITS_COMISION_TASA = 0.02;
 const PLANES_VALIDOS = ["gratis", "basico", "premium"];
 const esPlanVip = (plan) => plan === "premium";
 const planTieneFuncionesPremium = (plan) => plan === "basico" || plan === "premium";
-const planCobraComision = (plan) => !esPlanVip(plan);
+const planCobraComision = (plan, estadoSuscripcion) => estadoSuscripcion === "trial" || !esPlanVip(plan);
 // Meta del logro "Facturaste $500 USD" (Tus logros, panel > Inicio). Se
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
 // cambio de referencia. Se compara contra la facturación histórica total
@@ -427,11 +427,11 @@ const COMISION_POR_PLAN = {
   basico:  { tasa: 0.008,                 minima: 100 },
   premium: { tasa: 0,                     minima: 0 },
 };
-function configComisionPlan(plan) {
-  return COMISION_POR_PLAN[plan] || COMISION_POR_PLAN.gratis;
+function configComisionPlan(plan, estadoSuscripcion) {
+  return estadoSuscripcion === "trial" ? COMISION_POR_PLAN.gratis : COMISION_POR_PLAN[plan] || COMISION_POR_PLAN.gratis;
 }
-function calcularComisionTurnits(base, plan = "gratis") {
-  const cfg = configComisionPlan(plan);
+function calcularComisionTurnits(base, plan = "gratis", estadoSuscripcion) {
+  const cfg = configComisionPlan(plan, estadoSuscripcion);
   if (!(cfg.tasa > 0) && !(cfg.minima > 0)) return 0;
   return Math.max(cfg.minima, Math.round(Number(base || 0) * cfg.tasa));
 }
@@ -607,7 +607,7 @@ function horaDentroDeIntervalos(horarios, excepciones, fecha, hora) {
 }
 
 function mediosOfflinePermitidos(user) {
-  return planTieneFuncionesPremium(user?.plan) && !(user.plan === "basico" && user.estado_suscripcion === "trial");
+  return planTieneFuncionesPremium(user?.plan);
 }
 function limitarPagosPorPlan(config) {
   const result={...config};
@@ -1378,7 +1378,7 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 // REGISTRO — PASO 1
 // POST /registro/iniciar
 // ══════════════════════════════════════════════════════════════
-app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, planes:[
+app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:300,tasa:0.02}, planes:[
   {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02},
   {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008},
   {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,miembros_adicionales:null,comision_minima:0,comision_tasa:0}
@@ -1491,8 +1491,8 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
 
     const slug              = await generarSlugUnico(pendiente.business_name);
     const planFinal         = PLANES_VALIDOS.includes(pendiente.plan) ? pendiente.plan : "gratis";
-    const fechaVencimiento  = planFinal === "premium" ? new Date(Date.now() - 86400000).toISOString() : planFinal === "basico" ? calcularVencimiento(DIAS_PRUEBA) : null;
-    const estadoSuscripcion = planFinal === "premium" ? "suspendido" : planFinal === "basico" ? "trial" : "activo";
+    const fechaVencimiento  = planTieneFuncionesPremium(planFinal) ? calcularVencimiento(DIAS_PRUEBA) : null;
+    const estadoSuscripcion = planTieneFuncionesPremium(planFinal) ? "trial" : "activo";
 
     const insertData = {
       nombre_persona:     pendiente.nombre_persona,
@@ -1557,7 +1557,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
           nombre:      nuevo.nombre_persona,
           slug:        nuevo.slug,
           panel_url:   `${PANEL_URL}/${nuevo.slug}`,
-          dias_prueba: planFinal === "basico" ? DIAS_PRUEBA : 0,
+          dias_prueba: planTieneFuncionesPremium(planFinal) ? DIAS_PRUEBA : 0,
         }),
       }).catch((e) => console.error("Error mail bienvenida:", e.message));
     }
@@ -1583,7 +1583,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       slug:              nuevo.slug,
       business_name:     nuevo.business_name,
       plan:              nuevo.plan,
-      requiere_pago:     nuevo.plan === "premium",
+      requiere_pago:     false,
       panel_url:         `${PANEL_URL}/${nuevo.slug}`,
       token,
       dias_prueba:       planFinal === "basico" ? DIAS_PRUEBA : null,
@@ -3324,12 +3324,9 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     const esTrialPremium = user.plan === "basico" && user.estado_suscripcion === "trial";
     const agendaSinPagos = planTieneFuncionesPremium(user.plan) && configReserva.agenda_sin_pagos === true;
     const tieneMP      = !!configReserva.mp_access_token;
-    const metodoPagoEfectivo = esTrialPremium && configReserva.metodo_pago === "none" ? "total" : configReserva.metodo_pago;
+    const metodoPagoEfectivo = configReserva.metodo_pago;
     const requierePago = tieneMP && (metodoPagoEfectivo === "sena" || metodoPagoEfectivo === "total");
 
-    if (esTrialPremium && !tieneMP && !agendaSinPagos) {
-      return res.status(403).json({ success: false, error: "trial_requires_online_payment", message: "Durante la prueba solo se permiten reservas con pago online." });
-    }
 
     if (esPlanGratis && !tieneMP) return res.status(403).json({success:false,error:"free_no_payment_method",message:"El negocio debe conectar Mercado Pago para recibir reservas en el plan Gratis."});
     if (requierePago && !agendaSinPagos) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
@@ -3636,7 +3633,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
         servicio: servicioNombre || "Turno",
         metodo_pago,
         base_calculo: precioCobrado + montoExtras,
-        tasa: configComisionPlan(user.plan).tasa,
+        tasa: configComisionPlan(user.plan, user.estado_suscripcion).tasa,
         importe: importeComisionTurnits,
         periodo: periodoArgentina(),
       }]);
@@ -3886,7 +3883,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
         .select("plan, estado_suscripcion, telefono, business_name").eq("slug", slugClean).maybeSingle();
       if (negocioComisionError) throw negocioComisionError;
       usuarioComision = negocioComision;
-      if (negocioComision && planCobraComision(negocioComision.plan)) {
+      if (negocioComision && planCobraComision(negocioComision.plan, negocioComision.estado_suscripcion)) {
         const { data: comision, error: comisionLookupError } = await supabase.from("turnits_comisiones")
           .select("id, estado").eq("turno_id", turnoExistente.id).maybeSingle();
         if (comisionLookupError) throw comisionLookupError;
@@ -3941,7 +3938,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 
     if (updateError) throw updateError;
 
-    if (esAprobacionManual && usuarioComision && planCobraComision(usuarioComision.plan) && comisionManualNueva > 0) {
+    if (esAprobacionManual && usuarioComision && planCobraComision(usuarioComision.plan, usuarioComision.estado_suscripcion) && comisionManualNueva > 0) {
       const datosComision = {
         slug: slugClean,
         turno_id: turnoExistente.id,
@@ -3951,7 +3948,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
         servicio: turnoExistente.servicio_nombre || "Turno",
         metodo_pago: turnoExistente.metodo_pago,
         base_calculo: Number(turnoExistente.precio_cobrado || 0),
-        tasa: configComisionPlan(usuarioComision.plan).tasa,
+        tasa: configComisionPlan(usuarioComision.plan, usuarioComision.estado_suscripcion).tasa,
         importe: comisionManualNueva,
         periodo: periodoArgentina(),
       };
@@ -4235,7 +4232,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
         // Mismo método con el que se asienta el turno manual (cobro en persona).
         metodo_pago: "efectivo",
         base_calculo: precio,
-        tasa: configComisionPlan(user.plan).tasa,
+        tasa: configComisionPlan(user.plan, user.estado_suscripcion).tasa,
         importe: importeComisionTurnits,
         periodo: periodoArgentina(),
       }]);
@@ -4359,7 +4356,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
           Math.max(Number(user.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT, 1),
           ANTICIPACION_MINUTOS_MAX
         ),
-        metodo_pago:         user.plan === "basico" && user.estado_suscripcion === "trial" && user.metodo_pago === "none" ? "total" : user.metodo_pago,
+        metodo_pago:         user.metodo_pago,
         porcentaje_sena:     user.porcentaje_sena,
         horarios:            user.horarios    || {},
         excepciones:         user.excepciones || [],
@@ -6516,11 +6513,11 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
     if (!validateEmail(email))       return res.status(400).json({ success: false, error: "Email inválido." });
     if (!validatePassword(password)) return res.status(400).json({ success: false, error: "Contraseña: mínimo 6 caracteres." });
 
-    const planFinal         = plan === "basico" ? "basico" : "gratis";
+    const planFinal         = PLANES_VALIDOS.includes(plan) ? plan : "gratis";
     const slug              = await generarSlugUnico(business_name.trim());
     const hashedPassword    = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-    const fechaVencimiento  = planFinal === "basico" ? calcularVencimiento(DIAS_PRUEBA) : null;
-    const estadoSuscripcion = planFinal === "basico" ? "trial" : "activo";
+    const fechaVencimiento  = planTieneFuncionesPremium(planFinal) ? calcularVencimiento(DIAS_PRUEBA) : null;
+    const estadoSuscripcion = planTieneFuncionesPremium(planFinal) ? "trial" : "activo";
 
     const { data, error } = await supabase.from("usuarios").insert([{
       nombre_persona: nombre_persona.trim(), apellido: apellido?.trim() || "",
@@ -7089,7 +7086,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     }catch(e){if(e.promoValidacion)return res.status(400).json({success:false,error:e.message});throw e;}
 
     const esTrialPremium = user.plan === "basico" && user.estado_suscripcion === "trial";
-    const metodo    = esTrialPremium && configReserva.metodo_pago === "none" ? "total" : (configReserva.metodo_pago || "none");
+    const metodo    = configReserva.metodo_pago || "none";
     const debePagar = metodo === "sena" || metodo === "total";
     if (!debePagar || (precioServicio <= 0 && montoExtras <= 0)) return res.json({ isFree: true });
 
@@ -7100,9 +7097,9 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
       : baseCalculo;
     const conceptoPago = metodo === "sena" ? `Seña ${configReserva.porcentaje_sena || 30}%` : "Total";
 
-// Gratis y Básico pagan la comisión de Turnits por cobros online (distinta tasa por plan); Premium no.
-const fee = planCobraComision(user.plan)
-  ? calcularComisionTurnits(montoACobrar, user.plan)
+// Cualquier trial cobra el fee Gratis. Fuera del trial se aplica el fee del plan.
+const fee = planCobraComision(user.plan, user.estado_suscripcion)
+  ? calcularComisionTurnits(montoACobrar, user.plan, user.estado_suscripcion)
   : 0;
 
     if (configReserva.mp_access_token) {
