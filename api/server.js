@@ -461,37 +461,15 @@ async function obtenerEstadoComisionesTurnits(slug) {
 }
 
 async function validarReservasPorComisiones(slug, comisionNueva = 0) {
-  const { data: negocioPlan } = await supabase.from("usuarios").select("plan").eq("slug", slug).maybeSingle();
-  const estado = await obtenerEstadoComisionesTurnits(slug);
-  // VIP nunca se pausa por saldo de comisiones (aunque tenga deuda anterior).
-  if (esPlanVip(negocioPlan?.plan)) return { permitido: true, estado };
-  if (estado.saldo_vencido > 0) {
-    return { permitido: false, codigo: "comision_vencida", estado };
-  }
-  // El tope se puede cruzar UNA sola vez: si antes de esta reserva el saldo
-  // todavía está por debajo del límite, la reserva entra aunque con su
-  // comisión el total lo supere (ej: 22.000 + 1.000 → 23.000, permitido).
-  // Apenas el saldo queda en o sobre el límite, no entra ninguna más hasta
-  // que se pague. Por eso NO se suma comisionNueva en la comparación.
-  if (estado.saldo_pendiente >= estado.limite) {
-    return { permitido: false, codigo: "limite_comisiones", estado };
-  }
-  return { permitido: true, estado };
+  // El split retiene la comisión online; no hay bloqueos por saldo offline.
+  return { permitido: true, estado: { bloqueada: false, saldo_pendiente: 0, saldo_vencido: 0 } };
 }
 
 // ¿La agenda pública del negocio está pausada por deuda de comisiones?
 // (límite alcanzado o deuda vencida). VIP nunca. Se usa para mostrar el
 // mismo 404/"suspendido" que cuando no se paga el plan.
 async function agendaPausadaPorComisiones(slug, plan) {
-  if (esPlanVip(plan)) return false;
-  try {
-    const estado = await obtenerEstadoComisionesTurnits(slug);
-    return estado.bloqueada === true;
-  } catch (e) {
-    // Si falla la consulta no se tira abajo la agenda por un error nuestro.
-    console.error("Error evaluando pausa por comisiones:", e.message);
-    return false;
-  }
+  return false;
 }
 
 // Un cobro pendiente solo se puede reutilizar si sigue representando
@@ -622,8 +600,19 @@ function horaDentroDeIntervalos(horarios, excepciones, fecha, hora) {
   return intervalos.some(([ini, fin]) => minutos >= ini && minutos < fin);
 }
 
+function mediosOfflinePermitidos(user) {
+  return planTieneFuncionesPremium(user?.plan) && !(user.plan === "premium" && user.estado_suscripcion === "trial");
+}
+function limitarPagosPorPlan(config) {
+  const result={...config};
+  if(!mediosOfflinePermitidos(result)) {
+    result.acepta_transferencia=false;result.acepta_efectivo=false;result.datos_bancarios={};result.agenda_sin_pagos=false;
+    if(result.metodo_pago === "none" || !result.metodo_pago)result.metodo_pago="total";
+  }
+  return result;
+}
 function configNegocioParaEquipo(user, miembro) {
-  if (!miembro) return user;
+  if (!miembro) return limitarPagosPorPlan(user);
   const config = { ...user };
   const configPersonal = [
     ...(miembro.puede_configurar_horarios ? ["horarios", "excepciones", "anticipacion_minutos"] : []),
@@ -639,7 +628,7 @@ function configNegocioParaEquipo(user, miembro) {
   config.mp_refresh_token = usaCuentaPersonal ? miembro.mp_refresh_token : user.mp_refresh_token;
   config.mp_token_expires_at = usaCuentaPersonal ? miembro.mp_token_expires_at : user.mp_token_expires_at;
   config.mp_public_key = usaCuentaPersonal ? miembro.mp_public_key : user.mp_public_key;
-  return config;
+  return limitarPagosPorPlan(config);
 }
 
 async function aplicarVarianteServicio(slug, servicioId, equipoId, servicio) {
@@ -1076,77 +1065,8 @@ app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/comisiones-turnits/:slug/pagar", requireAuth, async (req, res) => {
-  let cobroCreado = null;
-  try {
-    const slug = cleanSlug(req.params.slug);
-    if (!MP_PLATFORM_TOKEN) return res.status(503).json({ success: false, error: "El pago de saldos no está disponible todavía. Contactá a Turnits." });
-
-    const { data: cobroExistente } = await supabase.from("turnits_comision_cobros")
-      .select("id, importe, init_point, preference_id, comision_ids")
-      .eq("slug", slug).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).maybeSingle();
-
-    // La deuda real se calcula SIEMPRE antes de decidir si se reutiliza algo.
-    const estado = await obtenerEstadoComisionesTurnits(slug);
-    if (estado.saldo_pendiente <= 0 || !estado.movimientos.length) {
-      // Ya no se debe nada: un cobro pendiente viejo no puede seguir abierto.
-      if (cobroExistente) {
-        await supabase.from("turnits_comision_cobros").update({ estado: "rechazada" })
-          .eq("id", cobroExistente.id).eq("estado", "pendiente");
-      }
-      return res.status(400).json({ success: false, error: "No tenés comisiones pendientes para pagar." });
-    }
-
-    // Solo se reutiliza el link si representa exactamente la deuda actual.
-    if (cobroCoincideConDeuda(cobroExistente, estado)) {
-      return res.json({ success: true, payment_url: cobroExistente.init_point, importe: Number(cobroExistente.importe), reutilizado: true });
-    }
-
-    // Preference viejo (cambió la deuda): se descarta y se crea uno nuevo con
-    // el saldo actual. Se libera primero porque hay un índice único de un
-    // solo cobro pendiente por negocio.
-    if (cobroExistente) {
-      const { error: descarteError } = await supabase.from("turnits_comision_cobros")
-        .update({ estado: "rechazada" }).eq("id", cobroExistente.id).eq("estado", "pendiente");
-      if (descarteError) throw descarteError;
-    }
-
-    const { data: cobroNuevo, error: cobroNuevoError } = await supabase.from("turnits_comision_cobros").insert([{
-      slug,
-      importe: estado.saldo_pendiente,
-      comision_ids: estado.movimientos.map((m) => m.id),
-    }]).select("id, importe, comision_ids").single();
-    if (cobroNuevoError) throw cobroNuevoError;
-    const cobro = cobroNuevo;
-    cobroCreado = cobroNuevo;
-
-    const client = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
-    const preference = new Preference(client);
-    const pref = await preference.create({ body: {
-      items: [{
-        title: "Saldo de comisiones Turnits",
-        description: `Comisiones acumuladas del negocio ${slug}`,
-        quantity: 1,
-        unit_price: Number(cobro.importe),
-        currency_id: "ARS",
-      }],
-      external_reference: cobro.id,
-      metadata: { tipo: "comision_turnits", slug, comision_cobro_id: cobro.id },
-      notification_url: `${API_URL}/webhook/mp`,
-      back_urls: { success: `${PANEL_URL}/${slug}?status=comisiones_ok`, failure: `${PANEL_URL}/${slug}?status=comisiones_error`, pending: `${PANEL_URL}/${slug}?status=comisiones_pendientes` },
-      auto_return: "approved",
-    } });
-
-    const { error: updateError } = await supabase.from("turnits_comision_cobros")
-      .update({ preference_id: pref.id, init_point: pref.init_point })
-      .eq("id", cobro.id).eq("estado", "pendiente");
-    if (updateError) throw updateError;
-    res.json({ success: true, payment_url: pref.init_point, importe: Number(cobro.importe) });
-  } catch (e) {
-    if (cobroCreado?.id) await supabase.from("turnits_comision_cobros").update({ estado: "rechazada" }).eq("id", cobroCreado.id);
-    console.error("Error POST /comisiones-turnits/pagar:", e.message);
-    res.status(500).json({ success: false, error: "No se pudo generar el pago del saldo." });
-  }
+app.post("/comisiones-turnits/:slug/pagar", requireAuth, (_req, res) => {
+  return res.status(410).json({success:false,error:"El pago de saldos fue retirado. Las comisiones online se descuentan automáticamente."});
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -1483,16 +1403,6 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       .from("usuarios").select("id").eq("email", emailClean).maybeSingle();
     if (yaExiste)
       return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
-
-    if (telefono) {
-      const telefonoClean = cleanPhone(telefono);
-      const { data: deudaPrevia, error: deudaError } = await supabase.from("turnits_comisiones")
-        .select("slug").eq("telefono_negocio", telefonoClean).eq("estado", "pendiente").limit(1);
-      if (deudaError) throw deudaError;
-      if (deudaPrevia?.length) {
-        return res.status(409).json({ success: false, error: "deuda_turnits_existente", message: "Este teléfono ya está asociado a un negocio con saldo pendiente de Turnits. Iniciá sesión en esa cuenta para regularizarlo." });
-      }
-    }
 
     const password_hash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
     const codigo        = Math.floor(100000 + Math.random() * 900000).toString();
@@ -2281,10 +2191,10 @@ const { data: user, error } = await supabase.from("usuarios")
     const esPremium               = user.plan === "premium";
     const esTrialPremium          = esPremium && user.estado_suscripcion === "trial";
     const agendaSinPagos          = agendaSinPagosEquipo;
-    const metodoPagoEfectivo      = esTrialPremium && metodoPublico === "none" ? "total" : metodoPublico;
+    const metodoPagoEfectivo      = !mediosOfflinePermitidos(user) && (!metodoPublico || metodoPublico === "none") ? "total" : metodoPublico;
     const mpDisponible            = !agendaSinPagos && !!mpDisponibleToken && ["sena", "total"].includes(metodoPagoEfectivo);
-    const transferenciaDisponible = !agendaSinPagos && !esTrialPremium && !!aceptaTransferenciaPublico;
-    const efectivoDisponible      = !agendaSinPagos && !esTrialPremium && !!aceptaEfectivoPublico;
+    const transferenciaDisponible = !agendaSinPagos && mediosOfflinePermitidos(user) && !!aceptaTransferenciaPublico;
+    const efectivoDisponible      = !agendaSinPagos && mediosOfflinePermitidos(user) && !!aceptaEfectivoPublico;
  
     const metodos_pago_disponibles = [
       ...(mpDisponible            ? ["mercadopago"]  : []),
@@ -3408,6 +3318,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
       return res.status(403).json({ success: false, error: "trial_requires_online_payment", message: "Durante la prueba solo se permiten reservas con pago online." });
     }
 
+    if (esPlanGratis && !tieneMP) return res.status(403).json({success:false,error:"free_no_payment_method",message:"El negocio debe conectar Mercado Pago para recibir reservas en el plan Gratis."});
     if (requierePago && !agendaSinPagos) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
 
     const hoy = new Date().toISOString().split("T")[0];
@@ -3597,9 +3508,8 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     const estaSuspendido = user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0);
     if (estaSuspendido) return res.status(403).json({ success: false, error: "Este servicio está pausado temporalmente." });
 
-    // Durante el trial Premium se mantienen los medios online; el plan
-    // Gratis ya puede aceptar efectivo/transferencia con comisión mensual.
-    if (user.plan === "premium" && user.estado_suscripcion === "trial") {
+    // Los medios directos pertenecen a Premium/VIP activos.
+    if (!mediosOfflinePermitidos(user)) {
       return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
     }
     if (metodo_pago === "transferencia" && !configReserva.acepta_transferencia) {
@@ -3644,9 +3554,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
         capacidad=promoReserva.capacidad;
       }
     }catch(e){if(e.promoValidacion)return res.status(400).json({success:false,error:e.message});throw e;}
-    const importeComisionTurnits = planCobraComision(user.plan)
-      ? calcularComisionTurnits(precioCobrado + montoExtras, user.plan)
-      : 0;
+    const importeComisionTurnits = 0; // Sin comisión diferida por efectivo o transferencia.
     const validacionComisionReserva = await validarReservasPorComisiones(slugClean, importeComisionTurnits);
     if (!validacionComisionReserva.permitido) {
       return res.status(403).json({
@@ -3973,7 +3881,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
         // En reservas nuevas el saldo ya se genera al agendar. Este fallback
         // completa reservas anteriores al cambio o reactivadas tras anularse.
         if (!comision || comision.estado === "anulada") {
-          comisionManualNueva = calcularComisionTurnits(turnoExistente.precio_cobrado, negocioComision.plan);
+          comisionManualNueva = 0; // Sin cargos por aprobación manual.
           const validacionComision = await validarReservasPorComisiones(slugClean, comisionManualNueva);
           if (!validacionComision.permitido) {
             return res.status(403).json({
@@ -4224,9 +4132,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     // Comisión de Turnits: los turnos cargados a mano también la suman. Solo
     // si el servicio tiene precio (un turno sin servicio/precio, ej. para
     // bloquear un horario, no genera cargo porque se cobraría el mínimo).
-    const importeComisionTurnits = planCobraComision(user.plan) && precio > 0
-      ? calcularComisionTurnits(precio, user.plan)
-      : 0;
+    const importeComisionTurnits = 0; // Los turnos cargados a mano no generan deuda.
     if (importeComisionTurnits > 0) {
       const validacionComision = await validarReservasPorComisiones(slugClean, importeComisionTurnits);
       if (!validacionComision.permitido) {
@@ -4450,10 +4356,10 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         mp_status:           user.mp_access_token ? "Conectado" : "Desconectado",
         dias_restantes:      diasRestantes,
         alerta_vencimiento:  diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
-        acepta_transferencia: !(user.plan === "premium" && user.estado_suscripcion === "trial") && !!user.acepta_transferencia,
-        acepta_efectivo:      !(user.plan === "premium" && user.estado_suscripcion === "trial") && !!user.acepta_efectivo,
+        acepta_transferencia: mediosOfflinePermitidos(user) && !!user.acepta_transferencia,
+        acepta_efectivo:      mediosOfflinePermitidos(user) && !!user.acepta_efectivo,
         agenda_sin_pagos:     planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true,
-        datos_bancarios:      user.plan === "premium" && user.estado_suscripcion === "trial" ? {} : (user.datos_bancarios || {}),
+        datos_bancarios:      !mediosOfflinePermitidos(user) ? {} : (user.datos_bancarios || {}),
       },
     });
   } catch (e) {
@@ -4550,7 +4456,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       const { data: negocioActual } = await supabase.from("usuarios").select("plan, estado_suscripcion").eq("slug", slug).maybeSingle();
       if (!negocioActual) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
       const esTrialPremium = negocioActual.plan === "premium" && negocioActual.estado_suscripcion === "trial";
-      if (esTrialPremium) {
+      if (!mediosOfflinePermitidos(negocioActual)) {
         if (update.metodo_pago === "none") update.metodo_pago = "total";
         if (update.acepta_transferencia !== undefined) update.acepta_transferencia = false;
         if (update.acepta_efectivo !== undefined) update.acepta_efectivo = false;
@@ -5573,6 +5479,10 @@ app.get("/empleado/:slug/config", requireAuth, async (req, res) => {
       settings[key] = propio ? personal[key] : negocio[key];
       heredados[key] = !propio;
     });
+    if(!mediosOfflinePermitidos(negocio)) {
+      settings.acepta_transferencia=false;settings.acepta_efectivo=false;settings.datos_bancarios={};settings.agenda_sin_pagos=false;
+      if(!settings.metodo_pago || settings.metodo_pago === "none")settings.metodo_pago="total";
+    }
     settings.horarios = settings.horarios || {};
     settings.excepciones = settings.excepciones || [];
     settings.datos_bancarios = settings.datos_bancarios || {};
@@ -5629,6 +5539,14 @@ async function actualizarConfigEquipo(slug, equipoId, body) {
     const { data: negocio, error } = await supabase.from("usuarios").select("plan").eq("slug", slug).single();
     if (error) throw error;
     if (!planTieneFuncionesPremium(negocio.plan)) return { error: "Esta opción está disponible en el plan Premium." };
+  }
+  if(["metodo_pago","acepta_transferencia","acepta_efectivo","datos_bancarios"].some(key=>update[key]!==undefined)) {
+    const {data:negocio,error}=await supabase.from("usuarios").select("plan,estado_suscripcion").eq("slug",slug).single();
+    if(error)throw error;
+    if(!mediosOfflinePermitidos(negocio)) {
+      update.acepta_transferencia=false;update.acepta_efectivo=false;update.datos_bancarios={};
+      if(update.metodo_pago === "none")update.metodo_pago="total";
+    }
   }
   const { error } = await supabase.from("equipo").update(update).eq("id", equipoId).eq("slug", slug).eq("es_dueño", false);
   if (error) throw error;
@@ -7407,11 +7325,6 @@ app.post("/cuenta/eliminar/:slug", limiterAuth, requireAuth, async (req, res) =>
       return res.status(403).json({ success: false, error: "Contraseña incorrecta." });
     }
     limpiarIntentosLogin(slug);
-
-    const estadoComisiones = await obtenerEstadoComisionesTurnits(slug);
-    if (estadoComisiones.saldo_pendiente > 0) {
-      return res.status(409).json({ success: false, error: "saldo_turnits_pendiente", message: "Antes de eliminar la cuenta, pagá el saldo pendiente de Turnits desde Comisiones y deudas." });
-    }
 
     await borrarNegocioCompleto(slug);
     console.log(`🗑️  Cuenta eliminada por su dueño: ${slug}`);
