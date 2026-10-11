@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.07-1";
+const PANEL_VERSION  = "2026.10.11-planes-final";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -607,7 +607,7 @@ function horaDentroDeIntervalos(horarios, excepciones, fecha, hora) {
 }
 
 function mediosOfflinePermitidos(user) {
-  return planTieneFuncionesPremium(user?.plan);
+  return user?.plan === "premium";
 }
 function limitarPagosPorPlan(config) {
   const result={...config};
@@ -1379,9 +1379,9 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 // POST /registro/iniciar
 // ══════════════════════════════════════════════════════════════
 app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:300,tasa:0.02}, planes:[
-  {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02},
-  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008},
-  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,miembros_adicionales:null,comision_minima:0,comision_tasa:0}
+  {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02,clientes_visibles:10,finanzas:true,temas:false,promociones:false,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
+  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
+  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,miembros_adicionales:null,comision_minima:0,comision_tasa:0,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:false,soporte:"prioritario"}
 ]}));
 
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
@@ -2194,7 +2194,7 @@ const { data: user, error } = await supabase.from("usuarios")
     const excepcionesPublicas = equipoCualquiera ? excepcionesEquipoUnion : valorConfig("excepciones");
     const metodoPublico = valorConfig("metodo_pago");
     const porcentajeSenaPublico = valorConfig("porcentaje_sena");
-    const agendaSinPagosEquipo = planTieneFuncionesPremium(user.plan) && valorConfig("agenda_sin_pagos") === true;
+    const agendaSinPagosEquipo = mediosOfflinePermitidos(user) && valorConfig("agenda_sin_pagos") === true;
     const configEquipoEfectiva = configEquipo ? configNegocioParaEquipo(user, configEquipo) : user;
     const mpDisponibleToken = configEquipoEfectiva.mp_access_token;
     const aceptaTransferenciaPublico = valorConfig("acepta_transferencia");
@@ -2352,6 +2352,9 @@ function promoHoyArgentina() { return new Intl.DateTimeFormat('sv-SE',{timeZone:
 function promoError(message) { const error=new Error(message);error.promoValidacion=true;return error; }
 async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
   if(!id) return null;
+  const {data:negocioPlan,error:planError}=await supabase.from('usuarios').select('plan').eq('slug',slug).maybeSingle();
+  if(planError)throw planError;
+  if(!negocioPlan || !planTieneFuncionesPremium(negocioPlan.plan))throw promoError('Las promociones no están disponibles para este negocio.');
   if(!UUID_REGEX.test(String(id)))throw promoError('La promoción seleccionada no es válida.');
   const {data:p,error}=await supabase.from('promociones').select('*').eq('slug',slug).eq('id',id).maybeSingle();if(error)throw error;
   const today=promoHoyArgentina();
@@ -2394,8 +2397,9 @@ async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servici
 }
 app.get('/promociones/:slug',limiterBooking,promocionesAsync(async(req,res)=>{
   const slug=cleanSlug(req.params.slug),today=promoHoyArgentina();
-  const {data:negocio,error:ne}=await supabase.from('usuarios').select('activo').eq('slug',slug).maybeSingle();if(ne)throw ne;
+  const {data:negocio,error:ne}=await supabase.from('usuarios').select('activo,plan').eq('slug',slug).maybeSingle();if(ne)throw ne;
   if(!negocio || !isActivo(negocio.activo))return res.status(404).json({success:false,error:'Negocio no disponible.'});
+  if(!planTieneFuncionesPremium(negocio.plan))return res.json({success:true,promociones:[]});
   const {data,error}=await supabase.from('promociones').select('id,items').eq('slug',slug).eq('activo',true).lte('fecha_inicio',today).gte('fecha_fin',today).order('created_at',{ascending:false});
   if(error && ['42P01','PGRST205'].includes(error.code))return res.json({success:true,promociones:[]});if(error)throw error;
   const promociones=[];
@@ -2672,7 +2676,9 @@ app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
     // ("true"/"false"), no boolean, así que se normaliza con isActivo()
     // antes de devolverlo (el frontend espera un boolean real).
     const servicios = (data || []).map((s) => ({ ...s, activo: isActivo(s.activo) }));
-    res.json({ success: true, servicios });
+    const {data:negocio,error:planError}=await supabase.from("usuarios").select("plan").eq("slug",slug).maybeSingle();
+    if(planError)throw planError;
+    res.json({ success: true, servicios, plan: negocio?.plan || "gratis" });
   } catch (e) {
     console.error("Error en GET /admin/servicios:", e.message);
     res.status(500).json({ success: false, error: "Error al obtener los servicios." });
@@ -3322,13 +3328,13 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
 
     const esPlanGratis = user.plan === "gratis";
     const esTrialPremium = user.plan === "basico" && user.estado_suscripcion === "trial";
-    const agendaSinPagos = planTieneFuncionesPremium(user.plan) && configReserva.agenda_sin_pagos === true;
+    const agendaSinPagos = mediosOfflinePermitidos(user) && configReserva.agenda_sin_pagos === true;
     const tieneMP      = !!configReserva.mp_access_token;
     const metodoPagoEfectivo = configReserva.metodo_pago;
     const requierePago = tieneMP && (metodoPagoEfectivo === "sena" || metodoPagoEfectivo === "total");
 
 
-    if (esPlanGratis && !tieneMP) return res.status(403).json({success:false,error:"free_no_payment_method",message:"El negocio debe conectar Mercado Pago para recibir reservas en el plan Gratis."});
+    if (!mediosOfflinePermitidos(user) && !tieneMP) return res.status(403).json({success:false,error:"free_no_payment_method",message:"El negocio debe conectar Mercado Pago para recibir reservas en Gratis o Básico."});
     if (requierePago && !agendaSinPagos) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
 
     const hoy = new Date().toISOString().split("T")[0];
@@ -4356,7 +4362,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
           Math.max(Number(user.anticipacion_minutos) || ANTICIPACION_MINUTOS_DEFAULT, 1),
           ANTICIPACION_MINUTOS_MAX
         ),
-        metodo_pago:         user.metodo_pago,
+        metodo_pago:         !mediosOfflinePermitidos(user) && user.metodo_pago === "none" ? "total" : user.metodo_pago,
         porcentaje_sena:     user.porcentaje_sena,
         horarios:            user.horarios    || {},
         excepciones:         user.excepciones || [],
@@ -4368,7 +4374,7 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
         alerta_vencimiento:  diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
         acepta_transferencia: mediosOfflinePermitidos(user) && !!user.acepta_transferencia,
         acepta_efectivo:      mediosOfflinePermitidos(user) && !!user.acepta_efectivo,
-        agenda_sin_pagos:     planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true,
+        agenda_sin_pagos:     mediosOfflinePermitidos(user) && user.agenda_sin_pagos === true,
         datos_bancarios:      !mediosOfflinePermitidos(user) ? {} : (user.datos_bancarios || {}),
       },
     });
@@ -4426,8 +4432,8 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
         .select("plan").eq("slug", slug).maybeSingle();
       if (negocioError) throw negocioError;
       if (!negocioActual) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-      if (update.agenda_sin_pagos && !planTieneFuncionesPremium(negocioActual.plan)) {
-        return res.status(403).json({ success: false, error: "Esta opción está disponible en el plan Básico." });
+      if (update.agenda_sin_pagos && !mediosOfflinePermitidos(negocioActual)) {
+        return res.status(403).json({ success: false, error: "La agenda sin cobro está disponible en el plan Premium." });
       }
     }
     if (update.metodo_pago !== undefined && !["none", "sena", "total"].includes(update.metodo_pago)) {
@@ -4810,10 +4816,11 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
     });
 
     const { data: user, error: fetchError } = await supabase.from("usuarios")
-      .select("tema, paletas_personalizadas").eq("slug", slug).maybeSingle();
+      .select("plan, tema, paletas_personalizadas").eq("slug", slug).maybeSingle();
     if (fetchError) throw fetchError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
+    if (!planTieneFuncionesPremium(user.plan)) return res.status(403).json({success:false,codigo:"plan_requerido",error:"La personalización de temas requiere Básico o Premium."});
     const temaMerged = { ...(user.tema || {}), ...temaFiltrado };
     const update = { tema: temaMerged };
 
@@ -4851,12 +4858,13 @@ app.get("/admin/tema/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const { data: user, error } = await supabase.from("usuarios")
-      .select("tema, logo_url, paletas_personalizadas").eq("slug", slug).maybeSingle();
+      .select("plan, tema, logo_url, paletas_personalizadas").eq("slug", slug).maybeSingle();
     if (error) throw error;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     res.json({
       success: true,
+      plan: user.plan || "gratis",
       tema: user.tema || {},
       logo_url: user.logo_url || null,
       paletas_personalizadas: user.paletas_personalizadas || [],
@@ -5553,7 +5561,7 @@ async function actualizarConfigEquipo(slug, equipoId, body) {
   if (update.agenda_sin_pagos === true) {
     const { data: negocio, error } = await supabase.from("usuarios").select("plan").eq("slug", slug).single();
     if (error) throw error;
-    if (!planTieneFuncionesPremium(negocio.plan)) return { error: "Esta opción está disponible en el plan Básico." };
+    if (!mediosOfflinePermitidos(negocio)) return { error: "La agenda sin cobro está disponible en el plan Premium." };
   }
   if(["metodo_pago","acepta_transferencia","acepta_efectivo","datos_bancarios"].some(key=>update[key]!==undefined)) {
     const {data:negocio,error}=await supabase.from("usuarios").select("plan,estado_suscripcion").eq("slug",slug).single();
@@ -5648,7 +5656,15 @@ async function promocionesPreparar(slug,body) {
   if(!Number.isFinite(precio_original) || precio_original <= 0 || !Number.isFinite(precio_final) || precio_final <= 0 || precio_final >= precio_original) {const e=new Error('El precio promocional debe ser mayor a cero y menor al precio original.');e.promoValidacion=true;throw e;}
   return {...datos,slug,items,precio_original,precio_final,updated_at:new Date().toISOString()};
 }
-app.get('/admin/promociones/:slug',requireAuth,promocionesAsync(async(req,res)=>{
+async function requirePromocionesPlan(req,res,next) {
+  try {
+    const {data,error}=await supabase.from("usuarios").select("plan").eq("slug",cleanSlug(req.params.slug)).maybeSingle();
+    if(error)throw error;
+    if(!data || !planTieneFuncionesPremium(data.plan)) return res.status(403).json({success:false,codigo:"plan_requerido",error:"Combos y promociones requieren Básico o Premium."});
+    next();
+  }catch{return res.status(500).json({success:false,error:"No pudimos verificar tu plan."});}
+}
+app.get('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
   const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).order('created_at',{ascending:false});
   if(error) return res.status(500).json({success:false,error:error.code === '42P01' || error.code === 'PGRST205' ? 'Falta instalar Promociones.sql en Supabase.' : 'No se pudieron cargar las promociones.'});
   res.json({success:true,promociones:data || []});
@@ -5664,9 +5680,9 @@ async function promocionesGuardar(req,res) {
     res.status(req.params.id ? 200 : 201).json({success:true,promocion:data});
   } catch(e) {console.error('Error guardando promoción:',e.code || e.message);res.status(e.promoValidacion ? 400 : 500).json({success:false,error:e.promoValidacion ? e.message : 'No se pudo guardar la promoción. Revisá que Promociones.sql esté instalado.'});}
 }
-app.post('/admin/promociones/:slug',requireAuth,promocionesGuardar);
-app.put('/admin/promociones/:slug/:id',requireAuth,promocionesGuardar);
-app.delete('/admin/promociones/:slug/:id',requireAuth,promocionesAsync(async(req,res)=>{
+app.post('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesGuardar);
+app.put('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promocionesGuardar);
+app.delete('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
   const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('id',req.params.id).select('id').maybeSingle();
   if(error) return res.status(500).json({success:false,error:'No se pudo eliminar la promoción.'});
   if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
@@ -5836,7 +5852,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       .eq("slug", slug).maybeSingle();
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-    const agendaSinPagos = planTieneFuncionesPremium(user.plan) && user.agenda_sin_pagos === true;
+    const agendaSinPagos = mediosOfflinePermitidos(user) && user.agenda_sin_pagos === true;
 
     const ahoraArg   = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
     const anioActual = ahoraArg.getFullYear();
@@ -7293,6 +7309,7 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
       estado_suscripcion:   "activo",
       fecha_vencimiento:    null,
       metodo_pago:          "total",
+      acepta_transferencia: false, acepta_efectivo: false, agenda_sin_pagos: false, datos_bancarios: {},
       premium_promo:        false,
     }).eq("slug", slug);
 
