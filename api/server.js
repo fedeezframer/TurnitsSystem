@@ -39,7 +39,14 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 const PANEL_VERSION  = "2026.10.07-1";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
-const PRECIO_RENOVACION  = parseInt(process.env.PRECIO_BASICO || "19900");
+const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
+const PRECIO_PREMIUM = Number(process.env.PRECIO_PREMIUM || "49900");
+if (![PRECIO_BASICO, PRECIO_PREMIUM].every(p => Number.isSafeInteger(p) && p > 0)) {
+  throw new Error("PRECIO_BASICO y PRECIO_PREMIUM deben ser importes enteros positivos en ARS.");
+}
+const PRECIO_RENOVACION = PRECIO_BASICO; // compatibilidad interna
+const precioMensualPlan = plan => plan === "premium" ? PRECIO_PREMIUM : PRECIO_BASICO;
+const nombrePlan = plan => plan === "premium" ? "Premium" : plan === "basico" ? "Básico" : "Gratis";
 // Tope de saldo del plan Gratis: equivalente a un mes de Básico.
 const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 9000);
 const TURNITS_COMISION_MINIMA_ARS = 300;
@@ -48,9 +55,8 @@ const TURNITS_COMISION_TASA = 0.02;
 // Planes: gratis < basico < premium.
 //  · Gratis: funciones limitadas. Cobra comisión de Turnits.
 //  · Básico: herramientas para negocios chicos; titular + 2 miembros. Cobra comisión online.
-//  · Premium: todas las funciones y SIN comisiones. Solo se asigna a mano desde
-//    superadmin a los mejores negocios (ver /superadmin/candidatos-vip).
-//    Puede tener fecha de vencimiento; al vencer vuelve a gratis (cron).
+//  · Premium: equipo sin límite y sin comisión Turnits por cobros online.
+//    Suscripción mensual; los accesos otorgados sin vencimiento se conservan.
 const PLANES_VALIDOS = ["gratis", "basico", "premium"];
 const esPlanVip = (plan) => plan === "premium";
 const planTieneFuncionesPremium = (plan) => plan === "basico" || plan === "premium";
@@ -415,7 +421,7 @@ function fechaVencimientoComision(periodo) {
 // cobros online): se cobra la mayor entre el mínimo y el porcentaje.
 //  · Gratis:  mínimo $300 o 2%
 //  · Básico: mínimo $100 o 0,8%
-//  · Premium:     no paga (se asigna a mano a amigos, familiares y socios)
+//  · Premium:     sin comisión Turnits (Mercado Pago cobra sus propias comisiones)
 const COMISION_POR_PLAN = {
   gratis:  { tasa: TURNITS_COMISION_TASA, minima: TURNITS_COMISION_MINIMA_ARS },
   basico:  { tasa: 0.008,                 minima: 100 },
@@ -1372,6 +1378,12 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 // REGISTRO — PASO 1
 // POST /registro/iniciar
 // ══════════════════════════════════════════════════════════════
+app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, planes:[
+  {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02},
+  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008},
+  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,miembros_adicionales:null,comision_minima:0,comision_tasa:0}
+]}));
+
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
   try {
     const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan, ref } = req.body;
@@ -1415,7 +1427,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       telefono:       telefono ? cleanPhone(telefono) : null,
       business_name:  business_name.trim(),
       password_hash,
-      plan:           plan === "basico" ? "basico" : "gratis",
+      plan:           PLANES_VALIDOS.includes(plan) ? plan : "gratis",
       referral_code:  normalizarReferralCode(ref),
       horarios:       horarios && typeof horarios === "object" ? horarios : null,
       duracion_turno: parseInt(duracion_turno) || 30,
@@ -1478,9 +1490,9 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
 
     const slug              = await generarSlugUnico(pendiente.business_name);
-    const planFinal         = pendiente.plan === "basico" ? "basico" : "gratis";
-    const fechaVencimiento  = planFinal === "basico" ? calcularVencimiento(DIAS_PRUEBA) : null;
-    const estadoSuscripcion = planFinal === "basico" ? "trial" : "activo";
+    const planFinal         = PLANES_VALIDOS.includes(pendiente.plan) ? pendiente.plan : "gratis";
+    const fechaVencimiento  = planFinal === "premium" ? new Date(Date.now() - 86400000).toISOString() : planFinal === "basico" ? calcularVencimiento(DIAS_PRUEBA) : null;
+    const estadoSuscripcion = planFinal === "premium" ? "suspendido" : planFinal === "basico" ? "trial" : "activo";
 
     const insertData = {
       nombre_persona:     pendiente.nombre_persona,
@@ -1571,6 +1583,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       slug:              nuevo.slug,
       business_name:     nuevo.business_name,
       plan:              nuevo.plan,
+      requiere_pago:     nuevo.plan === "premium",
       panel_url:         `${PANEL_URL}/${nuevo.slug}`,
       token,
       dias_prueba:       planFinal === "basico" ? DIAS_PRUEBA : null,
@@ -1894,7 +1907,7 @@ app.post("/login", limiterAuth, async (req, res) => {
 
     const diasRestantes      = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
     const suscripcionVencida = diasRestantes !== null && diasRestantes <= 0;
-    const esPremium          = user.plan === "basico";
+    const esPremium          = planTieneFuncionesPremium(user.plan);
 
     if (!isActivo(user.activo) && !suscripcionVencida) {
       return res.status(403).json({ success: false, error: "Este negocio está desactivado." });
@@ -6178,7 +6191,7 @@ const turnosHoyDetalle = turnosData
         dias_restantes:    diasRestantes,
         alerta:            diasRestantes !== null && diasRestantes <= 5 && diasRestantes > 0,
         vencida:           suscripcionVencida,
-        precio_renovacion: PRECIO_RENOVACION,
+        precio_renovacion: precioMensualPlan(user.plan),
       },
       businessName:   user.business_name,
       nombre_persona: user.nombre_persona,
@@ -7210,7 +7223,7 @@ app.get("/renovacion/info/:slug", async (req, res) => {
       plan_nombre: user.plan === "premium" ? "Premium" : user.plan === "basico" ? "Básico" : "Gratis",
       estado: suscripcionVencida ? "suspendido" : (user.estado_suscripcion || "activo"),
       fecha_vencimiento: user.fecha_vencimiento, dias_restantes: diasRestantes,
-      vencida: suscripcionVencida, precio_renovacion: PRECIO_RENOVACION,
+      vencida: suscripcionVencida, precio_renovacion: precioMensualPlan(user.plan),
     });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -7229,20 +7242,27 @@ app.post("/renovacion/checkout/:slug", async (req, res) => {
 
     if (error) throw error;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-    if (esPlanVip(user.plan)) return res.status(400).json({ success: false, error: "Tu cuenta Premium no requiere renovación." });
+    const planCompra = req.body?.plan || (user.plan === "premium" ? "premium" : "basico");
+    if (!["basico", "premium"].includes(planCompra)) return res.status(400).json({ success: false, error: "Elegí Básico o Premium." });
+    if (planCompra === "basico" && user.plan === "premium") {
+      const { count, error } = await supabase.from("equipo").select("id",{count:"exact",head:true}).eq("slug",slug).eq("es_dueño",false);
+      if (error) throw error;
+      if (count > 2) return res.status(403).json({success:false,error:"Básico permite 2 miembros adicionales. Reducí el equipo antes de cambiar de plan."});
+    }
+    const precio = precioMensualPlan(planCompra);
 
     const client   = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
     const pref     = new Preference(client);
     const response = await pref.create({ body: {
-      items: [{ title: `Turnits — Suscripción Básico (${user.business_name})`, unit_price: PRECIO_RENOVACION, quantity: 1, currency_id: "ARS" }],
+      items: [{ title: `Turnits — Suscripción ${nombrePlan(planCompra)} (${user.business_name})`, unit_price: precio, quantity: 1, currency_id: "ARS" }],
       payer: { email: user.email, name: `${user.nombre_persona || ""} ${user.apellido || ""}`.trim() },
-      metadata: { tipo: "renovacion_associe", slug, user_id: user.id },
+      metadata: { tipo: "renovacion_associe", slug, user_id: user.id, plan: planCompra, precio_ars: precio },
       notification_url: `${API_URL}/webhook/renovacion`,
       back_urls: { success: RENOVACION_SUCCESS, failure: RENOVACION_CANCEL, pending: RENOVACION_CANCEL },
       auto_return: "approved",
     }});
 
-    res.json({ success: true, payment_url: response.init_point, monto: PRECIO_RENOVACION });
+    res.json({ success: true, payment_url: response.init_point, monto: precio, plan: planCompra });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -7258,8 +7278,12 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
 
     if (fetchError) throw fetchError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
-    if (esPlanVip(user.plan)) return res.status(400).json({ success: false, error: "Tu cuenta Premium no se puede cambiar de plan desde el panel." });
 
+
+    const { count: miembros, error: equipoError } = await supabase.from("equipo")
+      .select("id", { count: "exact", head: true }).eq("slug", slug).eq("es_dueño", false);
+    if (equipoError) throw equipoError;
+    if (miembros > 0) return res.status(403).json({success:false,error:"El plan Gratis incluye sólo al titular. Eliminá los miembros adicionales antes de cambiar."});
     // FIX-UX/COMISIONES: acepta_transferencia/acepta_efectivo quedaban en
     // true después de bajar a gratis. El booking ya los rechaza igual
     // (chequeo plan !== "basico" en /reservar), pero dejarlos prendidos
@@ -7994,6 +8018,19 @@ async function procesarRenovacion(payData) {
   if (payData.status !== "approved") return;
   const slug = cleanSlug(payData.metadata?.slug || "");
   if (!slug) return;
+  const planCompra = payData.metadata?.plan || "basico"; // preferencias históricas
+  if (!["basico", "premium"].includes(planCompra)) return;
+  const precioEsperado = Number(payData.metadata?.precio_ars || precioMensualPlan(planCompra));
+  if (!Number.isFinite(precioEsperado) || precioEsperado <= 0 || payData.currency_id !== "ARS" || Number(payData.transaction_amount) < precioEsperado) {
+    console.error("Renovación rechazada: importe o moneda incorrectos."); return;
+  }
+  const { data: user, error: userError } = await supabase.from("usuarios")
+    .select("id, email, nombre_persona, plan, estado_suscripcion, fecha_vencimiento").eq("slug", slug).maybeSingle();
+  if (userError || !user || (payData.metadata?.user_id && payData.metadata.user_id !== user.id)) return;
+  if (planCompra === "basico") {
+    const { count, error } = await supabase.from("equipo").select("id", {count:"exact",head:true}).eq("slug",slug).eq("es_dueño",false);
+    if (error || count > 2) { console.error("Cambio a Básico requiere reducir el equipo; revisar pago", payData.id); return; }
+  }
 
   // FIX-IDEMPOTENCIA: MercadoPago puede (y suele) reintentar la notificación
   // de un mismo pago varias veces. Sin este chequeo, cada reintento volvía
@@ -8027,18 +8064,14 @@ async function procesarRenovacion(payData) {
     }
   }
 
-  const { data: user } = await supabase.from("usuarios")
-    .select("id, email, nombre_persona, plan, fecha_vencimiento").eq("slug", slug).maybeSingle();
-  if (!user) return;
-  if (esPlanVip(user.plan)) {
-    console.log(`ℹ️  Renovación ignorada: ${slug} es Premium y no vence.`);
-    return;
-  }
-
-  const fechaBase  = user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
+  const fechaBase  = user.plan === planCompra && user.estado_suscripcion !== "trial" && user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
   const nuevaFecha = calcularVencimiento(30, fechaBase);
 
-  await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: "basico", premium_promo: false }).eq("slug", slug);
+  const { error: updateError } = await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: planCompra, premium_promo: false }).eq("slug", slug);
+  if (updateError) {
+    if (paymentId) await supabase.from("renovaciones_procesadas").delete().eq("payment_id",paymentId);
+    throw updateError;
+  }
   invalidateCache(slug);
   console.log(`✅ Renovación aprobada: ${slug} → vence ${nuevaFecha}`);
 
@@ -8053,7 +8086,7 @@ async function procesarRenovacion(payData) {
     slug,
     tipo: "sistema",
     titulo: "Renovación aprobada",
-    mensaje: `Tu plan Básico se renovó correctamente. Nueva fecha de vencimiento: ${nuevaFecha}.`,
+    mensaje: `Tu plan ${nombrePlan(planCompra)} se renovó correctamente. Nueva fecha de vencimiento: ${nuevaFecha}.`,
     // FIX: es sobre la suscripción/cobro → pagos, no "inicio".
     data: { nuevaFecha, seccion: "pagos" },
   });
@@ -8450,9 +8483,8 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
 
     // REFERIDOS: quien tenía Básico solo por el mes de regalo vuelve al plan
     // gratis (igual que /renovacion/downgrade) en vez de quedar suspendido.
-    // Premium vencido: tampoco se compra (no tiene checkout), así que al vencer
-    // vuelve a gratis en vez de quedar suspendido esperando un pago de Básico.
-    const promoVencidos = (vencidos || []).filter((u) => u.premium_promo || esPlanVip(u.plan)).map((u) => u.slug);
+    // Las suscripciones mensuales vencidas se suspenden y pueden renovarse.
+    const promoVencidos = (vencidos || []).filter((u) => u.premium_promo).map((u) => u.slug);
     if (promoVencidos.length > 0) {
       await supabase.from("usuarios").update({
         plan: "gratis", estado_suscripcion: "activo", fecha_vencimiento: null,
@@ -8462,7 +8494,7 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
       promoVencidos.forEach((s) => invalidateCache(s));
     }
 
-    const slugs = (vencidos || []).filter((u) => !u.premium_promo && !esPlanVip(u.plan)).map((u) => u.slug);
+    const slugs = (vencidos || []).filter((u) => !u.premium_promo).map((u) => u.slug);
     if (slugs.length > 0) {
       await supabase.from("usuarios").update({ estado_suscripcion: "suspendido" }).in("slug", slugs);
       slugs.forEach((s) => invalidateCache(s));
@@ -8490,7 +8522,7 @@ app.get("/cron/check-vencimientos", requireAdminKey, async (req, res) => {
           tipo: "vencimiento",
           titulo: esPlanVip(u.plan) ? "Tu plan Premium está por vencer" : "Tu suscripción está por vencer",
           mensaje: esPlanVip(u.plan)
-            ? (dias === 1 ? "Tu plan Premium vence mañana." : "Tu plan Premium vence en 5 días.")
+            ? (dias === 1 ? "Tu plan Premium vence mañana. Renová para mantener el acceso." : "Tu plan Premium vence en 5 días. Podés renovarlo desde el panel.")
             : dias === 1
               ? "Tu plan Básico vence mañana. Renová para no perder acceso al panel."
               : "Tu plan Básico vence en 5 días. Renová cuando quieras desde el panel.",
