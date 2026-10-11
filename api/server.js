@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.11-avatares-catalogo";
+const PANEL_VERSION  = "2026.10.11-admin-catalogo-equipo";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -2690,23 +2690,32 @@ function validarServicioBody({ nombre, precio }) {
 // Sólo información pública de profesionales activos, con sus asignaciones reales.
 async function catalogoConProfesionales(slug,items,tipo) {
   if(!items?.length)return [];
-  const {data:equipo,error:ee}=await supabase.from('equipo').select('id,nombre,apellido,foto_url,color').eq('slug',slug).eq('activo',true).order('created_at',{ascending:true});if(ee)throw ee;
+  const {data:equipo,error:ee}=await supabase.from('equipo').select('id,nombre,apellido,foto_url,color,activo').eq('slug',slug).order('created_at',{ascending:true});if(ee)throw ee;
   if(!equipo?.length)return items.map(item=>({...item,profesionales:[]}));
   const ids=equipo.map(e=>e.id);
   let servicios=[],promos=[];
   if(tipo !== 'producto'){
-    const {data,error}=await supabase.from('servicio_equipo').select('servicio_id,equipo_id').in('equipo_id',ids);if(error)throw error;servicios=data || [];
+    const {data,error}=await supabase.from('servicio_equipo').select('servicio_id,equipo_id,precio_override,imagen_url_override,orden_override').in('equipo_id',ids);if(error)throw error;servicios=data || [];
   }
   if(tipo === 'promo'){
     const {data,error}=await supabase.from('promocion_equipo').select('promocion_id,equipo_id').in('equipo_id',ids).in('promocion_id',items.map(i=>i.id));if(error)throw error;promos=data || [];
   }
   const offers=(serviceId,memberId)=>servicios.some(v=>v.servicio_id===serviceId && v.equipo_id===memberId);
-  return items.map(item=>({...item,profesionales:equipo.filter(e=>{
+  return items.map(original=>{
+    const item={...original};
+    if(tipo === 'servicio' && item.owner_equipo_id){
+      const v=servicios.find(v=>v.servicio_id===item.id && v.equipo_id===item.owner_equipo_id);
+      if(v?.precio_override != null)item.precio=Number(v.precio_override);
+      if(v?.orden_override != null)item.orden=v.orden_override;
+      if(v?.imagen_url_override)item.imagen_url=v.imagen_url_override;
+    }
+    return {...item,creador:equipo.find(e=>e.id===item.owner_equipo_id) || null,profesionales:equipo.filter(e=>{
+    if(!isActivo(e.activo))return false;
     if(item.owner_equipo_id && item.owner_equipo_id !== e.id)return false;
     if(tipo === 'producto')return true;
     if(tipo === 'servicio')return offers(item.id,e.id);
     return (item.owner_equipo_id === e.id || promos.some(v=>v.promocion_id===item.id && v.equipo_id===e.id)) && (item.items || []).filter(i=>i.tipo==='servicio').every(i=>offers(i.id,e.id));
-  })}));
+  })};});
 }
 
 // GET /admin/servicios/:slug — todos los servicios del negocio (activos e inactivos)
@@ -2714,8 +2723,8 @@ app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const { data, error } = await supabase.from("servicios")
-      .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden")
-      .eq("slug", slug).is("owner_equipo_id",null)
+      .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden, owner_equipo_id")
+      .eq("slug", slug)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
 
@@ -2823,8 +2832,15 @@ app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
     if (error) throw error;
     if (!data) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
 
+    if(data.owner_equipo_id){
+      const variant={};
+      if(update.precio !== undefined)variant.precio_override=update.precio;
+      if(update.orden !== undefined)variant.orden_override=update.orden;
+      if(update.descripcion !== undefined)variant.imagen_url_override=String(update.descripcion || '').match(/^\[img:(.*?)\]/s)?.[1]?.trim() || null;
+      if(Object.keys(variant).length){const {error:ve}=await supabase.from('servicio_equipo').update(variant).eq('servicio_id',id).eq('equipo_id',data.owner_equipo_id);if(ve)throw ve;}
+    }
     invalidateCache(slugClean);
-    res.json({ success: true, servicio: { ...data, activo: isActivo(data.activo) } });
+    res.json({ success: true, servicio: (await catalogoConProfesionales(slugClean,[{...data,activo:isActivo(data.activo)}],"servicio"))[0] });
   } catch (e) {
     console.error("Error actualizando servicio:", e.message);
     res.status(500).json({ success: false, error: "No se pudo actualizar el servicio." });
@@ -3017,7 +3033,7 @@ app.get("/admin/extras/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     const { data, error } = await supabase.from("extras")
-      .select("*").eq("slug", slug).is("owner_equipo_id",null)
+      .select("*").eq("slug", slug)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
     res.json({ success: true, extras: await catalogoConProfesionales(slug,data || [],"producto") });
@@ -3196,10 +3212,11 @@ app.post("/admin/servicios/:id/extras", requireAuth, async (req, res) => {
     // Validar que el servicio y el extra sean del mismo negocio
     // (evita que alguien vincule un extra de otro negocio a mano).
     const [{ data: servicio }, { data: extra }] = await Promise.all([
-      supabase.from("servicios").select("id").eq("id", id).eq("slug", slugClean).maybeSingle(),
-      supabase.from("extras").select("id").eq("id", extra_id).eq("slug", slugClean).maybeSingle(),
+      supabase.from("servicios").select("id,owner_equipo_id").eq("id", id).eq("slug", slugClean).maybeSingle(),
+      supabase.from("extras").select("id,owner_equipo_id").eq("id", extra_id).eq("slug", slugClean).maybeSingle(),
     ]);
     if (!servicio) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
+    if(extra?.owner_equipo_id && extra.owner_equipo_id !== servicio?.owner_equipo_id)return res.status(400).json({success:false,error:"Un producto privado solo puede vincularse a los servicios de su creador."});
     if (!extra) return res.status(404).json({ success: false, error: "Producto no encontrado." });
  
     const { error } = await supabase.from("servicio_extras")
@@ -5890,7 +5907,7 @@ async function requirePromocionesPlan(req,res,next) {
   }catch{return res.status(500).json({success:false,error:"No pudimos verificar tu plan."});}
 }
 app.get('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
-  const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).is('owner_equipo_id',null).order('created_at',{ascending:false});
+  const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).order('created_at',{ascending:false});
   if(error) return res.status(500).json({success:false,error:error.code === '42P01' || error.code === 'PGRST205' ? 'Falta instalar Promociones.sql en Supabase.' : 'No se pudieron cargar las promociones.'});
   res.json({success:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo")});
 }));
@@ -5898,10 +5915,16 @@ async function promocionesGuardar(req,res) {
   try {
     const slug=cleanSlug(req.params.slug);let datos;
     try {promocionesValidar(req.body);} catch(e) {return res.status(400).json({success:false,error:e.message});}
-    datos=await promocionesPreparar(slug,req.body,req.empleado?.id || null);
-    datos.owner_equipo_id=req.empleado?.id || null;
+    let ownerId=req.empleado?.id || null;
+    if(req.params.id){
+      const {data:existing,error:xe}=await supabase.from('promociones').select('owner_equipo_id').eq('slug',slug).eq('id',req.params.id).maybeSingle();if(xe)throw xe;
+      if(!existing || (req.empleado && existing.owner_equipo_id !== req.empleado.id))return res.status(404).json({success:false,error:'Promoción no encontrada en tu perfil.'});
+      ownerId=existing.owner_equipo_id || null;
+    }
+    datos=await promocionesPreparar(slug,req.body,ownerId);
+    datos.owner_equipo_id=ownerId;
     let query=req.params.id ? supabase.from('promociones').update(datos).eq('slug',slug).eq('id',req.params.id) : supabase.from('promociones').insert(datos);
-    if(req.params.id)query=req.empleado ? query.eq('owner_equipo_id',req.empleado.id) : query.is('owner_equipo_id',null);
+    if(req.params.id)query=ownerId ? query.eq('owner_equipo_id',ownerId) : query.is('owner_equipo_id',null);
     const {data,error}=await query.select('*').maybeSingle();if(error) throw error;
     if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
     res.status(req.params.id ? 200 : 201).json({success:true,promocion:(await catalogoConProfesionales(slug,[data],"promo"))[0]});
@@ -5910,7 +5933,7 @@ async function promocionesGuardar(req,res) {
 app.post('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesGuardar);
 app.put('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promocionesGuardar);
 app.delete('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
-  const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('id',req.params.id).is('owner_equipo_id',null).select('id').maybeSingle();
+  const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('id',req.params.id).select('id').maybeSingle();
   if(error) return res.status(500).json({success:false,error:'No se pudo eliminar la promoción.'});
   if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
   res.json({success:true});
