@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.11-promos-equipo";
+const PANEL_VERSION  = "2026.10.11-productos-compartidos";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -2267,6 +2267,7 @@ async function resolverExtras(slugClean, servicioId, extraIdsRaw, cantidadesRaw,
     const { data: vinculos } = await supabase.from("servicio_extras")
       .select("extra_id").eq("servicio_id", servicioId).in("extra_id", [...permitidos]);
     permitidos = new Set((vinculos || []).map((v) => v.extra_id));
+    if(equipoId && UUID_REGEX.test(String(equipoId)))extrasDB.filter(e=>!e.owner_equipo_id).forEach(e=>permitidos.add(e.id));
   }
 
   const extras = extrasDB
@@ -2296,8 +2297,16 @@ app.get("/extras/:servicio_id", async (req, res) => {
  
     if (error) throw error;
  
-    const extras = (vinculos || [])
-      .map((v) => v.extras)
+    let compartidos=[];
+    if(UUID_REGEX.test(String(req.query.equipo_id || ""))){
+      const {data:servicio,error:se}=await supabase.from("servicios").select("slug,owner_equipo_id").eq("id",servicio_id).maybeSingle();if(se)throw se;
+      if(servicio && (!servicio.owner_equipo_id || servicio.owner_equipo_id === req.query.equipo_id)){
+        const {data:link,error:le}=await supabase.from("servicio_equipo").select("servicio_id").eq("servicio_id",servicio_id).eq("equipo_id",req.query.equipo_id).maybeSingle();if(le)throw le;
+        if(link){const {data,error:ce}=await supabase.from("extras").select("*").eq("slug",servicio.slug).is("owner_equipo_id",null).eq("activo",true);if(ce)throw ce;compartidos=data || [];}
+      }
+    }
+    const merged=new Map([...((vinculos || []).map(v=>v.extras)),...compartidos].filter(Boolean).map(e=>[e.id,e]));
+    const extras = [...merged.values()]
       .filter(e => e && (!e.owner_equipo_id || e.owner_equipo_id === req.query.equipo_id))
       .sort((a, b) => (a.orden || 0) - (b.orden || 0))
       .map(({ id, nombre, descripcion, precio, imagen_url }) => ({
@@ -5185,14 +5194,15 @@ function requireEmployeeCatalog(req,res,next) {
   if(!req.empleado.puede_crear_servicios)return res.status(403).json({success:false,error:"El titular no habilitó la gestión de tu catálogo."});
   next();
 }
-app.get("/empleado/:slug/extras", requireAuth, requireEmployeeCatalog, async (req, res) => {
+app.get("/empleado/:slug/extras", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
+    if(!req.empleado || req.empleado.slug !== slug)return res.status(403).json({success:false,error:"No autorizado para este perfil."});
     const { data, error } = await supabase.from("extras")
-      .select("*").eq("slug", slug).eq("owner_equipo_id", req.empleado.id)
+      .select("*").eq("slug", slug).or(`owner_equipo_id.is.null,owner_equipo_id.eq.${req.empleado.id}`)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
-    res.json({ success: true, extras: data || [] });
+    res.json({ success: true, extras: (data || []).map(e=>({...e,compartido:!e.owner_equipo_id,puede_editar:!!req.empleado.puede_crear_servicios && e.owner_equipo_id === req.empleado.id})) });
   } catch (e) {
     res.status(500).json({ success: false, error: "Error al obtener los productos." });
   }
@@ -5563,7 +5573,7 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
       if (servicioCreadoAhora) await supabase.from("servicios").delete().eq("id", servicio.id).eq("slug", slug);
       throw linkError;
     }
-    const {data:productos,error:productosError}=await supabase.from("extras").select("id").eq("slug",slug).eq("owner_equipo_id",miembro.id);if(productosError)throw productosError;
+    const {data:productos,error:productosError}=await supabase.from("extras").select("id").eq("slug",slug).or(`owner_equipo_id.is.null,owner_equipo_id.eq.${miembro.id}`);if(productosError)throw productosError;
     if(productos?.length){const {error:pe}=await supabase.from("servicio_extras").upsert(productos.map(x=>({servicio_id:servicio.id,extra_id:x.id})),{onConflict:"servicio_id,extra_id"});if(pe)throw pe;}
     invalidateCache(slug);
     res.status(201).json({ success: true, servicio: {
