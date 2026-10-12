@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.12-checkout-mobile-json-v4";
+const PANEL_VERSION  = "2026.10.12-reduccion-planes-v5";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -7586,12 +7586,6 @@ async function solicitarPreferenciaPlan(body, id) {
   if(!id && (!data.id || typeof data.init_point!=="string"))throw new Error("Mercado Pago no devolvió el enlace de pago. Volvé a intentar.");
   return data;
 }
-async function validarEquipoCompra(slug, plan) {
-  if(plan!=="basico")return;
-  const {count,error}=await supabase.from("equipo").select("id",{count:"exact",head:true}).eq("slug",slug).eq("es_dueño",false);
-  if(error)throw error;
-  if(count>2)throw new Error("Básico permite 2 integrantes adicionales. Reducí el equipo antes de comprar este plan.");
-}
 function compraParaPanel(c, email) {
   return {id:c.id,plan:c.plan,periodo:c.periodo,dias:c.dias,monto:c.importe,medio:c.medio,status:c.estado,email,
     public_key:c.medio==="tarjeta" ? process.env.MP_TURNERO_PUBLIC_KEY : undefined,payment_url:c.payment_url};
@@ -7638,6 +7632,9 @@ async function resultadoCompraPlan(c, pay) {
 app.get("/suscripcion/:slug", requireAuth, async(req,res)=>{
   try {
     const u=await usuarioCompraPlan(cleanSlug(req.params.slug));
+    const {data:miembros,error:teamError}=await supabase.from("equipo").select("id,nombre,apellido,created_at").eq("slug",u.slug).eq("es_dueño",false).order("created_at",{ascending:true,nullsFirst:false}).order("id",{ascending:true});
+    if(teamError)throw teamError;
+    const reducciones=Object.fromEntries([["gratis",0],["basico",2],["premium",null]].map(([plan,limite])=>[plan,{miembros_a_eliminar:limite===null?[]:(miembros || []).slice(limite).map(m=>({id:m.id,nombre:[m.nombre,m.apellido].filter(Boolean).join(" ")}))}]));
     const {data:compra,error}=await supabase.from("compras_planes").select("*").eq("usuario_id",u.id).in("estado",["nuevo","procesando","pending","unknown"]).maybeSingle();
     if(error)throw error;
     let retomada=compra;
@@ -7648,7 +7645,7 @@ app.get("/suscripcion/:slug", requireAuth, async(req,res)=>{
     }
     res.json({success:true,plan:u.plan,estado:u.estado_suscripcion,fecha_vencimiento:u.fecha_vencimiento,
       tarjeta_disponible:!!(process.env.MP_TURNERO_PUBLIC_KEY && MP_PLATFORM_TOKEN),
-      compra:retomada?compraParaPanel(retomada,u.email):null});
+      compra:retomada?compraParaPanel(retomada,u.email):null,reducciones});
   }catch(e){res.status(500).json({success:false,error:"No se pudo cargar la suscripción. Revisá la instalación del servidor y la base de datos."});}
 });
 app.post("/suscripcion/:slug/compra", limiterAuth, requireAuth, async(req,res)=>{
@@ -7659,7 +7656,6 @@ app.post("/suscripcion/:slug/compra", limiterAuth, requireAuth, async(req,res)=>
     const medio=req.body?.medio;
     if(!["tarjeta","mercadopago"].includes(medio))throw new Error("Elegí un medio de pago.");
     if(medio==="tarjeta" && !process.env.MP_TURNERO_PUBLIC_KEY)throw new Error("El pago con tarjeta no está configurado.");
-    await validarEquipoCompra(slug,oferta.plan);
     const {data:abierta,error:openError}=await supabase.from("compras_planes").select("*").eq("usuario_id",u.id).in("estado",["nuevo","procesando","pending","unknown"]).maybeSingle();
     if(openError)throw openError;
     if(abierta)return res.status(409).json({success:false,error:"Ya hay una compra abierta. Consultá su estado antes de crear otra.",compra:compraParaPanel(abierta,u.email)});
@@ -7735,7 +7731,6 @@ app.post("/suscripcion/:slug/compra/:id/pagar", limiterAuth, requireAuth, async(
     const methods=await methodsRes.json();
     if(!methods.some(m=>m.id===card.payment_method_id && ["credit_card","debit_card"].includes(m.payment_type_id)))
       return res.status(400).json({success:false,status:"nuevo",error:"Elegí una tarjeta de crédito o débito aceptada."});
-    await validarEquipoCompra(compra.slug,compra.plan);
     const {data:claim,error}=await supabase.from("compras_planes").update({estado:"procesando"}).eq("id",compra.id).eq("estado","nuevo").select("id");
     if(error)throw error;
     if(!claim?.length)return res.status(409).json({success:false,status:"unknown",error:"Hay un pago en curso. Consultá su estado."});
@@ -7778,11 +7773,6 @@ app.post("/renovacion/checkout/:slug", requireAuth, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
     const planCompra = req.body?.plan || (user.plan === "premium" ? "premium" : "basico");
     if (!["basico", "premium"].includes(planCompra)) return res.status(400).json({ success: false, error: "Elegí Básico o Premium." });
-    if (planCompra === "basico" && user.plan === "premium") {
-      const { count, error } = await supabase.from("equipo").select("id",{count:"exact",head:true}).eq("slug",slug).eq("es_dueño",false);
-      if (error) throw error;
-      if (count > 2) return res.status(403).json({success:false,error:"Básico permite 2 miembros adicionales. Reducí el equipo antes de cambiar de plan."});
-    }
     const precio = precioMensualPlan(planCompra);
 
     const client   = new MercadoPagoConfig({ accessToken: MP_PLATFORM_TOKEN });
@@ -7814,25 +7804,8 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
 
-    const { count: miembros, error: equipoError } = await supabase.from("equipo")
-      .select("id", { count: "exact", head: true }).eq("slug", slug).eq("es_dueño", false);
-    if (equipoError) throw equipoError;
-    if (miembros > 0) return res.status(403).json({success:false,error:"El plan Gratis incluye sólo al titular. Eliminá los miembros adicionales antes de cambiar."});
-    // FIX-UX/COMISIONES: acepta_transferencia/acepta_efectivo quedaban en
-    // true después de bajar a gratis. El booking ya los rechaza igual
-    // (chequeo plan !== "basico" en /reservar), pero dejarlos prendidos
-    // en la base hace que otras pantallas (ej. el checklist de onboarding)
-    // sigan mostrando esos métodos como "configurados" cuando en realidad
-    // el negocio no puede cobrarlos más. Se apagan acá para que todo el
-    // panel quede consistente con el plan real.
-    const { error: updateError } = await supabase.from("usuarios").update({
-      plan:                 "gratis",
-      estado_suscripcion:   "activo",
-      fecha_vencimiento:    null,
-      metodo_pago:          "total",
-      acepta_transferencia: false, acepta_efectivo: false, agenda_sin_pagos: false, datos_bancarios: {},
-      premium_promo:        false,
-    }).eq("slug", slug);
+    // El ajuste de límites y el cambio de plan se confirman juntos.
+    const { error: updateError } = await supabase.rpc("reducir_plan_gratis",{p_usuario_id:user.id,p_slug:slug});
 
     if (updateError) throw updateError;
     invalidateCache(slug);
