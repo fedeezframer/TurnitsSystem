@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.12-checkout-gracias-v3";
+const PANEL_VERSION  = "2026.10.12-checkout-mobile-json-v4";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -7570,6 +7570,22 @@ async function usuarioCompraPlan(slug) {
   if(!data)throw new Error("Negocio no encontrado.");
   return data;
 }
+// Preferences usa distintas firmas de update según la versión del SDK.
+// Enviar JSON explícito evita que se omita el cuerpo al cambiar de medio.
+async function solicitarPreferenciaPlan(body, id) {
+  const response=await fetch(`https://api.mercadopago.com/checkout/preferences${id ? "/"+encodeURIComponent(id) : ""}`,{
+    method:id ? "PUT" : "POST",
+    headers:{Authorization:`Bearer ${MP_PLATFORM_TOKEN}`,"Content-Type":"application/json",Accept:"application/json"},
+    body:JSON.stringify(body),signal:AbortSignal.timeout(25000)
+  });
+  const data=await response.json().catch(()=>null);
+  if(!response.ok || !data) {
+    console.error("Mercado Pago / preferencias de planes:", {operacion:id?"actualizar":"crear",status:response.status,error:data?.error,message:data?.message});
+    throw new Error(id ? "No se pudo cerrar el enlace de Mercado Pago. Volvé a intentar cambiar de método." : "No se pudo preparar el checkout de Mercado Pago. Volvé a intentar.");
+  }
+  if(!id && (!data.id || typeof data.init_point!=="string"))throw new Error("Mercado Pago no devolvió el enlace de pago. Volvé a intentar.");
+  return data;
+}
 async function validarEquipoCompra(slug, plan) {
   if(plan!=="basico")return;
   const {count,error}=await supabase.from("equipo").select("id",{count:"exact",head:true}).eq("slug",slug).eq("es_dueño",false);
@@ -7651,13 +7667,15 @@ app.post("/suscripcion/:slug/compra", limiterAuth, requireAuth, async(req,res)=>
     if(error)throw error;
     if(medio==="mercadopago") {
       try {
-        const response=await new Preference(new MercadoPagoConfig({accessToken:MP_PLATFORM_TOKEN})).create({body:{
-          items:[{title:`Turnits — Plan ${nombrePlan(c.plan)} ${c.periodo}`,unit_price:c.importe,quantity:1,currency_id:"ARS"}],
+        const importe=Number(c.importe);
+        if(!Number.isSafeInteger(importe) || importe<=0)throw new Error("El importe del plan no es válido.");
+        const response=await solicitarPreferenciaPlan({
+          items:[{title:`Turnits — Plan ${nombrePlan(c.plan)} ${c.periodo}`,unit_price:importe,quantity:1,currency_id:"ARS"}],
           payer:{email:u.email},external_reference:c.id,
-          metadata:{tipo:"renovacion_associe",compra_id:c.id,user_id:u.id,slug,plan:c.plan,periodo:c.periodo,precio_ars:c.importe},
+          metadata:{tipo:"renovacion_associe",compra_id:c.id,user_id:u.id,slug,plan:c.plan,periodo:c.periodo,precio_ars:importe},
           notification_url:`${API_URL}/webhook/renovacion`,
           back_urls:{success:`${PANEL_URL}/${slug}?status=renovacion_ok`,failure:`${PANEL_URL}/${slug}?status=renovacion_cancel`,pending:`${PANEL_URL}/${slug}?status=renovacion_pending`},auto_return:"approved"
-        }});
+        });
         const {error:saveError}=await supabase.from("compras_planes").update({preference_id:response.id,payment_url:response.init_point,estado:"nuevo"}).eq("id",c.id);
         if(saveError)throw saveError;
         c.payment_url=response.init_point;c.estado="nuevo";
@@ -7677,7 +7695,7 @@ app.post("/suscripcion/:slug/compra/:id/cancelar", requireAuth, async(req,res)=>
       }
       if(compra.preference_id) {
         const ahora=new Date();
-        await new Preference(new MercadoPagoConfig({accessToken:MP_PLATFORM_TOKEN})).update({id:compra.preference_id,body:{expires:true,expiration_date_from:new Date(ahora.getTime()-86400000).toISOString(),expiration_date_to:ahora.toISOString()}});
+        await solicitarPreferenciaPlan({expires:true,expiration_date_from:new Date(ahora.getTime()-86400000).toISOString(),expiration_date_to:ahora.toISOString()},compra.preference_id);
       }
       const posterior=await leerPagoCompra(compra);
       if(posterior && ["approved","pending","in_process","authorized"].includes(posterior.status)) {
