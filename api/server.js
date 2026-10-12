@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.12-popup-planes-anuales";
+const PANEL_VERSION  = "2026.10.12-checkout-gracias-v3";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -7599,7 +7599,14 @@ async function leerPagoCompra(c) {
   return results.find(p=>p.status==="approved") || results.find(p=>["pending","in_process","authorized"].includes(p.status)) || results[0] || null;
 }
 async function resultadoCompraPlan(c, pay) {
-  if(!pay)return {success:true,status:c.estado==="nuevo"?"nuevo":"unknown",message:"Todavía no pudimos confirmar el pago. Consultá el estado antes de volver a pagar."};
+  if(!pay) {
+    if(c.medio==="mercadopago") {
+      const {error}=await supabase.from("compras_planes").update({estado:"nuevo"}).eq("id",c.id).in("estado",["nuevo","pending","unknown"]).is("fecha_activada",null);
+      if(error)throw error;
+      return {success:true,status:"nuevo"};
+    }
+    return {success:true,status:c.estado==="nuevo"?"nuevo":"unknown"};
+  }
   if(pay.external_reference!==c.id || pay.metadata?.compra_id!==c.id || pay.metadata?.user_id!==c.usuario_id || pay.currency_id!=="ARS" || Number(pay.transaction_amount)!==Number(c.importe))
     throw new Error("El pago no coincide con la compra.");
   if(pay.status==="approved") {
@@ -7617,9 +7624,15 @@ app.get("/suscripcion/:slug", requireAuth, async(req,res)=>{
     const u=await usuarioCompraPlan(cleanSlug(req.params.slug));
     const {data:compra,error}=await supabase.from("compras_planes").select("*").eq("usuario_id",u.id).in("estado",["nuevo","procesando","pending","unknown"]).maybeSingle();
     if(error)throw error;
+    let retomada=compra;
+    if(!retomada && req.query?.retorno==="1") {
+      const {data:ultima,error:ultimoError}=await supabase.from("compras_planes").select("*").eq("usuario_id",u.id).order("created_at",{ascending:false}).limit(1).maybeSingle();
+      if(ultimoError)throw ultimoError;
+      retomada=ultima;
+    }
     res.json({success:true,plan:u.plan,estado:u.estado_suscripcion,fecha_vencimiento:u.fecha_vencimiento,
       tarjeta_disponible:!!(process.env.MP_TURNERO_PUBLIC_KEY && MP_PLATFORM_TOKEN),
-      compra:compra?compraParaPanel(compra,u.email):null});
+      compra:retomada?compraParaPanel(retomada,u.email):null});
   }catch(e){res.status(500).json({success:false,error:"No se pudo cargar la suscripción. Revisá la instalación del servidor y la base de datos."});}
 });
 app.post("/suscripcion/:slug/compra", limiterAuth, requireAuth, async(req,res)=>{
@@ -7645,9 +7658,9 @@ app.post("/suscripcion/:slug/compra", limiterAuth, requireAuth, async(req,res)=>
           notification_url:`${API_URL}/webhook/renovacion`,
           back_urls:{success:`${PANEL_URL}/${slug}?status=renovacion_ok`,failure:`${PANEL_URL}/${slug}?status=renovacion_cancel`,pending:`${PANEL_URL}/${slug}?status=renovacion_pending`},auto_return:"approved"
         }});
-        const {error:saveError}=await supabase.from("compras_planes").update({preference_id:response.id,payment_url:response.init_point,estado:"pending"}).eq("id",c.id);
+        const {error:saveError}=await supabase.from("compras_planes").update({preference_id:response.id,payment_url:response.init_point,estado:"nuevo"}).eq("id",c.id);
         if(saveError)throw saveError;
-        c.payment_url=response.init_point;c.estado="pending";
+        c.payment_url=response.init_point;c.estado="nuevo";
       }catch(e){await supabase.from("compras_planes").update({estado:"cancelled"}).eq("id",c.id);throw e;}
     }
     res.json({success:true,compra:compraParaPanel(c,u.email)});
@@ -7685,7 +7698,7 @@ app.post("/suscripcion/:slug/compra/:id/cancelar", requireAuth, async(req,res)=>
 app.get("/suscripcion/:slug/compra/:id/estado", requireAuth, async(req,res)=>{
   try {
     const {compra}=await compraDelTitular(req);
-    if(compra.estado==="nuevo")return res.json({success:true,status:"nuevo"});
+    if(compra.estado==="nuevo" && compra.medio!=="mercadopago")return res.json({success:true,status:"nuevo"});
     res.json(await resultadoCompraPlan(compra,await leerPagoCompra(compra)));
   }catch(e){res.status(503).json({success:false,status:"unknown",error:e.message || "No se pudo confirmar el pago."});}
 });
