@@ -36,7 +36,7 @@ const API_URL        = process.env.API_URL || "https://negosocio.onrender.com";
 // Versión vigente del panel (componente de Framer). Debe coincidir con
 // PANEL_BUILD_VERSION en PanelTurnits.tsx para activar la actualización
 // automática en sesiones que quedaron abiertas.
-const PANEL_VERSION  = "2026.10.11-admin-catalogo-equipo";
+const PANEL_VERSION  = "2026.10.12-popup-planes-anuales";
 
 const DIAS_PRUEBA        = parseInt(process.env.DIAS_PRUEBA       || "30");
 const PRECIO_BASICO = Number(process.env.PRECIO_BASICO || "19900");
@@ -46,6 +46,7 @@ if (![PRECIO_BASICO, PRECIO_PREMIUM].every(p => Number.isSafeInteger(p) && p > 0
 }
 const PRECIO_RENOVACION = PRECIO_BASICO; // compatibilidad interna
 const precioMensualPlan = plan => plan === "premium" ? PRECIO_PREMIUM : PRECIO_BASICO;
+const precioAnualPlan = plan => Math.round(precioMensualPlan(plan) * 12 * 67 / 100);
 const nombrePlan = plan => plan === "premium" ? "Premium" : plan === "basico" ? "Básico" : "Gratis";
 // Tope de saldo del plan Gratis: equivalente a un mes de Básico.
 const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 9000);
@@ -1384,8 +1385,8 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 // ══════════════════════════════════════════════════════════════
 app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:300,tasa:0.02}, planes:[
   {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02,clientes_visibles:10,finanzas:true,temas:false,promociones:false,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
-  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
-  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,miembros_adicionales:null,comision_minima:0,comision_tasa:0,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:false,soporte:"prioritario"}
+  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,precio_anual:precioAnualPlan("basico"),descuento_anual:33,dias_anual:365,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
+  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,precio_anual:precioAnualPlan("premium"),descuento_anual:33,dias_anual:365,miembros_adicionales:null,comision_minima:0,comision_tasa:0,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:false,soporte:"prioritario"}
 ]}));
 
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
@@ -7557,7 +7558,162 @@ app.get("/renovacion/info/:slug", async (req, res) => {
   }
 });
 
-app.post("/renovacion/checkout/:slug", async (req, res) => {
+// Compras del panel: precios y duración siempre calculados por el servidor.
+function condicionesCompraPlan(plan, periodo = "mensual") {
+  if (!["basico", "premium"].includes(plan) || !["mensual", "anual"].includes(periodo)) throw new Error("Elegí un plan y período válidos.");
+  const mensual = precioMensualPlan(plan);
+  return { plan, periodo, dias: periodo === "anual" ? 365 : 30, importe: periodo === "anual" ? Math.round(mensual * 12 * 67 / 100) : mensual };
+}
+async function usuarioCompraPlan(slug) {
+  const {data,error} = await supabase.from("usuarios").select("id,slug,email,nombre_persona,apellido,business_name,plan,estado_suscripcion,fecha_vencimiento").eq("slug",slug).maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error("Negocio no encontrado.");
+  return data;
+}
+async function validarEquipoCompra(slug, plan) {
+  if(plan!=="basico")return;
+  const {count,error}=await supabase.from("equipo").select("id",{count:"exact",head:true}).eq("slug",slug).eq("es_dueño",false);
+  if(error)throw error;
+  if(count>2)throw new Error("Básico permite 2 integrantes adicionales. Reducí el equipo antes de comprar este plan.");
+}
+function compraParaPanel(c, email) {
+  return {id:c.id,plan:c.plan,periodo:c.periodo,dias:c.dias,monto:c.importe,medio:c.medio,status:c.estado,email,
+    public_key:c.medio==="tarjeta" ? process.env.MP_TURNERO_PUBLIC_KEY : undefined,payment_url:c.payment_url};
+}
+async function compraDelTitular(req) {
+  const slug=cleanSlug(req.params.slug);
+  const user=await usuarioCompraPlan(slug);
+  const {data,error}=await supabase.from("compras_planes").select("*").eq("id",req.params.id).eq("usuario_id",user.id).maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error("Compra no encontrada.");
+  return {user,compra:data};
+}
+async function leerPagoCompra(c) {
+  const url=c.payment_id ? `https://api.mercadopago.com/v1/payments/${encodeURIComponent(c.payment_id)}` :
+    `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(c.id)}&sort=date_created&criteria=desc`;
+  const response=await fetch(url,{headers:{Authorization:`Bearer ${MP_PLATFORM_TOKEN}`},signal:AbortSignal.timeout(20000)});
+  if(!response.ok)throw new Error("No se pudo consultar Mercado Pago.");
+  const data=await response.json();
+  if(c.payment_id)return data;
+  const results=Array.isArray(data.results)?data.results:[];
+  return results.find(p=>p.status==="approved") || results.find(p=>["pending","in_process","authorized"].includes(p.status)) || results[0] || null;
+}
+async function resultadoCompraPlan(c, pay) {
+  if(!pay)return {success:true,status:c.estado==="nuevo"?"nuevo":"unknown",message:"Todavía no pudimos confirmar el pago. Consultá el estado antes de volver a pagar."};
+  if(pay.external_reference!==c.id || pay.metadata?.compra_id!==c.id || pay.metadata?.user_id!==c.usuario_id || pay.currency_id!=="ARS" || Number(pay.transaction_amount)!==Number(c.importe))
+    throw new Error("El pago no coincide con la compra.");
+  if(pay.status==="approved") {
+    const activation=await procesarRenovacion(pay);
+    if(!activation)throw new Error("El pago está aprobado, pero falta activar el plan. Consultá nuevamente o contactá a soporte.");
+    return {success:true,status:"approved",plan:c.plan,fecha_vencimiento:activation.fecha_vencimiento,message:"Pago aprobado. Tu plan ya está activo."};
+  }
+  const status=["rejected","cancelled","refunded","charged_back"].includes(pay.status)?pay.status:"pending";
+  const {error}=await supabase.from("compras_planes").update({estado:status,payment_id:String(pay.id)}).eq("id",c.id).is("fecha_activada",null);
+  if(error)throw error;
+  return {success:true,status,message:status==="pending"?"Mercado Pago está revisando el pago. Tu plan se activará cuando se apruebe.":"El pago no se aprobó. Podés volver a elegir un medio de pago."};
+}
+app.get("/suscripcion/:slug", requireAuth, async(req,res)=>{
+  try {
+    const u=await usuarioCompraPlan(cleanSlug(req.params.slug));
+    const {data:compra,error}=await supabase.from("compras_planes").select("*").eq("usuario_id",u.id).in("estado",["nuevo","procesando","pending","unknown"]).maybeSingle();
+    if(error)throw error;
+    res.json({success:true,plan:u.plan,estado:u.estado_suscripcion,fecha_vencimiento:u.fecha_vencimiento,
+      tarjeta_disponible:!!(process.env.MP_TURNERO_PUBLIC_KEY && MP_PLATFORM_TOKEN),
+      compra:compra?compraParaPanel(compra,u.email):null});
+  }catch(e){res.status(500).json({success:false,error:"No se pudo cargar la suscripción. Revisá la instalación del servidor y la base de datos."});}
+});
+app.post("/suscripcion/:slug/compra", limiterAuth, requireAuth, async(req,res)=>{
+  try {
+    if(!MP_PLATFORM_TOKEN)throw new Error("Los pagos de planes todavía no están configurados.");
+    const slug=cleanSlug(req.params.slug),u=await usuarioCompraPlan(slug);
+    const oferta=condicionesCompraPlan(req.body?.plan,req.body?.periodo || "mensual");
+    const medio=req.body?.medio;
+    if(!["tarjeta","mercadopago"].includes(medio))throw new Error("Elegí un medio de pago.");
+    if(medio==="tarjeta" && !process.env.MP_TURNERO_PUBLIC_KEY)throw new Error("El pago con tarjeta no está configurado.");
+    await validarEquipoCompra(slug,oferta.plan);
+    const {data:abierta,error:openError}=await supabase.from("compras_planes").select("*").eq("usuario_id",u.id).in("estado",["nuevo","procesando","pending","unknown"]).maybeSingle();
+    if(openError)throw openError;
+    if(abierta)return res.status(409).json({success:false,error:"Ya hay una compra abierta. Consultá su estado antes de crear otra.",compra:compraParaPanel(abierta,u.email)});
+    const {data:c,error}=await supabase.from("compras_planes").insert({usuario_id:u.id,slug,...oferta,medio}).select("*").single();
+    if(error)throw error;
+    if(medio==="mercadopago") {
+      try {
+        const response=await new Preference(new MercadoPagoConfig({accessToken:MP_PLATFORM_TOKEN})).create({body:{
+          items:[{title:`Turnits — Plan ${nombrePlan(c.plan)} ${c.periodo}`,unit_price:c.importe,quantity:1,currency_id:"ARS"}],
+          payer:{email:u.email},external_reference:c.id,
+          metadata:{tipo:"renovacion_associe",compra_id:c.id,user_id:u.id,slug,plan:c.plan,periodo:c.periodo,precio_ars:c.importe},
+          notification_url:`${API_URL}/webhook/renovacion`,
+          back_urls:{success:`${PANEL_URL}/${slug}?status=renovacion_ok`,failure:`${PANEL_URL}/${slug}?status=renovacion_cancel`,pending:`${PANEL_URL}/${slug}?status=renovacion_pending`},auto_return:"approved"
+        }});
+        const {error:saveError}=await supabase.from("compras_planes").update({preference_id:response.id,payment_url:response.init_point,estado:"pending"}).eq("id",c.id);
+        if(saveError)throw saveError;
+        c.payment_url=response.init_point;c.estado="pending";
+      }catch(e){await supabase.from("compras_planes").update({estado:"cancelled"}).eq("id",c.id);throw e;}
+    }
+    res.json({success:true,compra:compraParaPanel(c,u.email)});
+  }catch(e){res.status(400).json({success:false,error:e.code==="23505"?"Hay otra compra en curso. Volvé a abrir Planes para consultarla.":e.message || "No se pudo preparar el pago."});}
+});
+app.post("/suscripcion/:slug/compra/:id/cancelar", requireAuth, async(req,res)=>{
+  try {
+    const {compra}=await compraDelTitular(req);
+    const {data,error}=await supabase.from("compras_planes").update({estado:"cancelled"}).eq("id",compra.id).eq("estado","nuevo").select("id");
+    if(error)throw error;
+    if(!data?.length)return res.status(409).json({success:false,error:"El pago ya se inició; primero consultá su estado."});
+    res.json({success:true});
+  }catch(e){res.status(400).json({success:false,error:e.message});}
+});
+app.get("/suscripcion/:slug/compra/:id/estado", requireAuth, async(req,res)=>{
+  try {
+    const {compra}=await compraDelTitular(req);
+    if(compra.estado==="nuevo")return res.json({success:true,status:"nuevo"});
+    res.json(await resultadoCompraPlan(compra,await leerPagoCompra(compra)));
+  }catch(e){res.status(503).json({success:false,status:"unknown",error:e.message || "No se pudo confirmar el pago."});}
+});
+app.post("/suscripcion/:slug/compra/:id/pagar", limiterAuth, requireAuth, async(req,res)=>{
+  let compra;
+  try {
+    ({compra}=await compraDelTitular(req));
+    if(compra.medio!=="tarjeta")throw new Error("Esta compra utiliza el checkout de Mercado Pago.");
+    if(compra.estado!=="nuevo")return res.json(await resultadoCompraPlan(compra,await leerPagoCompra(compra)));
+    const card=req.body?.card;
+    if(typeof card?.token!=="string" || !/^[a-zA-Z0-9_-]{1,300}$/.test(card.token) || typeof card.payment_method_id!=="string" ||
+      !Number.isInteger(Number(card.installments)) || Number(card.installments)<1 || Number(card.installments)>48 || !validateEmail(card.payer?.email || ""))
+      return res.status(400).json({success:false,status:"nuevo",error:"Revisá los datos del formulario de tarjeta."});
+    const methodsRes=await fetch("https://api.mercadopago.com/v1/payment_methods",{headers:{Authorization:`Bearer ${MP_PLATFORM_TOKEN}`},signal:AbortSignal.timeout(20000)});
+    if(!methodsRes.ok)throw new Error("No se pudieron verificar los medios de pago.");
+    const methods=await methodsRes.json();
+    if(!methods.some(m=>m.id===card.payment_method_id && ["credit_card","debit_card"].includes(m.payment_type_id)))
+      return res.status(400).json({success:false,status:"nuevo",error:"Elegí una tarjeta de crédito o débito aceptada."});
+    await validarEquipoCompra(compra.slug,compra.plan);
+    const {data:claim,error}=await supabase.from("compras_planes").update({estado:"procesando"}).eq("id",compra.id).eq("estado","nuevo").select("id");
+    if(error)throw error;
+    if(!claim?.length)return res.status(409).json({success:false,status:"unknown",error:"Hay un pago en curso. Consultá su estado."});
+    compra.estado="procesando";
+    const body={transaction_amount:compra.importe,token:card.token,payment_method_id:card.payment_method_id,installments:Number(card.installments),
+      ...(card.issuer_id?{issuer_id:String(card.issuer_id)}:{}),
+      payer:{email:card.payer.email,...(card.payer.identification?{identification:{type:String(card.payer.identification.type || "").slice(0,20),number:String(card.payer.identification.number || "").slice(0,30)}}:{})},
+      description:`Turnits — Plan ${nombrePlan(compra.plan)} ${compra.periodo}`,external_reference:compra.id,
+      metadata:{tipo:"renovacion_associe",compra_id:compra.id,user_id:compra.usuario_id,slug:compra.slug,plan:compra.plan,precio_ars:compra.importe},notification_url:`${API_URL}/webhook/renovacion`};
+    const response=await fetch("https://api.mercadopago.com/v1/payments",{method:"POST",headers:{Authorization:`Bearer ${MP_PLATFORM_TOKEN}`,"Content-Type":"application/json","X-Idempotency-Key":compra.id},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
+    const pay=await response.json();
+    if(!response.ok) {
+      if(response.status>=400 && response.status<500 && ![408,409,429].includes(response.status) && !pay.id) {
+        const {error:rejectError}=await supabase.from("compras_planes").update({estado:"rejected"}).eq("id",compra.id).is("fecha_activada",null);
+        if(rejectError)throw rejectError;
+        return res.json({success:true,status:"rejected",message:"Mercado Pago no aceptó esta solicitud. Revisá los datos o elegí otro medio de pago."});
+      }
+      throw new Error("Mercado Pago no confirmó el resultado. Consultá el estado antes de repetir el pago.");
+    }
+    const {error:saveError}=await supabase.from("compras_planes").update({payment_id:String(pay.id)}).eq("id",compra.id);
+    if(saveError)throw saveError;
+    res.json(await resultadoCompraPlan(compra,pay));
+  }catch(e){
+    if(compra?.estado==="procesando")await supabase.from("compras_planes").update({estado:"unknown"}).eq("id",compra.id).is("fecha_activada",null);
+    res.status(503).json({success:false,status:compra?.estado==="nuevo"?"nuevo":"unknown",error:e.message || "No se pudo confirmar el pago. Consultá su estado."});
+  }
+});
+
+app.post("/renovacion/checkout/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
@@ -8343,81 +8499,28 @@ app.post("/webhook/mp", async (req, res) => {
 });
 
 async function procesarRenovacion(payData) {
-  if (payData.status !== "approved") return;
-  const slug = cleanSlug(payData.metadata?.slug || "");
-  if (!slug) return;
-  const planCompra = payData.metadata?.plan || "basico"; // preferencias históricas
-  if (!["basico", "premium"].includes(planCompra)) return;
-  const precioEsperado = Number(payData.metadata?.precio_ars || precioMensualPlan(planCompra));
-  if (!Number.isFinite(precioEsperado) || precioEsperado <= 0 || payData.currency_id !== "ARS" || Number(payData.transaction_amount) < precioEsperado) {
-    console.error("Renovación rechazada: importe o moneda incorrectos."); return;
+  if(payData.status!=="approved" || !payData.id || payData.metadata?.tipo!=="renovacion_associe")return null;
+  let slug=cleanSlug(payData.metadata?.slug || ""),planCompra=payData.metadata?.plan || "basico",dias=30,compra=null;
+  let precioEsperado=Number(payData.metadata?.precio_ars || precioMensualPlan(planCompra));
+  if(payData.metadata?.compra_id) {
+    const {data,error}=await supabase.from("compras_planes").select("*").eq("id",payData.metadata.compra_id).maybeSingle();
+    if(error)throw error;
+    if(!data || payData.external_reference!==data.id || payData.metadata.user_id!==data.usuario_id)throw new Error("Compra de suscripción inválida.");
+    compra=data;slug=data.slug;planCompra=data.plan;dias=data.dias;precioEsperado=data.importe;
   }
-  const { data: user, error: userError } = await supabase.from("usuarios")
-    .select("id, email, nombre_persona, plan, estado_suscripcion, fecha_vencimiento").eq("slug", slug).maybeSingle();
-  if (userError || !user || (payData.metadata?.user_id && payData.metadata.user_id !== user.id)) return;
-  if (planCompra === "basico") {
-    const { count, error } = await supabase.from("equipo").select("id", {count:"exact",head:true}).eq("slug",slug).eq("es_dueño",false);
-    if (error || count > 2) { console.error("Cambio a Básico requiere reducir el equipo; revisar pago", payData.id); return; }
-  }
-
-  // FIX-IDEMPOTENCIA: MercadoPago puede (y suele) reintentar la notificación
-  // de un mismo pago varias veces. Sin este chequeo, cada reintento volvía
-  // a sumar 30 días de más al vencimiento del negocio.
-  //
-  // Se "reserva" el payment_id primero con un insert en una tabla con
-  // columna UNIQUE (payment_id). Si el insert falla por conflicto, es
-  // porque este pago ya fue procesado antes → se corta acá sin tocar
-  // fecha_vencimiento. Esto también cubre el caso de dos webhooks para el
-  // mismo pago llegando casi al mismo tiempo: sólo uno de los dos gana el
-  // insert, el otro se corta.
-  //
-  // Requiere la tabla (crear una sola vez en Supabase):
-  //   create table renovaciones_procesadas (
-  //     payment_id text primary key,
-  //     slug text not null,
-  //     created_at timestamptz not null default now()
-  //   );
-  const paymentId = String(payData.id || "");
-  if (paymentId) {
-    const { error: claimError } = await supabase
-      .from("renovaciones_procesadas")
-      .insert([{ payment_id: paymentId, slug }]);
-    if (claimError) {
-      if (claimError.code === "23505") {
-        console.log(`↩️  Renovación ${paymentId} ya había sido procesada, se ignora el duplicado.`);
-      } else {
-        console.error("Error registrando renovación procesada:", claimError.message);
-      }
-      return;
-    }
-  }
-
-  const fechaBase  = user.plan === planCompra && user.estado_suscripcion !== "trial" && user.fecha_vencimiento && new Date(user.fecha_vencimiento) > new Date() ? user.fecha_vencimiento : null;
-  const nuevaFecha = calcularVencimiento(30, fechaBase);
-
-  const { error: updateError } = await supabase.from("usuarios").update({ fecha_vencimiento: nuevaFecha, estado_suscripcion: "activo", plan: planCompra, premium_promo: false }).eq("slug", slug);
-  if (updateError) {
-    if (paymentId) await supabase.from("renovaciones_procesadas").delete().eq("payment_id",paymentId);
-    throw updateError;
-  }
+  if(!slug || !["basico","premium"].includes(planCompra) || !Number.isFinite(precioEsperado) || precioEsperado<=0 || payData.currency_id!=="ARS" || Number(payData.transaction_amount)!==precioEsperado)
+    throw new Error("El importe o la moneda de la suscripción no coincide.");
+  const user=await usuarioCompraPlan(slug);
+  if((payData.metadata?.user_id && payData.metadata.user_id!==user.id) || (compra && compra.usuario_id!==user.id))throw new Error("El pago pertenece a otra cuenta.");
+  const {data:result,error}=await supabase.rpc("activar_compra_plan",{p_usuario_id:user.id,p_slug:slug,p_plan:planCompra,p_dias:dias,p_payment_id:String(payData.id),p_importe:precioEsperado,p_compra_id:compra?.id || null});
+  if(error)throw error;
   invalidateCache(slug);
-  console.log(`✅ Renovación aprobada: ${slug} → vence ${nuevaFecha}`);
-
-  if (user.email) {
-    fetch(APPS_SCRIPT_URL, {
-      method: "POST", headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ action: "renovacionAprobada", adminEmail: user.email, nombre: user.nombre_persona || "Cliente", slug, nuevaFecha }),
-    }).catch((e) => console.error("Error mail renovación:", e.message));
+  if(result?.aplicada) {
+    const nuevaFecha=result.fecha_vencimiento;
+    if(user.email && APPS_SCRIPT_URL)fetch(APPS_SCRIPT_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action:"renovacionAprobada",adminEmail:user.email,nombre:user.nombre_persona || "Cliente",slug,nuevaFecha})}).catch(()=>{});
+    crearNotificacion({slug,tipo:"sistema",titulo:"Plan activado",mensaje:`Tu Plan ${nombrePlan(planCompra)} ${compra?.periodo || "mensual"} está activo. Vence el ${new Date(nuevaFecha).toLocaleDateString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})}.`,data:{nuevaFecha,seccion:"pagos"}});
   }
-
-  crearNotificacion({
-    slug,
-    tipo: "sistema",
-    titulo: "Renovación aprobada",
-    mensaje: `Tu plan ${nombrePlan(planCompra)} se renovó correctamente. Nueva fecha de vencimiento: ${nuevaFecha}.`,
-    // FIX: es sobre la suscripción/cobro → pagos, no "inicio".
-    data: { nuevaFecha, seccion: "pagos" },
-  });
+  return result;
 }
 
 app.post("/webhook/renovacion", async (req, res) => {
@@ -8427,12 +8530,13 @@ app.post("/webhook/renovacion", async (req, res) => {
       const paymentId = query.id || body.data?.id;
       if (!paymentId) return res.sendStatus(200);
       const payRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${MP_PLATFORM_TOKEN}` } });
+      if (!payRes.ok) throw new Error("No se pudo verificar el pago de renovación.");
       await procesarRenovacion(await payRes.json());
     }
     res.sendStatus(200);
   } catch (e) {
     console.error("Error en /webhook/renovacion:", e.message);
-    res.sendStatus(200);
+    res.sendStatus(503);
   }
 });
 
