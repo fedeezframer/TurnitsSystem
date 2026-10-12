@@ -7656,6 +7656,26 @@ app.post("/suscripcion/:slug/compra", limiterAuth, requireAuth, async(req,res)=>
 app.post("/suscripcion/:slug/compra/:id/cancelar", requireAuth, async(req,res)=>{
   try {
     const {compra}=await compraDelTitular(req);
+    if(compra.medio==="mercadopago" && ["nuevo","pending","unknown"].includes(compra.estado)) {
+      const previo=await leerPagoCompra(compra);
+      if(previo && ["approved","pending","in_process","authorized"].includes(previo.status)) {
+        const resultado=await resultadoCompraPlan(compra,previo);
+        return res.status(409).json({...resultado,success:false,error:"Esta operación ya tiene un pago en curso. Consultá su estado antes de cambiar de medio."});
+      }
+      if(compra.preference_id) {
+        const ahora=new Date();
+        await new Preference(new MercadoPagoConfig({accessToken:MP_PLATFORM_TOKEN})).update({id:compra.preference_id,body:{expires:true,expiration_date_from:new Date(ahora.getTime()-86400000).toISOString(),expiration_date_to:ahora.toISOString()}});
+      }
+      const posterior=await leerPagoCompra(compra);
+      if(posterior && ["approved","pending","in_process","authorized"].includes(posterior.status)) {
+        await resultadoCompraPlan(compra,posterior);
+        return res.status(409).json({success:false,error:"El pago se inició mientras cambiabas de medio. Consultá su estado."});
+      }
+      const {data,error}=await supabase.from("compras_planes").update({estado:"cancelled"}).eq("id",compra.id).in("estado",["nuevo","pending","unknown"]).is("fecha_activada",null).select("id");
+      if(error)throw error;
+      if(!data?.length)return res.status(409).json({success:false,error:"La compra cambió de estado. Consultá el pago."});
+      return res.json({success:true});
+    }
     const {data,error}=await supabase.from("compras_planes").update({estado:"cancelled"}).eq("id",compra.id).eq("estado","nuevo").select("id");
     if(error)throw error;
     if(!data?.length)return res.status(409).json({success:false,error:"El pago ya se inició; primero consultá su estado."});
