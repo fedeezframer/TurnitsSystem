@@ -1,0 +1,20 @@
+# Importar este archivo como Blueprint o crear el Static Site manualmente.
+# El servicio API existente se mantiene separado y no se redefine acá.
+services:
+  - type: web
+    name: turnits-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: 24.13.0
+      - key: VITE_API_URL
+        value: https://negosocio.onrender.com
+      - key: VITE_MP_CLIENT_ID
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
