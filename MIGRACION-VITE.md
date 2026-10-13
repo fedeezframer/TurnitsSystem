@@ -9,6 +9,7 @@
 - Servicio: `turnits-web`, Static Site, proyecto Turnits; rama `codex/vite-migration`.
 - Render compila `web/` y publica `dist`, con la regla Rewrite `/*` → `/index.html`.
 - Configuradas `NODE_VERSION`, `VITE_API_URL` y `VITE_MP_CLIENT_ID` (identificador público).
+- Recuperadas las props publicadas del panel, booking, login y registro. Sus imágenes, SVG y fuentes se sirven desde `web/public/assets/framer/`.
 - En el servidor API se agregaron `PANEL_ORIGINS` y `GOOGLE_ALLOWED_ORIGINS`, conservando los dos orígenes de turnits.com y sumando `https://turnits-web.onrender.com`.
 
 Federico autorizó `https://turnits-web.onrender.com` en Google Cloud. La API también permite ese origen. La comprobación del inicio de sesión completo se realiza desde el login publicado, seleccionando una cuenta de Google.
@@ -52,7 +53,9 @@ Mantener las variables de retorno de pagos actuales durante la prueba. Los enlac
 
 ## Código y configuración
 
-- `web/src/config.ts`: URL de API, marca, colores, Client ID e imágenes/íconos que eran props de Framer.
+- `web/src/config.ts`: URL de API, marca, colores y Client ID; aplica las props recuperadas de Framer.
+- `web/src/framer-props.json`: valores originales de imágenes, íconos, fondos y opciones publicados en Framer, con rutas a los recursos locales.
+- `web/src/framer-fonts.css`: archivos originales de Inter e Inter Display; cada familia utiliza sus propios archivos.
 - `web/src/migrated/panel/`: 20 módulos para servicios, clientes, agenda, horarios, pagos, temas, equipo, finanzas, planes, empleado y componentes compartidos.
 - `web/src/migrated/`: login, registro, booking y comparador de planes.
 - `web/public/assets/`: ilustraciones originales y tipografía Inter. Se conserva la licencia de la fuente.
@@ -63,7 +66,7 @@ La sesión se conserva en localStorage con las claves actuales. Una URL de prueb
 
 ## Alcance de esta primera migración
 
-Se adaptaron los componentes que estaban disponibles en esta carpeta. El logo por defecto usa el SVG de respaldo que ya estaba en el checkout; las imágenes e íconos específicos cargados en el editor de Framer deben asignarse en `config.ts` o copiarse a `public/assets`.
+Se adaptaron los componentes que estaban disponibles en esta carpeta y se recuperaron las props de sus instancias publicadas en Framer. El panel, login y registro conservan sus respectivos logos originales. Los SVG, fondos, ilustraciones y fuentes se copiaron a la app; el manifiesto de recursos conserva sus URLs de origen. Los datos de cada negocio siguen viniendo de la API.
 
 La web pública de presentación, los textos legales y el panel interno de superadmin (`/internal`) todavía requieren sus fuentes/configuración de Framer para quedar íntegramente en React. Los enlaces legales siguen apuntando a las páginas publicadas. No se incluyeron los borradores legales locales con datos pendientes en el repositorio público.
 

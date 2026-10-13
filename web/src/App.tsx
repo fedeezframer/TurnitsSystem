@@ -31,8 +31,8 @@ function MissingPage() {
 export default function App() {
   return <Suspense fallback={<div className="app-loading" role="status">Cargando Turnits…</div>}><Routes>
     <Route path="/" element={<Navigate to="/login" replace />} />
-    <Route path="/login" element={<Login apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
-    <Route path="/registro" element={<Register baseUrl={appConfig.apiUrl} logoUrl={appConfig.logoUrl} termsUrl="/terminos" privacyUrl="/privacidad" />} />
+    <Route path="/login" element={<Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
+    <Route path="/registro" element={<Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" />} />
     <Route path="/register" element={<Navigate to="/registro" replace />} />
     <Route path="/panel" element={<PanelRoute />} />
     <Route path="/panel/:slug" element={<PanelRoute />} />
