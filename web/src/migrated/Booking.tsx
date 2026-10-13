@@ -2074,7 +2074,7 @@ export default function BookingFlow(props: any) {
     )
 
     return (
-        <div style={{width:"100vw",minHeight:"100dvh",margin:"0 calc(50% - 50vw)",boxSizing:"border-box",display:"flex",flexDirection:"column",fontFamily:"'DM Sans', -apple-system, sans-serif",...temaVars}}>
+        <div style={{width:"100%",minHeight:"100dvh",margin:0,boxSizing:"border-box",display:"flex",flexDirection:"column",fontFamily:"'DM Sans', -apple-system, sans-serif",...temaVars}}>
             {!esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && <BookingCombosSubheader promociones={promociones.filter(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id))} servicios={servicios} accent={accent} icono={iconoVerCombo} onSelect={elegirPromo} />}
         <div className={esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && promociones.some(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id)) ? "bf-combos-desktop-stage" : undefined} style={{display:"flex",flex:1,width:"100%",alignItems:enCheckoutStep ? "flex-start" : "center",justifyContent:"center",padding:enCheckoutStep ? 0 : "20px 0",boxSizing:"border-box"}}>
         {esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && <BookingCombosDesktop promociones={promociones.filter(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id))} servicios={servicios} accent={accent} onSelect={elegirPromo}/>}
