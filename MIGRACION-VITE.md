@@ -13,7 +13,7 @@
 
 Google Cloud todavía rechaza el nuevo origen: agregar `https://turnits-web.onrender.com` en **Orígenes de JavaScript autorizados** del cliente OAuth que ya usa el login. La API ya permite ese origen.
 
-El repositorio se conectó mediante su URL pública. Para publicar cambios posteriores usar **Manual Deploy → Deploy latest commit** en Render. Para habilitar despliegues automáticos se necesita conectar el proveedor GitHub o usar un Blueprint.
+El repositorio se conectó mediante su URL pública. Se comprobó un **Auto-Deploy** al subir un cambio en `web/` a `codex/vite-migration`. También se puede usar **Manual Deploy → Deploy latest commit** en Render. Los cambios fuera de `web/`, como esta documentación, no disparan el build del frontend.
 
 turnits.com continúa en Framer. Esta publicación permite revisar la app antes de cambiar el dominio. El booking ya se comprobó con los datos públicos reales; no se realizaron reservas, pagos ni modificaciones en cuentas.
 
