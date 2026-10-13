@@ -11,11 +11,11 @@
 - Configuradas `NODE_VERSION`, `VITE_API_URL` y `VITE_MP_CLIENT_ID` (identificador público).
 - En el servidor API se agregaron `PANEL_ORIGINS` y `GOOGLE_ALLOWED_ORIGINS`, conservando los dos orígenes de turnits.com y sumando `https://turnits-web.onrender.com`.
 
-Google Cloud todavía rechaza el nuevo origen: agregar `https://turnits-web.onrender.com` en **Orígenes de JavaScript autorizados** del cliente OAuth que ya usa el login. La API ya permite ese origen.
+Federico autorizó `https://turnits-web.onrender.com` en Google Cloud. La API también permite ese origen. La comprobación del inicio de sesión completo se realiza desde el login publicado, seleccionando una cuenta de Google.
 
 El repositorio se conectó mediante su URL pública. Se comprobó un **Auto-Deploy** al subir un cambio en `web/` a `codex/vite-migration`. También se puede usar **Manual Deploy → Deploy latest commit** en Render. Los cambios fuera de `web/`, como esta documentación, no disparan el build del frontend.
 
-turnits.com continúa en Framer. Esta publicación permite revisar la app antes de cambiar el dominio. El booking ya se comprobó con los datos públicos reales; no se realizaron reservas, pagos ni modificaciones en cuentas.
+turnits.com continúa en Framer y sus DNS se gestionan en Cloudflare. Esta publicación permite revisar la app antes de cambiar el dominio. El booking ya se comprobó con los datos públicos reales; no se realizaron reservas, pagos ni modificaciones en cuentas.
 
 ## Ejecutar en tu computadora
 
