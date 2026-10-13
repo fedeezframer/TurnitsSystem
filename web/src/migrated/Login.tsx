@@ -1,4 +1,6 @@
+import { appConfig } from "../config"
 import * as React from "react"
+import { Link } from "react-router"
 
 
 type Props = {
@@ -124,7 +126,7 @@ const css = `
 .tt-login-v2{position:fixed;inset:0;width:100%;height:100vh;height:100dvh;overflow:hidden;background:white;color:#191b19;display:block;font-family:Inter,Arial,sans-serif;-webkit-font-smoothing:antialiased;isolation:isolate}
 .tt-login-v2-side{position:absolute;inset:0 auto 0 0;width:50%;height:100%;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;padding:32px;padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom))}
 .tt-login-v2 form{width:100%;max-width:340px;margin:0}
-.tt-login-v2-brand{display:flex;justify-content:center;margin-bottom:20px}.tt-login-v2-brand img{width:66px;height:54px;object-fit:contain}
+.tt-login-v2-brand{display:flex;justify-content:center;margin-bottom:20px;color:inherit;text-decoration:none}.tt-login-v2-brand img{width:66px;height:54px;object-fit:contain}
 .tt-login-v2 h1{font-size:28px;font-weight:500;letter-spacing:-1px;line-height:1.2;text-align:center;margin:0}
 .tt-login-v2-intro{font-size:13px;line-height:1.5;text-align:center;color:#787e78;margin:10px 0 25px}
 .tt-login-v2-divider{height:1px;background:#eaede9;margin-bottom:24px}
@@ -179,7 +181,7 @@ const css = `
  */
 export default function LoginApp(props: Props) {
     const {
-        apiUrl = "https://negosocio.onrender.com",
+        apiUrl = appConfig.apiUrl,
         registerUrl = "/registro",
         logoUrl,
         accentColor = "#398252",
@@ -557,7 +559,7 @@ export default function LoginApp(props: Props) {
                 aria-labelledby={`${id}-title`}
             >
                 <form noValidate onSubmit={submit} aria-busy={loading}>
-                    <div className="tt-login-v2-brand">
+                    <Link to="/" className="tt-login-v2-brand" aria-label="Turnits, ir al inicio">
                         {logoUrl ? (
                             <img src={logoUrl} alt="Turnits" />
                         ) : (
@@ -590,7 +592,7 @@ export default function LoginApp(props: Props) {
                                 />
                             </svg>
                         )}
-                    </div>
+                    </Link>
                     <h1 id={`${id}-title`}>
                         {recover ? "Recuperá tu acceso" : "Iniciar sesión"}
                     </h1>
@@ -830,10 +832,7 @@ export default function LoginApp(props: Props) {
                         >
                             <div
                                 className="tt-login-v2-turno"
-                                style={Object.assign(
-                                    {},
-                                    { "--turno-color": turno.color }
-                                )}
+                                style={{ "--turno-color": turno.color } as React.CSSProperties & { "--turno-color": string }}
                             >
                                 <div className="tt-login-v2-turno-time">
                                     <span className="tt-login-v2-turno-dot" />

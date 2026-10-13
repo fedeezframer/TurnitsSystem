@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -309,7 +310,7 @@ const MercadoPagoConexion_MetodoCard = ({
 
 function MercadoPagoConexion(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         mpClientId = "",
         logoMP = "",
         logoTransferencia = "",
@@ -1268,7 +1269,7 @@ function PagosSettingsGuard({
 
 function ConfigPagos(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         mpClientId = "",
         employeeMode = false,

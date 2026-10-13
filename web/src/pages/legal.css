@@ -1,0 +1,11 @@
+.turnits-legal-page{background:#fff;color:#000;min-height:100dvh;font-family:Inter,sans-serif}
+.turnits-legal-header{text-align:center;padding:6px 24px 48px}
+.turnits-legal-header a{font:700 36px/1.2 Inter,sans-serif;color:#000;text-decoration:none;letter-spacing:-1.3px}
+.turnits-legal-content{width:90%;max-width:none;margin:0 auto;padding:12px 0 80px;font-size:16px;line-height:1.6;color:#666;overflow-wrap:break-word}
+.turnits-legal-content h1{color:#000;font:900 40px/1.1 Inter,sans-serif;margin:0 0 24px;letter-spacing:-1.7px}
+.turnits-legal-content h2{color:#000;font:700 30px/1.4 Inter,sans-serif;margin:0;letter-spacing:-.7px}
+.turnits-legal-content p{margin:0 0 24px}
+.turnits-legal-content ol{color:#000;font:700 30px/1.4 Inter,sans-serif;margin:38px 0 20px;padding-left:1.3em;letter-spacing:-.7px}
+.turnits-legal-content li{padding-left:2px}
+.turnits-legal-content a{color:#0099ff;text-decoration:underline}
+@media(max-width:480px){.turnits-legal-header{padding-bottom:36px}.turnits-legal-content{padding:12px 0 56px}.turnits-legal-content h1{font-size:32px;letter-spacing:-1px}.turnits-legal-content h2,.turnits-legal-content ol{font-size:25px;letter-spacing:-.5px}}

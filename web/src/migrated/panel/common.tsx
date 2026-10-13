@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -503,7 +504,7 @@ function TurnitsGlobalSaveManager_get() {
     if (!w.__turnitsGlobalSaveManager) {
         let pending: TurnitsGlobalPending = TurnitsGlobalSave_safeRead()
         let baseline: TurnitsGlobalPending = {}
-        let baseUrl = "https://negosocio.onrender.com"
+        let baseUrl = appConfig.apiUrl
         let saving = false
 
         const getSlug = () => {
@@ -886,7 +887,7 @@ const PlanEstado_MOCK = {
 }
 
 const BotonNotificaciones_API_BASE_URL_DEFAULT =
-    "https://negosocio.onrender.com"
+    appConfig.apiUrl
 
 function BotonNotificaciones_getScrollTargets() {
     const pageScroller = document.scrollingElement || document.documentElement
@@ -1243,7 +1244,7 @@ function NotificacionesPanel_esStandalone(): boolean {
 
 function NotificacionesPanel_urlBase64ToUint8Array(
     base64String: string
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
     const base64 = (base64String + padding)
         .replace(/-/g, "+")
@@ -2315,7 +2316,7 @@ interface TopServicios_ServicioData {
     nombre: string
     semanas: number[]
     total: number
-    color: string
+    line: string
     fill: string
     glow: string
 }

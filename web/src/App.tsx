@@ -2,14 +2,20 @@ import React, { lazy, Suspense } from "react"
 import { Link, Navigate, Route, Routes, useParams } from "react-router"
 import { appConfig } from "./config"
 import Receipt from "./pages/Receipt"
-import Legal from "./pages/Legal"
 import ResetPassword from "./pages/ResetPassword"
 
 const Login = lazy(() => import("./migrated/Login"))
 const Register = lazy(() => import("./migrated/Register"))
 const Booking = lazy(() => import("./migrated/Booking"))
 const Panel = lazy(() => import("./migrated/panel"))
-const Plans = lazy(() => import("./migrated/Plans"))
+const Home = lazy(() => import("./pages/Home"))
+const Legal = lazy(() => import("./pages/Legal"))
+const PublicPlans = lazy(() => import("./pages/PublicPlans"))
+const Store = lazy(() => import("./pages/Store"))
+const AppGateway = lazy(() => import("./pages/AppGateway"))
+const Internal = lazy(() => import("./migrated/public/AdminStats"))
+const Reschedule = lazy(() => import("./pages/Reschedule"))
+const AnimationTest = lazy(() => import("./pages/AnimationTest"))
 
 function PanelRoute() {
   return <Panel {...appConfig.panel} baseUrl={appConfig.apiUrl} accentColor={appConfig.accentColor} logoImage={appConfig.logoUrl} mpClientId={appConfig.mpClientId} logoutUrl="/login" style={{ width: "100%", minHeight: "100dvh" }} />
@@ -30,16 +36,25 @@ function MissingPage() {
 }
 export default function App() {
   return <Suspense fallback={<div className="app-loading" role="status">Cargando Turnits…</div>}><Routes>
-    <Route path="/" element={<Navigate to="/login" replace />} />
+    <Route path="/" element={<Home />} />
     <Route path="/login" element={<Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
     <Route path="/registro" element={<Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" />} />
-    <Route path="/register" element={<Navigate to="/registro" replace />} />
+    <Route path="/register" element={<Navigate to={`/registro${window.location.search}`} replace />} />
     <Route path="/panel" element={<PanelRoute />} />
     <Route path="/panel/:slug" element={<PanelRoute />} />
     <Route path="/renovar" element={<RenewRoute />} />
     <Route path="/agenda" element={<BookingRoute />} />
     <Route path="/agenda/:slug" element={<BookingRoute />} />
-    <Route path="/planes" element={<Plans baseUrl={appConfig.apiUrl} registroUrl="/registro" accentColor={appConfig.accentColor} />} />
+    <Route path="/planes" element={<PublicPlans />} />
+    <Route path="/store-login" element={<Store />} />
+    <Route path="/app" element={<AppGateway />} />
+    <Route path="/internal" element={<Internal loginPath="/login" refreshSeconds={60} />} />
+    <Route path="/reprogramar" element={<Reschedule />} />
+    <Route path="/login-test" element={<Navigate to={`/login${window.location.search}`} replace />} />
+    <Route path="/register-test" element={<Navigate to={`/registro${window.location.search}`} replace />} />
+    <Route path="/panel-test" element={<PanelRoute />} />
+    <Route path="/agenda-test" element={<BookingRoute />} />
+    <Route path="/test" element={<AnimationTest />} />
     <Route path="/success" element={<Receipt />} />
     <Route path="/pendiente" element={<Receipt />} />
     <Route path="/error" element={<Receipt failed />} />

@@ -1,1 +1,15 @@
-{"name":"Turnits","short_name":"Turnits","lang":"es-AR","start_url":"/panel","scope":"/","display":"standalone","theme_color":"#196b1f","background_color":"#f8fafc","icons":[{"src":"/assets/turnits-icon.svg","sizes":"any","type":"image/svg+xml"}]}
+{
+  "name": "Turnits",
+  "short_name": "Turnits",
+  "lang": "es-AR",
+  "start_url": "/panel",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#1b6b1a",
+  "background_color": "#f8fafc",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/favicon-light.png", "sizes": "200x200", "type": "image/png" },
+    { "src": "/assets/turnits-icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

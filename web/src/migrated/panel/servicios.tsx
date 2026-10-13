@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -2622,7 +2623,7 @@ function ServiciosManager_ExtraCard({
 
 function ServiciosManager(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         iconoPlaceholderUrl = "",
         iconoFormUrl = "",

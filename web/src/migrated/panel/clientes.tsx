@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -13,7 +14,7 @@ import { TurnitsPlanRequirement } from "./shared"
 
 function ClientesGrid(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         columnas = 4,
         porPagina = 12,

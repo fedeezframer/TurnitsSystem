@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -89,7 +90,7 @@ function OnboardingNube_BotonPrincipal({
 }
 
 function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
-    const api = (baseUrl || "https://negosocio.onrender.com").replace(
+    const api = (baseUrl || appConfig.apiUrl).replace(
         /\/+$/,
         ""
     )

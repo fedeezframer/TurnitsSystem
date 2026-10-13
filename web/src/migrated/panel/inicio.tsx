@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -358,7 +359,7 @@ function CopyTurnosButton(props) {
 
 function UserGreeting(props) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         fontSize = 16,
         color = "#000000",
     } = props
@@ -407,7 +408,7 @@ function UserGreeting(props) {
 
 function PlanEstado(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         textColor = "#0f172a",
         mutedColor = "#64748b",
@@ -1776,7 +1777,7 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
 }
 
 NotificacionesPanel.defaultProps = {
-    apiBaseUrl: "https://negosocio.onrender.com",
+    apiBaseUrl: appConfig.apiUrl,
     tokenStorageKey: "auth_token",
     pollingSeconds: 30,
     accentColor: "#6366F1",
@@ -1788,7 +1789,7 @@ NotificacionesPanel.defaultProps = {
 
 function TurnosHoy(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         onVerAgenda,
         style,
@@ -2378,7 +2379,7 @@ function RendimientoEquipo_EmptyState({
 
 function RendimientoEquipo(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         variant = "resumen",
         ilustracionVacia,
@@ -3288,7 +3289,7 @@ function RendimientoEquipo(props: any) {
 
 function IngresosEstimados(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         style,
     } = props
@@ -3785,7 +3786,7 @@ function IngresosEstimados_IngresoChip({
 
 function TurnosMes(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         onVerAgenda,
         style,
@@ -4223,7 +4224,7 @@ function TurnosMes_CardShell({ stats, accentColor, onVerAgenda, style }: any) {
 
 function ClientesCard(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         style,
     } = props
@@ -4634,7 +4635,7 @@ function ClientesCard_ResumenChip({
 
 function MejoresDias(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         style,
     } = props
@@ -5063,7 +5064,7 @@ function MejoresDias_CardShell({ stats, accentColor, style }: any) {
 }
 
 function TopServicios(props: any) {
-    const { baseUrl = "https://negosocio.onrender.com", style } = props
+    const { baseUrl = appConfig.apiUrl, style } = props
     const [servicios, setServicios] = React.useState<
         TopServicios_ServicioData[]
     >([])
@@ -5958,7 +5959,7 @@ function TopServicios_ChartCard({
 
 function HorasTrabajadas(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         style,
     } = props

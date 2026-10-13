@@ -1,3 +1,4 @@
+import { appConfig } from "../config"
 import * as React from "react"
 
 
@@ -34,7 +35,7 @@ function Value({ value, color }) {
 /** @framerSupportedLayoutWidth any */
 /** @framerSupportedLayoutHeight auto */
 export default function PlanesTurnits(props) {
-    const { baseUrl = "https://negosocio.onrender.com", registroUrl = "/registro", accentColor = "#1B6B1A", style } = props
+    const { baseUrl = appConfig.apiUrl, registroUrl = "/registro", accentColor = "#1B6B1A", style } = props
     const [catalog, setCatalog] = React.useState(defaults)
     const [days, setDays] = React.useState(30)
     const isCanvas = false

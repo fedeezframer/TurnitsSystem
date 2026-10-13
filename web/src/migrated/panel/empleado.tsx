@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -19,7 +20,7 @@ import { MercadoPagoConexion, ConfigPagos } from "./pagos"
 
 function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
     const api = String(
-        props.baseUrl || "https://negosocio.onrender.com"
+        props.baseUrl || appConfig.apiUrl
     ).replace(/\/+$/, "")
     const accentColor = props.accentColor || "#22c55e"
     const imagenSrc = (value: any, depth = 0): string => {
