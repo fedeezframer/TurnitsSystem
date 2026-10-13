@@ -7803,6 +7803,9 @@ app.post("/renovacion/downgrade/:slug", requireAuth, async (req, res) => {
     if (fetchError) throw fetchError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
+    if (user.plan === "gratis") {
+      return res.json({ success: true, plan: "gratis", mensaje: "Tu cuenta ya está en Plan Gratis." });
+    }
 
     // El ajuste de límites y el cambio de plan se confirman juntos.
     const { error: updateError } = await supabase.rpc("reducir_plan_gratis",{p_usuario_id:user.id,p_slug:slug});
