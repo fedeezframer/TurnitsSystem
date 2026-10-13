@@ -18,7 +18,10 @@ No se crearon reservas reales, no se efectuaron cobros y no se modificaron cuent
 
 ## Pendientes para cerrar el traslado
 
-- `turnits.com` todavía sirve Framer. Configurar el dominio personalizado en Render y sus DNS en Cloudflare; ajustar `VITE_SITE_URL` al dominio final y verificar HTTPS, rutas y origen OAuth.
+- El traslado de `turnits.com` a Render se completó el 13 de octubre de 2026. `turnits.com` y `www.turnits.com` apuntan a `turnits-web.onrender.com`, ambos figuran verificados y con certificado emitido. Se conservó el proxy de Cloudflare y el worker de `/sw.js`; `www` y HTTP redirigen a `https://turnits.com`.
+- `VITE_SITE_URL=https://turnits.com` se guardó en Render y se volvió a compilar. Se comprobaron los metadatos del dominio final, diez rutas públicas, favicon, touch icon, imagen social, manifest y worker de notificaciones. Login y agenda inicializaron sin errores JavaScript desde el dominio real; la agenda cargó servicios reales de la API. La autenticación y las escrituras completas siguen sujetas a la comprobación siguiente.
+- Se guardó una copia de los registros anteriores fuera del repositorio. Para volver a Framer, restaurar los dos registros A del dominio principal a `31.43.161.6` y `31.43.160.6` y el CNAME de `www` a `sites.framer.app`, con proxy y TTL Auto. Se conservó uno de esos registros con el nombre `framer-anterior`; debe volver a `@` para restaurar la configuración original.
+- Confirmar una sesión real desde el dominio final, incluidos los accesos con Google y el panel con datos reales.
 - Comprobar un pago completo de reserva y de plan, incluyendo retorno y confirmación por el servidor, en el dominio final.
 - Render muestra el aviso de cuenta **Payment failed**. Los servicios responden actualmente; el titular debe resolver la facturación desde su cuenta.
 - Conservar la publicación anterior de Framer hasta completar estas comprobaciones, para permitir volver a la configuración anterior del dominio.
