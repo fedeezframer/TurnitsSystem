@@ -1,3 +1,4 @@
+import { appConfig } from "../config"
 import * as React from "react"
 
 import { motion, AnimatePresence } from "framer-motion"
@@ -775,7 +776,7 @@ function FillButton({
  */
 export default function BookingFlow(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         manualSlug = "",
         useNegocioTheme: usarTemaProp,
         accentColor = "#000000",
@@ -875,7 +876,7 @@ export default function BookingFlow(props: any) {
 
     const [tarjetaDisponible,setTarjetaDisponible]=React.useState(false)
     const [cardSession,setCardSession]=React.useState<any>(null)
-    React.useEffect(()=>{let active=true;fetch(api+"/api/card-config").then(r=>r.ok?r.json():{}).then(d=>{if(active)setTarjetaDisponible(d.enabled===true)}).catch(()=>{});return()=>{active=false}},[api])
+    React.useEffect(()=>{let active=true;fetch(api+"/api/card-config").then(r=>r.ok?r.json():{enabled:false}).then(d=>{if(active)setTarjetaDisponible(d.enabled===true)}).catch(()=>{});return()=>{active=false}},[api])
     const [metodo, setMetodo] = React.useState<MetodoKey | "">("")
     const [comprobante, setComprobante] = React.useState<File | null>(null)
     const [errorArchivo, setErrorArchivo] = React.useState("")

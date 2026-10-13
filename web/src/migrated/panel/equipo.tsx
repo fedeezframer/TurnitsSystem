@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -1979,7 +1980,7 @@ function TeamManager_CanvasPreview({
 
 function TeamManager(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#6366F1",
         iconoVacioUrl = "",
         iconoCheck = "",

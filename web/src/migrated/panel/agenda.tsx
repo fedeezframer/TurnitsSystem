@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -12,7 +13,7 @@ import { AgendaPanel_useContainerWidth, AgendaPanel_getSlug, AgendaPanel_getToke
 
 function AgendaPanel(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         colorPendiente = "#F59E0B",
         colorReprogramacion = "#3B82F6",

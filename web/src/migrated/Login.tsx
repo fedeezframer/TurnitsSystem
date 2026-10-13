@@ -1,3 +1,4 @@
+import { appConfig } from "../config"
 import * as React from "react"
 
 
@@ -179,7 +180,7 @@ const css = `
  */
 export default function LoginApp(props: Props) {
     const {
-        apiUrl = "https://negosocio.onrender.com",
+        apiUrl = appConfig.apiUrl,
         registerUrl = "/registro",
         logoUrl,
         accentColor = "#398252",
@@ -830,10 +831,7 @@ export default function LoginApp(props: Props) {
                         >
                             <div
                                 className="tt-login-v2-turno"
-                                style={Object.assign(
-                                    {},
-                                    { "--turno-color": turno.color }
-                                )}
+                                style={{ "--turno-color": turno.color } as React.CSSProperties & { "--turno-color": string }}
                             >
                                 <div className="tt-login-v2-turno-time">
                                     <span className="tt-login-v2-turno-dot" />

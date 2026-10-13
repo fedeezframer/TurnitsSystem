@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -26,7 +27,7 @@ import { CopyTurnosButton } from "./inicio"
 
 function TurnitsPanel_Inner(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
         logoText = "turnits",
         logoImage,
@@ -151,7 +152,6 @@ function TurnitsPanel_Inner(props: any) {
             style={{
                 display: "flex",
                 flexDirection: isMobile ? "column" : "row",
-                width: "100%",
                 // En móvil el panel participa del alto normal del documento:
                 // sin fijarlo al viewport, así el navegador hace un solo scroll natural.
                 height: isMobile ? "auto" : "100vh",

@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -969,7 +970,7 @@ function ThemeEditor_LogoSection({
 
 function ThemeEditor(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#1B6B1A",
         iconoLogoUrl = "",
         style,

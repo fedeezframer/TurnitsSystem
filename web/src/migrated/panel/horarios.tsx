@@ -1,3 +1,4 @@
+import { appConfig } from "../../config"
 import * as React from "react"
 import {
     useState,
@@ -94,7 +95,7 @@ function HorariosConfig_TimeInput({
 
 function HorariosConfig(props: any) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         accentColor = "#2F8A2F",
         mostrarBotonGuardar = true,
         employeeMode = false,

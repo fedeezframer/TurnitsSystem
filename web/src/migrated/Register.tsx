@@ -1,3 +1,4 @@
+import { appConfig } from "../config"
 import * as React from "react"
 
 import { motion, AnimatePresence } from "framer-motion"
@@ -325,12 +326,12 @@ function CheckIcon({ color = "#1B6B1A", size = 16 }) {
 // mobile por más reglas que hubiera).
 function FillButton({
     onClick,
-    disabled,
+    disabled = false,
     fill,
     children,
     style,
     variant = "solid",
-}) {
+}: { onClick?: React.MouseEventHandler<HTMLButtonElement>; disabled?: boolean; fill: string; children: React.ReactNode; style?: React.CSSProperties; variant?: "solid" | "outline" }) {
     const [pressed, setPressed] = React.useState(false)
     const [hovered, setHovered] = React.useState(false)
     const [ripples, setRipples] = React.useState([])
@@ -493,7 +494,7 @@ function FillButton({
 // relleno de acento sube encima. SIN CAMBIOS respecto a la versión
 // anterior: sigue usando el color principal (fillColor), no el
 // nuevo "color acento".
-function BackButton({ onClick, fillColor, style }) {
+function BackButton({ onClick, fillColor, style }: { onClick: React.MouseEventHandler<HTMLButtonElement>; fillColor: string; style?: React.CSSProperties }) {
     return (
         <FillButton
             onClick={onClick}
@@ -577,7 +578,7 @@ function FieldBox({ children }) {
     )
 }
 
-function FieldRow({ children, noBorder, className }) {
+function FieldRow({ children, noBorder = false, className }: { children: React.ReactNode; noBorder?: boolean; className?: string }) {
     return (
         <div
             className={className}
@@ -601,7 +602,7 @@ function FlatInput({
     inputMode,
     style,
     rightSlot,
-}) {
+}: { placeholder?: string; value: string; onChange: (value: string) => void; type?: React.HTMLInputTypeAttribute; inputMode?: React.InputHTMLAttributes<HTMLInputElement>["inputMode"]; style?: React.CSSProperties; rightSlot?: React.ReactNode }) {
     return (
         <div
             style={{
@@ -638,7 +639,7 @@ function FlatInput({
     )
 }
 
-function ErrorList({ errors }) {
+function ErrorList({ errors }: { errors: Record<string, string> }) {
     const msgs = Object.values(errors || {}).filter(Boolean)
     if (!msgs.length) return null
     return (
@@ -935,7 +936,7 @@ function PlanCard({
 // ════════════════════════════════════════════════════════════
 export default function RegisterFlow(props) {
     const {
-        baseUrl = "https://negosocio.onrender.com",
+        baseUrl = appConfig.apiUrl,
         logoUrl,
         accentColor = "#111827",
         successColor = "#1B6B1A",
@@ -962,13 +963,13 @@ export default function RegisterFlow(props) {
     const [email, setEmail] = React.useState("")
     const [telefono, setTelefono] = React.useState("")
     const [pais, setPais] = React.useState(PAISES[0])
-    const [errPersonal, setErrPersonal] = React.useState({})
+    const [errPersonal, setErrPersonal] = React.useState<Record<string, string>>({})
 
     // ── Negocio ──
     const [businessName, setBusinessName] = React.useState("")
     const [password, setPassword] = React.useState("")
     const [acepta, setAcepta] = React.useState(false)
-    const [errNegocio, setErrNegocio] = React.useState({})
+    const [errNegocio, setErrNegocio] = React.useState<Record<string, string>>({})
 
     const [catalogoPlanes, setCatalogoPlanes] = React.useState(null)
     React.useEffect(() => {
@@ -1030,7 +1031,7 @@ export default function RegisterFlow(props) {
     // Validaciones
     // ────────────────────────────────────────────────────────
     function validarPersonal() {
-        const e = {}
+        const e: Record<string, string> = {}
         if (nombre.trim().length < 2) e.nombre = "Ingresá tu nombre."
         if (apellido.trim().length < 2) e.apellido = "Ingresá tu apellido."
         if (!EMAIL_REGEX.test(email.trim())) e.email = "Email inválido."
@@ -1044,7 +1045,7 @@ export default function RegisterFlow(props) {
     }
 
     function validarNegocio() {
-        const e = {}
+        const e: Record<string, string> = {}
         if (businessName.trim().length < 2)
             e.business = "Ingresá el nombre de tu negocio."
         if (password.length < MIN_PASSWORD)
@@ -1801,7 +1802,7 @@ export default function RegisterFlow(props) {
                                         loadingText="Preparando Premium…" onClick={() => elegirPlan("premium")} />
                                 </div>
                                 <p style={{fontSize:12,color:"#6B7280",textAlign:"center",lineHeight:1.6,margin:0}}>Básico y Premium incluyen {catalogoPlanes?.dias_prueba_basico ?? 30} días de prueba con las funciones de cada plan. Durante cualquier prueba, los cobros online tienen el fee de Gratis: $300 o 2%, el mayor. Mercado Pago cobra sus comisiones por separado.</p>
-                                <a href="https://turnits.com/planes" target="_blank" rel="noopener noreferrer" style={{display:"block",width:"100%",fontSize:13,color:successColor,textAlign:"center",marginTop:10}}>Comparar todas las características</a>
+                                <a href="/planes" target="_blank" rel="noopener noreferrer" style={{display:"block",width:"100%",fontSize:13,color:successColor,textAlign:"center",marginTop:10}}>Comparar todas las características</a>
                                 <div
                                     style={{
                                         display: "flex",
@@ -1976,7 +1977,7 @@ export default function RegisterFlow(props) {
 // ajustes de padding/gap para el componente angosto viven en la clase
 // .rf-wrapper (ver globalCss), no acá — así con espacio real de sobra
 // esto queda exactamente igual que antes.
-function wrapperStyle(stepId) {
+function wrapperStyle(stepId): React.CSSProperties {
     return {
         width: "100%",
         maxWidth: stepId === "plan" ? 1060 : 460,
