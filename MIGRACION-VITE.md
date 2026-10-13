@@ -2,6 +2,21 @@
 
 `web/` contiene las pantallas adaptadas del código vigente de Framer. `api/server.js` conserva la versión descargada de TurnitsSystem; esta migración no modifica la API ni la base de datos.
 
+## Publicación realizada — 12 de octubre de 2026
+
+- App: https://turnits-web.onrender.com/login
+- Booking: https://turnits-web.onrender.com/agenda/turnits
+- Servicio: `turnits-web`, Static Site, proyecto Turnits; rama `codex/vite-migration`.
+- Render compila `web/` y publica `dist`, con la regla Rewrite `/*` → `/index.html`.
+- Configuradas `NODE_VERSION`, `VITE_API_URL` y `VITE_MP_CLIENT_ID` (identificador público).
+- En el servidor API se agregaron `PANEL_ORIGINS` y `GOOGLE_ALLOWED_ORIGINS`, conservando los dos orígenes de turnits.com y sumando `https://turnits-web.onrender.com`.
+
+Google Cloud todavía rechaza el nuevo origen: agregar `https://turnits-web.onrender.com` en **Orígenes de JavaScript autorizados** del cliente OAuth que ya usa el login. La API ya permite ese origen.
+
+El repositorio se conectó mediante su URL pública. Para publicar cambios posteriores usar **Manual Deploy → Deploy latest commit** en Render. Para habilitar despliegues automáticos se necesita conectar el proveedor GitHub o usar un Blueprint.
+
+turnits.com continúa en Framer. Esta publicación permite revisar la app antes de cambiar el dominio. El booking ya se comprobó con los datos públicos reales; no se realizaron reservas, pagos ni modificaciones en cuentas.
+
 ## Ejecutar en tu computadora
 
 Usar Node 22.12 o superior (probado con 24.13).
