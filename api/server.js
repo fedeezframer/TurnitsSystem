@@ -7355,8 +7355,11 @@ app.post("/api/card-payment",limiterBooking,async(req,res)=>{
     if(!response.ok) {
       const diagnostic = cardProviderDiagnostic(response.status,pay);
       console.error("❌ MP card-payment:", JSON.stringify({slug:ctx.pending.slug,pending_id:ctx.pending.id,...diagnostic}));
-      return res.status(response.status>=500?503:400).json({status:"unknown",reference:diagnostic.reference,
-        error:response.status>=500
+      const needsOAuth = response.status===400 && !pay?.id && (diagnostic.cause_codes.includes("2059") || diagnostic.error_code==="2059");
+      return res.status(response.status>=500?503:400).json({status:needsOAuth?"not_charged":"unknown",reference:diagnostic.reference,
+        error:needsOAuth
+          ? `El negocio necesita volver a conectar Mercado Pago desde Pagos para habilitar este cobro. El cobro no se inició. Referencia: ${diagnostic.reference}.`
+          : response.status>=500
           ? `No pudimos confirmar el resultado. Referencia: ${diagnostic.reference}. Consultá el estado antes de volver a pagar.`
           : `Mercado Pago no aceptó la solicitud de pago. Referencia: ${diagnostic.reference}. Consultá el estado antes de volver a pagar.`});
     }
