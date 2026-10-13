@@ -4,7 +4,8 @@
 
 ## Publicación realizada — 12 de octubre de 2026
 
-- App: https://turnits-web.onrender.com/login
+- Web completa: https://turnits-web.onrender.com/
+- Login: https://turnits-web.onrender.com/login
 - Booking: https://turnits-web.onrender.com/agenda/turnits
 - Servicio: `turnits-web`, Static Site, proyecto Turnits; rama `codex/vite-migration`.
 - Render compila `web/` y publica `dist`, con la regla Rewrite `/*` → `/index.html`.
@@ -60,21 +61,27 @@ Mantener las variables de retorno de pagos actuales durante la prueba. Los enlac
 - `web/src/framer-props.json`: valores originales de imágenes, íconos, fondos y opciones publicados en Framer, con rutas a los recursos locales.
 - `web/src/framer-fonts.css`: archivos originales de Inter e Inter Display; cada familia utiliza sus propios archivos.
 - `web/src/migrated/panel/`: 20 módulos para servicios, clientes, agenda, horarios, pagos, temas, equipo, finanzas, planes, empleado y componentes compartidos.
-- `web/src/migrated/`: login, registro, booking y comparador de planes.
+- `web/src/migrated/`: login, registro, booking, panel interno, reprogramación y demostraciones animadas.
+- `web/src/pages/` y `web/src/published/`: portada, tabla de planes original, tienda, páginas legales y rutas de compatibilidad. Los estilos recuperados están aislados de las pantallas del panel.
+- `web/public/assets/site/`: recursos de las páginas públicas y fuentes Noto Serif y DM Sans, con sus licencias.
 - `web/public/assets/`: ilustraciones originales y tipografía Inter. Se conserva la licencia de la fuente.
 - `web/src/App.tsx`: rutas y carga de pantallas bajo demanda.
 - `web/public/sw.js`: notificaciones push; no almacena ni cachea respuestas de la API.
 
 La sesión se conserva en localStorage con las claves actuales. Una URL de prueba tiene otro origen, por lo que requiere volver a iniciar sesión. El backend sigue siendo responsable de permisos, precios y aprobación de pagos.
 
-## Alcance de esta primera migración
+## Alcance de la migración completa
 
 Se adaptaron los componentes que estaban disponibles en esta carpeta y se recuperaron las props de sus instancias publicadas en Framer. El panel, login y registro conservan sus respectivos logos originales. Los SVG, fondos, ilustraciones y fuentes se copiaron a la app; el manifiesto de recursos conserva sus URLs de origen. Los datos de cada negocio siguen viniendo de la API.
 
-La web pública de presentación, los textos legales y el panel interno de superadmin (`/internal`) todavía requieren sus fuentes/configuración de Framer para quedar íntegramente en React. Los enlaces legales siguen apuntando a las páginas publicadas. No se incluyeron los borradores legales locales con datos pendientes en el repositorio público.
+Se incorporaron la portada con sus demostraciones animadas y preguntas frecuentes, la tabla original de `/planes`, los documentos legales completos publicados, `/store-login`, `/reprogramar`, `/internal` y `/app`. Se recuperaron los componentes originales desde el editor de Framer sin modificar el proyecto. No se incluyeron los borradores legales locales con datos pendientes en el repositorio público.
+
+Las rutas de prueba de login, registro, panel y agenda reutilizan los componentes actuales. `/test` conserva la prueba de animación y `/404` muestra la pantalla de página no encontrada. Se conserva el query string al redirigir las rutas antiguas de autenticación. Sucursales figura como «Próximamente», conforme a la etapa acordada, y no habilita una función que todavía no existe.
+
+Las páginas públicas conservan la estructura publicada y sus recursos, sin cargar el runtime de Framer ni su editor. React controla los enlaces, preguntas frecuentes, animaciones y formularios; Vite genera archivos independientes por pantalla. La portada usa las comisiones vigentes y el panel interno distingue correctamente Básico y Premium utilizando el contrato existente de la API.
 
 Se agregó una pantalla de comprobante que consulta el estado real del turno por la API y una pantalla para los enlaces de cambio de contraseña. No se interpretan parámetros de URL como prueba de pago aprobado.
 
 ## Verificación
 
-Build de producción y navegación con API simulada: login a panel con sesión, ocho secciones del panel, registro, planes, booking en desktop/mobile, comprobante y cambio de contraseña. No se realizaron cargos ni cambios en Supabase. La comprobación final de OAuth, push y pagos en el nuevo dominio requiere configurar los orígenes y usar credenciales de prueba.
+Build de producción y navegación con API simulada: login a panel con sesión, ocho secciones del panel, registro, planes, booking en desktop/mobile, comprobante y cambio de contraseña. Se comprobaron también la portada y planes en 1440, 800 y 390 px, las siete preguntas frecuentes, documentos legales completos, navegación portada → planes → login, reprogramación con petición completa simulada y guard de superadmin autorizado/denegado por el servidor. No se realizaron cargos ni cambios en Supabase. La comprobación final de OAuth, push y pagos en el nuevo dominio requiere configurar los orígenes y usar credenciales de prueba.
