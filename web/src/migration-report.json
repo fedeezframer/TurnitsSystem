@@ -1,0 +1,32 @@
+{
+  "originalPanelBytes": 3972956,
+  "panelModules": [
+    "common",
+    "shared",
+    "inicio",
+    "servicios",
+    "clientes",
+    "agenda",
+    "horarios",
+    "pagos",
+    "temas",
+    "equipo",
+    "cuenta",
+    "onboarding",
+    "interfaz",
+    "finanzas",
+    "layout",
+    "dashboard",
+    "sesion",
+    "empleado",
+    "root"
+  ],
+  "assetsExtracted": true,
+  "sourceFiles": [
+    "PanelTurnits.tsx",
+    "LoginApp.tsx",
+    "RegisterFlow_adaptado.tsx",
+    "BookingFlow.tsx",
+    "PlanesTurnits.tsx"
+  ]
+}
