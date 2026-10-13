@@ -3,7 +3,7 @@ self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
 self.addEventListener('push',event=>{
   let data={};try{data=event.data?.json()||{}}catch{data={body:event.data?.text()||''}}
   event.waitUntil(self.registration.showNotification(data.title||'Turnits',{
-    body:data.body||data.message||'',icon:'/assets/turnits-icon.svg',badge:'/assets/turnits-icon.svg',
+    body:data.body||data.message||'',icon:'/apple-touch-icon.png',badge:'/favicon-light.png',
     tag:data.tag,data:{url:data.url||data.data?.url||'/panel'},
   }));
 });

@@ -10,6 +10,7 @@
 - Render compila `web/` y publica `dist`, con la regla Rewrite `/*` → `/index.html`.
 - Configuradas `NODE_VERSION`, `VITE_API_URL` y `VITE_MP_CLIENT_ID` (identificador público).
 - Recuperadas las props publicadas del panel, booking, login y registro. Sus imágenes, SVG y fuentes se sirven desde `web/public/assets/framer/`.
+- Favicon claro/oscuro, Apple Touch Icon y Social Preview originales instalados. Open Graph y Twitter Cards se incluyen en el HTML inicial para que los lectores de enlaces puedan verlos sin ejecutar React.
 - En el servidor API se agregaron `PANEL_ORIGINS` y `GOOGLE_ALLOWED_ORIGINS`, conservando los dos orígenes de turnits.com y sumando `https://turnits-web.onrender.com`.
 
 Federico autorizó `https://turnits-web.onrender.com` en Google Cloud. La API también permite ese origen. La comprobación del inicio de sesión completo se realiza desde el login publicado, seleccionando una cuenta de Google.
@@ -17,6 +18,8 @@ Federico autorizó `https://turnits-web.onrender.com` en Google Cloud. La API ta
 El repositorio se conectó mediante su URL pública. Se comprobó un **Auto-Deploy** al subir un cambio en `web/` a `codex/vite-migration`. También se puede usar **Manual Deploy → Deploy latest commit** en Render. Los cambios fuera de `web/`, como esta documentación, no disparan el build del frontend.
 
 turnits.com continúa en Framer y sus DNS se gestionan en Cloudflare. Esta publicación permite revisar la app antes de cambiar el dominio. El booking ya se comprobó con los datos públicos reales; no se realizaron reservas, pagos ni modificaciones en cuentas.
+
+Al mover el dominio, configurar `VITE_SITE_URL=https://turnits.com` en el Static Site y volver a compilar. Esto actualiza las URLs absolutas de la imagen y los metadatos sociales. Durante la prueba usan `https://turnits-web.onrender.com`.
 
 ## Ejecutar en tu computadora
 
