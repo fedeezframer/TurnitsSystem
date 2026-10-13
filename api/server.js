@@ -7259,6 +7259,25 @@ app.get("/auth/reset-token-info", async (req, res) => {
 app.get("/api/card-config", (_req,res)=>res.json({enabled:!!(process.env.MP_TURNERO_PUBLIC_KEY && process.env.JWT_SECRET)}));
 
 const cardPaymentLocks = new Set();
+function cardProviderDiagnostic(httpStatus, response) {
+  // Sólo identificadores del proveedor y nombres de campos: nunca el token,
+  // número de tarjeta, CVV, email, documento ni la respuesta completa de MP.
+  const safeCode = value => {
+    if (typeof value !== "string" && typeof value !== "number") return null;
+    const code = String(value).trim();
+    if (/^(?:\d{1,6}|[a-z][a-z0-9_]{0,63})$/i.test(code) && !/app_usr|bearer|test_/i.test(code)) return code;
+    return null;
+  };
+  const causes = Array.isArray(response?.cause) ? response.cause.slice(0,8) : [];
+  const codes = causes.map(cause => safeCode(cause?.code)).filter(Boolean);
+  const errorCode = safeCode(response?.error) || "provider_error";
+  const descriptions = [response?.message, ...causes.map(cause => cause?.description)]
+    .filter(value => typeof value === "string").join(" ").toLowerCase();
+  const fields = ["application_fee", "marketplace_fee", "public_key", "access_token", "token", "payer", "collector", "payment_method_id", "issuer_id", "installments", "transaction_amount", "notification_url", "metadata", "external_reference"]
+    .filter(field => descriptions.includes(field));
+  return {http_status:httpStatus,error_code:errorCode,cause_codes:codes,fields,
+    reference:`MP-${httpStatus}-${codes[0] || errorCode}`};
+}
 function verifyCardSession(value) {
   return jwt.verify(value, process.env.JWT_SECRET + ":card-checkout", {algorithms:["HS256"], audience:"turnits-card"});
 }
@@ -7333,7 +7352,14 @@ app.post("/api/card-payment",limiterBooking,async(req,res)=>{
     attempted=true;
     const response=await fetch("https://api.mercadopago.com/v1/payments",{method:"POST",headers:{Authorization:"Bearer "+ctx.token,"Content-Type":"application/json","X-Idempotency-Key":ctx.pending.id},body:JSON.stringify(body)});
     const pay=await response.json();
-    if(!response.ok)return res.status(response.status>=500?503:400).json({error:response.status>=500?"No pudimos confirmar el resultado. Consultá el estado antes de volver a pagar.":"Mercado Pago no pudo completar el cobro. Revisá los datos o consultá el estado."});
+    if(!response.ok) {
+      const diagnostic = cardProviderDiagnostic(response.status,pay);
+      console.error("❌ MP card-payment:", JSON.stringify({slug:ctx.pending.slug,pending_id:ctx.pending.id,...diagnostic}));
+      return res.status(response.status>=500?503:400).json({status:"unknown",reference:diagnostic.reference,
+        error:response.status>=500
+          ? `No pudimos confirmar el resultado. Referencia: ${diagnostic.reference}. Consultá el estado antes de volver a pagar.`
+          : `Mercado Pago no aceptó la solicitud de pago. Referencia: ${diagnostic.reference}. Consultá el estado antes de volver a pagar.`});
+    }
     return await finishCardPayment(ctx,pay,res);
   }catch{return res.status(attempted?503:400).json({status:attempted?"unknown":"not_charged",error:attempted?"No pudimos confirmar el resultado. Consultá el estado antes de volver a pagar.":"No se inició el cobro. Volvé a elegir el turno y revisá la conexión del negocio."});}
   finally{if(lock)cardPaymentLocks.delete(lock);}
