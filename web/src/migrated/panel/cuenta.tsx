@@ -747,6 +747,15 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
     }
     function elegirOferta(plan: any, account = cuenta) {
         if (busyRef.current) return
+        if (!["gratis", "basico", "premium"].includes(account?.plan)) {
+            setError("No se pudo confirmar tu plan actual. Volvé a abrir los planes.")
+            return
+        }
+        if (plan.id === "gratis") {
+            setSeleccion(null); setError(""); setMensaje("")
+            setAvisoPlan(account.plan === "gratis" ? null : plan)
+            return
+        }
         const orden = { gratis: 0, basico: 1, premium: 2 }
         if (orden[plan.id] < orden[account?.plan] || account?.reducciones?.[plan.id]?.miembros_a_eliminar?.length) {
             setAvisoPlan(plan); setError(""); setMensaje("")
@@ -754,8 +763,18 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
         }
         confirmarOferta(plan, account)
     }
+    async function revisarOferta(plan: any) {
+        if (busyRef.current) return
+        let account: any = null
+        await action(async () => {
+            account = await request(`/suscripcion/${encodeURIComponent(slug)}`)
+            if (mounted.current) setCuenta(account)
+        })
+        if (account && mounted.current) elegirOferta(plan, account)
+    }
     function confirmarOferta(plan: any, account = cuenta) {
         if (busyRef.current) return
+        if (plan.id === "gratis") { elegirOferta(plan, account); return }
         setSeleccion(plan); setError(""); setMensaje("")
         const next = account?.tarjeta_disponible ? "tarjeta" : "mercadopago"
         setMedio(next)
@@ -772,6 +791,14 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
         }
     }
     async function aplicarPlanGratis() {
+        const account = await request(`/suscripcion/${encodeURIComponent(slug)}`)
+        if (!mounted.current) return
+        setCuenta(account)
+        if (account.plan === "gratis") {
+            setAvisoPlan(null); setSeleccion(null); setError(""); setMensaje("")
+            return
+        }
+        if (!["basico", "premium"].includes(account.plan)) throw new Error("No se pudo confirmar tu plan actual.")
         await request(`/renovacion/downgrade/${encodeURIComponent(slug)}`, {})
         const url = new URL(window.location.href)
         url.searchParams.delete("planes"); url.searchParams.delete("status")
@@ -938,7 +965,7 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
                 </div></div>
                 <div className="tn-planes-grid">{catalogo.map(p => {
                     const gratis = p.id === "gratis", featured = p.id === "basico", monto = periodo === "anual" && !gratis ? p.precio_anual : p.precio_mensual
-                    const actual = cuenta?.plan === p.id && cuenta?.estado === "activo" && (!cuenta.fecha_vencimiento || new Date(cuenta.fecha_vencimiento) > new Date())
+                    const actual = cuenta?.plan === p.id && (gratis || (cuenta?.estado === "activo" && (!cuenta.fecha_vencimiento || new Date(cuenta.fecha_vencimiento) > new Date())))
                     return <div key={p.id} className={"tn-planes-card" + (featured ? " featured" : "")}>
                         {featured && <span style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", padding: "6px 13px", borderRadius: 99, background: "#196b1f", color: "#fff", fontSize: 12, fontWeight: 700 }}><TurnitsPlanIcon plan="basico" size={14} />Más elegido</span>}
                         <div style={{ textAlign: "center" }}>
@@ -948,14 +975,11 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
                         </div>
                         <div style={{ height: 1, background: "#e2e8f0" }} />
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>{features(p.id).map(f => <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, lineHeight: 1.5 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#196b1f" strokeWidth="2" style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg><span>{f}</span></div>)}</div>
-                        <button type="button" disabled={busy || (gratis && actual)} onClick={() => elegirOferta(p)} style={{ ...button, marginTop: "auto", width: "100%", background: featured ? "#196b1f" : gratis ? "#f1f5f9" : "#181b18", color: gratis ? "#475569" : "#fff", opacity: gratis && actual ? .6 : 1 }}>{gratis ? actual ? "Plan actual" : "Pasar a Gratis" : actual ? "Renovar plan" : "Comprar plan"}</button>
+                        <button type="button" disabled={busy || (gratis && actual)} onClick={() => revisarOferta(p)} style={{ ...button, marginTop: "auto", width: "100%", background: featured ? "#196b1f" : gratis ? "#f1f5f9" : "#181b18", color: gratis ? "#475569" : "#fff", opacity: gratis && actual ? .6 : 1 }}>{gratis ? actual ? "Plan actual" : "Pasar a Gratis" : actual ? "Renovar plan" : "Comprar plan"}</button>
                     </div>
                 })}</div>
                 <p style={{ margin: "20px 0 0", fontSize: 12, lineHeight: 1.6, color: "#64748b", textAlign: "center" }}>Anual: un pago por 365 días, con 33% de descuento sobre 12 mensualidades. Mercado Pago cobra sus costos de procesamiento por separado.</p>
-            </> : seleccion?.id === "gratis" ? <div style={{ maxWidth: 570, margin: "24px auto 0" }}>
-                <p style={{ fontSize: 14, lineHeight: 1.7, color: "#64748b" }}>Gratis incluye sólo al titular. El cambio se aplica inmediatamente y elimina los empleados adicionales; sus catálogos propios también se eliminan. Se deshabilitan temas, promociones, pagos directos y funciones del equipo.</p>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button disabled={busy} style={{ ...button, background: "#f1f5f9", color: "#475569" }} onClick={() => setSeleccion(null)}>Volver</button><button disabled={busy} style={button} onClick={() => action(aplicarPlanGratis)}>{busy ? "Cambiando…" : "Confirmar Plan Gratis"}</button></div>
-            </div> : isSuccess ? <MenuCuentaGraciasPlanes logo={checkoutLogo} nombre={catalogo.find(p => p.id === (compra?.plan || cuenta?.plan))?.nombre || "Premium"} fecha={cuenta.fecha_vencimiento} /> : oferta && <div className={"tn-checkout-layout " + (metodoActual === "tarjeta" ? "is-card" : "is-mp")}>
+            </> : isSuccess ? <MenuCuentaGraciasPlanes logo={checkoutLogo} nombre={catalogo.find(p => p.id === (compra?.plan || cuenta?.plan))?.nombre || "Premium"} fecha={cuenta.fecha_vencimiento} /> : oferta && <div className={"tn-checkout-layout " + (metodoActual === "tarjeta" ? "is-card" : "is-mp")}>
                 <div className="tn-checkout-left">
                     <MenuCuentaCheckoutBrand logo={checkoutLogo} />
                     <MenuCuentaCheckoutMethods value={metodoActual} cardAvailable={cuenta?.tarjeta_disponible} disabled={busy} onChange={cambiarMedio} />
