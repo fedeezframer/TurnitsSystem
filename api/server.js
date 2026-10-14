@@ -5961,6 +5961,17 @@ async function promocionesGuardar(req,res) {
 }
 app.post('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesGuardar);
 app.put('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promocionesGuardar);
+async function promocionesEstado(req,res) {
+  const slug=cleanSlug(req.params.slug),activo=req.body?.activo;
+  if(!UUID_REGEX.test(String(req.params.id)) || typeof activo !== 'boolean')return res.status(400).json({success:false,error:'Revisá la promoción y el estado elegido.'});
+  // Only switch visibility: preserve dates, weekday rules, prices and assignments.
+  let query=supabase.from('promociones').update({activo,updated_at:new Date().toISOString()}).eq('slug',slug).eq('id',req.params.id);
+  if(req.empleado)query=query.eq('owner_equipo_id',req.empleado.id);
+  const {data,error}=await query.select('*').maybeSingle();if(error)throw error;
+  if(!data)return res.status(404).json({success:false,error:'No encontramos esa promoción en tu catálogo.'});
+  res.json({success:true,promocion:(await catalogoConProfesionales(slug,[data],"promo"))[0]});
+}
+app.put('/admin/promociones/:slug/:id/estado',requireAuth,requirePromocionesPlan,promocionesAsync(promocionesEstado));
 app.delete('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
   const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('id',req.params.id).select('id').maybeSingle();
   if(error) return res.status(500).json({success:false,error:'No se pudo eliminar la promoción.'});
@@ -5974,6 +5985,7 @@ app.get('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,require
 }));
 app.post('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
 app.put('/empleado/:slug/promociones/:id',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
+app.put('/empleado/:slug/promociones/:id/estado',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesAsync(promocionesEstado));
 app.delete('/empleado/:slug/promociones/:id',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
  const {data,error}=await supabase.from('promociones').delete().eq('slug',cleanSlug(req.params.slug)).eq('owner_equipo_id',req.empleado.id).eq('id',req.params.id).select('id').maybeSingle();if(error)throw error;if(!data)return res.status(404).json({success:false,error:'Promoción no encontrada en tu perfil.'});res.json({success:true});
 }));

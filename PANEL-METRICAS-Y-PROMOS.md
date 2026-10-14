@@ -14,6 +14,14 @@ Federico pidió ejecutar personalmente `supabase/migrations/20261014_promociones
 
 Publicar el servidor con `web/src/shared/promotions.js`, seguido de la web. Es un módulo puro sin dependencias de React, dentro de la raíz `web` para que esté disponible en su build de Render. El selector de días sólo se habilita cuando la API anuncia soporte. Si la migración falta, las promos diarias siguen funcionando y el servidor rechaza explícitamente restricciones que aún no puede guardar. Los clientes antiguos conservan los días guardados al editar sin enviar el nuevo campo.
 
+## Visibilidad y pausa de promociones
+
+Los siete días siempre se muestran; inicialmente están atenuados y deshabilitados. El switch «Elegir días específicos» está apagado por defecto, manteniendo todos los días dentro de la vigencia. Sólo se puede activar cuando la API anuncia soporte.
+
+Se eliminó el switch de habilitar durante las fechas. Cada tarjeta ofrece Pausar/Reactivar, cambiando únicamente `activo` y `updated_at` mediante un endpoint autenticado. Conserva vigencia, días, precios, contenido y asignaciones. El empleado sólo puede cambiar sus propias promociones; el administrador puede gestionar todo su catálogo. Una edición abierta conserva el estado de pausa al guardar.
+
+Al vencer la fecha final inclusive (Argentina), la promoción deja de aparecer en el booking. Permanece en el panel como Vencida, incluso si también estaba pausada. Reactivarla no extiende su vigencia: se deben editar las fechas para volver a ofrecerla. No se elimina automáticamente ninguna promoción.
+
 ## Validación
 
 Build TypeScript/Vite y sintaxis del servidor; pruebas aisladas de cálculos mensuales, proporción sobre el precio completo, métricas, primeras visitas, fechas y días, precio autorizado, rechazo de reservas en días incorrectos, preservación de días en editores antiguos y compatibilidad mientras se instala el SQL. Pruebas de navegador con API simulada en escritorio/celular para ranking, Finanzas, creación/edición, días vacíos y OFF en el calendario. No se realizaron cobros, reservas ni escrituras reales en Supabase.
