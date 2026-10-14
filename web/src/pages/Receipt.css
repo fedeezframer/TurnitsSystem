@@ -1,0 +1,33 @@
+.receipt-page{min-height:100dvh;width:100%;background:#fff;color:#111827;font-family:'Inter Display','Inter',sans-serif}
+.receipt-header{height:76px;display:flex;align-items:center;justify-content:center;padding:20px}
+.receipt-header a{color:#111;text-decoration:none;font-size:36px;line-height:1;font-weight:750;letter-spacing:-1.6px}
+.receipt-main{min-height:calc(100dvh - 76px);display:flex;justify-content:center;align-items:center;padding:32px 20px 68px}
+.receipt-card{width:432px;max-width:100%;min-height:600px;border:1px solid #deebe0;border-radius:20px;background:#fff;padding:40px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.receipt-card-with-details{justify-content:flex-start}
+.receipt-status{flex-shrink:0;width:96px;height:96px;border-radius:50%;display:grid;place-items:center;color:#fff;background:#6d6e18}
+.receipt-status-confirmed{background:#196b1f}
+.receipt-status-cancelled,.receipt-status-rejected{background:#781b1a}
+.receipt-title{margin:18px 0 24px;text-align:center;font-size:32px;line-height:1.2;letter-spacing:-1.1px;font-style:italic;font-weight:400;color:#6d6e18}
+.receipt-title-confirmed{color:#196b1f}
+.receipt-title-cancelled,.receipt-title-rejected{color:#781b1a}
+.receipt-information{width:100%;min-width:0}
+.receipt-message,.receipt-loading,.receipt-error{font-size:14px;line-height:1.5;margin:0 0 20px}
+.receipt-message,.receipt-loading{color:#4b5563}
+.receipt-loading,.receipt-error{text-align:center}
+.receipt-error{color:#dc2626;overflow-wrap:anywhere}
+.receipt-details{margin:0;display:flex;flex-direction:column;gap:10px;min-width:0}
+.receipt-row{display:flex;flex-direction:column;gap:4px;min-width:0}
+.receipt-row dt{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#9ca3af;font-weight:500}
+.receipt-row dd{margin:0;font-size:15px;line-height:1.45;font-weight:500;overflow-wrap:anywhere;min-width:0}
+.receipt-value-paid{color:#15803d}
+.receipt-value-due{color:#c2410c}
+.receipt-divider{height:1px;background:#f3f4f6;margin:4px 0}
+.receipt-extras{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.receipt-extras li{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.receipt-extras li span:first-child{min-width:0;overflow-wrap:anywhere}
+.receipt-extras li span:last-child{flex-shrink:0;white-space:nowrap}
+.receipt-code{margin:18px 0 0;text-align:center;font-size:12px;color:#9ca3af}
+.receipt-back{display:inline-flex;align-items:center;justify-content:center;gap:14px;min-height:44px;max-width:100%;margin-top:32px;padding:10px 20px;border-radius:4px;background:#000;color:#fff;text-decoration:none;font-size:16px;line-height:1.3;transition:background .15s}
+.receipt-back:hover{background:#242424}
+.receipt-back:focus-visible,.receipt-header a:focus-visible{outline:3px solid #196b1f;outline-offset:4px}
+@media(max-width:480px){.receipt-header{height:68px}.receipt-header a{font-size:32px}.receipt-main{min-height:calc(100dvh - 68px);padding:24px 16px 40px}.receipt-card{padding:32px 24px;min-height:560px}.receipt-title{font-size:29px}.receipt-status{width:88px;height:88px}}
