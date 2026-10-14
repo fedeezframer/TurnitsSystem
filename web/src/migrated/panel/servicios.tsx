@@ -12,6 +12,7 @@ import { createPortal } from "react-dom"
 import { ServiciosManager_ImageUploaderProps, ServiciosManager_getSlug, ServiciosManager_getToken, ServiciosManager_cardBase, ServiciosManager_shimmerCSS, ServiciosManager_Extra, ServiciosManager_FORM_EMPTY, ServiciosManager_FormProps, ServiciosManager_FormData, ServiciosManager_PRECIO_MINIMO, ServiciosManager_DURACIONES, ServiciosManager_formatDuracion, ServiciosManager_EXTRA_FORM_EMPTY, ServiciosManager_ExtraFormProps, ServiciosManager_ExtraFormData, ServiciosManager_PRECIO_MINIMO_EXTRA, ServiciosManager_Servicio, ServiciosManager_EmployeeCardStyle, CatalogoProfesional, ServiciosManager_useContainerWidth, TurnitsResolveAccountPlan, ServiciosManager_parseDesc, ServiciosManager_buildDesc, TurnitsLockedStyle } from "./common"
 import { ServiciosManager_PlaceholderIcon } from "./inicio"
 import { TurnitsPlanRequirement } from "./shared"
+import { PROMO_DAYS, promoDaysLabel, promoHasMatchingDate } from "../../shared/promotions.js"
 
 function Turnits_ImageAdjustDialog({
     file,
@@ -3577,7 +3578,7 @@ function ServiciosManager(props: any) {
                     </div>
                 </>
             ) : (
-                <>{puedePromociones ? <ServiciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Combos y promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Disponible en Básico y Premium, también durante la prueba.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>
+                <>{puedePromociones ? <ServiciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Combos y promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Armá combos y descuentos para tu catálogo.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>
             )}
         </div>
     )
@@ -3585,9 +3586,10 @@ function ServiciosManager(props: any) {
 
 function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMobile,employeeMode=false}:{api:string;servicios:any[];productos:any[];accentColor:string;isMobile:boolean;employeeMode?:boolean}) {
     const hoy = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
-    const initial = () => ({nombre:"",tipo:"combo",items:[] as {tipo:string;id:string;cantidad:number}[],descuento_tipo:"precio_final",valor:"",fecha_inicio:hoy(),fecha_fin:hoy(),activo:true})
+    const initial = () => ({nombre:"",tipo:"combo",items:[] as {tipo:string;id:string;cantidad:number}[],descuento_tipo:"precio_final",valor:"",fecha_inicio:hoy(),fecha_fin:hoy(),dias_semana:null as number[] | null,activo:true})
     const [form,setForm]=React.useState(initial)
     const [lista,setLista]=React.useState<any[]>([])
+    const [diasHabilitados,setDiasHabilitados]=React.useState(false)
     const [loading,setLoading]=React.useState(true)
     const [error,setError]=React.useState("")
     const [busy,setBusy]=React.useState(false)
@@ -3602,7 +3604,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
         if(!response.ok || !result.success)throw new Error(result.error || "No se pudo completar la operación.")
         return result
     }
-    React.useEffect(()=>{let active=true;request("").then(r=>{if(active)setLista(r.promociones)}).catch(e=>{if(active)setError(e.message)}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[api,slug,token])
+    React.useEffect(()=>{let active=true;request("").then(r=>{if(active){setLista(r.promociones);setDiasHabilitados(r.dias_semana_habilitado===true)}}).catch(e=>{if(active)setError(e.message)}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[api,slug,token])
     const catalogo=[...servicios.filter(s=>s.activo).map(s=>({...s,tipo:"servicio"})),...productos.filter(p=>p.activo === true || p.activo === "true").map(p=>({...p,tipo:"producto"}))]
     const selected=form.items.map(item=>({...item,source:catalogo.find(c=>c.tipo===item.tipo && c.id===item.id)}))
     const original=selected.reduce((sum,item)=>sum+Number(item.source?.precio || 0)*item.cantidad,0)
@@ -3613,11 +3615,13 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const toggle=(item:any)=>setForm(prev=>({...prev,items:prev.items.some(i=>i.id===item.id&&i.tipo===item.tipo) ? prev.items.filter(i=>!(i.id===item.id&&i.tipo===item.tipo)) : prev.tipo === "descuento" ? [{tipo:item.tipo,id:item.id,cantidad:1}] : [...prev.items,{tipo:item.tipo,id:item.id,cantidad:1}]}))
     const guardar=async(e:React.FormEvent)=>{
         e.preventDefault();setError("")
+        if(form.dias_semana !== null && !diasHabilitados) {setError("La programación por días todavía no está disponible. Volvé a cargar las promociones.");return}
+        if(!promoHasMatchingDate(form)) {setError("No hay ningún día seleccionado dentro de la vigencia. Elegí al menos un día que coincida con las fechas.");return}
         if(!form.nombre.trim() || !form.items.length || selected.some(i=>!i.source) || !form.fecha_inicio || !form.fecha_fin || form.fecha_fin<form.fecha_inicio || !validPrice || (form.tipo === "combo" && form.items.reduce((sum,i)=>sum+i.cantidad,0)<2)) {setError("Completá el nombre, los elementos, un precio menor al original y una vigencia válida. Los combos necesitan al menos dos unidades.");return}
         setBusy(true)
         try {const result=await request(editando ? `/${editando}` : "",editando ? "PUT" : "POST",{...form,valor});setLista(prev=>[result.promocion,...prev.filter(p=>p.id!==result.promocion.id)]);setMostrar(false);setEditando(null);setForm(initial())}catch(e:any){setError(e.message)}finally{setBusy(false)}
     }
-    const editar=(promo:any)=>{setForm({...promo,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))});setEditando(promo.id);setMostrar(true);setError("")}
+    const editar=(promo:any)=>{setForm({...promo,dias_semana:promo.dias_semana ?? null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))});setEditando(promo.id);setMostrar(true);setError("")}
     const eliminar=async(id:string)=>{if(!window.confirm("¿Eliminar esta promoción?"))return;setBusy(true);setError("");try{await request(`/${id}`,"DELETE");setLista(prev=>prev.filter(p=>p.id!==id))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
     const input:React.CSSProperties={width:"100%",minWidth:0,boxSizing:"border-box",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"9px 11px",font:"inherit",fontSize:13,background:"white",color:"#1e293b",transition:"border-color .15s, box-shadow .15s"}
     const button:React.CSSProperties={border:0,borderRadius:10,padding:"10px 14px",background:accentColor,color:"white",font:"inherit",fontWeight:650,cursor:busy ? "wait" : "pointer"}
@@ -3651,7 +3655,12 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{[7,15,30].map(days=><button type="button" key={days} aria-pressed={duracionElegida===days} style={{...button,background:duracionElegida===days ? accentColor : "#f1f5f9",color:duracionElegida===days ? "white" : "#475569",fontSize:12,transition:"background .15s,color .15s"}} onClick={()=>{const d=new Date((form.fecha_inicio || hoy())+"T12:00:00");d.setDate(d.getDate()+days-1);const end=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;setForm({...form,fecha_inicio:form.fecha_inicio || hoy(),fecha_fin:end})}}>{days} días</button>)}</div>
                 <div style={{padding:14,borderRadius:12,background:"#f1f8f2",lineHeight:1.7}}><div>Precio original: <strong>{money(original)}</strong></div><div>Precio de la promo: <strong>{validPrice ? money(final) : "—"}</strong></div><div>Ahorro: <strong>{validPrice ? `${money(original-final)} (${((original-final)/original*100).toFixed(1)}%)` : "—"}</strong></div></div>
-                <label style={{display:"flex",alignItems:"center",gap:10,fontSize:12,color:"#475569",cursor:"pointer"}}><input className="promo-switch" role="switch" type="checkbox" checked={form.activo} onChange={e=>setForm({...form,activo:e.target.checked})}/>Habilitar durante las fechas elegidas</label>
+                {diasHabilitados && <div style={{display:"grid",gap:10}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}><span style={{fontWeight:700}}>Días de la promo <small style={{fontWeight:400,color:"#64748b"}}>· opcional</small></span><label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:400}}><input className="promo-switch" role="switch" type="checkbox" checked={form.dias_semana === null} onChange={e=>setForm({...form,dias_semana:e.target.checked ? null : []})}/>Todos los días</label></div>
+                    {form.dias_semana !== null && <div role="group" aria-label="Días de la semana de la promoción" style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:5}}>{PROMO_DAYS.map(day=><button type="button" key={day.id} aria-label={day.label} aria-pressed={form.dias_semana!.includes(day.id)} style={{...button,padding:"10px 2px",fontSize:12,background:form.dias_semana!.includes(day.id) ? accentColor : "#f1f5f9",color:form.dias_semana!.includes(day.id) ? "white" : "#475569"}} onClick={()=>setForm(prev=>({...prev,dias_semana:prev.dias_semana!.includes(day.id) ? prev.dias_semana!.filter(id=>id!==day.id) : [...prev.dias_semana!,day.id]}))}>{day.short}</button>)}</div>}
+                    <p style={{margin:0,fontSize:12,color:"#64748b",lineHeight:1.5}}>{form.dias_semana === null ? "Se aplica todos los días dentro de las fechas elegidas." : form.dias_semana.length ? `Se repite los ${promoDaysLabel(form.dias_semana)} dentro de la vigencia.` : "Elegí los días en los que querés ofrecer esta promo."}</p>
+                </div>}
+                <label style={{display:"flex",alignItems:"center",gap:10,fontSize:12,color:"#475569",cursor:"pointer"}}><input className="promo-switch" role="switch" type="checkbox" checked={form.activo} onChange={e=>setForm({...form,activo:e.target.checked})}/>Habilitar durante las fechas y días elegidos</label>
             </fieldset>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button disabled={busy} type="submit" style={button}>{busy ? "Guardando…" : "Guardar promo"}</button><button disabled={busy} type="button" style={{...button,background:"#f1f5f9",color:"#475569"}} onClick={()=>{setMostrar(false);setError("")}}>Cancelar</button></div>
         </form>}
@@ -3676,6 +3685,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                     {!employeeMode && <ServiciosManager_Creador item={p} />}
                     {!employeeMode && <ServiciosManager_Profesionales profesionales={p.profesionales} />}
                     <div style={{fontSize:10,color:"#64748b",lineHeight:1.5,marginTop:1}}>{date(p.fecha_inicio)} al {date(p.fecha_fin)} · inclusive</div>
+                    {p.dias_semana != null && <div style={{fontSize:11,color:accentColor,lineHeight:1.5}}>Sólo los {promoDaysLabel(p.dias_semana)}</div>}
                     <div style={{display:"flex",gap:7,marginTop:3}}><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#f1f5f9",color:"#475569",fontSize:12}} onClick={()=>editar(p)}>Editar</button><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#fff1f2",color:"#b91c1c",fontSize:12}} onClick={()=>eliminar(p.id)}>Eliminar</button></div>
                 </div>
             </div>

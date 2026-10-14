@@ -27,7 +27,7 @@ function TurnitsPlanIcon({ plan, size = 20 }: { plan: "basico" | "premium"; size
 
 function TurnitsPlanRequirement({ premiumOnly = false, color = "#64748b" }: { premiumOnly?: boolean; color?: string }) {
     const label = premiumOnly ? "Requiere Plan Premium" : "Disponible con Plan Básico o Plan Premium"
-    return <span role="img" aria-label={label} title={label} style={{ display: "inline-flex", alignItems: "center", gap: 5, color, flexShrink: 0 }}>
+    return <span role="img" aria-label={label} style={{ display: "inline-flex", alignItems: "center", gap: 5, color, flexShrink: 0 }}>
         {!premiumOnly && <TurnitsPlanIcon plan="basico" />}
         <TurnitsPlanIcon plan="premium" />
     </span>

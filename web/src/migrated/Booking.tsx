@@ -1,5 +1,6 @@
 import { appConfig } from "../config"
 import * as React from "react"
+import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
 
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -82,6 +83,7 @@ interface Negocio {
     datos_bancarios: DatosBancarios | null
 }
 interface BookingPromo {
+ dias_semana?: number[] | null;
  imagenes?:{id:string;tipo:string;url:string}[];
  id:string;nombre:string;tipo:"combo"|"descuento";servicio_id:string;precio_original:number;precio_final:number;duracion:number;fecha_inicio:string;fecha_fin:string;items:{id:string;tipo:string;nombre:string;cantidad:number}[]
 }
@@ -833,7 +835,7 @@ export default function BookingFlow(props: any) {
     const hoyBA = React.useMemo(() => getHoyBA(), [])
     const [verMasDias, setVerMasDias] = React.useState(false)
     const [fecha, setFecha] = React.useState<string>("")
-    const promoParaFecha = (dia:string) => promoElegida?.tipo === "combo" ? promoElegida : promociones.filter(p=>p.tipo === "descuento" && p.servicio_id===servicioId && dia>=p.fecha_inicio && dia<=p.fecha_fin && p.precio_final<Number(servicios.find(s=>s.id===servicioId)?.precio || 0)).sort((a,b)=>a.precio_final-b.precio_final)[0] || null
+    const promoParaFecha = (dia:string) => promoElegida?.tipo === "combo" ? (promoAppliesOn(promoElegida,dia) ? promoElegida : null) : promociones.filter(p=>p.tipo === "descuento" && p.servicio_id===servicioId && promoAppliesOn(p,dia) && p.precio_final<Number(servicios.find(s=>s.id===servicioId)?.precio || 0)).sort((a,b)=>a.precio_final-b.precio_final)[0] || null
     const promoAplicada = fecha ? promoParaFecha(fecha) : promoElegida
     const [diasLlenos, setDiasLlenos] = React.useState<string[]>([])
     const [diasSinDisponibilidad, setDiasSinDisponibilidad] = React.useState<
@@ -1121,20 +1123,23 @@ export default function BookingFlow(props: any) {
             const diaNombre = DIAS[dateObj.getDay()]
             if (!esCustomConSlots && !negocio.horarios?.[diaNombre]?.activo)
                 continue
+            // Filter before the display limit so weekly combos can reach later weeks.
+            if (promoElegida?.tipo === "combo" && !promoAppliesOn(promoElegida,iso)) continue
             lista.push(iso)
         }
         return lista
-    }, [negocio, excepcionesMap, hoyBA])
+    }, [negocio, excepcionesMap, hoyBA, promoElegida])
 
-    const hayMasDias = diasTodos.slice(MAX_DIAS_VISIBLES).some(f => !diasSinDisponibilidad.includes(f) && (promoElegida?.tipo !== "combo" || (f >= promoElegida.fecha_inicio && f <= promoElegida.fecha_fin)))
+    const diasParaSeleccion = React.useMemo(() => diasTodos.filter(f => promoElegida?.tipo !== "combo" || promoAppliesOn(promoElegida,f)), [diasTodos,promoElegida])
+    const hayMasDias = diasParaSeleccion.slice(MAX_DIAS_VISIBLES).some(f => !diasSinDisponibilidad.includes(f))
     const diasCandidatos = React.useMemo(
-        () => (verMasDias ? diasTodos : diasTodos.slice(0, MAX_DIAS_VISIBLES)),
-        [diasTodos, verMasDias]
+        () => (verMasDias ? diasParaSeleccion : diasParaSeleccion.slice(0, MAX_DIAS_VISIBLES)),
+        [diasParaSeleccion, verMasDias]
     )
     // Oculta únicamente las fechas ya consultadas que no tengan horarios
     // reservables. Las fechas completas siguen visibles si admiten lista de espera.
     const diasDisponibles = React.useMemo(
-        () => diasCandidatos.filter((f) => !diasSinDisponibilidad.includes(f) && (promoElegida?.tipo !== "combo" || (f>=promoElegida.fecha_inicio && f<=promoElegida.fecha_fin))),
+        () => diasCandidatos.filter((f) => !diasSinDisponibilidad.includes(f)),
         [diasCandidatos, diasSinDisponibilidad, promoElegida]
     )
 
@@ -2317,6 +2322,7 @@ export default function BookingFlow(props: any) {
                                     <div>
                                         <BackLink onClick={volverPaso} />
                                         <StepTitle title="Elegí el día" />
+                                        {promoElegida?.dias_semana != null && <p style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)",margin:"0 0 12px"}}>Esta promo se aplica los {promoDaysLabel(promoElegida.dias_semana)} dentro de su vigencia.</p>}
                                         {promoElegida?.tipo === "descuento" && <p style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)",margin:"-4px 0 14px"}}>Los días OFF tienen descuento. Las demás fechas se reservan al precio normal.</p>}
                                         <DiasBlock
                                             accent={accent}
@@ -3229,6 +3235,7 @@ function BookingCombosDesktop({promociones,servicios,accent,onSelect}:{promocion
         <div style={{fontSize:15,fontWeight:700,color:"var(--bf-text)"}}>Combos disponibles</div>
         {promociones.map(p=><div key={p.id} style={{padding:14,border:"1px solid var(--bf-border)",borderRadius:12,background:"var(--bf-card-bg)",display:"flex",flexDirection:"column",gap:9,minWidth:0}}>
             <strong style={{fontSize:13,lineHeight:1.4,color:"var(--bf-text)",overflowWrap:"anywhere"}}>{p.nombre}</strong>
+            {p.dias_semana != null && <span style={{fontSize:11,lineHeight:1.4,color:"var(--bf-text-muted)"}}>Sólo los {promoDaysLabel(p.dias_semana)}</span>}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:5}}>{p.items.map(item=>{const url=p.imagenes?.find(i=>i.tipo===item.tipo && i.id===item.id)?.url || (item.tipo === "servicio" ? servicios.find(s=>s.id===item.id)?.imagen : "");return <span key={item.tipo+item.id} title={`${item.cantidad} × ${item.nombre}`} style={{aspectRatio:"1",position:"relative",display:"grid",placeItems:"center",borderRadius:5,overflow:"hidden",background:"var(--bf-panel-bg)",minWidth:0}}>{url ? <img src={url} alt={item.nombre} style={{width:"100%",height:"100%",objectFit:item.tipo === "producto" ? "contain" : "cover",borderRadius:5}}/> : <span style={{fontSize:10,padding:4,textAlign:"center",color:"var(--bf-text-muted)",overflowWrap:"anywhere"}}>{item.nombre}</span>}{item.cantidad>1 && <span style={{position:"absolute",right:2,bottom:2,fontSize:9,padding:"1px 3px",borderRadius:3,background:"var(--bf-card-bg)",color:"var(--bf-text)"}}>×{item.cantidad}</span>}</span>})}</div>
             <div style={{fontSize:10,lineHeight:1.5,color:"var(--bf-text-muted)",overflowWrap:"anywhere"}}>Incluye: {p.items.map(i=>`${i.cantidad} × ${i.nombre}`).join(" + ")}</div>
             <div style={{display:"flex",alignItems:"baseline",gap:6,flexWrap:"wrap",color:"var(--bf-text)"}}><strong style={{fontSize:15}}>$ {p.precio_final.toLocaleString("es-AR")}</strong><del style={{fontSize:11,color:"var(--bf-text-muted)"}}>$ {p.precio_original.toLocaleString("es-AR")}</del></div>
@@ -3294,6 +3301,7 @@ function BookingCombosSubheader({promociones,servicios,accent,icono,onSelect}:{p
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
                         <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:5}}>
                             <button type="button" aria-label="Cerrar combos" onClick={()=>setAbierto(false)} style={{display:"block",maxWidth:"100%",border:0,padding:0,background:"transparent",color:"var(--bf-text)",font:"inherit",fontSize:12,lineHeight:"16px",textAlign:"left",overflowWrap:"anywhere",cursor:"pointer"}}>{p.nombre}</button>
+                            {p.dias_semana != null && <span style={{fontSize:10,lineHeight:1.4,color:"var(--bf-text-muted)"}}>Sólo los {promoDaysLabel(p.dias_semana)}</span>}
                             <div style={{display:"flex",alignItems:"baseline",gap:6,flexWrap:"wrap",fontSize:12,lineHeight:"16px",color:"var(--bf-text)"}}><strong style={{fontWeight:600}}>$ {p.precio_final.toLocaleString("es-AR")}</strong><del style={{fontSize:10,color:"var(--bf-text-muted)",fontWeight:400}}>$ {p.precio_original.toLocaleString("es-AR")}</del></div>
                             <button type="button" onClick={()=>onSelect(p)} style={{border:0,borderRadius:20,padding:"4px 7px",background:accent,color:"white",font:"inherit",fontSize:10,lineHeight:"13px",cursor:"pointer",whiteSpace:"nowrap"}}>Agendar Combo</button>
                         </div>

@@ -4925,14 +4925,12 @@ function finanzasMetricasNegocio(summary: any, gastos: FinanzasGasto[]) {
     const total = number(summary.gastosTotales)
     const turnos = Math.max(0, number(summary.cantidadTurnos))
     const fijos = gastos.filter(g => g.tipo === "fijo" || g.origen_recurrente).reduce((sum, g) => sum + number(g.monto), 0)
-    const variables = total - fijos
-    const contribucion = ingresos - variables
-    const tasaContribucion = ingresos > 0 ? contribucion / ingresos : null
-    const equilibrio = tasaContribucion !== null && tasaContribucion > 0 ? fijos / tasaContribucion : null
-    return { fijos, variables, contribucion, tasaContribucion, equilibrio,
+    const variables = Math.max(0, total - fijos)
+    return { fijos, variables,
         ticket: turnos > 0 ? ingresos / turnos : null,
         costoTurno: turnos > 0 ? total / turnos : null,
-        seguridad: equilibrio !== null && ingresos > 0 ? (ingresos - equilibrio) / ingresos * 100 : null }
+        resultadoTurno: turnos > 0 ? (ingresos - total) / turnos : null,
+        comisionIngresos: ingresos > 0 ? number(summary.comisionesTotales) / ingresos * 100 : null }
 }
 
 function TurnitsSidebarUtilityButton(accentColor: string): React.CSSProperties {

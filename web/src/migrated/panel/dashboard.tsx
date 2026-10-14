@@ -780,7 +780,7 @@ function TurnitsDashboard_ServicesMostRequested({
 }
 
 function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
-    const dias = stats?.diasRecurrentes || []
+    const dias = stats?.diasConMasTurnos || []
     const total = dias.reduce(
         (a: number, d: any) => a + Number(d.cantidad || 0),
         0
@@ -800,10 +800,10 @@ function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
                 <div
                     style={{ fontSize: 16, fontWeight: 750, color: "#111827" }}
                 >
-                    ¿Cuándo vuelven tus clientes?
+                    Días con más turnos
                 </div>
                 <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
-                    Días con más visitas de clientes recurrentes
+                    Reservas confirmadas y completadas de este mes
                 </div>
             </div>
             {top ? (
@@ -823,7 +823,7 @@ function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
                             fontWeight: 650,
                         }}
                     >
-                        Día más recurrente
+                        Día con más turnos
                     </div>
                     <div
                         style={{
@@ -862,12 +862,12 @@ function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
                     marginTop: 14,
                 }}
             >
-                {dias.slice(0, 5).map((d: any) => (
+                {dias.map((d: any, index: number) => (
                     <div
                         key={d.nombre}
                         style={{
                             display: "grid",
-                            gridTemplateColumns: "74px 1fr 36px",
+                            gridTemplateColumns: "96px 1fr 36px",
                             alignItems: "center",
                             gap: 8,
                         }}
@@ -879,7 +879,7 @@ function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
                                 fontWeight: 650,
                             }}
                         >
-                            {d.nombre}
+                            {index + 1}. {d.nombre}
                         </div>
                         <div
                             style={{
@@ -919,8 +919,7 @@ function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
                             fontSize: 11.5,
                         }}
                     >
-                        Todavía no hay suficientes visitas recurrentes para
-                        mostrar un patrón.
+                        Todavía no hay turnos confirmados para mostrar el ranking.
                     </div>
                 )}
             </div>

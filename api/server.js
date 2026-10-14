@@ -9,6 +9,7 @@ import rateLimit      from "express-rate-limit";
 import multer         from "multer";
 import crypto         from "crypto";
 import webpush        from "web-push";
+import { normalizePromoDays, promoAppliesOn, promoHasMatchingDate } from "../web/src/shared/promotions.js";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
@@ -1234,8 +1235,19 @@ function calcularDiasRecurrentes(turnos) {
     .sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
 }
 
-// El panel guarda la imagen del servicio DENTRO de la descripción con el
-// formato "[img:URL]texto". Para el límite de largo se mide solo el texto.
+// Ranking del mes: todos los turnos confirmados/completados, incluso primeras visitas.
+function calcularDiasConMasTurnos(turnos) {
+  const conteo = Array(7).fill(0);
+  for (const t of turnos || []) {
+    if (!["confirmado", "completado"].includes(t.estado) || !fechaISOValida(String(t.fecha || "").slice(0, 10))) continue;
+    conteo[new Date(String(t.fecha).slice(0, 10) + "T12:00:00Z").getUTCDay()]++;
+  }
+  const total = conteo.reduce((a,b) => a+b, 0);
+  return conteo.map((cantidad,dia) => ({nombre:NOMBRES_DIAS_SEMANA[dia],cantidad,porcentaje:total ? Math.round(cantidad / total * 100) : 0,dia}))
+    .filter(d => d.cantidad > 0).sort((a,b) => b.cantidad-a.cantidad || ((a.dia+6)%7)-((b.dia+6)%7));
+}
+
+// El panel guarda la imagen del servicio dentro de "[img:URL]texto".
 function largoDescripcionServicio(descripcion) {
   return String(descripcion ?? "").replace(/^\[img:.*?\]/s, "").length;
 }
@@ -2375,7 +2387,7 @@ async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
   if(!UUID_REGEX.test(String(id)))throw promoError('La promoción seleccionada no es válida.');
   const {data:p,error}=await supabase.from('promociones').select('*').eq('slug',slug).eq('id',id).maybeSingle();if(error)throw error;
   const today=promoHoyArgentina();
-  if(!p || !p.activo || today<p.fecha_inicio || today>p.fecha_fin || (fecha && (fecha<p.fecha_inicio || fecha>p.fecha_fin)))throw promoError('La promo no está vigente para ese día. Elegí otra fecha o servicio.');
+  if(!p || !p.activo || today<p.fecha_inicio || today>p.fecha_fin || (fecha && !promoAppliesOn(p,fecha)))throw promoError('La promo no está vigente para ese día. Elegí otra fecha o servicio.');
   if(p.owner_equipo_id && p.owner_equipo_id !== equipoId)throw promoError('Esta promo pertenece a otro profesional.');
   if(!p.owner_equipo_id) {
     let assignedId=equipoId;
@@ -2404,7 +2416,7 @@ async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
   if(!Number.isFinite(total) || total<=0 || !Number.isFinite(ratio) || ratio<=0 || ratio>=1)throw promoError('El precio de esta promo no es válido.');
   const extras=p.items.filter(i=>i.tipo==='producto').map(i=>({id:i.id,nombre:i.nombre,cantidad:i.cantidad,precio:Math.round(Number(i.precio)*i.cantidad*ratio*100)/100,promo_incluido:true}));
   const montoExtras=Math.round(extras.reduce((sum,i)=>sum+i.precio,0)*100)/100;
-  return {id:p.id,nombre:p.nombre,tipo:p.tipo,items:p.items,imagenes,fecha_inicio:p.fecha_inicio,fecha_fin:p.fecha_fin,precio_original:Number(p.precio_original),precio_final:total,servicio_id:servicios[0].id,duracion,capacidad,extras,montoExtras,precioServicio:Math.round((total-montoExtras)*100)/100};
+  return {id:p.id,nombre:p.nombre,tipo:p.tipo,items:p.items,imagenes,fecha_inicio:p.fecha_inicio,fecha_fin:p.fecha_fin,dias_semana:p.dias_semana ?? null,precio_original:Number(p.precio_original),precio_final:total,servicio_id:servicios[0].id,duracion,capacidad,extras,montoExtras,precioServicio:Math.round((total-montoExtras)*100)/100};
 }
 async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servicioId) {
   if(!promo){
@@ -5885,10 +5897,12 @@ function promocionesValidar(body) {
   if(tipo === 'descuento' && (items.length !== 1 || items[0].tipo !== 'servicio' || items[0].cantidad !== 1)) throw new Error('El descuento individual debe aplicarse a un único servicio.');
   if(tipo === 'combo' && items.reduce((sum,item)=>sum+item.cantidad,0)<2) throw new Error('Un combo debe incluir al menos dos servicios o productos.');
   if(!['porcentaje','precio_final'].includes(descuento_tipo) || typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0 || valor > 100000000000 || (descuento_tipo === 'porcentaje' && valor >= 100)) throw new Error('Ingresá un porcentaje entre 0 y 100 o un precio final válido.');
-  return {nombre:nombre.trim(),tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin,activo:body.activo !== false};
+  const dias_semana=normalizePromoDays(body.dias_semana);
+  if(!promoHasMatchingDate({fecha_inicio,fecha_fin,dias_semana}))throw new Error('No hay ningún día seleccionado dentro de la vigencia. Revisá los días o las fechas.');
+  return {nombre:nombre.trim(),tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin,dias_semana,activo:body.activo !== false};
 }
 async function promocionesPreparar(slug,body,equipoId=null) {
-  const datos=promocionesValidar(body), items=[];
+  let datos;try{datos=promocionesValidar(body);}catch(e){e.promoValidacion=true;throw e;}const items=[];
   for(const item of datos.items) {
     const {data,error}=await supabase.from(item.tipo === 'servicio' ? 'servicios' : 'extras').select('id,nombre,precio,activo,owner_equipo_id').eq('slug',slug).eq('id',item.id).maybeSingle();
     if(error) throw error;
@@ -5913,23 +5927,34 @@ async function requirePromocionesPlan(req,res,next) {
 app.get('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
   const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).order('created_at',{ascending:false});
   if(error) return res.status(500).json({success:false,error:error.code === '42P01' || error.code === 'PGRST205' ? 'Falta instalar Promociones.sql en Supabase.' : 'No se pudieron cargar las promociones.'});
-  res.json({success:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo")});
+  res.json({success:true,dias_semana_habilitado:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo")});
 }));
 async function promocionesGuardar(req,res) {
   try {
-    const slug=cleanSlug(req.params.slug);let datos;
+    const slug=cleanSlug(req.params.slug);let datos,body=req.body;
     try {promocionesValidar(req.body);} catch(e) {return res.status(400).json({success:false,error:e.message});}
     let ownerId=req.empleado?.id || null;
     if(req.params.id){
-      const {data:existing,error:xe}=await supabase.from('promociones').select('owner_equipo_id').eq('slug',slug).eq('id',req.params.id).maybeSingle();if(xe)throw xe;
+      const {data:existing,error:xe}=await supabase.from('promociones').select('*').eq('slug',slug).eq('id',req.params.id).maybeSingle();if(xe)throw xe;
       if(!existing || (req.empleado && existing.owner_equipo_id !== req.empleado.id))return res.status(404).json({success:false,error:'Promoción no encontrada en tu perfil.'});
       ownerId=existing.owner_equipo_id || null;
+      // Older clients do not send this field; preserve an existing schedule.
+      if(!Object.hasOwn(body,'dias_semana'))body={...body,dias_semana:existing.dias_semana ?? null};
     }
-    datos=await promocionesPreparar(slug,req.body,ownerId);
+    datos=await promocionesPreparar(slug,body,ownerId);
     datos.owner_equipo_id=ownerId;
-    let query=req.params.id ? supabase.from('promociones').update(datos).eq('slug',slug).eq('id',req.params.id) : supabase.from('promociones').insert(datos);
-    if(req.params.id)query=ownerId ? query.eq('owner_equipo_id',ownerId) : query.is('owner_equipo_id',null);
-    const {data,error}=await query.select('*').maybeSingle();if(error) throw error;
+    const write=()=>{
+      let query=req.params.id ? supabase.from('promociones').update(datos).eq('slug',slug).eq('id',req.params.id) : supabase.from('promociones').insert(datos);
+      if(req.params.id)query=ownerId ? query.eq('owner_equipo_id',ownerId) : query.is('owner_equipo_id',null);
+      return query.select('*').maybeSingle();
+    };
+    let {data,error}=await write();
+    if(error && ['PGRST204','42703'].includes(error.code) && /dias_semana/.test(error.message || '')) {
+      if(datos.dias_semana !== null)return res.status(409).json({success:false,error:'La programación por días todavía no está habilitada. Contactá a soporte para activarla.'});
+      // Keep daily promotions working while the optional migration is installed.
+      delete datos.dias_semana;({data,error}=await write());
+    }
+    if(error) throw error;
     if(!data) return res.status(404).json({success:false,error:'No encontramos esa promoción.'});
     res.status(req.params.id ? 200 : 201).json({success:true,promocion:(await catalogoConProfesionales(slug,[data],"promo"))[0]});
   } catch(e) {console.error('Error guardando promoción:',e.code || e.message);res.status(e.promoValidacion ? 400 : 500).json({success:false,error:e.promoValidacion ? e.message : 'No se pudo guardar la promoción. Revisá que Promociones.sql esté instalado.'});}
@@ -5945,7 +5970,7 @@ app.delete('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,pro
 
 
 app.get('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
- const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).eq('owner_equipo_id',req.empleado.id).order('created_at',{ascending:false});if(error)throw error;res.json({success:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo")});
+ const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).eq('owner_equipo_id',req.empleado.id).order('created_at',{ascending:false});if(error)throw error;res.json({success:true,dias_semana_habilitado:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo")});
 }));
 app.post('/empleado/:slug/promociones',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
 app.put('/empleado/:slug/promociones/:id',requireAuth,requireEmployeeCatalog,requirePromocionesPlan,promocionesGuardar);
@@ -6076,7 +6101,7 @@ app.get("/finanzas/:slug", requireAuth, async (req, res) => {
       ingresosBrutos, cantidadTurnos: (turnos || []).length, gastosManuales, comisionesMercadoPago, comisionesTurnits, comisionesTotales, gastosTotales, balance,
       margenOperativo: ingresosBrutos > 0 ? balance / ingresosBrutos * 100 : null,
       puntoEquilibrio, mayorGasto: mayor ? { ...mayor, label: etiquetas[mayor.categoria] || mayor.categoria } : null,
-      categorias: categorias.map(c => ({ ...c, label: etiquetas[c.categoria] || c.categoria })),
+      categorias: categorias.map(c => ({ ...c, porcentajeIngresos: ingresosBrutos > 0 ? Number(c.total) / ingresosBrutos * 100 : null, label: etiquetas[c.categoria] || c.categoria })),
     }, gastos: gastos.sort((a, b) => b.fecha.localeCompare(a.fecha)) });
   } catch (e) {
     console.error("Error en /finanzas:", e.message);
@@ -6429,7 +6454,7 @@ const turnosHoyDetalle = turnosData
       const turnosRango = [];
       for (let pagina = 0; pagina < 50; pagina++) {
         const { data, error } = await supabase.from("turnos")
-          .select("id, precio_cobrado")
+          .select("id, precio_cobrado, fecha, estado")
           .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
           .not("estado", "in", "(cancelado,pendiente)")
           .order("id", { ascending: true })
@@ -6441,6 +6466,7 @@ const turnosHoyDetalle = turnosData
       return {
         turnos: turnosRango.length,
         ingresos: turnosRango.reduce((total, t) => total + Number(t.precio_cobrado || 0), 0),
+        diasConMasTurnos: calcularDiasConMasTurnos(turnosRango),
       };
     };
     const nuevosRango = (desde, hasta) =>
@@ -6467,6 +6493,7 @@ const turnosHoyDetalle = turnosData
 
     const serviciosMasPedidos = calcularServiciosMasPedidos(turnosParaMetricas);
     const diasRecurrentes     = calcularDiasRecurrentes(todosLosTurnos);
+    const diasConMasTurnos = (await resumenTurnosRango(inicioMes,finMesActual)).diasConMasTurnos;
 
     const finalData = {
       turnosHoy, turnosMes: turnosMesTotal, turnosMesAnterior: turnosMesAnteriorTotal || 0, turnosHoyDetalle,
@@ -6490,6 +6517,7 @@ const turnosHoyDetalle = turnosData
       },
       serviciosMasPedidos,
       diasRecurrentes,
+      diasConMasTurnos,
       comparativas,
       ventas: {
         volumenTotal:   metricas.volumenTotal,

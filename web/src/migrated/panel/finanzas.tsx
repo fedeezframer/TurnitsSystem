@@ -405,19 +405,18 @@ function FinanzasPanel({
     const gastos: FinanzasGasto[] = data?.periodo === mes ? data.gastos || [] : []
     const indicadores = finanzasMetricasNegocio(summary, gastos)
     const categorias = summary.categorias || []
-    const sumaRubros = categorias.reduce(
-        (s: number, c: any) => s + Number(c.total || 0),
-        0
-    )
+    const ingresos = Number(summary.ingresosBrutos || 0)
+    const balance = Number(summary.balance || 0)
+    const colorCategoria = (categoria: string) => FINANZAS_CATEGORIAS.find(x => x.id === categoria)?.color || "#64748b"
+    const porcentajeIngresos = (importe: number) => ingresos > 0 ? `${(importe / ingresos * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 })}%` : "—"
+    const distribucion = [...categorias, ...(balance > 0 ? [{ categoria: "balance", total: balance }] : [])]
     let cursor = 0
-    const conic = categorias
+    const conic = distribucion
         .filter((c: any) => Number(c.total) > 0)
         .map((c: any) => {
             const start = cursor
-            cursor += (Number(c.total) / (sumaRubros || 1)) * 100
-            const color =
-                FINANZAS_CATEGORIAS.find((x) => x.id === c.categoria)?.color ||
-                (c.categoria === "comisiones_turnits" ? "#475569" : "#64748b")
+            cursor += (Number(c.total) / (ingresos || 1)) * 100
+            const color = c.categoria === "balance" ? "#18732a" : colorCategoria(c.categoria)
             return `${color} ${start}% ${cursor}%`
         })
         .join(", ")
@@ -565,14 +564,14 @@ function FinanzasPanel({
                             }}
                         >
                             <div
+                                role="img"
+                                aria-label={ingresos <= 0 ? "Sin ingresos para calcular proporciones" : balance < 0 ? "Los gastos superan el valor de los turnos" : `Distribución sobre el valor de los turnos. Balance estimado: ${porcentajeIngresos(balance)}`}
                                 style={{
                                     width: 220,
                                     height: 220,
                                     borderRadius: "50%",
                                     background:
-                                        sumaRubros > 0
-                                            ? `conic-gradient(${conic})`
-                                            : "#edf1f5",
+                                        ingresos <= 0 ? "#edf1f5" : balance < 0 ? "#b73535" : conic ? `conic-gradient(${conic})` : "#edf1f5",
                                     display: "grid",
                                     placeItems: "center",
                                     flexShrink: 0,
@@ -618,8 +617,9 @@ function FinanzasPanel({
                                 <div
                                     style={{ fontWeight: 700, marginBottom: 8 }}
                                 >
-                                    Ingresos y gastos por rubro
+                                    Distribución del valor de los turnos
                                 </div>
+                                <p style={{fontSize:11,lineHeight:1.5,color:"#738096",margin:"0 0 6px"}}>Porcentajes sobre el precio completo de los turnos del mes, incluida la parte que se paga en el local.</p>
                                 <div
                                     style={{
                                         borderBottom: "1px solid #e5e7eb",
@@ -629,7 +629,7 @@ function FinanzasPanel({
                                         gap: 12,
                                     }}
                                 >
-                                    <span>Ingresos brutos</span>
+                                    <span>Valor total de los turnos</span>
                                     <b>{money(summary.ingresosBrutos)}</b>
                                 </div>
                                 {categorias.map((c: any) => {
@@ -670,16 +670,15 @@ function FinanzasPanel({
                                                 <small
                                                     style={{ color: "#8290a3" }}
                                                 >
-                                                    {Number(
-                                                        c.porcentajeGastos || 0
-                                                    ).toFixed(0)}
-                                                    %
+                                                    {porcentajeIngresos(Number(c.total))}
                                                 </small>
                                             </span>
                                             <b>{money(c.total)}</b>
                                         </div>
                                     )
                                 })}
+                                {balance >= 0 && ingresos > 0 && <div style={{display:"flex",justifyContent:"space-between",gap:12,padding:"9px 0",fontSize:13}}><span style={{display:"flex",gap:8,alignItems:"center"}}><i style={{width:9,height:9,borderRadius:"50%",background:"#18732a"}}/>Balance estimado <small style={{color:"#8290a3"}}>{porcentajeIngresos(balance)}</small></span><b>{money(balance)}</b></div>}
+                                {balance < 0 && <p style={{fontSize:12,color:"#b73535",lineHeight:1.5}}>Los gastos superan el valor de los turnos en {money(-balance)}. Los porcentajes pueden sumar más del 100%.</p>}
                             </div>
                         </div>
                         <div style={card}>
@@ -689,10 +688,10 @@ function FinanzasPanel({
                                 {[
                                     ["Ticket promedio", indicadores.ticket, "Ingresos por turno incluido en el período."],
                                     ["Costo promedio por turno", indicadores.costoTurno, "Gastos y comisiones repartidos entre los turnos del período."],
-                                    ["Margen de contribución", indicadores.tasaContribucion == null ? null : (indicadores.tasaContribucion * 100).toFixed(1) + "%", "Porcentaje disponible tras los costos variables para cubrir costos fijos y generar resultado."],
-                                    ["Punto de equilibrio estimado", indicadores.equilibrio, indicadores.equilibrio == null ? "Requiere ingresos y un margen de contribución positivo." : "Facturación necesaria para cubrir los costos con la proporción actual de gastos variables."],
-                                    ["Margen de seguridad", indicadores.seguridad == null ? null : indicadores.seguridad.toFixed(1) + "%", "Distancia al punto de equilibrio sobre los ingresos. Si es negativo, aún no se cubren los costos."],
-                                    ["Turnos para cubrir costos", indicadores.equilibrio !== null && indicadores.ticket !== null && indicadores.ticket > 0 ? Math.ceil(indicadores.equilibrio / indicadores.ticket).toLocaleString("es-AR") : null, "Estimación total para el período, manteniendo el ticket y la proporción de costos variables actuales."],
+                                    ["Resultado promedio por turno", indicadores.resultadoTurno, "Balance del período dividido por los turnos. Refleja la mezcla real de servicios, sin proyectar reservas futuras."],
+                                    ["Costos fijos", indicadores.fijos, "Gastos marcados como fijos y gastos que se repiten mensualmente."],
+                                    ["Costos variables", indicadores.variables, "Otros gastos y comisiones asociados a la actividad del período."],
+                                    ["Comisiones sobre ingresos", indicadores.comisionIngresos == null ? null : indicadores.comisionIngresos.toLocaleString("es-AR",{maximumFractionDigits:1}) + "%", "Comisiones de Turnits y Mercado Pago sobre el valor completo de los turnos, no sólo sobre las señas."],
                                 ].map(([label, value, help]: any) => (
                                     <div key={label} style={{ padding: 15, background: "#f8fafc", borderRadius: 12, minWidth: 0 }}>
                                         <div style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>{label}</div>

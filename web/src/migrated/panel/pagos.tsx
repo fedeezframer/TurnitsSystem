@@ -738,7 +738,7 @@ function MercadoPagoConexion(props: any) {
                         logo={logoTransferencia}
                         fallback="🏦"
                         titulo="Transferencia bancaria"
-                        descripcion="Disponible en Premium. Recibí transferencias directamente en tu cuenta, sin comisión de Turnits."
+                        descripcion="Recibí transferencias directamente en tu cuenta, sin comisión de Turnits."
                         activo={aceptaTransferencia}
                         estadoTexto={
                             aceptaTransferencia ? "Activo" : "Desactivada"
@@ -860,7 +860,7 @@ function MercadoPagoConexion(props: any) {
                         logo={logoEfectivo}
                         fallback="💵"
                         titulo="Efectivo"
-                        descripcion="Disponible en Premium. Cobrá en el local al momento del servicio, sin comisión de Turnits."
+                        descripcion="Cobrá en el local al momento del servicio, sin comisión de Turnits."
                         activo={aceptaEfectivo}
                         estadoTexto={aceptaEfectivo ? "Activo" : "Desactivado"}
                         color={efectivoColor}
@@ -1192,9 +1192,7 @@ function ConfigPagos_OpcionMetodo({
                                 lineHeight: 1.4,
                             }}
                         >
-                            {locked
-                                ? "Disponible en el Plan Premium"
-                                : descripcion}
+                            {descripcion}
                         </div>
                     )}
                 </div>
@@ -2002,9 +2000,7 @@ function ConfigPagos_CanvasPreview({ accentColor }: { accentColor: string }) {
                                         marginTop: 2,
                                     }}
                                 >
-                                    {locked
-                                        ? "Disponible en el plan Básico"
-                                        : "El cliente paga el precio completo al reservar."}
+                                    El cliente paga el precio completo al reservar.
                                 </div>
                             </div>
                         </div>

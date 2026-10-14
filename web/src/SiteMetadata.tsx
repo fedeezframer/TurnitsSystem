@@ -15,6 +15,9 @@ export default function SiteMetadata() {
   const { pathname } = useLocation()
   useEffect(() => {
     const path = pathname === "/" ? "/" : pathname.replace(/\/$/, "")
+    if (/^\/panel(?:\/|$|-test$)/.test(path)) document.title = "Turnits | Panel"
+    else if (/^\/agenda(?:\/|$|-test$)/.test(path)) document.title = "Turnits | Agendar turno"
+    else document.title = "Turnits | Agenda online"
     const canonicalPath = publicPages[path] || (/^\/agenda\/[^/]+$/.test(path) ? path : null)
     let robots = document.head.querySelector<HTMLMetaElement>('meta[name="robots"]')
     if (!robots) {

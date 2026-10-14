@@ -2694,9 +2694,7 @@ function RendimientoEquipo(props: any) {
                         lineHeight: 1.5,
                     }}
                 >
-                    {esVariantEquipo
-                        ? "Con Básico podés ver cuántos turnos hizo cada integrante y cuánto facturó en el día, semana o mes."
-                        : "Mirá cuántos turnos hizo y cuánto facturó cada integrante del equipo por día, semana o mes."}
+                    Mirá cuántos turnos hizo y cuánto facturó cada integrante del equipo por día, semana o mes.
                 </span>
                 <RendimientoEquipo_EmptyState
                     imagen={ilustracionVacia}

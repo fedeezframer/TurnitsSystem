@@ -2294,8 +2294,7 @@ function TeamManager(props: any) {
                     }}
                 >
                     Sumá profesionales a tu negocio, asignales servicios y llevá
-                    la cuenta de cada uno. Disponible en el plan Básico (prueba
-                    gratis o activo).
+                    la cuenta de cada uno.
                 </span>
             </div>
         )

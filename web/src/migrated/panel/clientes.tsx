@@ -340,7 +340,7 @@ function ClientesGrid_Shell({
                     {totalReal > limiteClientes && (
                         <div style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#f8fafc",borderLeft:"1px solid #e5e7eb",borderTop:slice.length >= colsActivas ? "1px solid #e5e7eb" : "none",minHeight:isMobile ? 100 : 110,padding:"36px 8px 10px",...TurnitsLockedStyle}}>
                             <span style={{position:"absolute",top:10,right:10}}><TurnitsPlanRequirement premiumOnly={plan === "basico"} /></span>
-                            <span style={{fontSize:isMobile ? 10 : 12,fontWeight:700,color:"#64748b",textAlign:"center",lineHeight:1.4}}>{totalReal - limiteClientes} clientes más<br />en {plan === "basico" ? "Premium" : "Básico o Premium"}</span>
+                            <span style={{fontSize:isMobile ? 10 : 12,fontWeight:700,color:"#64748b",textAlign:"center",lineHeight:1.4}}>{totalReal - limiteClientes} clientes más</span>
                         </div>
                     )}
 
