@@ -618,6 +618,9 @@ function limitarPagosPorPlan(config) {
   }
   return result;
 }
+function usaCuentaMpPersonal(miembro) {
+  return !!miembro?.puede_recibir_pagos_personales && !!miembro?.mp_access_token;
+}
 function configNegocioParaEquipo(user, miembro) {
   if (!miembro) return limitarPagosPorPlan(user);
   const config = { ...user };
@@ -630,7 +633,7 @@ function configNegocioParaEquipo(user, miembro) {
   });
   // Mercado Pago es opcional por integrante: sin conexión individual usa
   // la cuenta central del negocio; con conexión, cobra en la cuenta propia.
-  const usaCuentaPersonal = !!miembro.puede_recibir_pagos_personales && !!miembro.mp_access_token;
+  const usaCuentaPersonal = usaCuentaMpPersonal(miembro);
   config.mp_access_token = usaCuentaPersonal ? miembro.mp_access_token : user.mp_access_token;
   config.mp_refresh_token = usaCuentaPersonal ? miembro.mp_refresh_token : user.mp_refresh_token;
   config.mp_token_expires_at = usaCuentaPersonal ? miembro.mp_token_expires_at : user.mp_token_expires_at;
@@ -7290,7 +7293,7 @@ async function cardContext(session) {
   let member=null;
   if(pending.equipo_id){const {data}=await supabase.from("equipo").select("*").eq("id",pending.equipo_id).eq("slug",pending.slug).maybeSingle();member=data;}
   const config=configNegocioParaEquipo(user,member);
-  const token=config.mp_access_token && (member?.mp_access_token ? await obtenerTokenMpVigenteEquipo(pending.slug,member.id,member) : await obtenerTokenMpVigente(pending.slug,user));
+  const token=config.mp_access_token && (usaCuentaMpPersonal(member) ? await obtenerTokenMpVigenteEquipo(pending.slug,member.id,member) : await obtenerTokenMpVigente(pending.slug,user));
   if(!token)throw new Error("El negocio debe reconectar Mercado Pago.");
   return {pending,user,member,config,token};
 }
@@ -7355,10 +7358,10 @@ app.post("/api/card-payment",limiterBooking,async(req,res)=>{
     if(!response.ok) {
       const diagnostic = cardProviderDiagnostic(response.status,pay);
       console.error("❌ MP card-payment:", JSON.stringify({slug:ctx.pending.slug,pending_id:ctx.pending.id,...diagnostic}));
-      const needsOAuth = response.status===400 && !pay?.id && (diagnostic.cause_codes.includes("2059") || diagnostic.error_code==="2059");
-      return res.status(response.status>=500?503:400).json({status:needsOAuth?"not_charged":"unknown",reference:diagnostic.reference,
-        error:needsOAuth
-          ? `El negocio necesita volver a conectar Mercado Pago desde Pagos para habilitar este cobro. El cobro no se inició. Referencia: ${diagnostic.reference}.`
+      const feeConnectionRejected = response.status===400 && !pay?.id && (diagnostic.cause_codes.includes("2059") || diagnostic.error_code==="2059");
+      return res.status(response.status>=500?503:400).json({status:feeConnectionRejected?"not_charged":"unknown",reference:diagnostic.reference,
+        error:feeConnectionRejected
+          ? `Mercado Pago no habilitó el reparto de comisión con la cuenta conectada a este negocio. Contactá al negocio para revisar la conexión de cobros. El cobro no se inició. Referencia: ${diagnostic.reference}.`
           : response.status>=500
           ? `No pudimos confirmar el resultado. Referencia: ${diagnostic.reference}. Consultá el estado antes de volver a pagar.`
           : `Mercado Pago no aceptó la solicitud de pago. Referencia: ${diagnostic.reference}. Consultá el estado antes de volver a pagar.`});
@@ -7464,7 +7467,7 @@ const fee = planCobraComision(user.plan, user.estado_suscripcion)
 
     if (configReserva.mp_access_token) {
       try {
-        const tokenVigente = empleadoReserva?.mp_access_token
+        const tokenVigente = usaCuentaMpPersonal(empleadoReserva)
           ? await obtenerTokenMpVigenteEquipo(slugClean, empleadoReserva.id, empleadoReserva)
           : await obtenerTokenMpVigente(slugClean, user);
         if (!tokenVigente) {
