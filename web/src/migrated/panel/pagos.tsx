@@ -701,7 +701,6 @@ function MercadoPagoConexion(props: any) {
                     }
                     onToggle={conectado && !esPremium ? toggleMp : undefined}
                     accion={
-                        !conectado &&
                         (!employeeMode || allowPersonalAccount) ? (
                             <button
                                 onClick={(e) => {
@@ -727,7 +726,7 @@ function MercadoPagoConexion(props: any) {
                                 }}
                             >
                                 <MercadoPagoConexion_LinkIcon />
-                                Conectar
+                                {conectado ? "Reconectar" : "Conectar"}
                             </button>
                         ) : undefined
                     }
