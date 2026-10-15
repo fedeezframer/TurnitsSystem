@@ -3923,6 +3923,7 @@ function TeamManager_useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
 }
 
 type SeccionId =
+    | "perfil"
     | "inicio"
     | "servicios"
     | "clientes"
@@ -3943,6 +3944,7 @@ const NAV_ITEMS: { id: SeccionId; label: string }[] = [
     { id: "finanzas", label: "Finanzas" },
     { id: "temas", label: "Temas" },
     { id: "equipo", label: "Equipo" },
+    { id: "perfil", label: "Perfil" },
 ]
 
 function MenuUserAvatar({

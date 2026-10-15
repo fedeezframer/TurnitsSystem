@@ -10,6 +10,7 @@ import multer         from "multer";
 import crypto         from "crypto";
 import webpush        from "web-push";
 import { normalizePromoDays, promoAppliesOn, promoHasMatchingDate } from "../web/src/shared/promotions.js";
+import { crearSucursales } from "./perfil-sucursales.js";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
@@ -643,6 +644,7 @@ function configNegocioParaEquipo(user, miembro) {
 }
 
 async function aplicarVarianteServicio(slug, servicioId, equipoId, servicio) {
+  await sucursalesApp.validarEquipoReserva(slug,equipoId);
   if (!servicio) return servicio;
   const {data:scope,error:scopeError}=await supabase.from("servicios").select("owner_equipo_id").eq("slug",slug).eq("id",servicioId).maybeSingle();
   if(scopeError)throw scopeError;
@@ -989,6 +991,8 @@ async function requireAuth(req, res, next) {
 // ══════════════════════════════════════════════════════════════
 // COMISIONES TURNITS — saldo mensual por efectivo / transferencia
 // ══════════════════════════════════════════════════════════════
+const sucursalesApp=crearSucursales({app,supabase,requireAuth,cleanSlug,isActivo,invalidateCache,multer});
+
 app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1401,7 +1405,7 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:300,tasa:0.02}, planes:[
   {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02,clientes_visibles:10,finanzas:true,temas:false,promociones:false,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
   {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,precio_anual:precioAnualPlan("basico"),descuento_anual:33,dias_anual:365,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
-  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,precio_anual:precioAnualPlan("premium"),descuento_anual:33,dias_anual:365,miembros_adicionales:null,comision_minima:0,comision_tasa:0,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:false,soporte:"prioritario"}
+  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,precio_anual:precioAnualPlan("premium"),descuento_anual:33,dias_anual:365,miembros_adicionales:null,comision_minima:0,comision_tasa:0,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:true,soporte:"prioritario"}
 ]}));
 
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
@@ -2366,7 +2370,7 @@ app.get("/equipo/:slug", async (req, res) => {
       .filter((p) => (vistos.has(p.id) ? false : (vistos.add(p.id), true)))
       .map(({ servicio_equipo, ...p }) => p);
 
-    res.json({ success: true, equipo });
+    res.json({ success: true, equipo:await sucursalesApp.filtroEquipoPublico(slug,equipo) });
   } catch (e) {
     res.status(500).json({ success: false, error: "Error al obtener el equipo." });
   }
@@ -2884,7 +2888,7 @@ app.delete("/admin/servicios/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/admin/equipo/:id/servicios-disponibles", requireAuth, async (req, res) => {
+app.get(["/admin/equipo/:id/servicios-disponibles","/empleado/:slug/sucursal/miembros/:id/servicios-disponibles"], requireAuth, sucursalesApp.equipoMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const slugClean = cleanSlug(req.query.slug || req.auth.slug);
@@ -2920,7 +2924,7 @@ app.get("/admin/equipo/:id/servicios-disponibles", requireAuth, async (req, res)
 });
 
 // POST /admin/equipo/:id/servicios — vincular
-app.post("/admin/equipo/:id/servicios", requireAuth, async (req, res) => {
+app.post(["/admin/equipo/:id/servicios","/empleado/:slug/sucursal/miembros/:id/servicios"], requireAuth, sucursalesApp.equipoMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { servicio_id } = req.body;
@@ -2991,7 +2995,7 @@ app.put("/admin/equipo/:id/servicios/:servicio_id", requireAuth, async (req, res
 });
 
 // DELETE /admin/equipo/:id/servicios/:servicio_id — desvincular
-app.delete("/admin/equipo/:id/servicios/:servicio_id", requireAuth, async (req, res) => {
+app.delete(["/admin/equipo/:id/servicios/:servicio_id","/empleado/:slug/sucursal/miembros/:id/servicios/:servicio_id"], requireAuth, sucursalesApp.equipoMiddleware, async (req, res) => {
   try {
     const { id, servicio_id } = req.params;
     // FIX-SEC: verificar que el miembro del equipo sea de ESTE negocio
@@ -3950,7 +3954,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
     // asignados a su perfil. El resto de acciones siguen siendo exclusivas del titular.
     if (req.auth?.rol === "empleado" && (
       !["confirmado", "cancelado"].includes(estado) || notas !== undefined || equipo_id !== undefined ||
-      turnoExistente.equipo_id !== req.empleado?.id || turnoExistente.estado !== "pendiente" ||
+      !(await sucursalesApp.puedeGestionarTurno(req,turnoExistente)) || turnoExistente.estado !== "pendiente" ||
       !["transferencia", "efectivo"].includes(turnoExistente.metodo_pago)
     )) {
       return res.status(403).json({ success: false, error: "Sólo podés aprobar o rechazar turnos pendientes asignados a tu perfil." });
@@ -4374,6 +4378,7 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
         servicio:       t.servicio_nombre || null,
         equipo_id:      t.equipo_id       || null,
         equipo_nombre:  t.equipo_nombre   || null,
+        sucursal_id:    t.sucursal_id     || null,
         precio_cobrado: t.precio_cobrado  || 0,
         monto_pagado:   t.monto_pagado    || 0,
         monto_pendiente_local: Math.max((t.precio_cobrado || 0) - (t.monto_pagado || 0), 0),
@@ -5039,7 +5044,7 @@ app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/admin/equipo", requireAuth, async (req, res) => {
+app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, sucursalesApp.equipoMiddleware, async (req, res) => {
   try {
     const { slug, nombre, apellido, color, rol, foto_url } = req.body;
     const loginEmail = String(req.body.login_email || "").trim().toLowerCase() || null;
@@ -5048,7 +5053,7 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
       puede_recibir_pagos_personales: req.body.puede_recibir_pagos_personales === true,
       puede_crear_servicios: req.body.puede_crear_servicios === true,
     };
-    const slugClean = cleanSlug(slug || req.auth.slug);
+    const slugClean = req.sucursalAdmin?.slug || cleanSlug(slug || req.auth.slug);
 
     if (!slugClean || !nombre) {
       return res.status(400).json({ success: false, error: "Faltan nombre y slug." });
@@ -5101,7 +5106,7 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
       nombre:   nombre.trim(),
       apellido: apellido?.trim().slice(0, 80) || null,
       color:    colorFinal,
-      rol:      rolFinal,
+      rol:      req.sucursalAdmin ? "colaborador" : rolFinal,
       foto_url: foto_url || null,
       activo:   true,
       login_email: loginEmail,
@@ -5109,6 +5114,7 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
       login_reset_token_expiry: loginResetExpiry,
       login_activado: false,
       ...permisos,
+      ...(req.sucursalAdmin ? {sucursal_id:req.sucursalAdmin.id,puede_configurar_horarios:false,puede_recibir_pagos_personales:false,puede_crear_servicios:false} : {}),
     }]).select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios").single();
 
     if (error) throw error;
@@ -5134,16 +5140,19 @@ app.post("/admin/equipo", requireAuth, async (req, res) => {
   }
 });
 
-app.put("/admin/equipo/:id", requireAuth, async (req, res) => {
+app.put(["/admin/equipo/:id","/empleado/:slug/sucursal/miembros/:id"], requireAuth, sucursalesApp.equipoMiddleware, async (req, res) => {
   try {
     const { id }    = req.params;
-    const slugClean = cleanSlug(req.body.slug || req.auth.slug);
+    const slugClean = req.sucursalAdmin?.slug || cleanSlug(req.body.slug || req.auth.slug);
     const { nombre, apellido, color, rol, activo, foto_url } = req.body;
 
     const { data: actual, error: fetchError } = await supabase
-      .from("equipo").select("es_dueño").eq("id", id).eq("slug", slugClean).maybeSingle();
+      .from("equipo").select(req.sucursalAdmin ? "es_dueño,sucursal_id" : "es_dueño").eq("id", id).eq("slug", slugClean).maybeSingle();
     if (fetchError) throw fetchError;
     if (!actual) return res.status(404).json({ success: false, error: "Miembro no encontrado." });
+    if(req.sucursalAdmin && (actual.sucursal_id!==req.sucursalAdmin.id || actual.es_dueño || id===req.empleado.id || Object.keys(req.body).some(key=>!["slug","nombre","apellido","color","foto_url","activo"].includes(key)))) {
+      return res.status(403).json({success:false,error:"Sólo podés editar los datos de otros miembros de tu sucursal. Los permisos los define el dueño general."});
+    }
 
     if (actual.es_dueño) {
       if (rol !== undefined && rol !== "dueño") {
@@ -5496,6 +5505,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
 
     res.json({
       success: true,
+      sucursal_admin: await sucursalesApp.resolverAdmin(req),
       perfil: {
         id: miembro.id,
         nombre: miembro.nombre,

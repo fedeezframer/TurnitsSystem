@@ -400,11 +400,13 @@ function TeamManager_ServiciosVinculados({
     accentColor,
     apiUrl,
     isMobile,
+    routePrefix = '/admin/equipo',
 }: {
     equipoId: string
     accentColor: string
     apiUrl: string
     isMobile: boolean
+    routePrefix?: string
 }) {
     const [loading, setLoading] = React.useState(true)
     const [servicios, setServicios] = React.useState<
@@ -420,7 +422,7 @@ function TeamManager_ServiciosVinculados({
         setLoading(true)
         setError("")
         fetch(
-            `${apiUrl}/admin/equipo/${equipoId}/servicios-disponibles?slug=${slug}`,
+            `${apiUrl}${routePrefix}/${equipoId}/servicios-disponibles?slug=${slug}`,
             { headers: { Authorization: `Bearer ${token}` } }
         )
             .then((r) => r.json())
@@ -441,7 +443,7 @@ function TeamManager_ServiciosVinculados({
         return () => {
             activo = false
         }
-    }, [equipoId, apiUrl])
+    }, [equipoId, apiUrl,routePrefix])
 
     const toggle = async (servicio: TeamManager_ServicioAsignable) => {
         const slug = TeamManager_getSlug()
@@ -457,7 +459,7 @@ function TeamManager_ServiciosVinculados({
 
         try {
             const res = nuevoEstado
-                ? await fetch(`${apiUrl}/admin/equipo/${equipoId}/servicios`, {
+                ? await fetch(`${apiUrl}${routePrefix}/${equipoId}/servicios`, {
                       method: "POST",
                       headers: {
                           "Content-Type": "application/json",
@@ -466,7 +468,7 @@ function TeamManager_ServiciosVinculados({
                       body: JSON.stringify({ servicio_id: servicio.id, slug }),
                   })
                 : await fetch(
-                      `${apiUrl}/admin/equipo/${equipoId}/servicios/${servicio.id}?slug=${slug}`,
+                      `${apiUrl}${routePrefix}/${equipoId}/servicios/${servicio.id}?slug=${slug}`,
                       {
                           method: "DELETE",
                           headers: { Authorization: `Bearer ${token}` },
@@ -2582,6 +2584,7 @@ function TeamManager(props: any) {
 }
 
 const NAV_ICONS: Record<SeccionId, React.ReactElement> = {
+    perfil: (<><rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="9" r="2.5"/><path d="M8 17c0-4 8-4 8 0"/></>),
     inicio: (
         <path d="M4 11.5 12 4l8 7.5M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" />
     ),

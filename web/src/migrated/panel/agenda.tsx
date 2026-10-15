@@ -9,6 +9,7 @@ import {
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
+import './perfil.css'
 import { AgendaPanel_useContainerWidth, AgendaPanel_getSlug, AgendaPanel_getToken, AgendaPanel_filtrarPasados, AgendaPanel_esPendienteAprobacion, AgendaPanel_hoyISO, AgendaPanel_cleanTel, AgendaPanel_formatFecha, AgendaPanel_wrapperBase, AgendaPanel_mockDias, AgendaPanel_globalCSS, AgendaPanel_FONT_BODY, AgendaPanel_SURFACE, AgendaPanel_HAIRLINE, AgendaPanel_INK, AgendaPanel_FONT_DISPLAY, AgendaPanel_SLATE, AgendaPanel_tieneExtras, AgendaPanel_GHOST, AgendaPanel_extrasLabel, AgendaPanel_metodoPagoLabel, AgendaPanel_formatMonto, AgendaPanel_estadoPagoLabel, AgendaPanel_labelStyle, AgendaPanel_inputStyle, AgendaPanel_tieneReprogramacionPendiente, AgendaPanel_faltaProfesional, AgendaPanel_formatFechaParts } from "./common"
 
 function AgendaPanel(props: any) {
@@ -40,6 +41,9 @@ function AgendaPanel(props: any) {
     const hoyWidth = isMobile ? "100%" : isTablet ? 160 : 180
 
     const [dias, setDias] = React.useState<any[]>([])
+    const [sucursales,setSucursales]=React.useState<any[]>([])
+    const [sucursalFiltro,setSucursalFiltro]=React.useState('todas')
+    React.useEffect(()=>{let alive=true;const slug=AgendaPanel_getSlug(),token=AgendaPanel_getToken();if(slug && token)fetch(`${baseUrl.replace(/\/+$/,'')}/admin/sucursales/${slug}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(alive && d?.premium && d?.habilitado)setSucursales(d.sucursales || [])}).catch(()=>{});return()=>{alive=false}},[baseUrl]);
     const agendaRequestId = React.useRef(0)
     const [loading, setLoading] = React.useState(true)
     const [error, setError] = React.useState("")
@@ -757,12 +761,13 @@ function AgendaPanel(props: any) {
 
     return (
         <>
+            {sucursales.length>0 && <div className="negocio-editor" style={{marginBottom:14}}><label className="negocio-field" style={{maxWidth:320}}>Sucursal<select aria-label="Sucursal" value={sucursalFiltro} onChange={e=>setSucursalFiltro(e.target.value)}><option value="todas">Todas las sucursales</option><option value="principal">Sede principal</option>{sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}{!s.activo?' · Pausada':''}</option>)}</select></label></div>}
             <div
                 ref={containerRef}
                 style={{ ...AgendaPanel_wrapperBase, ...style }}
             >
                 <AgendaPanel_Layout
-                    dias={dias}
+                    dias={sucursalFiltro==='todas'?dias:dias.map(d=>({...d,turnos:d.turnos.filter((t:any)=>(t.sucursal_id || 'principal')===sucursalFiltro)})).filter(d=>d.turnos.length)}
                     colsDias={colsDias}
                     hoyWidth={hoyWidth}
                     accentColor={accentColor}

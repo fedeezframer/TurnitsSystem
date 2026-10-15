@@ -17,6 +17,7 @@ import { TurnitsDashboard_MetricCard, TurnitsDashboard_Chart, TurnitsDashboard_U
 import { ServiciosManager } from "./servicios"
 import { HorariosConfig, ExcepcionesConfig } from "./horarios"
 import { MercadoPagoConexion, ConfigPagos } from "./pagos"
+import { SucursalEmpleado } from "./perfil"
 
 function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
     const api = String(
@@ -91,7 +92,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
         props.iconosNotificaciones
     )
     const [tab, setTab] = React.useState<
-        "inicio" | "servicios" | "agenda" | "horarios" | "pagos"
+        "inicio" | "servicios" | "agenda" | "horarios" | "pagos" | "equipo"
     >("inicio")
     const [data, setData] = React.useState<any>(null)
     const [loading, setLoading] = React.useState(true)
@@ -168,7 +169,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
     // abierta. Volver a consultar el perfil al navegar hace visible el cambio
     // al entrar a cada sección, sin reiniciar la app ni esperar al polling.
     const navegarA = (
-        seccion: "inicio" | "servicios" | "agenda" | "horarios" | "pagos"
+        seccion: "inicio" | "servicios" | "agenda" | "horarios" | "pagos" | "equipo"
     ) => {
         setTab(seccion)
         cargar().catch((e: any) =>
@@ -598,8 +599,8 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
         boxShadow: "0 2px 8px rgba(15,23,42,.04)",
     }
     const items = NAV_ITEMS.filter((item) =>
-        ["inicio", "servicios", "agenda", "horarios", "pagos"].includes(item.id)
-    )
+        ["inicio", "servicios", "agenda", "horarios", "pagos"].includes(item.id) || (item.id === "equipo" && !!data?.sucursal_admin)
+    ).map(item=>item.id==='equipo'?{...item,label:'Mi sucursal'}:item)
     const puedeHorarios = !!data?.perfil?.puede_configurar_horarios
     const puedePagos = !!data?.perfil?.puede_recibir_pagos_personales
     const puedeServicios = !!data?.perfil?.puede_crear_servicios
@@ -619,6 +620,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
             servicios: "Mis Servicios",
             horarios: "Mis Horarios",
             pagos: "Mis Pagos",
+            equipo: "Mi sucursal",
         } as any
     )[tab]
 
@@ -827,6 +829,8 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                         >
                             Cargando tu información…
                         </div>
+                    ) : tab === "equipo" ? (
+                        <SucursalEmpleado api={api} slug={slug} token={token}/>
                     ) : tab === "inicio" ? (
                         <div style={{ display: "grid", gap: 14 }}>
                             <section

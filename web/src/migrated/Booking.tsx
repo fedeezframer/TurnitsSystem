@@ -812,6 +812,8 @@ export default function BookingFlow(props: any) {
     const [errorNegocio, setErrorNegocio] = React.useState("")
 
     const [profesionales, setProfesionales] = React.useState<Profesional[]>([])
+    const [sucursales,setSucursales]=React.useState<{id:string;nombre:string;direccion:string;equipo_ids:string[]}[]>([])
+    const [sucursalId,setSucursalId]=React.useState('')
     const [loadingProf, setLoadingProf] = React.useState(true)
     const [equipoId, setEquipoId] = React.useState<string | null>(null)
     const [equipoIdReservado, setEquipoIdReservado] = React.useState<
@@ -991,13 +993,15 @@ export default function BookingFlow(props: any) {
             return
         }
         let alive = true
-        fetch(`${api}/equipo/${slug}`)
-            .then((r) => r.json())
-            .then((data) => {
+        Promise.all([
+            fetch(`${api}/equipo/${slug}`).then(r=>r.json()),
+            fetch(`${api}/sucursales/${slug}`).then(r=>r.ok?r.json():{sucursales:[]}).catch(()=>({sucursales:[]})),
+        ]).then(([data,sedes]) => {
                 if (!alive) return
                 const lista = data?.success ? data.equipo || [] : []
+                setSucursales(sedes.sucursales || [])
                 setProfesionales(lista)
-                if (lista.length === 1) setEquipoId(lista[0].id)
+                if (lista.length === 1 && !sedes.sucursales?.length) setEquipoId(lista[0].id)
             })
             .catch(() => alive && setProfesionales([]))
             .finally(() => alive && setLoadingProf(false))
@@ -1006,7 +1010,8 @@ export default function BookingFlow(props: any) {
         }
     }, [api, slug, isCanvas])
 
-    const requiereProfesional = profesionales.length > 1
+    const profesionalesVisibles=sucursales.length?profesionales.filter(p=>sucursales.find(s=>s.id===sucursalId)?.equipo_ids.includes(p.id)):profesionales
+    const requiereProfesional = profesionales.length > 1 || sucursales.length>0
     const listoParaServicios =
         !loadingProf && (!requiereProfesional || !!equipoId)
 
@@ -2193,6 +2198,13 @@ export default function BookingFlow(props: any) {
                                             title="Elegí profesional"
                                             hint="Elegí con quién querés el turno."
                                         />
+                                        {sucursales.length>0 && <div style={{display:'grid',gap:10,marginBottom:18}}>
+                                            <h3 style={{fontSize:14,margin:'0 0 3px',color:tema.texto}}>Elegí la sucursal</h3>
+                                            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))',gap:8}}>
+                                                {sucursales.map(s=><button type="button" key={s.id} aria-pressed={sucursalId===s.id} onClick={()=>{setSucursalId(s.id);setEquipoId(null);setEquipoIdReservado(null);setServicioId(null);setPromocionId(null);setExtrasSeleccionados([]);setFecha('');setHora('')}} style={{padding:'13px 14px',borderRadius:12,border:`1px solid ${sucursalId===s.id?accent:tema.secundario+'25'}`,background:sucursalId===s.id?accent+'0c':'transparent',color:tema.texto,textAlign:'left',cursor:'pointer',fontFamily:'inherit'}}><strong style={{display:'block',fontSize:14}}>{s.nombre}</strong>{s.direccion && <span style={{display:'block',fontSize:12,marginTop:5,opacity:.65}}>{s.direccion}</span>}</button>)}
+                                            </div>
+                                            {sucursalId && !profesionalesVisibles.length && <p style={{fontSize:13,opacity:.65}}>Todavía no hay profesionales disponibles en esta sucursal.</p>}
+                                        </div>}
 
                                         <div
                                             className="bf-scroll-list bf-professionals-grid"
@@ -2209,7 +2221,7 @@ export default function BookingFlow(props: any) {
                                                 <Skeleton />
                                             ) : (
                                                 <>
-                                                    {profesionales.map((p) => (
+                                                    {profesionalesVisibles.map((p) => (
                                                         <ProfesionalCard
                                                             key={p.id}
                                                             prof={p}
@@ -2225,7 +2237,7 @@ export default function BookingFlow(props: any) {
                                                         />
                                                     ))}
                                                     {profesionales.length >
-                                                        1 && (
+                                                        1 && !sucursales.length && (
                                                         <CualquierProfesionalCard
                                                             accentColor={accent}
                                                             iconoCualquiera={

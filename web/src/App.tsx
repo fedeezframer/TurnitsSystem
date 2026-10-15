@@ -16,6 +16,7 @@ const AppGateway = lazy(() => import("./pages/AppGateway"))
 const Internal = lazy(() => import("./migrated/public/AdminStats"))
 const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))
+const BusinessProfile = lazy(() => import("./pages/BusinessProfile"))
 
 function PanelRoute() {
   return <Panel {...appConfig.panel} baseUrl={appConfig.apiUrl} accentColor={appConfig.accentColor} logoImage={appConfig.logoUrl} mpClientId={appConfig.mpClientId} logoutUrl="/login" style={{ width: "100%", minHeight: "100dvh" }} />
@@ -46,6 +47,7 @@ export default function App() {
     <Route path="/agenda" element={<BookingRoute />} />
     <Route path="/agenda/:slug" element={<BookingRoute />} />
     <Route path="/planes" element={<PublicPlans />} />
+    <Route path="/perfil/:slug" element={<BusinessProfile />} />
     <Route path="/store-login" element={<Store />} />
     <Route path="/app" element={<AppGateway />} />
     <Route path="/internal" element={<Internal loginPath="/login" refreshSeconds={60} />} />

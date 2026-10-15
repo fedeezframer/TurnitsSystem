@@ -24,6 +24,7 @@ import { PagosSettingsGuard, MercadoPagoConexion, ConfigPagos } from "./pagos"
 import { FinanzasPanel } from "./finanzas"
 import { ThemeEditor } from "./temas"
 import { CopyTurnosButton } from "./inicio"
+import { PerfilNegocio, EquipoSecciones } from "./perfil"
 
 function TurnitsPanel_Inner(props: any) {
     const {
@@ -756,7 +757,7 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Gestioná a las personas que trabajan con vos"
                             isMobile={isMobile}
                         />
-                        <TeamManager
+                        <EquipoSecciones
                             baseUrl={baseUrl}
                             accentColor={accentColor}
                             iconoVacioUrl={iconos.equipoVacio}
@@ -766,6 +767,7 @@ function TurnitsPanel_Inner(props: any) {
                         />
                     </div>
                 )}
+                {seccionActiva === "perfil" && <PerfilNegocio baseUrl={baseUrl} isMobile={isMobile}/>}
             </div>
 
             <TurnitsDashboardSidePanel
