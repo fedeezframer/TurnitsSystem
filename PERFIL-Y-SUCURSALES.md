@@ -48,7 +48,7 @@ Documentación: [OpenFreeMap e integración con Vite/Leaflet](https://openfreema
 
 Se sigue el concepto aportado por Federico: ancho máximo de 854 px, logo pequeño de Turnits centrado, banner de 306 px, ficha blanca con tres columnas (identidad/Ver Agenda, puntuación/comentario y ubicación) y tarjeta de reseñas aparte. En móvil las dos primeras columnas permanecen juntas y la ubicación pasa a una fila completa. Descripción, contacto y galería se conservan debajo. Por la revisión posterior del 15/10, el banner muestra sólo la imagen y ya no carga la tipografía manuscrita ni superpone nombre o rubro.
 
-El minimapa toma únicamente ubicaciones públicas y activas ya configuradas en Sucursales, prioriza la principal y permite elegir si hay varias con coordenadas. No inventa ubicaciones ni geocodifica las direcciones automáticamente. La vista previa del panel usa el mismo componente. No hay cambios de API ni SQL adicionales para este diseño.
+El minimapa toma únicamente ubicaciones públicas y activas ya configuradas en Sucursales, prioriza la principal y permite elegir si hay varias con coordenadas. No inventa ubicaciones ni geocodifica las direcciones automáticamente. No hay cambios de API ni SQL adicionales para este diseño.
 
 Por decisión de Federico, reseñas y puntuaciones son sólo una preparación visual: estrellas sin puntuar, cero opiniones y comentario deshabilitado con «Próximamente». No se agregan opiniones ficticias ni endpoints de publicación. La funcionalidad queda para las cuentas de consumidores, con una reseña por cuenta.
 
@@ -62,7 +62,7 @@ El editor muestra el dominio fijo y pide sólo el usuario; WhatsApp pide el núm
 
 Ejecutar `supabase/migrations/20261015_perfil_redes_sociales.sql` agrega `redes_sociales` JSONB sin modificar las políticas de acceso. Federico confirmó la ejecución completa el 15/10/2026. La API detecta su disponibilidad y conserva lectura y edición anterior si falta la columna; los nuevos campos permanecen deshabilitados hasta instalarla.
 
-Tocar el minimapa abre un diálogo con mapa interactivo grande, zoom y pin de la sede elegida. La X, Escape o el fondo lo cierran; el foco vuelve al disparador y se restaura el scroll. En este diálogo el zoom no deja una transición pendiente que pueda ejecutarse después de desmontar el mapa. Se retiran las marcas opcionales Leaflet y OpenFreeMap, manteniendo visibles los créditos requeridos de OpenMapTiles y OpenStreetMap.
+Tocar el minimapa público abre un diálogo con mapa interactivo grande, zoom y pin de la sede elegida. La X, Escape o el fondo lo cierran; el foco vuelve al disparador y se restaura el scroll. En este diálogo el zoom no deja una transición pendiente que pueda ejecutarse después de desmontar el mapa. Se retiran las marcas opcionales Leaflet y OpenFreeMap, manteniendo visibles los créditos requeridos de OpenMapTiles y OpenStreetMap.
 
 Verificación: `work/verify-perfil-redes.cjs` prueba migración idempotente, RLS, aislamiento, guardar/publicar/quitar enlaces, compatibilidad y validación; `work/verify-profile-social-map-ui.cjs` prueba los campos, tarjetas y diálogo con zoom/cierre/foco en escritorio y 390 px, con API y datos vectoriales simulados.
 
@@ -72,4 +72,6 @@ Verificación: `work/verify-perfil-redes.cjs` prueba migración idempotente, RLS
 
 Federico confirmó la ejecución completa de `supabase/migrations/20261015_perfil_imagenes.sql`. Agrega los campos, conserva la galería existente y reemplaza sólo la restricción de cantidad. No modifica RLS ni permisos. La API devuelve `imagenes_habilitadas`; sin la migración conserva el editor anterior y explica qué actualización falta. Los clientes anteriores que omiten los nuevos campos conservan el banner y la foto ya guardados. Todas las imágenes deben pertenecer al directorio público de ese negocio; URLs externas o de otro negocio se rechazan.
 
-Validación: `work/verify-profile-images-sql.cjs` y `work/verify-profile-images-api.cjs` prueban idempotencia, galería de 100 fotos, RLS/privacidad, compatibilidad y pertenencia de las imágenes. `work/verify-profile-images-ui.cjs` prueba subir/cambiar/quitar los tipos separados, más de ocho fotos, carga múltiple con error parcial recuperable, rechazo de archivos grandes y escritorio/390 px sin desbordamiento. Sin escrituras de prueba en producción.
+Validación: `work/verify-profile-images-sql.cjs` y `work/verify-profile-images-api.cjs` prueban idempotencia, galería de 100 fotos, RLS/privacidad, compatibilidad y pertenencia de las imágenes. `work/verify-profile-images-ui.cjs` probó subir/cambiar/quitar los tipos separados, más de ocho fotos, carga múltiple con error parcial recuperable, rechazo de archivos grandes y escritorio/390 px sin desbordamiento. Sin escrituras de prueba en producción.
+
+Por pedido posterior se retiró la ficha de vista previa del editor de Perfil, conservando las miniaturas de los archivos como controles de edición y el enlace al perfil público. En Temas se retiraron la pestaña de vista previa, el iframe y la miniatura de agenda; siguen Logo, Colores y sus paletas. Los scripts antiguos que usaban la ficha duplicada del panel corresponden al diseño anterior.

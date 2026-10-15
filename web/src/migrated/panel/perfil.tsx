@@ -12,7 +12,7 @@ const LocationPicker = React.lazy(() =>
     default: m.LocationPicker,
   })),
 );
-import { PerfilContenido } from "./perfil-publico";
+import "./perfil-publico.css";
 import { SOCIAL_LINKS, normalizarEnlaceRed } from "../../shared/socials.js";
 import { SocialProfileField } from "../../components/SocialProfileField";
 import { BusinessAvatar } from "../../components/BusinessAvatar";
@@ -95,7 +95,6 @@ export function PerfilNegocio({
   const api = baseUrl.replace(/\/+$/, ""),
     slug = MenuFooter_getSlug();
   const [form, setForm] = React.useState(perfilVacio),
-    [logo, setLogo] = React.useState(""),
     [habilitado, setHabilitado] = React.useState(false),
     [redesHabilitadas, setRedesHabilitadas] = React.useState(false),
     [imagenesHabilitadas, setImagenesHabilitadas] = React.useState(false),
@@ -111,7 +110,6 @@ export function PerfilNegocio({
       .then((d) => {
         if (alive) {
           setForm({ ...perfilVacio, ...d.perfil });
-          setLogo(d.logo_url || "");
           setHabilitado(d.habilitado);
           setRedesHabilitadas(!!d.redes_habilitadas);
           setImagenesHabilitadas(!!d.imagenes_habilitadas);
@@ -512,12 +510,6 @@ export function PerfilNegocio({
               </p>
             )}
           </form>
-          <section className="negocio-card negocio-stack">
-            <h2>Vista previa</h2>
-            <div className="negocio-preview">
-              <PerfilContenido perfil={form} logo={logo} slug={slug} />
-            </div>
-          </section>
         </>
       )}
     </div>
