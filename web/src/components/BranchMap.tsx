@@ -58,6 +58,7 @@ export function BranchMap({
   label = "Mapa de sucursales",
   editing = false,
   compact = false,
+  expanded = false,
 }: {
   pins: Pin[];
   selected?: string;
@@ -66,6 +67,7 @@ export function BranchMap({
   label?: string;
   editing?: boolean;
   compact?: boolean;
+  expanded?: boolean;
 }) {
   const container = React.useRef<HTMLDivElement>(null),
     map = React.useRef<L.Map | null>(null),
@@ -85,8 +87,13 @@ export function BranchMap({
       touchZoom: !compact,
       doubleClickZoom: !compact,
       keyboard: !compact,
+      // A dialog can unmount while Leaflet's zoom transition is still queued.
+      zoomAnimation: !expanded,
+      markerZoomAnimation: !expanded,
       maxZoom: 19,
     }).setView(DEFAULT_CENTER, 13);
+    instance.attributionControl.setPrefix(false);
+    instance.attributionControl.addAttribution(STREET_ATTRIBUTION);
     map.current = instance;
     layer.current = L.layerGroup().addTo(instance);
     let tiles: L.MaplibreGL | undefined;
@@ -134,7 +141,7 @@ export function BranchMap({
       map.current = null;
       layer.current = null;
     };
-  }, [editing, compact]);
+  }, [editing, compact, expanded]);
   React.useEffect(() => {
     const instance = map.current,
       group = layer.current;
@@ -142,9 +149,9 @@ export function BranchMap({
     group.clearLayers();
     for (const pin of pins) {
       const marker = L.marker([pin.latitud, pin.longitud], {
-        icon: pinIcon(editing || pin.id === selected, compact),
+        icon: pinIcon(editing || pin.id === selected, compact || expanded),
         draggable: editing,
-        keyboard: true,
+        keyboard: !compact,
         title: pin.nombre,
         alt: pin.nombre,
         riseOnHover: true,
@@ -173,7 +180,7 @@ export function BranchMap({
       );
       instance.fitBounds(bounds, {
         padding: [40, 40],
-        maxZoom: editing || compact ? 16 : 14,
+        maxZoom: editing || compact || expanded ? 16 : 14,
         animate: false,
       });
     }
@@ -184,9 +191,11 @@ export function BranchMap({
       !instance.getBounds().contains([active.latitud, active.longitud])
     )
       instance.panTo([active.latitud, active.longitud]);
-  }, [pins, selected, editing, compact]);
+  }, [pins, selected, editing, compact, expanded]);
   return (
-    <div className={`tn-branch-map${compact ? " tn-branch-map-compact" : ""}`}>
+    <div
+      className={`tn-branch-map${compact ? " tn-branch-map-compact" : ""}${expanded ? " tn-branch-map-expanded" : ""}`}
+    >
       <div
         className="tn-map-surface"
         ref={container}

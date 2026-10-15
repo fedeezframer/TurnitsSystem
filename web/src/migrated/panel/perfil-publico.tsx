@@ -2,6 +2,9 @@ import * as React from "react";
 import { appConfig } from "../../config";
 import { validPoint } from "../../shared/locations.js";
 import type { MapBranch } from "../../components/BranchMap";
+import { enlacesPublicos } from "../../shared/socials.js";
+import { SocialIcon } from "../../components/SocialIcon";
+import { ProfileMapDialog } from "../../components/ProfileMapDialog";
 import "./perfil.css";
 import "./perfil-publico.css";
 const BranchMap = React.lazy(() =>
@@ -36,7 +39,8 @@ export function PerfilContenido({
   const [locations, setLocations] = React.useState<MapBranch[]>([]),
     [mapError, setMapError] = React.useState(false),
     [mapLoading, setMapLoading] = React.useState(!!slug),
-    [coverFailed, setCoverFailed] = React.useState(false);
+    [coverFailed, setCoverFailed] = React.useState(false),
+    [mapOpen, setMapOpen] = React.useState(false);
   const cover = perfil.fotos?.[0];
   React.useEffect(() => setCoverFailed(false), [cover]);
   React.useEffect(() => {
@@ -82,10 +86,11 @@ export function PerfilContenido({
   );
   const name = perfil.nombre || "Nombre del negocio",
     city = [perfil.ciudad, perfil.provincia].filter(Boolean).join(", "),
+    socials = enlacesPublicos(perfil),
     hasDetails =
       perfil.descripcion ||
       perfil.telefono_publico ||
-      perfil.instagram ||
+      socials.length > 0 ||
       perfil.sitio_web ||
       perfil.fotos?.length > 1;
   return (
@@ -160,12 +165,34 @@ export function PerfilContenido({
                   </div>
                 }
               >
-                <BranchMap
-                  pins={pins}
-                  selected={location.id}
-                  compact
-                  label={`Ubicación de ${location.nombre}`}
-                />
+                <div className="perfil-map-clickable">
+                  <BranchMap
+                    pins={pins}
+                    selected={location.id}
+                    compact
+                    label={`Ubicación de ${location.nombre}`}
+                  />
+                  <button
+                    className="perfil-map-expand"
+                    type="button"
+                    aria-label={`Ampliar mapa de ${location.nombre}`}
+                    aria-haspopup="dialog"
+                    onClick={() => setMapOpen(true)}
+                  >
+                    <span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6" />
+                      </svg>
+                      Ampliar
+                    </span>
+                  </button>
+                </div>
               </React.Suspense>
             ) : (
               <div className="perfil-map-placeholder">
@@ -183,13 +210,21 @@ export function PerfilContenido({
               </div>
             )}
             {(location?.direccion || perfil.direccion) && (
-              <p className={`perfil-address${location?' perfil-visually-hidden':''}`}>
+              <p
+                className={`perfil-address${location ? " perfil-visually-hidden" : ""}`}
+              >
                 {location?.direccion || perfil.direccion}
               </p>
             )}
           </div>
         </div>
       </article>
+      {mapOpen && location && (
+        <ProfileMapDialog
+          location={location}
+          onClose={() => setMapOpen(false)}
+        />
+      )}
       <section
         className="perfil-reviews"
         aria-labelledby="perfil-reviews-title"
@@ -204,26 +239,66 @@ export function PerfilContenido({
           {perfil.descripcion && <p>{perfil.descripcion}</p>}
           <div className="perfil-contact-links">
             {perfil.telefono_publico && (
-              <a href={`tel:${perfil.telefono_publico.replace(/[^\d+]/g, "")}`}>
-                Llamar
+              <a
+                className="perfil-social-link"
+                href={`tel:${perfil.telefono_publico.replace(/[^\d+]/g, "")}`}
+              >
+                <span className="perfil-social-icon">
+                  <SocialIcon name="phone" />
+                </span>
+                <span>
+                  <strong>Llamar</strong>
+                  <small>{perfil.telefono_publico}</small>
+                </span>
+                <span className="perfil-social-arrow" aria-hidden="true">
+                  ↗
+                </span>
               </a>
             )}
-            {perfil.instagram && (
+            {socials.map((red) => (
               <a
-                href={perfil.instagram}
+                key={red.key}
+                className="perfil-social-link"
+                href={red.url}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`Abrir ${red.label} del negocio`}
               >
-                Instagram ↗
+                <span className="perfil-social-icon">
+                  <SocialIcon name={red.key} />
+                </span>
+                <span>
+                  <strong>{red.label}</strong>
+                  <small>
+                    {red.key === "whatsapp"
+                      ? "Escribinos"
+                      : new URL(red.url).pathname
+                          .replace(/^\//, "")
+                          .replace(/\/$/, "") || "Ver perfil"}
+                  </small>
+                </span>
+                <span className="perfil-social-arrow" aria-hidden="true">
+                  ↗
+                </span>
               </a>
-            )}
+            ))}
             {perfil.sitio_web && (
               <a
+                className="perfil-social-link"
                 href={perfil.sitio_web}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Sitio web ↗
+                <span className="perfil-social-icon">
+                  <SocialIcon name="web" />
+                </span>
+                <span>
+                  <strong>Sitio web</strong>
+                  <small>Conocé más</small>
+                </span>
+                <span className="perfil-social-arrow" aria-hidden="true">
+                  ↗
+                </span>
               </a>
             )}
           </div>

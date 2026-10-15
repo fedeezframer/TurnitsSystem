@@ -53,3 +53,13 @@ El minimapa toma únicamente ubicaciones públicas y activas ya configuradas en 
 Por decisión de Federico, reseñas y puntuaciones son sólo una preparación visual: estrellas sin puntuar, cero opiniones y comentario deshabilitado con «Próximamente». No se agregan opiniones ficticias ni endpoints de publicación. La funcionalidad queda para las cuentas de consumidores, con una reseña por cuenta.
 
 Verificación adicional: `work/verify-streets-regression.cjs` conserva las pruebas de sedes/cercanía/edición con el nuevo renderer; `work/verify-profile-concept.cjs` comprueba dimensiones del boceto, portada, enlace, estados vacíos/error/privado y 390 px; `work/verify-map-no-webgl.cjs` comprueba continuación por lista sin WebGL. Sin escrituras ni cobros reales.
+
+## Redes sociales y mapa ampliable — 15/10/2026
+
+Perfil permite cargar Instagram, Facebook, TikTok, YouTube, X, LinkedIn y WhatsApp. Se muestran como tarjetas con íconos en «Sobre el negocio», junto al teléfono y la web. Son enlaces públicos, sin OAuth ni acceso a las cuentas. Instagram, TikTok, YouTube y X admiten `@usuario`; los enlaces se normalizan y validan en cliente y servidor por protocolo HTTPS y dominio de cada red. Quitar el enlace elimina su tarjeta. Instagram conserva su campo anterior y los clientes anteriores conservan los enlaces nuevos al guardar.
+
+Ejecutar `supabase/migrations/20261015_perfil_redes_sociales.sql` agrega `redes_sociales` JSONB sin modificar las políticas de acceso. Federico confirmó la ejecución completa el 15/10/2026. La API detecta su disponibilidad y conserva lectura y edición anterior si falta la columna; los nuevos campos permanecen deshabilitados hasta instalarla.
+
+Tocar el minimapa abre un diálogo con mapa interactivo grande, zoom y pin de la sede elegida. La X, Escape o el fondo lo cierran; el foco vuelve al disparador y se restaura el scroll. En este diálogo el zoom no deja una transición pendiente que pueda ejecutarse después de desmontar el mapa. Se retiran las marcas opcionales Leaflet y OpenFreeMap, manteniendo visibles los créditos requeridos de OpenMapTiles y OpenStreetMap.
+
+Verificación: `work/verify-perfil-redes.cjs` prueba migración idempotente, RLS, aislamiento, guardar/publicar/quitar enlaces, compatibilidad y validación; `work/verify-profile-social-map-ui.cjs` prueba los campos, tarjetas y diálogo con zoom/cierre/foco en escritorio y 390 px, con API y datos vectoriales simulados.

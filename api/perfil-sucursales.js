@@ -1,4 +1,8 @@
 import crypto from "node:crypto";
+import {
+  SOCIAL_LINKS,
+  normalizarEnlaceRed,
+} from "../web/src/shared/socials.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const faltaSchemaSucursales = (e) =>
@@ -29,13 +33,26 @@ export function validarPerfil(body) {
     !/^[+\d\s()\-]{5,30}$/.test(data.telefono_publico)
   )
     throw new Error("Revisá el teléfono público.");
-  if (
-    data.instagram &&
-    !/^https:\/\/(www\.)?instagram\.com\/[a-z\d_.\/-]+\/?$/i.test(
-      data.instagram,
+  data.instagram = normalizarEnlaceRed("instagram", data.instagram);
+  if (data.instagram.length > 250)
+    throw new Error("Revisá el enlace de Instagram.");
+  if (body.redes_sociales !== undefined) {
+    if (
+      !body.redes_sociales ||
+      typeof body.redes_sociales !== "object" ||
+      Array.isArray(body.redes_sociales) ||
+      Object.keys(body.redes_sociales).some(
+        (key) =>
+          !SOCIAL_LINKS.some((red) => red.key === key && key !== "instagram"),
+      )
     )
-  )
-    throw new Error("Usá el enlace completo de Instagram.");
+      throw new Error("Revisá los enlaces de redes sociales.");
+    data.redes_sociales = Object.fromEntries(
+      Object.entries(body.redes_sociales)
+        .map(([key, value]) => [key, normalizarEnlaceRed(key, value)])
+        .filter(([, value]) => value),
+    );
+  }
   if (data.sitio_web) {
     const u = new URL(data.sitio_web);
     if (u.protocol !== "https:" || u.username || u.password)
@@ -104,6 +121,26 @@ export function crearSucursales({
     if (error) throw error;
     if (!data) fail("Negocio no encontrado.", 404);
     return data;
+  };
+  const leerPerfil = async (slug, publico = false) => {
+    const campos = publico
+      ? "nombre,descripcion,categoria,direccion,ciudad,provincia,telefono_publico,instagram,sitio_web,fotos"
+      : "*";
+    const consultar = (columnas) => {
+      let q = supabase
+        .from("negocio_perfiles")
+        .select(columnas)
+        .eq("slug", slug);
+      if (publico) q = q.eq("publicado", true);
+      return q.maybeSingle();
+    };
+    let result = await consultar(campos + ",redes_sociales"),
+      redes_habilitadas = true;
+    if (result.error && faltaSchemaSucursales(result.error)) {
+      redes_habilitadas = false;
+      result = await consultar(campos);
+    }
+    return { ...result, redes_habilitadas };
   };
   const rows = async (slug) => {
     let [{ data: sucursales, error }, { data: equipo, error: ee }] =
@@ -238,15 +275,12 @@ export function crearSucursales({
     asyncRoute(async (req, res) => {
       const slug = cleanSlug(req.params.slug),
         user = await negocio(slug);
-      const { data, error } = await supabase
-        .from("negocio_perfiles")
-        .select("*")
-        .eq("slug", slug)
-        .maybeSingle();
+      const { data, error, redes_habilitadas } = await leerPerfil(slug);
       if (error && !faltaSchemaSucursales(error)) throw error;
       res.json({
         success: true,
         habilitado: !error,
+        redes_habilitadas,
         logo_url: user.logo_url,
         perfil: data || {
           nombre: user.business_name || "",
@@ -258,6 +292,7 @@ export function crearSucursales({
           telefono_publico: "",
           instagram: "",
           sitio_web: "",
+          redes_sociales: {},
           fotos: [],
           publicado: false,
         },
@@ -276,6 +311,17 @@ export function crearSucursales({
       } catch (e) {
         fail(e.message);
       }
+      const existente = await leerPerfil(slug);
+      if (existente.error) throw existente.error;
+      if (!existente.redes_habilitadas) {
+        if (Object.keys(perfil.redes_sociales || {}).length)
+          fail(
+            "Falta instalar la actualización de redes sociales del perfil.",
+            409,
+          );
+        delete perfil.redes_sociales;
+      } else if (!Object.hasOwn(perfil, "redes_sociales"))
+        perfil.redes_sociales = existente.data?.redes_sociales || {};
       // Sólo fotos subidas por este negocio al bucket público; nunca datos de la cuenta.
       const prefix = supabase.storage
         .from("logos")
@@ -353,14 +399,7 @@ export function crearSucursales({
       const slug = cleanSlug(req.params.slug),
         user = await negocio(slug);
       if (!isActivo(user.activo)) fail("Perfil no disponible.", 404);
-      const { data, error } = await supabase
-        .from("negocio_perfiles")
-        .select(
-          "nombre,descripcion,categoria,direccion,ciudad,provincia,telefono_publico,instagram,sitio_web,fotos",
-        )
-        .eq("slug", slug)
-        .eq("publicado", true)
-        .maybeSingle();
+      const { data, error } = await leerPerfil(slug, true);
       if (error && !faltaSchemaSucursales(error)) throw error;
       if (!data) fail("Perfil no publicado.", 404);
       res.json({

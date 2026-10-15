@@ -1,6 +1,6 @@
 import type { StyleSpecification } from "maplibre-gl";
 export const STREET_ATTRIBUTION =
-  '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+  '© <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a> · Datos de <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
 // Only real street geometry and street names: no POIs, terrain or place labels.
 export function streetMapStyle(
