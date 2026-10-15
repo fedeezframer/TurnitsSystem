@@ -161,6 +161,35 @@ export function PerfilNegocio({
       setUploading(false);
     }
   };
+  if (!loading && error && !habilitado) {
+    return (
+      <div className="negocio-editor negocio-stack">
+        <SeccionHeader
+          title="Perfil del negocio"
+          subtitle="Tu presentación pública"
+          isMobile={isMobile}
+        />
+        <section className="negocio-card negocio-stack">
+          <p role="alert" className="negocio-error">
+            {error}
+          </p>
+          <a
+            className="negocio-button"
+            href={
+              /sesión|token|autorizado/i.test(error)
+                ? "/login"
+                : window.location.pathname
+            }
+            style={{ alignSelf: "flex-start" }}
+          >
+            {/sesión|token|autorizado/i.test(error)
+              ? "Iniciar sesión"
+              : "Volver a cargar"}
+          </a>
+        </section>
+      </div>
+    );
+  }
   return (
     <div className="negocio-editor negocio-stack">
       <SeccionHeader
