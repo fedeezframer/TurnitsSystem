@@ -1796,7 +1796,7 @@ export default function RegisterFlow(props) {
                                         onClick={() => elegirPlan("basico")}
                                     />
                                     <PlanCard selected={selectedPlan === "premium"} titulo="Plan Premium" priceNode={<div style={{fontSize:30,fontWeight:800,color:successColor}}>{precioPremiumActual.split("/")[0]}<span style={{fontSize:14,fontWeight:500,color:"#9CA3AF"}}>/mes</span></div>}
-                                        features={["Todo lo de Básico","Equipo y clientes sin límite","Transferencia, efectivo y agenda sin cobro","Soporte prioritario","Finanzas y rendimiento del equipo","Combos, promociones y productos","Tras la prueba: sin comisión Turnits"]}
+                                        features={["Todo lo de Básico","Equipo y clientes sin límite","Sucursales y encargados por sede","Transferencia, efectivo y agenda sin cobro","Soporte prioritario","Finanzas y rendimiento del equipo","Combos, promociones y productos","Tras la prueba: sin comisión Turnits"]}
                                         featureTextColor={() => "#374151"} checkColor={successColor} cta="Empezar Prueba Gratis"
                                         accentColor={acento} loading={planSubmitting && selectedPlan === "premium"}
                                         loadingText="Preparando Premium…" onClick={() => elegirPlan("premium")} />

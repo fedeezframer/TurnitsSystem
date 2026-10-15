@@ -14,7 +14,7 @@ Una cuenta, una suscripción y un enlace `/agenda/{slug}`. Las sucursales son se
 
 ## Instalación
 
-Ejecutar **completos**, en este orden, `supabase/migrations/20261014_perfil_sucursales.sql` y `supabase/migrations/20261014_sucursales_cambio_plan.sql` como administrador en Supabase. Federico confirmó la ejecución del primero el 14/10/2026; el complemento se entregó por separado. El agente no ejecutó cambios en la base real.
+Ejecutar **completos**, en este orden, `supabase/migrations/20261014_perfil_sucursales.sql` y `supabase/migrations/20261014_sucursales_cambio_plan.sql` como administrador en Supabase. Federico confirmó la ejecución de ambos el 14/10/2026. El agente no ejecutó cambios en la base real.
 
 El complemento devuelve a la sede principal los miembros conservados al bajar de Premium y revoca a los encargados. No cambia la sucursal de las reservas históricas ni elimina las sedes.
 
