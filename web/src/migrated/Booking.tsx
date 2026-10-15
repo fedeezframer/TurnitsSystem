@@ -1003,6 +1003,7 @@ export default function BookingFlow(props: any) {
                 if (!alive) return
                 const lista = data?.success ? data.equipo || [] : []
                 setSucursales((sedes.sucursales || []).map((s:MapBranch)=>({...s,sin_equipo:s.id==='principal' && lista.length===0})))
+                setSucursalId(sedes.sucursales.length === 1 ? sedes.sucursales[0].id : '')
                 setProfesionales(lista)
                 if (lista.length === 1 && !sedes.sucursales?.length) setEquipoId(lista[0].id)
             })
@@ -1014,6 +1015,7 @@ export default function BookingFlow(props: any) {
     }, [api, slug, isCanvas])
 
     const profesionalesVisibles=sucursales.length?profesionales.filter(p=>sucursales.find(s=>s.id===sucursalId)?.equipo_ids?.includes(p.id)):profesionales
+    const requiereSucursal = sucursales.length > 1
     const requiereProfesional = profesionales.length > 1 || (sucursales.length>0 && profesionales.length>0)
     const listoParaServicios =
         !loadingProf && !errorSedes && (!requiereProfesional || !!equipoId) && (!sucursales.length || !!sucursalId)
@@ -1480,14 +1482,14 @@ export default function BookingFlow(props: any) {
 
     const steps = React.useMemo(() => {
         const s: string[] = []
-        if (sucursales.length) s.push("sucursal")
+        if (requiereSucursal) s.push("sucursal")
         if (requiereProfesional) s.push("profesional")
         s.push("servicio")
         s.push("fecha")
         s.push("hora")
         s.push("checkout")
         return s
-    }, [requiereProfesional,sucursales.length])
+    }, [requiereProfesional,requiereSucursal])
 
     const [stepId, setStepId] = React.useState("")
 
@@ -2206,7 +2208,7 @@ export default function BookingFlow(props: any) {
                                 {stepId === "sucursal" && <div><StepTitle title="Elegí la sucursal"/><React.Suspense fallback={<Skeleton/>}><BranchSelection branches={sucursales} selected={sucursalId} accent={accent} onSelect={elegirSucursal} onContinue={irSiguientePaso}/></React.Suspense></div>}
                                 {stepId === "profesional" && (
                                     <div>
-                                        {sucursales.length>0 && <div style={{marginBottom:14}}><BackLink onClick={volverPaso}/></div>}
+                                        {stepIndex>0 && <div style={{marginBottom:14}}><BackLink onClick={volverPaso}/></div>}
                                         <StepTitle
                                             title="Elegí profesional"
                                             hint={sucursales.length?`Elegí con quién querés el turno en ${sucursales.find(s=>s.id===sucursalId)?.nombre || 'esta sede'}.`:'Elegí con quién querés el turno.'}
