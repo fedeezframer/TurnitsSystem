@@ -14,7 +14,7 @@ const LocationPicker = React.lazy(() =>
 );
 import { PerfilContenido } from "./perfil-publico";
 import { SOCIAL_LINKS, normalizarEnlaceRed } from "../../shared/socials.js";
-import { SocialIcon } from "../../components/SocialIcon";
+import { SocialProfileField } from "../../components/SocialProfileField";
 
 export function NegocioIcon({
   kind = "sucursal",
@@ -296,44 +296,31 @@ export function PerfilNegocio({
                 <div>
                   <h3>Redes sociales</h3>
                   <p className="negocio-muted">
-                    Agregá los enlaces públicos de tu negocio. Aparecen en
-                    «Sobre el negocio» y podés quitarlos cuando quieras.
+                    Completá sólo tu usuario en cada red, sin pegar el enlace.
+                    Aparecen en «Sobre el negocio» y podés quitarlos cuando
+                    quieras.
                   </p>
                 </div>
                 <div className="negocio-grid">
                   {SOCIAL_LINKS.map((red) => (
-                    <label className="negocio-field" key={red.key}>
-                      {red.label}
-                      <span className="negocio-social-input">
-                        <SocialIcon name={red.key} />
-                        <input
-                          aria-label={`Perfil de ${red.label}`}
-                          type="text"
-                          autoCapitalize="none"
-                          autoCorrect="off"
-                          spellCheck={false}
-                          inputMode="url"
-                          maxLength={red.key === "instagram" ? 250 : 350}
-                          placeholder={red.placeholder}
-                          value={
-                            (red.key === "instagram"
-                              ? form.instagram
-                              : form.redes_sociales?.[red.key]) || ""
-                          }
-                          disabled={
-                            red.key !== "instagram" && !redesHabilitadas
-                          }
-                          onChange={(e) =>
-                            red.key === "instagram"
-                              ? change("instagram", e.target.value)
-                              : change("redes_sociales", {
-                                  ...form.redes_sociales,
-                                  [red.key]: e.target.value,
-                                })
-                          }
-                        />
-                      </span>
-                    </label>
+                    <SocialProfileField
+                      key={red.key}
+                      network={red}
+                      value={
+                        (red.key === "instagram"
+                          ? form.instagram
+                          : form.redes_sociales?.[red.key]) || ""
+                      }
+                      disabled={red.key !== "instagram" && !redesHabilitadas}
+                      onChange={(value) =>
+                        red.key === "instagram"
+                          ? change("instagram", value)
+                          : change("redes_sociales", {
+                              ...form.redes_sociales,
+                              [red.key]: value,
+                            })
+                      }
+                    />
                   ))}
                 </div>
                 {!redesHabilitadas && (

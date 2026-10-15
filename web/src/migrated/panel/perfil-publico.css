@@ -471,21 +471,44 @@
   margin-bottom: 6px;
 }
 .negocio-social-input {
-  position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
+  border: 1px solid #dce3dd;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  padding-left: 12px;
+  gap: 7px;
+}
+.negocio-social-input:focus-within {
+  border-color: #197128;
+  box-shadow: 0 0 0 3px #19712812;
+}
+.negocio-social-input.is-disabled {
+  opacity: 0.5;
+}
+.negocio-social-prefix {
+  flex-shrink: 0;
+  color: #6b7b70;
+  font-size: 12px;
+  user-select: none;
 }
 .negocio-social-input > svg {
-  position: absolute;
-  left: 12px;
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
   color: #607668;
   pointer-events: none;
 }
 .negocio-social-input > input {
-  padding-left: 43px !important;
+  min-width: 0;
+  flex: 1;
+  width: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding-left: 0 !important;
 }
 .perfil-map-clickable {
   position: relative;
