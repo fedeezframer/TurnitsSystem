@@ -382,6 +382,14 @@ async function borrarNegocioCompleto(slug) {
   // Imágenes en Storage (logo, comprobantes, fotos de servicios / equipo /
   // extras). "Best effort": el negocio ya está borrado, si algo falla acá
   // solo se loguea.
+  try {
+    for(let i=0;i<20;i++) {
+      const {data,error}=await supabase.storage.from("logos").list(`${slug}/perfil`,{limit:100});
+      if(error || !data?.length)break;
+      const {error:removeError}=await supabase.storage.from("logos").remove(data.map(file=>`${slug}/perfil/${file.name}`));
+      if(removeError)break;
+    }
+  }catch(e){console.warn("No se pudieron limpiar todas las fotos del perfil eliminado.");}
   for (const bucket of ["logos", "comprobantes", "servicios", "equipo", "extras"]) {
     try {
       for (let i = 0; i < 20; i++) {
