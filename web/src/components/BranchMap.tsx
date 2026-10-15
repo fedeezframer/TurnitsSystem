@@ -1,6 +1,11 @@
 import * as React from "react";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { maplibreGL } from "@maplibre/maplibre-gl-leaflet";
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import { streetMapStyle, STREET_ATTRIBUTION } from "./street-map-style";
+setWorkerUrl(workerUrl);
 import {
   branchesByDistance,
   validPoint,
@@ -19,13 +24,24 @@ export type MapBranch = {
 };
 type Pin = { id: string; nombre: string; latitud: number; longitud: number };
 const DEFAULT_CENTER: L.LatLngTuple = [-31.4167, -64.1833];
-const TILE_URL =
-  import.meta.env.VITE_MAP_TILE_URL ||
-  "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const TILE_ATTRIBUTION =
-  import.meta.env.VITE_MAP_ATTRIBUTION ||
-  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
-function pinIcon(selected: boolean) {
+function canRenderStreets() {
+  try {
+    const context = document.createElement("canvas").getContext("webgl2");
+    if (!context) return false;
+    context.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
+  } catch {
+    return false;
+  }
+}
+function pinIcon(selected: boolean, compact: boolean) {
+  if (compact)
+    return L.divIcon({
+      className: "tn-profile-map-pin",
+      html: '<svg viewBox="0 0 32 42" aria-hidden="true"><path fill="#bc383a" d="M16 1A14 14 0 0 0 2 15c0 10 14 26 14 26s14-16 14-26A14 14 0 0 0 16 1Z"/><circle fill="#fff" cx="16" cy="15" r="5"/></svg>',
+      iconSize: [26, 36],
+      iconAnchor: [13, 35],
+    });
   return L.divIcon({
     className: "tn-map-pin-container",
     html: `<span class="tn-map-pin ${selected ? "selected" : ""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>`,
@@ -41,6 +57,7 @@ export function BranchMap({
   onPointChange,
   label = "Mapa de sucursales",
   editing = false,
+  compact = false,
 }: {
   pins: Pin[];
   selected?: string;
@@ -48,6 +65,7 @@ export function BranchMap({
   onPointChange?: (p: GeoPoint) => void;
   label?: string;
   editing?: boolean;
+  compact?: boolean;
 }) {
   const container = React.useRef<HTMLDivElement>(null),
     map = React.useRef<L.Map | null>(null),
@@ -62,25 +80,43 @@ export function BranchMap({
     const instance = L.map(container.current, {
       scrollWheelZoom: false,
       worldCopyJump: true,
-      zoomControl: true,
-    }).setView(DEFAULT_CENTER, editing ? 12 : 5);
+      zoomControl: !compact,
+      dragging: !compact,
+      touchZoom: !compact,
+      doubleClickZoom: !compact,
+      keyboard: !compact,
+      maxZoom: 19,
+    }).setView(DEFAULT_CENTER, 13);
     map.current = instance;
     layer.current = L.layerGroup().addTo(instance);
-    let errors = 0;
-    const tiles = L.tileLayer(TILE_URL, {
-      maxZoom: 19,
-      attribution: TILE_ATTRIBUTION,
-      referrerPolicy: "strict-origin-when-cross-origin",
-      keepBuffer: 1,
-    });
-    tiles.on("tileerror", () => {
-      if (++errors >= 3) setTileError(true);
-    });
-    tiles.on("tileload", () => {
-      errors = 0;
-      setTileError(false);
-    });
-    tiles.addTo(instance);
+    let tiles: L.MaplibreGL | undefined;
+    try {
+      if (!canRenderStreets()) throw new Error("webgl-unavailable");
+      tiles = maplibreGL({
+        style: streetMapStyle(
+          import.meta.env.VITE_MAP_VECTOR_SOURCE || undefined,
+        ),
+        attributionControl: { customAttribution: STREET_ATTRIBUTION },
+        renderWorldCopies: true,
+      });
+      // The adapter registers Leaflet events before creating its GL renderer.
+      // A failed renderer must be removable without breaking map navigation.
+      const remove = tiles.onRemove;
+      tiles.onRemove = function (map) {
+        if (this.getMaplibreMap()) return remove.call(this, map);
+        this.getContainer()?.remove();
+        return this;
+      };
+      tiles.addTo(instance);
+      const vector = tiles.getMaplibreMap();
+      vector.on("error", () => setTileError(true));
+      vector.on("idle", () => {
+        if (vector.areTilesLoaded()) setTileError(false);
+      });
+    } catch {
+      if (tiles && instance.hasLayer(tiles)) instance.removeLayer(tiles);
+      setTileError(true);
+    }
     if (editing)
       instance.on("click", (event: L.LeafletMouseEvent) =>
         callbacks.current.onPointChange?.({
@@ -98,7 +134,7 @@ export function BranchMap({
       map.current = null;
       layer.current = null;
     };
-  }, [editing]);
+  }, [editing, compact]);
   React.useEffect(() => {
     const instance = map.current,
       group = layer.current;
@@ -106,7 +142,7 @@ export function BranchMap({
     group.clearLayers();
     for (const pin of pins) {
       const marker = L.marker([pin.latitud, pin.longitud], {
-        icon: pinIcon(editing || pin.id === selected),
+        icon: pinIcon(editing || pin.id === selected, compact),
         draggable: editing,
         keyboard: true,
         title: pin.nombre,
@@ -137,7 +173,7 @@ export function BranchMap({
       );
       instance.fitBounds(bounds, {
         padding: [40, 40],
-        maxZoom: editing ? 16 : 14,
+        maxZoom: editing || compact ? 16 : 14,
         animate: false,
       });
     }
@@ -148,9 +184,9 @@ export function BranchMap({
       !instance.getBounds().contains([active.latitud, active.longitud])
     )
       instance.panTo([active.latitud, active.longitud]);
-  }, [pins, selected, editing]);
+  }, [pins, selected, editing, compact]);
   return (
-    <div className="tn-branch-map">
+    <div className={`tn-branch-map${compact ? " tn-branch-map-compact" : ""}`}>
       <div
         className="tn-map-surface"
         ref={container}
@@ -159,8 +195,9 @@ export function BranchMap({
       />
       {tileError && (
         <p className="tn-map-error" role="status">
-          No pudimos cargar el fondo del mapa. Podés seguir usando la lista de
-          sucursales.
+          {compact
+            ? "No pudimos cargar el mapa."
+            : "No pudimos cargar el fondo del mapa. Podés seguir eligiendo una sede o ingresar las coordenadas manualmente."}
         </p>
       )}
     </div>

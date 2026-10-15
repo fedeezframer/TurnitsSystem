@@ -17,6 +17,35 @@
   font-size: 10px;
   background: #fffffff2;
 }
+.tn-branch-map-compact {
+  border: 0;
+  border-radius: 20px;
+}
+.tn-branch-map-compact .tn-map-surface {
+  height: 130px;
+  background: #e4e7e4;
+}
+.tn-profile-map-pin {
+  background: transparent;
+  border: 0;
+  filter: drop-shadow(0 2px 2px #28382b20);
+}
+.tn-profile-map-pin svg {
+  width: 26px;
+  height: 36px;
+}
+.tn-map-surface .leaflet-gl-layer {
+  pointer-events: none;
+}
+.tn-map-surface .maplibregl-canvas {
+  display: block;
+  outline: none;
+}
+.tn-branch-map-compact .leaflet-control-attribution {
+  font-size: 7px;
+  line-height: 1.3;
+  max-width: 100%;
+}
 .tn-map-surface .leaflet-control-attribution a {
   color: #285a38;
 }
@@ -203,6 +232,9 @@
   outline-offset: 3px;
 }
 @media (max-width: 600px) {
+  .tn-branch-map-compact .tn-map-surface {
+    height: 175px;
+  }
   .tn-map-surface {
     height: 265px;
   }

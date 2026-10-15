@@ -38,6 +38,18 @@ La asignación de sucursales y encargados usa una función SQL atómica, valida 
 
 ## Proveedor del mapa
 
-Leaflet 1.9.4 se carga en un módulo separado. Usa teselas estándar de OpenStreetMap con atribución visible, referrer y caché normales del navegador. No usa geocodificador, proxy, descarga masiva ni precarga sin interacción. La URL puede sustituirse con `VITE_MAP_TILE_URL` y la atribución con `VITE_MAP_ATTRIBUTION` al compilar la web. El servicio público de teselas es de mejor esfuerzo, sin SLA; al crecer el tráfico conviene configurar un proveedor acorde al volumen. Si el mapa falla, la lista sigue disponible.
+Leaflet conserva los pines y la interacción. MapLibre GL dibuja un estilo vectorial propio, cargado en un módulo separado: fondo claro, calles blancas y nombres en gris. Sólo se usan las capas `transportation` y `transportation_name`; se excluyen comercios, lugares, relieve, edificios, parques y etiquetas de ciudades. Los mapas del booking, del editor y del perfil usan el mismo estilo. OpenFreeMap suministra los datos OpenMapTiles basados en OpenStreetMap, con atribución visible. La fuente vectorial puede sustituirse con `VITE_MAP_VECTOR_SOURCE` al compilar la web. Se eliminó la configuración anterior de teselas raster. No se agrega geocodificador, proxy, descarga masiva ni cuota de una cuenta de pago.
 
-Documentación: [Leaflet](https://leafletjs.com/reference.html), [política de teselas OSM](https://operations.osmfoundation.org/policies/tiles/). Las pruebas automáticas interceptan las teselas para no generar tráfico automatizado al servicio público.
+El servicio público es de mejor esfuerzo, sin SLA. Si falla el mapa o el navegador carece de WebGL2, la lista y la entrada manual de coordenadas siguen funcionando. El renderer fallido se retira sin dejar eventos de Leaflet que rompan los pasos del booking.
+
+Documentación: [OpenFreeMap e integración con Vite/Leaflet](https://openfreemap.org/quick_start/), [uso comercial y atribución](https://openfreemap.org/), [Leaflet](https://leafletjs.com/reference.html). Las pruebas de interacción interceptan los datos vectoriales; una pasada visual usa la carga normal del mapa y la portada pública del negocio.
+
+## Diseño público del perfil — 15/10/2026
+
+Se sigue el concepto aportado por Federico: ancho máximo de 854 px, logo pequeño de Turnits centrado, portada de 306 px con nombre manuscrito, ficha blanca con tres columnas (identidad/Ver Agenda, puntuación/comentario y ubicación) y tarjeta de reseñas aparte. En móvil las dos primeras columnas permanecen juntas y la ubicación pasa a una fila completa. La primera foto existente sigue siendo la portada. Descripción, contacto y fotos restantes se conservan debajo. La tipografía Kaushan Script se sirve localmente con su licencia OFL.
+
+El minimapa toma únicamente ubicaciones públicas y activas ya configuradas en Sucursales, prioriza la principal y permite elegir si hay varias con coordenadas. No inventa ubicaciones ni geocodifica las direcciones automáticamente. La vista previa del panel usa el mismo componente. No hay cambios de API ni SQL adicionales para este diseño.
+
+Por decisión de Federico, reseñas y puntuaciones son sólo una preparación visual: estrellas sin puntuar, cero opiniones y comentario deshabilitado con «Próximamente». No se agregan opiniones ficticias ni endpoints de publicación. La funcionalidad queda para las cuentas de consumidores, con una reseña por cuenta.
+
+Verificación adicional: `work/verify-streets-regression.cjs` conserva las pruebas de sedes/cercanía/edición con el nuevo renderer; `work/verify-profile-concept.cjs` comprueba dimensiones del boceto, portada, enlace, estados vacíos/error/privado y 390 px; `work/verify-map-no-webgl.cjs` comprueba continuación por lista sin WebGL. Sin escrituras ni cobros reales.

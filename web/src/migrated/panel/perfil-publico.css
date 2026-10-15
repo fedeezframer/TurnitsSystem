@@ -1,0 +1,463 @@
+@font-face {
+  font-family: "Kaushan Script";
+  src: url("/assets/site/kaushan-script.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+.perfil-page {
+  min-height: 100dvh;
+  background: #f8f9fa;
+  padding: 38px 18px 50px;
+  color: #101310;
+  font-family: "Inter Display", sans-serif;
+}
+.perfil-page *,
+.perfil-publico * {
+  box-sizing: border-box;
+}
+.perfil-page-inner {
+  max-width: 854px;
+  margin: 0 auto;
+}
+.perfil-turnits-link {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 34px;
+  position: relative;
+  width: 140px;
+  height: 26px;
+}
+.perfil-turnits-link img {
+  position: absolute;
+  width: 140px;
+  height: 48px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+}
+.perfil-page-status {
+  background: #fff;
+  border: 1px solid #e1e5e4;
+  border-radius: 18px;
+  padding: 30px;
+  line-height: 1.6;
+}
+.perfil-publico {
+  width: 100%;
+  min-width: 0;
+  color: #101310;
+  font-family: "Inter Display", sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.perfil-main-card {
+  border: 1px solid #e1e5e8;
+  border-radius: 18px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 2px 5px #192a3303;
+}
+.perfil-cover {
+  position: relative;
+  height: 306px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+}
+.perfil-cover-photo,
+.perfil-cover-shade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+.perfil-cover-shade {
+  z-index: -1;
+  background: #0009;
+}
+.perfil-cover-empty {
+  background: linear-gradient(120deg, #28372c, #19211b);
+}
+.perfil-cover-empty .perfil-cover-shade {
+  background: #0002;
+}
+.perfil-cover-brand {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 18px;
+  padding: 25px;
+  text-align: center;
+  color: #fff;
+  font-family: "Kaushan Script", cursive;
+  line-height: 1.3;
+  flex-wrap: wrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.perfil-cover-brand > span {
+  font-size: clamp(40px, 6vw, 88px);
+}
+.perfil-cover-brand > small {
+  font-size: clamp(25px, 3vw, 42px);
+}
+.perfil-overview {
+  padding: 18px 29px 19px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.3fr);
+  gap: 34px;
+  align-items: start;
+}
+.perfil-publico p,
+.perfil-publico h1,
+.perfil-publico h2 {
+  margin: 0;
+}
+.perfil-category,
+.perfil-city {
+  font-size: 19px;
+  color: #637183;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.perfil-identity h1 {
+  font-size: 29px;
+  letter-spacing: -0.7px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.perfil-identity {
+  padding: 10px 0 0 7px;
+  min-width: 0;
+}
+.perfil-booking-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #1b6b1a;
+  text-decoration: none;
+  font-size: 18px;
+  line-height: 1.2;
+  padding: 8px 18px;
+  min-height: 36px;
+  border-radius: 24px;
+  margin: 12px 0 0 -7px;
+  max-width: 178px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.perfil-booking-link:hover {
+  background: #145513;
+}
+.perfil-booking-preview {
+  cursor: default;
+}
+.perfil-rating {
+  padding-top: 14px;
+  min-width: 0;
+}
+.perfil-rating-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  font-size: 17px;
+  margin-bottom: 9px;
+}
+.perfil-rating-heading small {
+  font-size: 13px;
+  color: #a0a5a2;
+}
+.perfil-stars {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+  color: #1b6b1a;
+}
+.perfil-stars svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.perfil-rating textarea {
+  width: 100%;
+  height: 99px;
+  resize: none;
+  border: 1px solid #eceeec;
+  border-radius: 10px;
+  padding: 10px;
+  font:
+    400 12px "Inter Display",
+    sans-serif;
+  background: #fff;
+  color: #9b9f9b;
+  display: block;
+  opacity: 1;
+  -webkit-text-fill-color: #9b9f9b;
+  cursor: not-allowed;
+}
+.perfil-rating textarea::placeholder {
+  color: #a3a6a3;
+  opacity: 1;
+}
+.perfil-coming-soon {
+  display: block;
+  color: #8d948e;
+  font-size: 10px;
+  margin: 5px 0 0 2px;
+}
+.perfil-publico .perfil-location h2 {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0;
+  margin: 0 0 5px;
+}
+.perfil-location {
+  min-width: 0;
+}
+.perfil-location select {
+  font:
+    400 11px "Inter Display",
+    sans-serif;
+  max-width: 100%;
+  width: 100%;
+  border: 1px solid #e2e7e2;
+  border-radius: 7px;
+  padding: 6px 7px;
+  background: #fff;
+  color: #637183;
+  margin: 0 0 7px;
+}
+.perfil-address {
+  font-size: 11px;
+  color: #7f8780;
+  line-height: 1.4;
+  margin-top: 5px !important;
+  overflow-wrap: anywhere;
+}
+.perfil-address.perfil-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.perfil-map-placeholder {
+  height: 130px;
+  background: #e4e7e4;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  color: #7f8780;
+  font-size: 11px;
+  text-align: center;
+  padding: 12px;
+}
+.perfil-map-placeholder svg {
+  width: 23px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.perfil-publico .perfil-reviews h2 {
+  font-size: 37px;
+  font-weight: 500;
+  letter-spacing: -1px;
+  margin: 0 0 23px;
+  line-height: 1.3;
+}
+.perfil-reviews,
+.perfil-details {
+  padding: 27px 30px;
+  background: #fff;
+  border: 1px solid #e1e5e4;
+  border-radius: 17px;
+  min-width: 0;
+}
+.perfil-reviews {
+  min-height: 235px;
+}
+.perfil-reviews p {
+  font-size: 17px;
+  color: #66716a;
+  margin: 0 0 7px;
+}
+.perfil-reviews > span {
+  color: #969e98;
+  font-size: 13px;
+}
+.perfil-publico .perfil-details h2 {
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  margin-bottom: 15px;
+}
+.perfil-details > p {
+  font-size: 15px;
+  line-height: 1.65;
+  color: #5b655d;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.perfil-contact-links {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 17px;
+}
+.perfil-contact-links a {
+  color: #1b6b1a;
+  font-size: 13px;
+  text-underline-offset: 4px;
+}
+.perfil-photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+}
+.perfil-photo-gallery img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.perfil-booking-link:focus-visible,
+.perfil-location select:focus-visible,
+.perfil-contact-links a:focus-visible,
+.perfil-turnits-link:focus-visible {
+  outline: 2px solid #1b6b1a;
+  outline-offset: 4px;
+}
+.negocio-preview:has(.perfil-publico) {
+  background: #f8f9fa;
+  padding: 16px;
+}
+@media (max-width: 850px) {
+  .perfil-overview {
+    gap: 20px;
+    padding: 18px 22px;
+  }
+  .perfil-rating-heading {
+    font-size: 15px;
+    gap: 4px;
+  }
+  .perfil-stars svg {
+    width: 14px;
+    height: 14px;
+  }
+  .perfil-category,
+  .perfil-city {
+    font-size: 16px;
+  }
+  .perfil-identity h1 {
+    font-size: 25px;
+  }
+  .perfil-booking-link {
+    font-size: 16px;
+  }
+}
+@media (max-width: 640px) {
+  .perfil-page {
+    padding: 22px 14px 30px;
+  }
+  .perfil-turnits-link {
+    margin-bottom: 22px;
+  }
+  .perfil-cover {
+    height: 210px;
+  }
+  .perfil-cover-brand {
+    gap: 8px;
+  }
+  .perfil-cover-brand > span {
+    font-size: 47px;
+  }
+  .perfil-cover-brand > small {
+    font-size: 26px;
+  }
+  .perfil-overview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 22px 16px;
+    padding: 18px;
+  }
+  .perfil-identity {
+    padding: 0;
+  }
+  .perfil-category,
+  .perfil-city {
+    font-size: 14px;
+  }
+  .perfil-identity h1 {
+    font-size: 25px;
+  }
+  .perfil-booking-link {
+    margin: 10px 0 0;
+    font-size: 15px;
+    max-width: 165px;
+  }
+  .perfil-rating {
+    padding-top: 4px;
+  }
+  .perfil-rating-heading {
+    flex-wrap: wrap;
+    font-size: 13px;
+    gap: 4px;
+  }
+  .perfil-stars svg {
+    width: 14px;
+    height: 14px;
+  }
+  .perfil-rating-heading small {
+    font-size: 11px;
+  }
+  .perfil-rating textarea {
+    height: 85px;
+  }
+  .perfil-location {
+    grid-column: 1/-1;
+  }
+  .perfil-publico .perfil-location h2 {
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+  .perfil-map-placeholder {
+    height: 175px;
+  }
+  .perfil-publico .perfil-reviews h2 {
+    font-size: 30px;
+  }
+  .perfil-reviews,
+  .perfil-details {
+    padding: 22px;
+  }
+  .perfil-reviews {
+    min-height: 190px;
+  }
+  .perfil-photo-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .negocio-preview:has(.perfil-publico) {
+    padding: 0;
+  }
+  .perfil-publico {
+    gap: 20px;
+  }
+}

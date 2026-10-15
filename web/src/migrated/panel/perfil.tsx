@@ -355,7 +355,7 @@ export function PerfilNegocio({
           <section className="negocio-card negocio-stack">
             <h2>Vista previa</h2>
             <div className="negocio-preview">
-              <PerfilContenido perfil={form} logo={logo} />
+              <PerfilContenido perfil={form} logo={logo} slug={slug} />
             </div>
           </section>
         </>

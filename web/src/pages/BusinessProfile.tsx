@@ -8,6 +8,8 @@ export default function BusinessProfile() {
     [error, setError] = React.useState("");
   React.useEffect(() => {
     let alive = true;
+    setPerfil(null);
+    setError("");
     fetch(`${appConfig.apiUrl}/perfil/${encodeURIComponent(slug || "")}`)
       .then(async (r) => {
         const d = await r.json();
@@ -21,40 +23,31 @@ export default function BusinessProfile() {
     };
   }, [slug]);
   return (
-    <main
-      className="negocio-editor"
-      style={{
-        minHeight: "100dvh",
-        background: "#f8fafc",
-        padding: "26px 16px",
-      }}
-    >
-      <div
-        style={{ maxWidth: 850, margin: "0 auto" }}
-        className="negocio-stack"
-      >
-        <Link to="/" style={{ alignSelf: "center" }}>
-          <img
-            src={appConfig.logoUrl}
-            alt="Turnits"
-            style={{ width: 130, maxHeight: 45, objectFit: "contain" }}
-          />
+    <main className="perfil-page">
+      <div className="perfil-page-inner">
+        <Link
+          to="/"
+          className="perfil-turnits-link"
+          aria-label="Turnits — ir al inicio"
+        >
+          <img src={appConfig.logoUrl} alt="Turnits" />
         </Link>
-        <section className="negocio-card">
-          {error ? (
-            <p role="alert" className="negocio-muted">
-              {error}
-            </p>
-          ) : !perfil ? (
-            <p role="status">Cargando perfil…</p>
-          ) : (
-            <PerfilContenido
-              perfil={perfil}
-              logo={perfil.logo_url}
-              bookingUrl={`/agenda/${slug}`}
-            />
-          )}
-        </section>
+        {error ? (
+          <p role="alert" className="perfil-page-status">
+            {error}
+          </p>
+        ) : !perfil ? (
+          <p role="status" className="perfil-page-status">
+            Cargando perfil…
+          </p>
+        ) : (
+          <PerfilContenido
+            perfil={perfil}
+            logo={perfil.logo_url}
+            bookingUrl={`/agenda/${slug}`}
+            slug={slug}
+          />
+        )}
       </div>
     </main>
   );
