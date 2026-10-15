@@ -1,6 +1,8 @@
 import { appConfig } from "../config"
 import * as React from "react"
 import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
+import type {MapBranch} from "../components/BranchMap"
+const BranchSelection=React.lazy(()=>import("../components/BranchMap").then(m=>({default:m.BranchSelection})))
 
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -812,9 +814,10 @@ export default function BookingFlow(props: any) {
     const [errorNegocio, setErrorNegocio] = React.useState("")
 
     const [profesionales, setProfesionales] = React.useState<Profesional[]>([])
-    const [sucursales,setSucursales]=React.useState<{id:string;nombre:string;direccion:string;equipo_ids:string[]}[]>([])
+    const [sucursales,setSucursales]=React.useState<MapBranch[]>([])
     const [sucursalId,setSucursalId]=React.useState('')
     const [loadingProf, setLoadingProf] = React.useState(true)
+    const [errorSedes,setErrorSedes]=React.useState("")
     const [equipoId, setEquipoId] = React.useState<string | null>(null)
     const [equipoIdReservado, setEquipoIdReservado] = React.useState<
         string | null
@@ -994,26 +997,26 @@ export default function BookingFlow(props: any) {
         }
         let alive = true
         Promise.all([
-            fetch(`${api}/equipo/${slug}`).then(r=>r.json()),
-            fetch(`${api}/sucursales/${slug}`).then(r=>r.ok?r.json():{sucursales:[]}).catch(()=>({sucursales:[]})),
+            fetch(`${api}/equipo/${slug}`).then(async r=>{const d=await r.json();if(!r.ok || !d.success || !Array.isArray(d.equipo))throw new Error('equipo');return d}),
+            fetch(`${api}/sucursales/${slug}`).then(async r=>{const d=await r.json();if(!r.ok || !d.success || !Array.isArray(d.sucursales))throw new Error('sucursales');return d}),
         ]).then(([data,sedes]) => {
                 if (!alive) return
                 const lista = data?.success ? data.equipo || [] : []
-                setSucursales(sedes.sucursales || [])
+                setSucursales((sedes.sucursales || []).map((s:MapBranch)=>({...s,sin_equipo:s.id==='principal' && lista.length===0})))
                 setProfesionales(lista)
                 if (lista.length === 1 && !sedes.sucursales?.length) setEquipoId(lista[0].id)
             })
-            .catch(() => alive && setProfesionales([]))
+            .catch(() => {if(alive){setProfesionales([]);setErrorSedes('No pudimos cargar las sedes y profesionales. Volvé a intentarlo.')}})
             .finally(() => alive && setLoadingProf(false))
         return () => {
             alive = false
         }
     }, [api, slug, isCanvas])
 
-    const profesionalesVisibles=sucursales.length?profesionales.filter(p=>sucursales.find(s=>s.id===sucursalId)?.equipo_ids.includes(p.id)):profesionales
-    const requiereProfesional = profesionales.length > 1 || sucursales.length>0
+    const profesionalesVisibles=sucursales.length?profesionales.filter(p=>sucursales.find(s=>s.id===sucursalId)?.equipo_ids?.includes(p.id)):profesionales
+    const requiereProfesional = profesionales.length > 1 || (sucursales.length>0 && profesionales.length>0)
     const listoParaServicios =
-        !loadingProf && (!requiereProfesional || !!equipoId)
+        !loadingProf && !errorSedes && (!requiereProfesional || !!equipoId) && (!sucursales.length || !!sucursalId)
 
     React.useEffect(()=>{
         if(isCanvas || !slug)return
@@ -1467,6 +1470,7 @@ export default function BookingFlow(props: any) {
         !!fecha && !!hora && datosPersonalesOkParaBoton && metodoPagoValido
 
     const STEP_LABELS: Record<string, string> = {
+        sucursal: "Sucursal",
         profesional: "Profesional",
         servicio: "Servicio",
         fecha: "Fecha",
@@ -1476,13 +1480,14 @@ export default function BookingFlow(props: any) {
 
     const steps = React.useMemo(() => {
         const s: string[] = []
+        if (sucursales.length) s.push("sucursal")
         if (requiereProfesional) s.push("profesional")
         s.push("servicio")
         s.push("fecha")
         s.push("hora")
         s.push("checkout")
         return s
-    }, [requiereProfesional])
+    }, [requiereProfesional,sucursales.length])
 
     const [stepId, setStepId] = React.useState("")
 
@@ -1539,6 +1544,10 @@ export default function BookingFlow(props: any) {
         if (prev) setStepId(prev)
     }
 
+    function elegirSucursal(id:string) {
+        if(id===sucursalId)return
+        setSucursalId(id);setEquipoId(null);setEquipoIdReservado(null);setServicioId(null);setPromocionId(null);setExtrasSeleccionados([]);setFecha('');setHora('');setServicios([])
+    }
     function elegirProfesional(p: Profesional) {
         setEquipoId(p.id)
         setEquipoIdReservado(null)
@@ -1980,6 +1989,7 @@ export default function BookingFlow(props: any) {
             </div>
         )
     }
+    if(errorSedes)return <div style={{...wrapperStyle,...temaVars,gap:16}}><p role="alert">{errorSedes}</p><button type="button" onClick={()=>window.location.reload()} style={{background:accent,color:'#fff',border:0,borderRadius:10,padding:'12px 18px',cursor:'pointer',fontFamily:'inherit'}}>Volver a cargar</button></div>
     // Plan vencido o deuda de comisiones: el backend responde suspendido:true
     // (sin distinguir el motivo hacia el cliente final).
     if (negocio.suspendido) {
@@ -2164,6 +2174,7 @@ export default function BookingFlow(props: any) {
                     >
                         {enCheckoutStep && headerBlock}
 
+                        {sucursalId && stepId!=='sucursal' && <p style={{fontSize:12,margin:'0 0 12px',color:tema.secundario}}>{sucursales.find(s=>s.id===sucursalId)?.nombre}</p>}
                         {stepId && (
                             <ProgressBar
                                 steps={steps}
@@ -2192,19 +2203,15 @@ export default function BookingFlow(props: any) {
                                     gap: 14,
                                 }}
                             >
+                                {stepId === "sucursal" && <div><StepTitle title="Elegí la sucursal"/><React.Suspense fallback={<Skeleton/>}><BranchSelection branches={sucursales} selected={sucursalId} accent={accent} onSelect={elegirSucursal} onContinue={irSiguientePaso}/></React.Suspense></div>}
                                 {stepId === "profesional" && (
                                     <div>
+                                        {sucursales.length>0 && <div style={{marginBottom:14}}><BackLink onClick={volverPaso}/></div>}
                                         <StepTitle
                                             title="Elegí profesional"
-                                            hint="Elegí con quién querés el turno."
+                                            hint={sucursales.length?`Elegí con quién querés el turno en ${sucursales.find(s=>s.id===sucursalId)?.nombre || 'esta sede'}.`:'Elegí con quién querés el turno.'}
                                         />
-                                        {sucursales.length>0 && <div style={{display:'grid',gap:10,marginBottom:18}}>
-                                            <h3 style={{fontSize:14,margin:'0 0 3px',color:tema.texto}}>Elegí la sucursal</h3>
-                                            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))',gap:8}}>
-                                                {sucursales.map(s=><button type="button" key={s.id} aria-pressed={sucursalId===s.id} onClick={()=>{setSucursalId(s.id);setEquipoId(null);setEquipoIdReservado(null);setServicioId(null);setPromocionId(null);setExtrasSeleccionados([]);setFecha('');setHora('')}} style={{padding:'13px 14px',borderRadius:12,border:`1px solid ${sucursalId===s.id?accent:tema.secundario+'25'}`,background:sucursalId===s.id?accent+'0c':'transparent',color:tema.texto,textAlign:'left',cursor:'pointer',fontFamily:'inherit'}}><strong style={{display:'block',fontSize:14}}>{s.nombre}</strong>{s.direccion && <span style={{display:'block',fontSize:12,marginTop:5,opacity:.65}}>{s.direccion}</span>}</button>)}
-                                            </div>
-                                            {sucursalId && !profesionalesVisibles.length && <p style={{fontSize:13,opacity:.65}}>Todavía no hay profesionales disponibles en esta sucursal.</p>}
-                                        </div>}
+
 
                                         <div
                                             className="bf-scroll-list bf-professionals-grid"

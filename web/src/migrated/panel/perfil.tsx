@@ -7,6 +7,7 @@ import {
 import { TeamManager, TeamManager_ServiciosVinculados } from "./equipo";
 import { TurnitsPlanRequirement } from "./shared";
 import "./perfil.css";
+const LocationPicker=React.lazy(()=>import('../../components/BranchMap').then(m=>({default:m.LocationPicker})));
 import { PerfilContenido } from "./perfil-publico";
 
 export function NegocioIcon({
@@ -369,6 +370,8 @@ const sucursalVacia = {
   activo: true,
   admin_equipo_id: null as string | null,
   miembros: [] as string[],
+  latitud:null as number|null,
+  longitud:null as number|null,
 };
 export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
   const api = baseUrl.replace(/\/+$/, ""),
@@ -393,7 +396,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
     try {
       const d = await request(`${api}/admin/sucursales/${slug}`, {
         method: "PUT",
-        body: JSON.stringify(form),
+        body: JSON.stringify(data.mapa_habilitado?form:Object.fromEntries(Object.entries(form).filter(([key])=>!['latitud','longitud'].includes(key)))),
       });
       setData((p: any) => ({ ...p, ...d }));
       setForm(null);
@@ -450,21 +453,10 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
             Falta instalar la actualización de Sucursales en la base de datos.
           </p>
         )}
-        <div className="negocio-row">
-          <NegocioIcon />
-          <div>
-            <h3>Sede principal</h3>
-            <p className="negocio-muted">
-              Dueño general ·{" "}
-              {data.equipo.filter((m: any) => !m.sucursal_id).length}{" "}
-              integrantes
-            </p>
-          </div>
-        </div>
       </div>
       {form && (
         <form className="negocio-card negocio-stack" onSubmit={guardar}>
-          <h2>{form.id ? "Editar sucursal" : "Nueva sucursal"}</h2>
+          <h2>{form.id==='principal'?'Editar sede principal':form.id ? "Editar sucursal" : "Nueva sucursal"}</h2>
           <fieldset
             className="negocio-stack"
             disabled={busy}
@@ -491,16 +483,19 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                 />
               </label>
             </div>
+            <React.Suspense fallback={<p className="negocio-muted">Cargando mapa…</p>}>
+              <LocationPicker latitud={form.latitud} longitud={form.longitud} disabled={busy || !data.mapa_habilitado} onChange={point=>setForm({...form,latitud:point?.latitud ?? null,longitud:point?.longitud ?? null})}/>
+            </React.Suspense>
+            {!data.mapa_habilitado && <p className="negocio-muted">Falta instalar la actualización de mapas para guardar ubicaciones.</p>}
             <div className="negocio-stack" style={{ gap: 10 }}>
               <h3>Miembros de esta sucursal</h3>
               <p className="negocio-muted">
-                Cada profesional trabaja en una sede. Al moverlo, sus reservas
-                anteriores conservan la sucursal original. Los que quites
-                vuelven a la sede principal.
+                Cada profesional trabaja en una sede. Al moverlo, sus reservas anteriores conservan su sucursal.
+                {form.id==='principal'?' Para quitar a alguien de la principal, asignalo desde otra sede.':' Los que quites vuelven a la sede principal.'}
               </p>
               <div className="negocio-grid">
                 {data.equipo
-                  .filter((m: any) => !m.es_dueño)
+                  .filter((m: any) => form.id==='principal' || !m.es_dueño)
                   .map((m: any) => {
                     const selected = form.miembros.includes(m.id),
                       sede = data.sucursales.find(
@@ -511,6 +506,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                         className="negocio-chip"
                         type="button"
                         aria-pressed={selected}
+                        disabled={form.id==='principal' && !m.sucursal_id}
                         key={m.id}
                         onClick={() =>
                           setForm({
@@ -546,7 +542,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                               color: "#64748b",
                             }}
                           >
-                            {sede?.nombre || "Sede principal"}
+                            {sede?.nombre || data.principal?.nombre || "Sede principal"}
                             {!m.activo ? " · Inactivo" : ""}
                           </small>
                         </span>
@@ -567,6 +563,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
             <label className="negocio-field">
               Encargado de la sucursal
               <select
+                aria-label="Encargado de la sucursal"
                 value={form.admin_equipo_id || ""}
                 onChange={(e) =>
                   setForm({ ...form, admin_equipo_id: e.target.value || null })
@@ -576,7 +573,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                 {data.equipo
                   .filter(
                     (m: any) =>
-                      form.miembros.includes(m.id) && m.activo && m.login_email,
+                      form.miembros.includes(m.id) && m.activo && m.login_email && !m.es_dueño,
                   )
                   .map((m: any) => (
                     <option value={m.id} key={m.id}>
@@ -625,9 +622,9 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
         </p>
       )}
       <div className="negocio-grid">
-        {data.sucursales.map((s: any) => {
+        {[data.principal || {...sucursalVacia,id:'principal',nombre:'Sede principal'},...data.sucursales].map((s: any) => {
           const miembros = data.equipo.filter(
-              (m: any) => m.sucursal_id === s.id,
+              (m: any) => (m.sucursal_id || 'principal') === s.id,
             ),
             admin = miembros.find((m: any) => m.id === s.admin_equipo_id);
           return (
@@ -644,6 +641,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               </div>
               <div>
                 <h2>{s.nombre}</h2>
+                {s.id==='principal' && <p className="negocio-muted">Sede principal</p>}
                 <p className="negocio-muted">
                   {s.direccion || "Sin dirección configurada"}
                 </p>
@@ -653,6 +651,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                   ? `Encargado: ${admin.nombre} ${admin.apellido || ""}`
                   : "Administrada por el dueño general"}
               </p>
+              <p className="negocio-muted">{s.latitud!=null && s.longitud!=null?'Ubicación marcada en el mapa':'Sin ubicación en el mapa'}</p>
               <div className="negocio-row">
                 {miembros.map((m: any) => (
                   <span
@@ -669,7 +668,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               </div>
               <button
                 type="button"
-                disabled={disabled || busy}
+                disabled={disabled || busy || (s.id==='principal' && !data.mapa_habilitado)}
                 className="negocio-button secondary"
                 onClick={() => {
                   setForm({
@@ -679,6 +678,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                     activo: s.activo,
                     admin_equipo_id: s.admin_equipo_id,
                     miembros: miembros.map((m: any) => m.id),
+                    latitud:s.latitud ?? null,longitud:s.longitud ?? null,
                   });
                   setError("");
                   setSaved("");
@@ -928,13 +928,14 @@ export function SucursalEmpleado({
                 <div className="negocio-row">
                   <button
                     className="negocio-button secondary"
+                    disabled={!!m.es_dueño}
                     onClick={() =>
                       setServiciosMiembro(serviciosMiembro === m.id ? "" : m.id)
                     }
                   >
                     Servicios
                   </button>
-                  {m.id !== myId && (
+                  {m.id !== myId && !m.es_dueño && (
                     <button
                       className="negocio-button secondary"
                       onClick={() =>

@@ -75,16 +75,14 @@ export function crearSucursales({
       await fn(req, res);
     } catch (e) {
       const schema = faltaSchemaSucursales(e);
-      res
-        .status(schema ? 409 : e.status || 500)
-        .json({
-          success: false,
-          codigo: schema ? "instalar_perfil_sucursales" : undefined,
-          error: schema
-            ? "Falta instalar la actualización de Perfil y Sucursales en la base de datos."
-            : e.publicMessage ||
-              "No se pudo completar el cambio. Volvé a intentarlo.",
-        });
+      res.status(schema ? 409 : e.status || 500).json({
+        success: false,
+        codigo: schema ? "instalar_perfil_sucursales" : undefined,
+        error: schema
+          ? "Falta instalar la actualización de Perfil y Sucursales en la base de datos."
+          : e.publicMessage ||
+            "No se pudo completar el cambio. Volvé a intentarlo.",
+      });
     }
   };
   const fail = (message, status = 400) => {
@@ -108,11 +106,13 @@ export function crearSucursales({
     return data;
   };
   const rows = async (slug) => {
-    const [{ data: sucursales, error }, { data: equipo, error: ee }] =
+    let [{ data: sucursales, error }, { data: equipo, error: ee }] =
       await Promise.all([
         supabase
           .from("sucursales")
-          .select("id,nombre,direccion,activo,admin_equipo_id,created_at")
+          .select(
+            "id,nombre,direccion,activo,admin_equipo_id,created_at,es_principal,latitud,longitud",
+          )
           .eq("slug", slug)
           .order("created_at"),
         supabase
@@ -123,17 +123,42 @@ export function crearSucursales({
           .eq("slug", slug)
           .order("created_at"),
       ]);
+    let mapa_habilitado = !error;
+    if (error && faltaSchemaSucursales(error)) {
+      const legacy = await supabase
+        .from("sucursales")
+        .select("id,nombre,direccion,activo,admin_equipo_id,created_at")
+        .eq("slug", slug)
+        .order("created_at");
+      sucursales = legacy.data;
+      error = legacy.error;
+      mapa_habilitado = false;
+    }
     if (error || ee) throw error || ee;
-    return { sucursales: sucursales || [], equipo: equipo || [] };
+    const principal = (sucursales || []).find((s) => s.es_principal);
+    return {
+      sucursales: (sucursales || []).filter((s) => !s.es_principal),
+      equipo: equipo || [],
+      mapa_habilitado,
+      principal: principal
+        ? { ...principal, registro_id: principal.id, id: "principal" }
+        : {
+            id: "principal",
+            nombre: "Sede principal",
+            direccion: "",
+            activo: true,
+            admin_equipo_id: null,
+            latitud: null,
+            longitud: null,
+          },
+    };
   };
   const owner = (req, res, next) =>
     req.empleado
-      ? res
-          .status(403)
-          .json({
-            success: false,
-            error: "Sólo el dueño general puede modificar esta configuración.",
-          })
+      ? res.status(403).json({
+          success: false,
+          error: "Sólo el dueño general puede modificar esta configuración.",
+        })
       : next();
   const resolverAdmin = async (req) => {
     if (!req.empleado) return null;
@@ -142,7 +167,7 @@ export function crearSucursales({
     if (!premium(user)) return null;
     const { data, error } = await supabase
       .from("sucursales")
-      .select("id,slug,nombre,direccion,activo")
+      .select("*")
       .eq("slug", slug)
       .eq("admin_equipo_id", req.empleado.id)
       .eq("activo", true)
@@ -151,8 +176,16 @@ export function crearSucursales({
       if (faltaSchemaSucursales(error)) return null;
       throw error;
     }
-    return data;
+    return data?.es_principal
+      ? { ...data, registro_id: data.id, id: "principal" }
+      : data;
   };
+  const idEquipoSede = (sucursal) =>
+    sucursal.id === "principal" ? null : sucursal.id;
+  const scopeSede = (query, sucursal) =>
+    sucursal.id === "principal"
+      ? query.is("sucursal_id", null)
+      : query.eq("sucursal_id", sucursal.id);
   const equipoMiddleware = async (req, res, next) => {
     if (
       req.auth.rol !== "superadmin" &&
@@ -167,39 +200,35 @@ export function crearSucursales({
     try {
       const sucursal = await resolverAdmin(req);
       if (!sucursal)
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "No tenés permiso para administrar esta sucursal.",
-          });
+        return res.status(403).json({
+          success: false,
+          error: "No tenés permiso para administrar esta sucursal.",
+        });
       if (req.params.id) {
-        const { data, error } = await supabase
-          .from("equipo")
-          .select("id")
-          .eq("id", req.params.id)
-          .eq("slug", sucursal.slug)
-          .eq("sucursal_id", sucursal.id)
+        const { data, error } = await scopeSede(
+          supabase
+            .from("equipo")
+            .select("id")
+            .eq("id", req.params.id)
+            .eq("slug", sucursal.slug),
+          sucursal,
+        )
           .eq("es_dueño", false)
           .maybeSingle();
         if (error) throw error;
         if (!data)
-          return res
-            .status(404)
-            .json({
-              success: false,
-              error: "Miembro no encontrado en tu sucursal.",
-            });
+          return res.status(404).json({
+            success: false,
+            error: "Miembro no encontrado en tu sucursal.",
+          });
       }
       req.sucursalAdmin = sucursal;
       next();
     } catch (e) {
-      res
-        .status(500)
-        .json({
-          success: false,
-          error: "No se pudo verificar el acceso a la sucursal.",
-        });
+      res.status(500).json({
+        success: false,
+        error: "No se pudo verificar el acceso a la sucursal.",
+      });
     }
   };
   app.get(
@@ -279,12 +308,10 @@ export function crearSucursales({
     (req, res, next) =>
       upload(req, res, (e) =>
         e
-          ? res
-              .status(400)
-              .json({
-                success: false,
-                error: "Usá una imagen JPG, PNG o WebP de hasta 3 MB.",
-              })
+          ? res.status(400).json({
+              success: false,
+              error: "Usá una imagen JPG, PNG o WebP de hasta 3 MB.",
+            })
           : next(),
       ),
     asyncRoute(async (req, res) => {
@@ -309,12 +336,10 @@ export function crearSucursales({
         .limit(1);
       if (pe) throw pe;
       const path = `${slug}/perfil/${crypto.randomUUID()}.${type}`;
-      const { error } = await supabase.storage
-        .from("logos")
-        .upload(path, b, {
-          contentType: type === "jpg" ? "image/jpeg" : `image/${type}`,
-          upsert: false,
-        });
+      const { error } = await supabase.storage.from("logos").upload(path, b, {
+        contentType: type === "jpg" ? "image/jpeg" : `image/${type}`,
+        upsert: false,
+      });
       if (error) throw error;
       res.json({
         success: true,
@@ -382,7 +407,7 @@ export function crearSucursales({
         fail("Sucursales requiere Premium vigente.", 403);
       const b = req.body || {};
       if (
-        (b.id !== null && !UUID.test(b.id)) ||
+        (b.id !== null && b.id !== "principal" && !UUID.test(b.id)) ||
         typeof b.nombre !== "string" ||
         !b.nombre.trim() ||
         b.nombre.trim().length > 80 ||
@@ -397,15 +422,55 @@ export function crearSucursales({
         fail("Revisá el nombre, la dirección y los miembros de la sucursal.");
       if (b.admin_equipo_id && !b.miembros.includes(b.admin_equipo_id))
         fail("El encargado debe estar asignado a la sucursal.");
-      const { data, error } = await supabase.rpc("guardar_sucursal", {
-        p_slug: slug,
-        p_id: b.id,
-        p_nombre: b.nombre.trim(),
-        p_direccion: b.direccion.trim(),
-        p_activo: b.activo,
-        p_admin: b.admin_equipo_id,
-        p_miembros: [...new Set(b.miembros)],
-      });
+      const mapa =
+        Object.hasOwn(b, "latitud") ||
+        Object.hasOwn(b, "longitud") ||
+        b.id === "principal";
+      if (
+        mapa &&
+        !(
+          (b.latitud === null && b.longitud === null) ||
+          (typeof b.latitud === "number" &&
+            Number.isFinite(b.latitud) &&
+            Math.abs(b.latitud) <= 90 &&
+            typeof b.longitud === "number" &&
+            Number.isFinite(b.longitud) &&
+            Math.abs(b.longitud) <= 180)
+        )
+      )
+        fail(
+          "Marcá una ubicación válida en el mapa o quitá ambas coordenadas.",
+        );
+      if (b.id && b.id !== "principal") {
+        const { data: existing, error: existingError } = await supabase
+          .from("sucursales")
+          .select("*")
+          .eq("slug", slug)
+          .eq("id", b.id)
+          .maybeSingle();
+        if (existingError) throw existingError;
+        if (!existing || existing.es_principal)
+          fail("Sucursal no encontrada.", 404);
+      }
+      const { data, error } = await supabase.rpc(
+        mapa ? "guardar_sucursal_mapa" : "guardar_sucursal",
+        {
+          p_slug: slug,
+          p_id: b.id === "principal" ? null : b.id,
+          p_nombre: b.nombre.trim(),
+          p_direccion: b.direccion.trim(),
+          p_activo: b.activo,
+          p_admin: b.admin_equipo_id,
+          p_miembros: [...new Set(b.miembros)],
+          ...(mapa
+            ? {
+                p_principal: b.id === "principal",
+                p_latitud: b.latitud,
+                p_longitud: b.longitud,
+              }
+            : {}),
+        },
+      );
       if (error) {
         if (faltaSchemaSucursales(error)) throw error;
         if (error.code === "23505")
@@ -432,30 +497,29 @@ export function crearSucursales({
         if (!faltaSchemaSucursales(e)) throw e;
         return res.json({ success: true, sucursales: [] });
       }
-      if (!data.sucursales.length)
+      if (!data.sucursales.length && !data.principal.registro_id)
         return res.json({ success: true, sucursales: [] });
       const publicas = [
-        {
-          id: "principal",
-          nombre: "Sede principal",
-          direccion: "",
-          activo: true,
-        },
+        ...(data.principal.activo ? [data.principal] : []),
         ...data.sucursales.filter((s) => s.activo),
       ];
       res.json({
         success: true,
-        sucursales: publicas.map(({ id, nombre, direccion }) => ({
-          id,
-          nombre,
-          direccion,
-          equipo_ids: data.equipo
-            .filter(
-              (e) =>
-                isActivo(e.activo) && (e.sucursal_id || "principal") === id,
-            )
-            .map((e) => e.id),
-        })),
+        sucursales: publicas.map(
+          ({ id, nombre, direccion, latitud, longitud }) => ({
+            id,
+            nombre,
+            direccion,
+            latitud: latitud ?? null,
+            longitud: longitud ?? null,
+            equipo_ids: data.equipo
+              .filter(
+                (e) =>
+                  isActivo(e.activo) && (e.sucursal_id || "principal") === id,
+              )
+              .map((e) => e.id),
+          }),
+        ),
       });
     }),
   );
@@ -473,19 +537,24 @@ export function crearSucursales({
         });
       const [{ data: equipo, error }, { data: turnos, error: te }] =
         await Promise.all([
-          supabase
-            .from("equipo")
-            .select("id,nombre,apellido,color,foto_url,activo,login_activado")
-            .eq("slug", sucursal.slug)
-            .eq("sucursal_id", sucursal.id)
-            .order("created_at"),
-          supabase
-            .from("turnos")
-            .select(
-              "id,fecha,hora,nombre,apellido,servicio_nombre,equipo_nombre,equipo_id,estado,metodo_pago,pago_estado",
-            )
-            .eq("slug", sucursal.slug)
-            .eq("sucursal_id", sucursal.id)
+          scopeSede(
+            supabase
+              .from("equipo")
+              .select(
+                "id,nombre,apellido,color,foto_url,activo,login_activado,es_dueño",
+              )
+              .eq("slug", sucursal.slug),
+            sucursal,
+          ).order("created_at"),
+          scopeSede(
+            supabase
+              .from("turnos")
+              .select(
+                "id,fecha,hora,nombre,apellido,servicio_nombre,equipo_nombre,equipo_id,estado,metodo_pago,pago_estado",
+              )
+              .eq("slug", sucursal.slug),
+            sucursal,
+          )
             .gte(
               "fecha",
               new Date().toLocaleDateString("en-CA", {
@@ -517,7 +586,7 @@ export function crearSucursales({
       .eq("slug", branch.slug)
       .maybeSingle();
     if (error) throw error;
-    return data?.sucursal_id === branch.id;
+    return !!data && (data.sucursal_id || "principal") === branch.id;
   };
   const filtroEquipoPublico = async (slug, equipo) => {
     const user = await negocio(slug);
@@ -535,13 +604,26 @@ export function crearSucursales({
     );
     const permitidos = new Set(
       data.equipo
-        .filter((e) => !e.sucursal_id || activas.has(e.sucursal_id))
+        .filter((e) =>
+          e.sucursal_id
+            ? activas.has(e.sucursal_id)
+            : !premium(user) || data.principal.activo,
+        )
         .map((e) => e.id),
     );
     return equipo.filter((e) => permitidos.has(e.id));
   };
   const validarEquipoReserva = async (slug, id) => {
-    if (!id || !UUID.test(id)) return;
+    if (!id || !UUID.test(id)) {
+      const user = await negocio(slug);
+      if (!premium(user)) return;
+      const data = await rows(slug);
+      if (!data.principal.activo)
+        throw new Error(
+          "La sede principal no está disponible para nuevas reservas.",
+        );
+      return;
+    }
     const { data: miembro, error } = await supabase
       .from("equipo")
       .select("sucursal_id")
@@ -553,7 +635,16 @@ export function crearSucursales({
       throw error;
     }
     if (!miembro) throw new Error("El profesional no está disponible.");
-    if (!miembro.sucursal_id) return;
+    if (!miembro.sucursal_id) {
+      const user = await negocio(slug);
+      if (!premium(user)) return;
+      const data = await rows(slug);
+      if (!data.principal.activo)
+        throw new Error(
+          "La sede principal no está disponible para nuevas reservas.",
+        );
+      return;
+    }
     const { data: sucursal, error: se } = await supabase
       .from("sucursales")
       .select("id")
@@ -573,5 +664,6 @@ export function crearSucursales({
     filtroEquipoPublico,
     resolverAdmin,
     validarEquipoReserva,
+    idEquipoSede,
   };
 }

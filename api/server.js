@@ -5122,7 +5122,7 @@ app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, suc
       login_reset_token_expiry: loginResetExpiry,
       login_activado: false,
       ...permisos,
-      ...(req.sucursalAdmin ? {sucursal_id:req.sucursalAdmin.id,puede_configurar_horarios:false,puede_recibir_pagos_personales:false,puede_crear_servicios:false} : {}),
+      ...(req.sucursalAdmin ? {sucursal_id:sucursalesApp.idEquipoSede(req.sucursalAdmin),puede_configurar_horarios:false,puede_recibir_pagos_personales:false,puede_crear_servicios:false} : {}),
     }]).select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios").single();
 
     if (error) throw error;
@@ -5158,7 +5158,7 @@ app.put(["/admin/equipo/:id","/empleado/:slug/sucursal/miembros/:id"], requireAu
       .from("equipo").select(req.sucursalAdmin ? "es_dueño,sucursal_id" : "es_dueño").eq("id", id).eq("slug", slugClean).maybeSingle();
     if (fetchError) throw fetchError;
     if (!actual) return res.status(404).json({ success: false, error: "Miembro no encontrado." });
-    if(req.sucursalAdmin && (actual.sucursal_id!==req.sucursalAdmin.id || actual.es_dueño || id===req.empleado.id || Object.keys(req.body).some(key=>!["slug","nombre","apellido","color","foto_url","activo"].includes(key)))) {
+    if(req.sucursalAdmin && (actual.sucursal_id!==sucursalesApp.idEquipoSede(req.sucursalAdmin) || actual.es_dueño || id===req.empleado.id || Object.keys(req.body).some(key=>!["slug","nombre","apellido","color","foto_url","activo"].includes(key)))) {
       return res.status(403).json({success:false,error:"Sólo podés editar los datos de otros miembros de tu sucursal. Los permisos los define el dueño general."});
     }
 

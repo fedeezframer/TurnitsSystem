@@ -43,7 +43,8 @@ function AgendaPanel(props: any) {
     const [dias, setDias] = React.useState<any[]>([])
     const [sucursales,setSucursales]=React.useState<any[]>([])
     const [sucursalFiltro,setSucursalFiltro]=React.useState('todas')
-    React.useEffect(()=>{let alive=true;const slug=AgendaPanel_getSlug(),token=AgendaPanel_getToken();if(slug && token)fetch(`${baseUrl.replace(/\/+$/,'')}/admin/sucursales/${slug}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(alive && d?.premium && d?.habilitado)setSucursales(d.sucursales || [])}).catch(()=>{});return()=>{alive=false}},[baseUrl]);
+    const [principalNombre,setPrincipalNombre]=React.useState('Sede principal')
+    React.useEffect(()=>{let alive=true;const slug=AgendaPanel_getSlug(),token=AgendaPanel_getToken();if(slug && token)fetch(`${baseUrl.replace(/\/+$/,'')}/admin/sucursales/${slug}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(alive && d?.premium && d?.habilitado){setSucursales(d.sucursales || []);setPrincipalNombre(d.principal?.nombre || 'Sede principal')}}).catch(()=>{});return()=>{alive=false}},[baseUrl]);
     const agendaRequestId = React.useRef(0)
     const [loading, setLoading] = React.useState(true)
     const [error, setError] = React.useState("")
@@ -761,7 +762,7 @@ function AgendaPanel(props: any) {
 
     return (
         <>
-            {sucursales.length>0 && <div className="negocio-editor" style={{marginBottom:14}}><label className="negocio-field" style={{maxWidth:320}}>Sucursal<select aria-label="Sucursal" value={sucursalFiltro} onChange={e=>setSucursalFiltro(e.target.value)}><option value="todas">Todas las sucursales</option><option value="principal">Sede principal</option>{sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}{!s.activo?' · Pausada':''}</option>)}</select></label></div>}
+            {sucursales.length>0 && <div className="negocio-editor" style={{marginBottom:14}}><label className="negocio-field" style={{maxWidth:320}}>Sucursal<select aria-label="Sucursal" value={sucursalFiltro} onChange={e=>setSucursalFiltro(e.target.value)}><option value="todas">Todas las sucursales</option><option value="principal">{principalNombre}</option>{sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}{!s.activo?' · Pausada':''}</option>)}</select></label></div>}
             <div
                 ref={containerRef}
                 style={{ ...AgendaPanel_wrapperBase, ...style }}
