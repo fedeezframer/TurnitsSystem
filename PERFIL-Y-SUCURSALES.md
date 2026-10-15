@@ -4,7 +4,7 @@ Una cuenta, una suscripción y un enlace `/agenda/{slug}`. Las sucursales son se
 
 ## Uso
 
-- **Perfil** en el menú: nombre público, rubro, descripción, ubicación, teléfono público, Instagram, web y hasta ocho fotos (primera como portada). Se guarda inicialmente oculto. El titular decide cuándo publicarlo en `/perfil/{slug}`. Esta ficha es la base del futuro Browse; no se implementó todavía el buscador de negocios.
+- **Perfil** en el menú: nombre público, rubro, descripción, ubicación, teléfono público, redes, web, foto de perfil, banner y galería sin límite de cantidad. Se guarda inicialmente oculto. El titular decide cuándo publicarlo en `/perfil/{slug}`. Esta ficha es la base del futuro Browse; no se implementó todavía el buscador de negocios.
 - **Equipo → Miembros / Sucursales**. Sólo Premium vigente, incluida la prueba Premium, puede crear o modificar sucursales. Los otros planes muestran el bloqueo con opacidad y corona.
 - La **sede principal** contiene al dueño y a quienes no tienen sucursal asignada. También tiene un editor de nombre, dirección, mapa, estado, miembros y encargado. El dueño conserva el control general. Para quitar un miembro de la principal, se lo asigna desde otra sucursal. En cada sede se configura un encargado opcional y cada profesional pertenece a una sola sede. Al quitarlo de una secundaria vuelve a la principal.
 - El dueño general conserva la administración de todo. Puede delegar una sucursal a un integrante activo con email de acceso. El integrante termina de activar su acceso mediante el flujo habitual del equipo.
@@ -46,7 +46,7 @@ Documentación: [OpenFreeMap e integración con Vite/Leaflet](https://openfreema
 
 ## Diseño público del perfil — 15/10/2026
 
-Se sigue el concepto aportado por Federico: ancho máximo de 854 px, logo pequeño de Turnits centrado, portada de 306 px con nombre manuscrito, ficha blanca con tres columnas (identidad/Ver Agenda, puntuación/comentario y ubicación) y tarjeta de reseñas aparte. En móvil las dos primeras columnas permanecen juntas y la ubicación pasa a una fila completa. La primera foto existente sigue siendo la portada. Descripción, contacto y fotos restantes se conservan debajo. La tipografía Kaushan Script se sirve localmente con su licencia OFL.
+Se sigue el concepto aportado por Federico: ancho máximo de 854 px, logo pequeño de Turnits centrado, banner de 306 px, ficha blanca con tres columnas (identidad/Ver Agenda, puntuación/comentario y ubicación) y tarjeta de reseñas aparte. En móvil las dos primeras columnas permanecen juntas y la ubicación pasa a una fila completa. Descripción, contacto y galería se conservan debajo. Por la revisión posterior del 15/10, el banner muestra sólo la imagen y ya no carga la tipografía manuscrita ni superpone nombre o rubro.
 
 El minimapa toma únicamente ubicaciones públicas y activas ya configuradas en Sucursales, prioriza la principal y permite elegir si hay varias con coordenadas. No inventa ubicaciones ni geocodifica las direcciones automáticamente. La vista previa del panel usa el mismo componente. No hay cambios de API ni SQL adicionales para este diseño.
 
@@ -65,3 +65,11 @@ Ejecutar `supabase/migrations/20261015_perfil_redes_sociales.sql` agrega `redes_
 Tocar el minimapa abre un diálogo con mapa interactivo grande, zoom y pin de la sede elegida. La X, Escape o el fondo lo cierran; el foco vuelve al disparador y se restaura el scroll. En este diálogo el zoom no deja una transición pendiente que pueda ejecutarse después de desmontar el mapa. Se retiran las marcas opcionales Leaflet y OpenFreeMap, manteniendo visibles los créditos requeridos de OpenMapTiles y OpenStreetMap.
 
 Verificación: `work/verify-perfil-redes.cjs` prueba migración idempotente, RLS, aislamiento, guardar/publicar/quitar enlaces, compatibilidad y validación; `work/verify-profile-social-map-ui.cjs` prueba los campos, tarjetas y diálogo con zoom/cierre/foco en escritorio y 390 px, con API y datos vectoriales simulados.
+
+## Foto de perfil, banner y galería — 15/10/2026
+
+`foto_perfil_url` y `banner_url` se editan de forma independiente de `fotos`. La galería deja de tener un máximo de ocho y permite seleccionar varios archivos; todos se muestran en el perfil con carga diferida. Se conserva el límite de 3 MB por archivo y la validación de contenido JPG/PNG/WebP. Ninguna foto de la galería se convierte automáticamente en banner o avatar. Sin banner se muestra un fondo de color; sin foto de perfil (o si falla) se muestran iniciales con color. El nombre y el rubro quedan en la ficha, fuera del banner.
+
+Federico confirmó la ejecución completa de `supabase/migrations/20261015_perfil_imagenes.sql`. Agrega los campos, conserva la galería existente y reemplaza sólo la restricción de cantidad. No modifica RLS ni permisos. La API devuelve `imagenes_habilitadas`; sin la migración conserva el editor anterior y explica qué actualización falta. Los clientes anteriores que omiten los nuevos campos conservan el banner y la foto ya guardados. Todas las imágenes deben pertenecer al directorio público de ese negocio; URLs externas o de otro negocio se rechazan.
+
+Validación: `work/verify-profile-images-sql.cjs` y `work/verify-profile-images-api.cjs` prueban idempotencia, galería de 100 fotos, RLS/privacidad, compatibilidad y pertenencia de las imágenes. `work/verify-profile-images-ui.cjs` prueba subir/cambiar/quitar los tipos separados, más de ocho fotos, carga múltiple con error parcial recuperable, rechazo de archivos grandes y escritorio/390 px sin desbordamiento. Sin escrituras de prueba en producción.

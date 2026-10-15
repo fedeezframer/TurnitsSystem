@@ -58,15 +58,21 @@ export function validarPerfil(body) {
     if (u.protocol !== "https:" || u.username || u.password)
       throw new Error("El sitio web debe comenzar con https://.");
   }
-  if (
-    typeof body.publicado !== "boolean" ||
-    !Array.isArray(body.fotos) ||
-    body.fotos.length > 8
-  )
+  if (typeof body.publicado !== "boolean" || !Array.isArray(body.fotos))
     throw new Error("Revisá la publicación y las fotos.");
   data.publicado = body.publicado;
   data.fotos = [...new Set(body.fotos)];
-  for (const photo of data.fotos) {
+  for (const key of ["foto_perfil_url", "banner_url"]) {
+    if (!Object.hasOwn(body, key)) continue;
+    if (typeof body[key] !== "string") throw new Error("Imagen inválida.");
+    data[key] = body[key].trim();
+  }
+  for (const photo of [
+    ...data.fotos,
+    data.foto_perfil_url,
+    data.banner_url,
+  ].filter((p) => p !== undefined && p !== "")) {
+    if (typeof photo !== "string") throw new Error("Foto inválida.");
     const u = new URL(photo);
     if (
       u.protocol !== "https:" ||
@@ -134,13 +140,20 @@ export function crearSucursales({
       if (publico) q = q.eq("publicado", true);
       return q.maybeSingle();
     };
-    let result = await consultar(campos + ",redes_sociales"),
-      redes_habilitadas = true;
+    let result = await consultar(
+        campos + ",redes_sociales,foto_perfil_url,banner_url",
+      ),
+      redes_habilitadas = true,
+      imagenes_habilitadas = true;
+    if (result.error && faltaSchemaSucursales(result.error)) {
+      imagenes_habilitadas = false;
+      result = await consultar(campos + ",redes_sociales");
+    }
     if (result.error && faltaSchemaSucursales(result.error)) {
       redes_habilitadas = false;
       result = await consultar(campos);
     }
-    return { ...result, redes_habilitadas };
+    return { ...result, redes_habilitadas, imagenes_habilitadas };
   };
   const rows = async (slug) => {
     let [{ data: sucursales, error }, { data: equipo, error: ee }] =
@@ -275,12 +288,14 @@ export function crearSucursales({
     asyncRoute(async (req, res) => {
       const slug = cleanSlug(req.params.slug),
         user = await negocio(slug);
-      const { data, error, redes_habilitadas } = await leerPerfil(slug);
+      const { data, error, redes_habilitadas, imagenes_habilitadas } =
+        await leerPerfil(slug);
       if (error && !faltaSchemaSucursales(error)) throw error;
       res.json({
         success: true,
         habilitado: !error,
         redes_habilitadas,
+        imagenes_habilitadas,
         logo_url: user.logo_url,
         perfil: data || {
           nombre: user.business_name || "",
@@ -294,6 +309,8 @@ export function crearSucursales({
           sitio_web: "",
           redes_sociales: {},
           fotos: [],
+          foto_perfil_url: "",
+          banner_url: "",
           publicado: false,
         },
       });
@@ -322,15 +339,33 @@ export function crearSucursales({
         delete perfil.redes_sociales;
       } else if (!Object.hasOwn(perfil, "redes_sociales"))
         perfil.redes_sociales = existente.data?.redes_sociales || {};
+      for (const key of ["foto_perfil_url", "banner_url"]) {
+        if (!existente.imagenes_habilitadas) {
+          if (perfil[key])
+            fail(
+              "Falta instalar la actualización de imágenes del perfil.",
+              409,
+            );
+          delete perfil[key];
+        } else if (!Object.hasOwn(perfil, key))
+          perfil[key] = existente.data?.[key] || "";
+      }
+      if (!existente.imagenes_habilitadas && perfil.fotos.length > 8)
+        fail(
+          "Falta instalar la actualización de imágenes para ampliar la galería.",
+          409,
+        );
       // Sólo fotos subidas por este negocio al bucket público; nunca datos de la cuenta.
       const prefix = supabase.storage
         .from("logos")
         .getPublicUrl(`${slug}/perfil/`).data.publicUrl;
       if (
-        perfil.fotos.some(
-          (url) =>
-            !url.startsWith(prefix) || url.slice(prefix.length).includes("/"),
-        )
+        [...perfil.fotos, perfil.foto_perfil_url, perfil.banner_url]
+          .filter(Boolean)
+          .some(
+            (url) =>
+              !url.startsWith(prefix) || url.slice(prefix.length).includes("/"),
+          )
       )
         fail("Subí las fotos desde este perfil.");
       const { data, error } = await supabase

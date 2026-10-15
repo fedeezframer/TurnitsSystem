@@ -5,6 +5,7 @@ import type { MapBranch } from "../../components/BranchMap";
 import { enlacesPublicos } from "../../shared/socials.js";
 import { SocialIcon } from "../../components/SocialIcon";
 import { ProfileMapDialog } from "../../components/ProfileMapDialog";
+import { BusinessAvatar } from "../../components/BusinessAvatar";
 import "./perfil.css";
 import "./perfil-publico.css";
 const BranchMap = React.lazy(() =>
@@ -41,7 +42,7 @@ export function PerfilContenido({
     [mapLoading, setMapLoading] = React.useState(!!slug),
     [coverFailed, setCoverFailed] = React.useState(false),
     [mapOpen, setMapOpen] = React.useState(false);
-  const cover = perfil.fotos?.[0];
+  const cover = perfil.banner_url;
   React.useEffect(() => setCoverFailed(false), [cover]);
   React.useEffect(() => {
     setLocations([]);
@@ -92,7 +93,7 @@ export function PerfilContenido({
       perfil.telefono_publico ||
       socials.length > 0 ||
       perfil.sitio_web ||
-      perfil.fotos?.length > 1;
+      perfil.fotos?.length > 0;
   return (
     <div className="perfil-publico">
       <article className="perfil-main-card" aria-label={`Perfil de ${name}`}>
@@ -107,14 +108,10 @@ export function PerfilContenido({
               onError={() => setCoverFailed(true)}
             />
           )}
-          <div className="perfil-cover-shade" />
-          <div className="perfil-cover-brand">
-            <span>{name}</span>
-            {perfil.categoria && <small>{perfil.categoria}</small>}
-          </div>
         </div>
         <div className="perfil-overview">
           <div className="perfil-identity">
+            <BusinessAvatar name={name} src={perfil.foto_perfil_url} />
             <p className="perfil-category">{perfil.categoria || "Negocio"}</p>
             <h1>{name}</h1>
             {city && <p className="perfil-city">{city}</p>}
@@ -302,14 +299,14 @@ export function PerfilContenido({
               </a>
             )}
           </div>
-          {perfil.fotos?.length > 1 && (
+          {perfil.fotos?.length > 0 && (
             <div className="perfil-photo-gallery">
-              {perfil.fotos.slice(1).map((url: string, i: number) => (
+              {perfil.fotos.map((url: string, i: number) => (
                 <img
                   key={`${url}-${i}`}
                   src={url}
                   loading="lazy"
-                  alt={`Foto ${i + 2} de ${name}`}
+                  alt={`Foto ${i + 1} de ${name}`}
                 />
               ))}
             </div>

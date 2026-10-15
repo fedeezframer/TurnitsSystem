@@ -15,6 +15,7 @@ const LocationPicker = React.lazy(() =>
 import { PerfilContenido } from "./perfil-publico";
 import { SOCIAL_LINKS, normalizarEnlaceRed } from "../../shared/socials.js";
 import { SocialProfileField } from "../../components/SocialProfileField";
+import { BusinessAvatar } from "../../components/BusinessAvatar";
 
 export function NegocioIcon({
   kind = "sucursal",
@@ -80,6 +81,8 @@ export const perfilVacio = {
   sitio_web: "",
   redes_sociales: {} as Record<string, string>,
   fotos: [] as string[],
+  foto_perfil_url: "",
+  banner_url: "",
   publicado: false,
 };
 export function PerfilNegocio({
@@ -95,9 +98,11 @@ export function PerfilNegocio({
     [logo, setLogo] = React.useState(""),
     [habilitado, setHabilitado] = React.useState(false),
     [redesHabilitadas, setRedesHabilitadas] = React.useState(false),
+    [imagenesHabilitadas, setImagenesHabilitadas] = React.useState(false),
     [loading, setLoading] = React.useState(true),
     [busy, setBusy] = React.useState(false),
     [uploading, setUploading] = React.useState(false),
+    [uploadProgress, setUploadProgress] = React.useState(""),
     [error, setError] = React.useState(""),
     [saved, setSaved] = React.useState("");
   React.useEffect(() => {
@@ -109,6 +114,7 @@ export function PerfilNegocio({
           setLogo(d.logo_url || "");
           setHabilitado(d.habilitado);
           setRedesHabilitadas(!!d.redes_habilitadas);
+          setImagenesHabilitadas(!!d.imagenes_habilitadas);
         }
       })
       .catch((e) => alive && setError(e.message))
@@ -123,6 +129,7 @@ export function PerfilNegocio({
   };
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy || uploading) return;
     setBusy(true);
     setError("");
     setSaved("");
@@ -144,6 +151,10 @@ export function PerfilNegocio({
             .filter(([, value]) => value),
         );
       else delete payload.redes_sociales;
+      if (!imagenesHabilitadas) {
+        delete payload.foto_perfil_url;
+        delete payload.banner_url;
+      }
       const d = await request(`${api}/admin/perfil/${slug}`, {
         method: "PUT",
         body: JSON.stringify(payload),
@@ -156,13 +167,19 @@ export function PerfilNegocio({
       setBusy(false);
     }
   };
-  const subir = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const subir = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    destino: "fotos" | "foto_perfil_url" | "banner_url" = "fotos",
+  ) => {
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file) return;
+    if (!files.length || uploading) return;
     if (
-      file.size > 3 * 1024 * 1024 ||
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type)
+      files.some(
+        (file) =>
+          file.size > 3 * 1024 * 1024 ||
+          !["image/jpeg", "image/png", "image/webp"].includes(file.type),
+      )
     ) {
       setError("Usá una foto JPG, PNG o WebP de hasta 3 MB.");
       return;
@@ -170,22 +187,30 @@ export function PerfilNegocio({
     setUploading(true);
     setError("");
     try {
-      const body = new FormData();
-      body.append("foto", file);
-      const r = await fetch(`${api}/admin/perfil/${slug}/foto`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${MenuFooter_getToken()}` },
-        body,
-      });
-      const d = await r.json();
-      if (!r.ok || !d.success)
-        throw new Error(d.error || "No se pudo subir la foto.");
-      setForm((f) => ({ ...f, fotos: [...f.fotos, d.url].slice(0, 8) }));
-      setSaved("");
+      for (const [index, file] of files.entries()) {
+        setUploadProgress(`Subiendo ${index + 1} de ${files.length}…`);
+        const body = new FormData();
+        body.append("foto", file);
+        const r = await fetch(`${api}/admin/perfil/${slug}/foto`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${MenuFooter_getToken()}` },
+          body,
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success)
+          throw new Error(d.error || "No se pudo subir la foto.");
+        setForm((f) =>
+          destino === "fotos"
+            ? { ...f, fotos: [...new Set([...f.fotos, d.url])] }
+            : { ...f, [destino]: d.url },
+        );
+        setSaved("");
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
       setUploading(false);
+      setUploadProgress("");
     }
   };
   if (!loading && error && !habilitado) {
@@ -248,6 +273,72 @@ export function PerfilNegocio({
               style={{ border: 0, padding: 0, margin: 0 }}
               className="negocio-stack"
             >
+              <section
+                className="negocio-brand-grid"
+                aria-label="Imágenes del perfil"
+              >
+                {(
+                  [
+                    ["foto_perfil_url", "Foto de perfil"],
+                    ["banner_url", "Banner"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <div className="negocio-brand-upload negocio-stack" key={key}>
+                    <h3>{label}</h3>
+                    <div
+                      className={`negocio-brand-preview${key === "banner_url" ? " negocio-banner-preview" : ""}`}
+                    >
+                      {key === "foto_perfil_url" ? (
+                        <BusinessAvatar
+                          name={form.nombre || "Negocio"}
+                          src={form.foto_perfil_url}
+                        />
+                      ) : (
+                        form.banner_url && (
+                          <img src={form.banner_url} alt="Banner del negocio" />
+                        )
+                      )}
+                    </div>
+                    <p className="negocio-muted">
+                      {key === "foto_perfil_url"
+                        ? "Una imagen cuadrada para identificar tu negocio."
+                        : "Una imagen horizontal, sin texto agregado por Turnits."}
+                    </p>
+                    <div className="negocio-row">
+                      <label
+                        className={`negocio-button secondary${uploading || !imagenesHabilitadas ? " is-disabled" : ""}`}
+                      >
+                        {form[key] ? "Cambiar imagen" : "Subir imagen"}
+                        <input
+                          aria-label={`Subir ${label.toLowerCase()}`}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          hidden
+                          disabled={uploading || !imagenesHabilitadas}
+                          onChange={(e) => subir(e, key)}
+                        />
+                      </label>
+                      {form[key] && (
+                        <button
+                          className="negocio-button secondary"
+                          type="button"
+                          aria-label={`Quitar ${label.toLowerCase()}`}
+                          disabled={uploading || !imagenesHabilitadas}
+                          onClick={() => change(key, "")}
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </section>
+              {!imagenesHabilitadas && (
+                <p className="negocio-muted">
+                  Falta instalar la actualización de imágenes del perfil para
+                  habilitar el banner, la foto de perfil y la galería ampliada.
+                </p>
+              )}
               <div className="negocio-grid">
                 {(
                   [
@@ -332,35 +423,43 @@ export function PerfilNegocio({
               </section>
               <div className="negocio-stack" style={{ gap: 10 }}>
                 <div className="negocio-between">
-                  <h3>Fotos del negocio</h3>
+                  <h3>Galería de fotos</h3>
                   <label
                     className="negocio-button secondary"
                     style={{
-                      opacity: uploading || form.fotos.length >= 8 ? 0.45 : 1,
+                      opacity: uploading ? 0.45 : 1,
                     }}
                   >
                     {" "}
-                    {uploading ? "Subiendo…" : "+ Agregar foto"}
+                    {uploading ? "Subiendo…" : "+ Agregar fotos"}
                     <input
-                      aria-label="Agregar foto del negocio"
+                      aria-label="Agregar fotos a la galería"
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
                       hidden
-                      disabled={uploading || form.fotos.length >= 8}
-                      onChange={subir}
+                      multiple
+                      disabled={uploading}
+                      onChange={(e) => subir(e)}
                     />
                   </label>
                 </div>
                 <p className="negocio-muted">
-                  Hasta 8 fotos. La primera se usa como portada.
+                  Sin límite de cantidad. Podés seleccionar varias a la vez.
+                  JPG, PNG o WebP, hasta 3 MB por imagen.
                 </p>
+                {uploadProgress && (
+                  <p role="status" className="negocio-muted">
+                    {uploadProgress}
+                  </p>
+                )}
                 <div className="negocio-gallery">
                   {form.fotos.map((url, i) => (
                     <div className="negocio-photo" key={url}>
-                      <img src={url} alt={`Foto ${i + 1}`} />
+                      <img src={url} alt={`Foto ${i + 1}`} loading="lazy" />
                       <button
                         type="button"
                         aria-label={`Quitar foto ${i + 1}`}
+                        disabled={uploading}
                         onClick={() =>
                           change(
                             "fotos",
