@@ -1984,12 +1984,14 @@ export default function BookingFlow(props: any) {
 
     if (loadingNegocio) {
         return (
-            <div style={{ ...wrapperStyle, ...temaVars }}>
+            <div role="status" aria-label="Cargando agenda" style={{ ...temaVars, width: "100%", minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 0", boxSizing: "border-box" }}>
+            <div className="bf-loading-placeholder" aria-hidden="true" style={wrapperStyle}>
                 <style>{shimmerCSS + "\n.bf-full-viewport{min-height:100vh;min-height:100dvh;box-sizing:border-box;}"}</style>
                 <Skeleton h={64} r={16} />
                 <Skeleton h={52} />
                 <Skeleton h={52} />
                 <Skeleton h={52} />
+            </div>
             </div>
         )
     }

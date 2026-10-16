@@ -39,7 +39,7 @@ function TurnitsPanel_GuardaSesion({
         setChequeado(true)
     }, [])
 
-    if (!chequeado) return null
+    if (!chequeado) return <div className="app-loading" role="status">Verificando sesión…</div>
     if (sinStorage) {
         return (
             <div

@@ -38,6 +38,9 @@ export default function BusinessProfile({
   }, [perfil?.nombre, publications]);
   const profileUrl = `/perfil/${encodeURIComponent(slug || "")}`;
   const bookingUrl = `/agenda/${encodeURIComponent(slug || "")}`;
+  if (!perfil && !error) {
+    return <main className="app-loading" role="status">Cargando perfil…</main>;
+  }
   return (
     <main
       className={`perfil-page${publications ? " perfil-page-publications" : ""}`}
@@ -53,10 +56,6 @@ export default function BusinessProfile({
         {error ? (
           <p role="alert" className="perfil-page-status">
             {error}
-          </p>
-        ) : !perfil ? (
-          <p role="status" className="perfil-page-status">
-            Cargando perfil…
           </p>
         ) : publications ? (
           <PerfilPublicaciones

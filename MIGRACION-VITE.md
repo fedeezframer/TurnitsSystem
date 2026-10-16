@@ -85,3 +85,11 @@ Se agregó una pantalla de comprobante que consulta el estado real del turno por
 ## Verificación
 
 Build de producción y navegación con API simulada: login a panel con sesión, ocho secciones del panel, registro, planes, booking en desktop/mobile, comprobante y cambio de contraseña. Se comprobaron también la portada y planes en 1440, 800 y 390 px, las siete preguntas frecuentes, documentos legales completos, navegación portada → planes → login, reprogramación con petición completa simulada y guard de superadmin autorizado/denegado por el servidor. No se realizaron cargos ni cambios en Supabase. La comprobación final de OAuth, push y pagos en el nuevo dominio requiere configurar los orígenes y usar credenciales de prueba.
+
+## Centrado inicial y registro — 16/10/2026
+
+El registro ocupa al menos el alto del viewport y centra su contenido con márgenes automáticos. Si el paso de planes supera ese alto, el documento crece y permite llegar a todas las opciones con scroll normal, sin recortar la parte superior. Se respetan las áreas seguras del dispositivo.
+
+La carga previa a React incluye un estado centrado en el HTML. El fallback de rutas, el arranque del panel y su verificación de sesión, el skeleton inicial de booking y la espera de datos del perfil mantienen el centrado vertical y horizontal. La espera del panel de empleado se centra dentro de su área disponible. No se fuerza una altura fija al contenido final.
+
+Validación: `work/verify-centered-layout.cjs` simula API lenta, comprueba el HTML sin JavaScript, los pasos personal/negocio/planes del registro y tamaños de escritorio, mobile y pantalla baja. Sin altas de cuentas ni escrituras en producción. No requiere cambios del servidor ni SQL.

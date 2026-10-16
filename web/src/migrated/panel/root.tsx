@@ -53,13 +53,8 @@ function TurnitsPanel_SessionRouter(props: any) {
     if (!sesion)
         return (
             <div
-                style={{
-                    minHeight: 240,
-                    display: "grid",
-                    placeItems: "center",
-                    color: "#94a3b8",
-                    fontFamily: "sans-serif",
-                }}
+                className="app-loading"
+                role="status"
             >
                 Cargando panel…
             </div>

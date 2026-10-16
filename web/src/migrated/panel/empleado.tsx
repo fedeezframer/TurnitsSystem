@@ -820,8 +820,12 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                     )}
                     {loading ? (
                         <div
+                            role="status"
                             style={{
                                 ...card,
+                                minHeight: "calc(100dvh - 180px)",
+                                display: "grid",
+                                placeItems: "center",
                                 color: "#94a3b8",
                                 textAlign: "center",
                                 padding: 40,

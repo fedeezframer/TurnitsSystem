@@ -1981,7 +1981,7 @@ function wrapperStyle(stepId): React.CSSProperties {
     return {
         width: "100%",
         maxWidth: stepId === "plan" ? 1060 : 460,
-        margin: "0 auto",
+        margin: "auto",
         display: "flex",
         flexDirection: "column",
         gap: 22,
@@ -2026,6 +2026,13 @@ const globalCss = `
        componente, no el de la ventana del navegador. */
     .rf-container {
         width: 100%;
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        padding-top: max(20px, env(safe-area-inset-top));
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+        box-sizing: border-box;
         container-type: inline-size;
         container-name: rf;
     }
