@@ -14,6 +14,8 @@ import { crearSucursales } from "./perfil-sucursales.js";
 import { createBranchPanel } from "./branch-panel.js";
 import { businessIcon } from "./business-appearance.js";
 import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appearance.js";
+import { createConsumerAccounts, consumerIdentity } from "./consumer-accounts.js";
+import { validCategories } from "../web/src/shared/categories.js";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
@@ -963,6 +965,9 @@ async function requireAuth(req, res, next) {
     if (!secret) return res.status(500).json({ success: false, error: "JWT_SECRET no configurado." });
     const payload = jwt.verify(token, secret);
     if (payload.rol === "superadmin") { req.auth = payload; return next(); }
+    if (payload.rol === "consumidor" || payload.consumidorId || !payload.slug) {
+      return res.status(403).json({ success: false, error: "Esta cuenta no tiene acceso al panel del negocio." });
+    }
     const slugRuta = cleanSlug(req.params.slug || req.body?.slug || req.query?.slug || "");
     if (slugRuta && payload.slug !== slugRuta) {
       return res.status(403).json({ success: false, error: "No autorizado para este negocio." });
@@ -1018,6 +1023,8 @@ async function requireAuth(req, res, next) {
 // ══════════════════════════════════════════════════════════════
 const sucursalesApp=crearSucursales({app,supabase,requireAuth,cleanSlug,isActivo,invalidateCache,multer});
 const branchPanel=createBranchPanel({app,supabase,requireAuth,cleanSlug});
+const consumerAccounts=createConsumerAccounts({app,supabase,bcrypt,jwt,limiterAuth,limiterCodigo,fetch,
+  mailUrl:APPS_SCRIPT_URL,rounds:BCRYPT_ROUNDS,expiry:JWT_EXPIRY});
 
 app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
   try {
@@ -1437,6 +1444,14 @@ app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prue
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
   try {
     const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan, ref } = req.body;
+    const rubros = req.body.rubros === undefined ? null : validCategories(req.body.rubros, false);
+    if (req.body.rubros !== undefined && !rubros)
+      return res.status(400).json({success:false,error:"Elegí un solo rubro para tu negocio."});
+    if(rubros && (typeof nombre_persona !== "string" || !nombre_persona.trim() || typeof apellido !== "string" || !apellido.trim() || typeof email !== "string" || email.length>254 || typeof telefono !== "string" || !telefono || typeof password !== "string" || Buffer.byteLength(password)>72 || typeof business_name !== "string" || typeof req.body.usuario !== "string"))
+      return res.status(400).json({success:false,error:"Revisá los datos del negocio y completá todos los campos."});
+    const requestedSlug = req.body.usuario === undefined ? null : String(req.body.usuario).trim().toLowerCase();
+    if (requestedSlug !== null && (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(requestedSlug) || requestedSlug.endsWith("-")))
+      return res.status(400).json({success:false,error:"El usuario debe tener entre 2 y 60 letras minúsculas, números o guiones."});
 
     if (!nombre_persona || !email || !password || !business_name)
       return res.status(400).json({ success: false, error: "Faltan campos obligatorios." });
@@ -1466,8 +1481,23 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
     if (yaExiste)
       return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
 
+    if (rubros) {
+      const conflicts = await Promise.all([
+        supabase.from("consumidores").select("id").eq("email",emailClean).maybeSingle(),
+        supabase.from("equipo").select("id").eq("login_email",emailClean).maybeSingle(),
+        supabase.from("admins").select("id").eq("email",emailClean).maybeSingle(),
+      ]);
+      if(conflicts.some(result=>result.error)) throw conflicts.find(result=>result.error).error;
+      if(conflicts.some(result=>result.data)) return res.status(409).json({success:false,error:"Ya existe una cuenta con ese email. Iniciá sesión."});
+    }
+    if(requestedSlug) {
+      const {data:taken,error:slugError}=await supabase.from("usuarios").select("id").eq("slug",requestedSlug).maybeSingle();
+      if(slugError) throw slugError;
+      if(taken) return res.status(409).json({success:false,error:"Ese usuario ya está en uso. Elegí otro."});
+    }
+
     const password_hash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-    const codigo        = Math.floor(100000 + Math.random() * 900000).toString();
+    const codigo        = crypto.randomInt(100000, 1000000).toString();
     const codigo_expiry = new Date(Date.now() + 1000 * 60 * 15).toISOString();
 
     const { error } = await supabase.from("registros_pendientes").upsert([{
@@ -1483,6 +1513,8 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       duracion_turno: parseInt(duracion_turno) || 30,
       codigo,
       codigo_expiry,
+      rubro: rubros?.[0] || null,
+      slug_solicitado: requestedSlug,
     }], { onConflict: "email" });
 
     if (error) throw error;
@@ -1539,7 +1571,12 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
     if (yaExiste)
       return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
 
-    const slug              = await generarSlugUnico(pendiente.business_name);
+    const slug              = pendiente.slug_solicitado || await generarSlugUnico(pendiente.business_name);
+    if(pendiente.slug_solicitado) {
+      const {data:taken,error:slugError}=await supabase.from("usuarios").select("id").eq("slug",slug).maybeSingle();
+      if(slugError) throw slugError;
+      if(taken) return res.status(409).json({success:false,error:"Ese usuario ya está en uso. Volvé atrás y elegí otro."});
+    }
     const planFinal         = PLANES_VALIDOS.includes(pendiente.plan) ? pendiente.plan : "gratis";
     const fechaVencimiento  = planTieneFuncionesPremium(planFinal) ? calcularVencimiento(DIAS_PRUEBA) : null;
     const estadoSuscripcion = planTieneFuncionesPremium(planFinal) ? "trial" : "activo";
@@ -1550,6 +1587,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       email:              emailClean,
       telefono:           pendiente.telefono           || null,
       business_name:      pendiente.business_name,
+      ...(pendiente.rubro ? {rubro:pendiente.rubro} : {}),
       slug,
       password:           pendiente.password_hash,
       plan:               planFinal,
@@ -1575,7 +1613,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
 
     if (insertError) {
       if (insertError.code === "23505")
-        return res.status(409).json({ success: false, error: "El email ya está registrado." });
+        return res.status(409).json({ success: false, error: "El email o usuario ya está registrado. Volvé atrás para revisarlo." });
       throw insertError;
     }
 
@@ -1665,7 +1703,7 @@ app.post("/registro/reenviar-codigo", limiterAuth, async (req, res) => {
     if (!pendiente)
       return res.status(404).json({ success: false, error: "No hay un registro pendiente para ese email." });
 
-    const codigo        = Math.floor(100000 + Math.random() * 900000).toString();
+    const codigo        = crypto.randomInt(100000, 1000000).toString();
     const codigo_expiry = new Date(Date.now() + 1000 * 60 * 15).toISOString();
 
     await supabase.from("registros_pendientes")
@@ -1776,16 +1814,16 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
         return res.status(401).json({success:false,error:'No pudimos verificar tu cuenta de Google. Volvé a intentar.'});
       }
       if (!google || google.nonce !== nonce || typeof google.sub !== 'string' || !google.sub || google.email_verified !== true) return res.status(401).json({success:false,error:'La credencial de Google no es válida.'});
-      const {data:binding,error:bindingError} = await supabase.from('google_login_accounts').select('google_sub,usuario_id,equipo_id').eq('google_sub',google.sub).maybeSingle();
+      const {data:binding,error:bindingError} = await supabase.from('google_login_accounts').select('google_sub,usuario_id,equipo_id,consumidor_id').eq('google_sub',google.sub).maybeSingle();
       if (bindingError) throw bindingError;
-      let user = null, member = null;
+      let user = null, member = null, consumer = null;
       const email = typeof google.email === 'string' ? google.email.trim().toLowerCase() : '';
       if (binding) {
-        const table = binding.usuario_id ? 'usuarios' : 'equipo';
-        const id = binding.usuario_id || binding.equipo_id;
+        const table = binding.usuario_id ? 'usuarios' : binding.equipo_id ? 'equipo' : 'consumidores';
+        const id = binding.usuario_id || binding.equipo_id || binding.consumidor_id;
         const {data,error} = await supabase.from(table).select('*').eq('id',id).maybeSingle();
         if (error) throw error;
-        if (binding.usuario_id) user = data; else member = data;
+        if (binding.usuario_id) user = data; else if(binding.equipo_id) member = data; else consumer = data;
       } else {
         // Sólo el email del token verificado; nunca se toma un email enviado por el navegador.
         const authoritative = email.endsWith('@gmail.com') || (typeof google.hd === 'string' && google.hd.length > 0);
@@ -1798,7 +1836,12 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
           if (employeeError) throw employeeError;
           member = employee;
         }
-        if (!user && !member) return res.status(404).json({success:false,code:'google_registration_required',error:'Completá el registro de tu negocio para empezar.'});
+        if (!user && !member) {
+          const {data,error}=await supabase.from('consumidores').select('*').eq('email',email).maybeSingle();
+          if(error) throw error;
+          consumer=data;
+        }
+        if (!user && !member && !consumer) return res.status(404).json({success:false,code:'google_registration_required',error:'Completá el registro de tu cuenta para empezar.'});
       }
       let payload, result;
       if (user) {
@@ -1808,6 +1851,9 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
         payload = {slug:user.slug,negocioId:user.id,rol:'owner'};
         result = {slug:user.slug,email:user.email,business_name:user.business_name,nombre_persona:user.nombre_persona,apellido:user.apellido || '',plan:user.plan || 'gratis',suscripcion:{estado:expired?'suspendido':user.estado_suscripcion || 'trial',fecha_vencimiento:user.fecha_vencimiento,dias_restantes:days,vencida:expired}};
         if (expired && user.plan === 'basico') result.redirect='renovar';
+      } else if(consumer && consumer.activo === true && consumer.email_verificado === true) {
+        payload={consumidorId:consumer.id,rol:'consumidor'};
+        result={tipo_cuenta:'usuario',rol:'consumidor',consumidor_id:consumer.id,email:consumer.email,nombre_persona:consumer.nombre_persona,apellido:consumer.apellido || '',intereses:consumer.intereses,redirect:'browse'};
       } else if (member && !member.es_dueño && member.login_activado && isActivo(member.activo)) {
         const {data:business,error} = await supabase.from('usuarios').select('activo,plan,fecha_vencimiento').eq('slug',member.slug).maybeSingle();
         if (error) throw error;
@@ -1818,7 +1864,7 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
       // Consume el desafío antes de vincular/emitir la sesión: evita reutilizaciones concurrentes.
       if (!challenges.delete(nonce)) return res.status(401).json({success:false,error:'Volvé a seleccionar tu cuenta de Google.'});
       if (!binding) {
-        const {error} = await supabase.from('google_login_accounts').insert({google_sub:google.sub,usuario_id:user?.id || null,equipo_id:member?.id || null});
+        const {error} = await supabase.from('google_login_accounts').insert({google_sub:google.sub,usuario_id:user?.id || null,equipo_id:member?.id || null,consumidor_id:consumer?.id || null});
         if (error?.code === '23505') return res.status(409).json({success:false,error:'Esta cuenta ya está conectada a otra cuenta de Google. Usá esa cuenta o tu acceso habitual.'});
         if (error) throw error;
         limpiarIntentosLogin(email);
@@ -1847,7 +1893,7 @@ app.post("/login", limiterAuth, async (req, res) => {
     const email    = req.body.email?.trim().toLowerCase() || "";
     const password = req.body.password;
 
-    if ((!rawSlug && !email) || !password) {
+    if ((!rawSlug && !email) || typeof password !== "string") {
       return res.status(400).json({ success: false, error: "Faltan email (o slug) y contraseña." });
     }
 
@@ -1942,6 +1988,13 @@ app.post("/login", limiterAuth, async (req, res) => {
             email,
           });
         }
+        if(!miembro) {
+          const consumer=await consumerAccounts.findByEmail(email);
+          if(consumer && consumer.activo === true && consumer.email_verificado === true && await bcrypt.compare(password,consumer.password)) {
+            limpiarIntentosLogin(claveBloqueo);
+            return res.json(consumerAccounts.session(consumer));
+          }
+        }
       }
       registrarIntentoFallidoLogin(claveBloqueo);
       return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
@@ -2026,6 +2079,11 @@ app.get("/verify-session", async (req, res) => {
     if (!token) return res.json({ active: false, reason: "no_token" });
 
     const payload    = jwt.verify(token, process.env.JWT_SECRET);
+    if(payload.rol === "consumidor") {
+      const consumer=await consumerAccounts.findById(payload.consumidorId);
+      if(!consumer || consumer.activo !== true || consumer.email_verificado !== true) return res.json({active:false,reason:"consumer_access_disabled"});
+      return res.json({active:true,...consumerIdentity(consumer)});
+    }
     if (payload.rol === "empleado" && payload.equipoId) {
       const [{ data: miembro }, { data: negocio }] = await Promise.all([
         supabase.from("equipo").select("id, slug, nombre, apellido, activo, es_dueño, login_activado")

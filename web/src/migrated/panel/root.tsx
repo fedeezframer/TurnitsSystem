@@ -43,6 +43,11 @@ function TurnitsPanel_SessionRouter(props: any) {
                 })
                 .find(Boolean) || ""
         const claims = token ? GuardaSesion_leerJwt(token) : null
+        if (claims?.rol === "consumidor") {
+            setPanelScope(null)
+            window.location.replace("/browse")
+            return
+        }
         const slug =
             claims?.slug ||
             (() => {

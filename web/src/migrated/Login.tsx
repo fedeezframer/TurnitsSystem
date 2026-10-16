@@ -80,6 +80,8 @@ const keys = [
     "slug",
     "business_name",
     "user_email",
+    "account_type",
+    "just_registered",
 ]
 const clearSession = () => keys.forEach((key) => localStorage.removeItem(key))
 // Datos ficticios; reproduce las tarjetas compactas de AgendaPanel_CalendarTurno.
@@ -350,13 +352,14 @@ export default function LoginApp(props: Props) {
         setPassword("")
     }
     function finishLogin(result: any) {
+        const consumer = result.rol === "consumidor" && result.tipo_cuenta === "usuario"
         const slug = String(result.slug || "")
             .trim()
             .toLowerCase()
         if (
             typeof result.token !== "string" ||
             !result.token ||
-            (!result.es_admin && !slug)
+            (!result.es_admin && !consumer && !slug)
         )
             throw new Error(
                 "La respuesta del servicio está incompleta. Volvé a intentar."
@@ -365,9 +368,10 @@ export default function LoginApp(props: Props) {
             clearSession()
             localStorage.setItem("access_token", result.token)
             localStorage.setItem("user_email", result.email || email.trim())
+            localStorage.setItem("account_type", consumer ? "usuario" : "negocio")
             localStorage.removeItem("input_login_email")
             localStorage.removeItem("input_login_password")
-            if (!result.es_admin) {
+            if (!result.es_admin && !consumer) {
                 localStorage.setItem("user_slug", slug)
                 localStorage.setItem("auth_slug", slug)
                 if (
@@ -389,7 +393,7 @@ export default function LoginApp(props: Props) {
         }
         setPassword("")
         window.location.replace(
-            `${window.location.origin}${result.es_admin ? "/internal" : `/panel/${encodeURIComponent(slug)}`}`
+            `${window.location.origin}${result.es_admin ? "/internal" : consumer ? "/browse" : `/panel/${encodeURIComponent(slug)}`}`
         )
     }
     async function authenticateGoogle(credential: string, nonce: string) {

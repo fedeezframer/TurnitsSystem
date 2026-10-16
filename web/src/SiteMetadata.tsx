@@ -17,6 +17,8 @@ export default function SiteMetadata() {
     const path = pathname === "/" ? "/" : pathname.replace(/\/$/, "")
     if (/^\/panel(?:\/|$|-test$)/.test(path)) document.title = "Turnits | Panel"
     else if (/^\/agenda(?:\/|$|-test$)/.test(path)) document.title = "Turnits | Agendar turno"
+    else if (path === "/registro" || path === "/register") document.title = "Turnits | Registro"
+    else if (path === "/browse") document.title = "Turnits | Browse"
     else document.title = "Turnits | Agenda online"
     const canonicalPath = publicPages[path] || (/^\/agenda\/[^/]+$/.test(path) ? path : null)
     let robots = document.head.querySelector<HTMLMetaElement>('meta[name="robots"]')

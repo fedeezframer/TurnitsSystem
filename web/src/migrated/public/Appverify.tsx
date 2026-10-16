@@ -32,7 +32,7 @@ function decodeToken(token: string): TokenSession | null {
         const slug = String(claims?.slug || "")
             .trim()
             .toLowerCase()
-        if (!slug) return null
+        if (!slug && !(claims.rol === "consumidor" && claims.consumidorId)) return null
         return {
             token,
             slug,
@@ -70,6 +70,11 @@ function guardarSesionCanonica(session: TokenSession, slug: string) {
     }
     try {
         localStorage.setItem("access_token", session.token)
+        localStorage.setItem("account_type", session.role === "consumidor" ? "usuario" : "negocio")
+        if (session.role === "consumidor") {
+            for (const key of [...SLUG_KEYS, "business_name", "just_registered"]) localStorage.removeItem(key)
+            return
+        }
         localStorage.setItem("user_slug", slug)
         localStorage.setItem("auth_slug", slug)
         localStorage.setItem("slug", slug)
@@ -77,7 +82,7 @@ function guardarSesionCanonica(session: TokenSession, slug: string) {
 }
 
 function limpiarSesion() {
-    for (const key of [...TOKEN_KEYS, ...SLUG_KEYS]) {
+    for (const key of [...TOKEN_KEYS, ...SLUG_KEYS, "account_type"]) {
         try {
             localStorage.removeItem(key)
         } catch {}
@@ -133,8 +138,13 @@ export function useAppSessionRedirect() {
                     return
                 }
 
-                // El servidor valida la sesión; su slug es la referencia
-                // canónica. No se usa un slug viejo de localStorage para rutear.
+                // El servidor valida el tipo de cuenta antes de elegir el destino.
+                if (data.rol === "consumidor") {
+                    guardarSesionCanonica(session, "")
+                    if (!cancelled) window.location.replace("/browse")
+                    return
+                }
+                // El slug del servidor es la referencia canónica para negocios.
                 const slug = String(data.slug || session.slug)
                     .trim()
                     .toLowerCase()
@@ -155,7 +165,8 @@ export function useAppSessionRedirect() {
                 )
                 if (!cancelled) {
                     guardarSesionCanonica(session, session.slug)
-                    irAlPanel(session.slug)
+                    if (session.role === "consumidor") window.location.replace("/browse")
+                    else irAlPanel(session.slug)
                 }
             }
         }
