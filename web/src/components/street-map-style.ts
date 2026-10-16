@@ -1,21 +1,32 @@
 import type { StyleSpecification } from "maplibre-gl";
 export const STREET_ATTRIBUTION =
-  '© <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a> · Datos de <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
 // Only real street geometry and street names: no POIs, terrain or place labels.
-export function streetMapStyle(
-  sourceUrl = "https://tiles.openfreemap.org/planet",
-): StyleSpecification {
+export function streetMapStyle(sourceUrl: string): StyleSpecification {
   const roads = [
     "match",
-    ["get", "class"],
+    ["get", "kind"],
     [
       "motorway",
       "trunk",
       "primary",
       "secondary",
       "tertiary",
-      "minor",
+      "residential",
+      "unclassified",
+      "living_street",
+      "pedestrian",
+      "motorway_link",
+      "trunk_link",
+      "primary_link",
+      "secondary_link",
+      "tertiary_link",
+      "busway",
+      "bus_guideway",
+      "footway",
+      "cycleway",
+      "steps",
       "service",
       "track",
       "path",
@@ -26,7 +37,12 @@ export function streetMapStyle(
   return {
     version: 8,
     name: "Turnits · Calles",
-    glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+    glyphs: new URL(
+      "/maps/fonts/{fontstack}/{range}.pbf",
+      window.location.origin,
+    ).href
+      .replaceAll("%7B", "{")
+      .replaceAll("%7D", "}"),
     sources: {
       streets: {
         type: "vector",
@@ -44,7 +60,7 @@ export function streetMapStyle(
         id: "street-edges",
         type: "line",
         source: "streets",
-        "source-layer": "transportation",
+        "source-layer": "streets",
         filter: roads,
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
@@ -68,7 +84,7 @@ export function streetMapStyle(
         id: "streets",
         type: "line",
         source: "streets",
-        "source-layer": "transportation",
+        "source-layer": "streets",
         filter: roads,
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
@@ -92,10 +108,10 @@ export function streetMapStyle(
         id: "avenues",
         type: "line",
         source: "streets",
-        "source-layer": "transportation",
+        "source-layer": "streets",
         filter: [
           "match",
-          ["get", "class"],
+          ["get", "kind"],
           ["motorway", "trunk", "primary", "secondary", "tertiary"],
           true,
           false,
@@ -122,7 +138,7 @@ export function streetMapStyle(
         id: "street-names",
         type: "symbol",
         source: "streets",
-        "source-layer": "transportation_name",
+        "source-layer": "street_labels",
         minzoom: 12,
         filter: ["all", roads, ["has", "name"]],
         layout: {

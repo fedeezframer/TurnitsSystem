@@ -1,0 +1,39 @@
+Turnits · Calles de Argentina
+
+Diseño del mapa: Turnits. Software, datos y tipografía servidos por el alojamiento
+de Turnits. No se consultan servicios cartográficos externos al navegar el mapa.
+
+DATOS
+© OpenStreetMap contributors. Open Database License 1.0 (ODbL).
+https://www.openstreetmap.org/copyright
+https://opendatacommons.org/licenses/odbl/1-0/
+
+Fuente de descarga: extracto Argentina de Geofabrik, Shortbread 1.0.
+https://download.geofabrik.de/south-america/argentina.html
+https://download.geofabrik.de/south-america/argentina-shortbread-1.0.mbtiles
+Descargado el 15 de octubre de 2026.
+
+La copia distribuida contiene las geometrías reales de calles y sus nombres;
+se filtraron otras capas y se conservaron sólo los atributos de clase y nombre.
+Se quitaron identificadores de elementos y atributos que el diseño no utiliza.
+Los archivos son una copia fechada, no una fuente de actualizaciones en vivo.
+Cobertura y precisión: las disponibles en el extracto de OpenStreetMap indicado.
+El esquema Shortbread se publica bajo CC0, sin atribuciones adicionales:
+https://shortbread-tiles.org/copyright/
+
+El archivo PMTiles se distribuye dividido en bloques binarios, con su tamaño,
+orden y SHA-256 en manifest.json. Se puede reconstruir concatenando los bloques
+en ese orden. La base derivada se ofrece bajo la misma ODbL. La atribución a
+OpenStreetMap debe mantenerse al mostrar estos datos aunque se alojen localmente.
+
+SOFTWARE
+Leaflet: BSD-2-Clause, licencia en LICENSE-Leaflet.txt.
+MapLibre GL JS: BSD-3-Clause, licencia en LICENSE-MapLibre.txt.
+PMTiles: BSD-3-Clause, licencia en LICENSE-PMTiles.txt.
+
+TIPOGRAFÍA
+Noto Sans Regular, SIL Open Font License 1.1.
+Licencia en fonts/LICENSE-Noto-Sans.txt.
+Glifos copiados desde https://tiles.openfreemap.org/fonts/ para alojamiento local.
+Fuente original: https://github.com/openmaptiles/fonts/tree/master/noto-sans
+No se realizan solicitudes a ese dominio durante el uso del mapa.

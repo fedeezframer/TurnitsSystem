@@ -93,3 +93,12 @@ Se retiraron «Guardar perfil» y «Guardar apariencia». Ambos editores usan la
 La API devuelve la versión normalizada como nueva base. Los fallos parciales mantienen pendiente sólo la sección fallida, muestran el motivo y permiten reintentar. Las ediciones que se hagan durante una solicitud se conservan como cambios pendientes, incluso al volver al valor que tenía antes de esa solicitud. El ícono del panel se refresca después del guardado de Perfil. Las confirmaciones de formularios de creación/edición de servicios, promociones, miembros y sucursales siguen siendo acciones propias de cada registro.
 
 Verificación actual: `work/verify-global-profile-ui.cjs` cubre doce paletas sin inputs libres ni guardados locales, cambios conjuntos Perfil/Temas, navegación/recarga, validación, error parcial/reintento, subida de foto al cambiar de sección, cambios durante el guardado, permisos Gratis y escritorio/390 px. API simulada, sin modificar perfiles reales. No requiere SQL ni cambios en el servidor.
+
+## Mapa alojado por Turnits — 15/10/2026
+
+Se sustituyó el acceso en vivo a OpenFreeMap por una copia local de calles y nombres
+de toda Argentina. Los datos vectoriales, glifos, worker y librerías se sirven
+desde el mismo alojamiento de la web. Se mantiene la atribución necesaria a
+OpenStreetMap y se retira OpenMapTiles porque los datos ahora usan Shortbread.
+No se mantiene un fallback externo. Ver [MAPAS-ARGENTINA.md](MAPAS-ARGENTINA.md)
+para tamaño, origen, licencias, pruebas y procedimiento de actualización.

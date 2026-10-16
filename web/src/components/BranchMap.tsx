@@ -5,6 +5,7 @@ import { maplibreGL } from "@maplibre/maplibre-gl-leaflet";
 import { setWorkerUrl } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { streetMapStyle, STREET_ATTRIBUTION } from "./street-map-style";
+import { localMapUrl } from "./local-map-source";
 setWorkerUrl(workerUrl);
 import {
   branchesByDistance,
@@ -100,9 +101,7 @@ export function BranchMap({
     try {
       if (!canRenderStreets()) throw new Error("webgl-unavailable");
       tiles = maplibreGL({
-        style: streetMapStyle(
-          import.meta.env.VITE_MAP_VECTOR_SOURCE || undefined,
-        ),
+        style: streetMapStyle(localMapUrl()),
         attributionControl: { customAttribution: STREET_ATTRIBUTION },
         renderWorldCopies: true,
       });

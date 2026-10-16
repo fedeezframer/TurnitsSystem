@@ -1,0 +1,38 @@
+{
+  "version": "cb5d92c12d545fe1",
+  "size": 273659080,
+  "sha256": "cb5d92c12d545fe1157c525961ff60906cf65b33b015ea7faa783ce94adaf42f",
+  "chunkSize": 47185920,
+  "parts": [
+    {
+      "path": "/maps/argentina/cb5d92c12d545fe1/part-000.bin",
+      "size": 47185920,
+      "sha256": "8c8e9986aec5587f7667716387464b55b75fd21ddca9232ff9798f585760c4b1"
+    },
+    {
+      "path": "/maps/argentina/cb5d92c12d545fe1/part-001.bin",
+      "size": 47185920,
+      "sha256": "0cd0abea15b40f015f120b1165052dd401c5e994934d1db5895e05150dee6f04"
+    },
+    {
+      "path": "/maps/argentina/cb5d92c12d545fe1/part-002.bin",
+      "size": 47185920,
+      "sha256": "04619b42b7adce36898f4e8788242821011bfd8832b73c5c7091d4f20b6f9ce2"
+    },
+    {
+      "path": "/maps/argentina/cb5d92c12d545fe1/part-003.bin",
+      "size": 47185920,
+      "sha256": "aa995523bdca0af886f552dd00063b6eb344337787fd9a737106af0451ff8bbb"
+    },
+    {
+      "path": "/maps/argentina/cb5d92c12d545fe1/part-004.bin",
+      "size": 47185920,
+      "sha256": "3e1b3df3b7bfcc20584edb3034e7ca0f614963eb4ef3330b7281552bb079138f"
+    },
+    {
+      "path": "/maps/argentina/cb5d92c12d545fe1/part-005.bin",
+      "size": 37729480,
+      "sha256": "a1379863264f8cb6ccab10c9daf463c5552a2ffaa8bcfbe7ba5e61543391ca6d"
+    }
+  ]
+}
