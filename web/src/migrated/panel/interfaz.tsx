@@ -181,15 +181,21 @@ function TurnitsGlobalSaveBar({
     const [saving, setSaving] = React.useState(false)
     const [error, setError] = React.useState("")
     const [success, setSuccess] = React.useState(false)
+    const [blocker, setBlocker] = React.useState("")
     React.useEffect(() => {
         if (typeof window === "undefined") return
         const manager = TurnitsGlobalSaveManager_get()
-        const sync = () => {
+        const sync = (e?: any) => {
+            if (e?.detail?.edited) {
+                setError("")
+                setSuccess(false)
+            }
             const sections = [
                 ["horarios", "Horarios"],
                 ["excepciones", "Excepciones"],
                 ["pagos", "Pagos"],
                 ["tema", "Tema"],
+                ["perfil", "Perfil"],
             ]
                 .filter(([key]) =>
                     manager?.isDirty(key as TurnitsGlobalSaveSection)
@@ -197,11 +203,13 @@ function TurnitsGlobalSaveBar({
                 .map(([, label]) => label)
             setDirtySections(sections)
             setDirty(sections.length > 0)
+            if (sections.length) setSuccess(false)
+            setBlocker(manager?.getBlocker() || "")
         }
         const onState = (e: any) => setSaving(!!e?.detail?.saving)
         const onSuccess = () => {
             setError("")
-            setSuccess(true)
+            setSuccess(!manager?.hasDirty())
             setTimeout(() => setSuccess(false), 2200)
             sync()
         }
@@ -278,6 +286,7 @@ function TurnitsGlobalSaveBar({
                             : "Guardalos para que queden aplicados en tu agenda."}
                     </div>
                 )}
+                {blocker && <div role="status" style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{blocker}</div>}
             </div>
             {!success && (
                 <motion.button
@@ -290,18 +299,18 @@ function TurnitsGlobalSaveBar({
                         setSuccess(false)
                         TurnitsGlobalSaveManager_get()?.saveAll()
                     }}
-                    disabled={saving || !dirty}
+                    disabled={saving || !dirty || !!blocker}
                     style={{
                         padding: "9px 16px",
                         borderRadius: 10,
                         border: "none",
                         boxSizing: "border-box",
                         minWidth: 124,
-                        background: dirty && !saving ? accentColor : "#e2e8f0",
-                        color: dirty && !saving ? "#fff" : "#94a3b8",
+                        background: dirty && !saving && !blocker ? accentColor : "#e2e8f0",
+                        color: dirty && !saving && !blocker ? "#fff" : "#94a3b8",
                         fontSize: 12,
                         fontWeight: 700,
-                        cursor: dirty && !saving ? "pointer" : "default",
+                        cursor: dirty && !saving && !blocker ? "pointer" : "default",
                         fontFamily: "inherit",
                         whiteSpace: "nowrap",
                         flexShrink: 0,

@@ -22,14 +22,6 @@ import {
 } from "../../shared/appearance.js";
 import "./temas.css";
 
-const COLORS = [
-  ["primario", "Color principal"],
-  ["secundario", "Color secundario"],
-  ["fondo", "Fondo"],
-  ["texto", "Texto"],
-  ["acento", "Acento"],
-] as const;
-
 function ThemeEditor({
   baseUrl = appConfig.apiUrl,
   accentColor = "#197128",
@@ -47,11 +39,6 @@ function ThemeEditor({
     [tema, setTema] = React.useState<ThemeEditor_Tema>(
       ThemeEditor_TEMA_DEFAULT,
     ),
-    [baseline, setBaseline] = React.useState<ThemeEditor_Tema>(
-      ThemeEditor_TEMA_DEFAULT,
-    ),
-    [busy, setBusy] = React.useState(false),
-    [saved, setSaved] = React.useState(false),
     [error, setError] = React.useState("");
 
   React.useEffect(() => {
@@ -88,7 +75,6 @@ function ThemeEditor({
         if (!alive) return;
         const full = ThemeEditor_temaCompleto(d.tema);
         setEnabled(["basico", "premium"].includes(plan));
-        setBaseline(full);
         const manager = TurnitsGlobalSaveManager_get();
         manager?.setBaseline("tema", full);
         const pending = manager?.getPending("tema");
@@ -112,54 +98,26 @@ function ThemeEditor({
     };
   }, [api]);
 
-  const dirty = !ThemeEditor_mismoTema(tema, baseline);
   React.useEffect(() => {
     if (loading || !enabled) return;
-    const manager = TurnitsGlobalSaveManager_get();
-    if (dirty) manager?.markDirty("tema", tema);
-    else if (manager?.isDirty("tema")) manager.clear("tema");
-  }, [dirty, tema, loading, enabled]);
+    TurnitsGlobalSaveManager_get()?.markDirty("tema", tema);
+  }, [tema, loading, enabled]);
   React.useEffect(() => {
     const onSaved = (e: any) => {
-      if (e.detail?.section === "tema") setBaseline({ ...tema });
+      if (e.detail?.section !== "tema") return;
+      const full = ThemeEditor_temaCompleto(e.detail.data);
+      setTema(
+        ThemeEditor_temaCompleto(
+          TurnitsGlobalSaveManager_get()?.getPending("tema") || full,
+        ),
+      );
     };
     window.addEventListener("turnits_global_saved", onSaved);
     return () => window.removeEventListener("turnits_global_saved", onSaved);
-  }, [tema]);
+  }, []);
 
   const update = (values: Partial<ThemeEditor_Tema>) => {
     setTema((t) => ({ ...t, ...values }));
-    setSaved(false);
-  };
-  const save = async () => {
-    if (busy || !enabled || !dirty) return;
-    setBusy(true);
-    setError("");
-    setSaved(false);
-    try {
-      const r = await fetch(`${api}/admin/tema/${ThemeEditor_getSlug()}`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${ThemeEditor_getToken()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(tema),
-      });
-      const d = await r.json();
-      if (!r.ok || !d.success)
-        throw new Error(d.error || "No se pudo guardar la apariencia.");
-      const full = ThemeEditor_temaCompleto(d.tema || tema);
-      setTema(full);
-      setBaseline(full);
-      setSaved(true);
-      const manager = TurnitsGlobalSaveManager_get();
-      manager?.setBaseline("tema", full);
-      manager?.clear("tema");
-    } catch (e: any) {
-      setError(e.message || "Error de red.");
-    } finally {
-      setBusy(false);
-    }
   };
 
   if (loading)
@@ -214,13 +172,13 @@ function ThemeEditor({
         )}
       </div>
       <fieldset
-        disabled={!enabled || busy}
+        disabled={!enabled}
         style={!enabled ? TurnitsLockedStyle : undefined}
         className="te-fields"
       >
         <section className="te-section">
           <h3>Colores</h3>
-          <p>Elegí una paleta o ajustá cada color.</p>
+          <p>Elegí una paleta clara para tu negocio.</p>
           <div className="te-palettes">
             {ThemeEditor_PALETAS.map((p) => (
               <button
@@ -240,40 +198,6 @@ function ThemeEditor({
                 </span>
                 {p.nombre}
               </button>
-            ))}
-          </div>
-          <div className="te-colors">
-            {COLORS.map(([key, label]) => (
-              <div className="te-color-field" key={key}>
-                <label
-                  className="te-color-swatch"
-                  style={{ background: tema[key] }}
-                >
-                  <span className="te-sr-only">{label}</span>
-                  <input
-                    aria-label={`${label} (selector)`}
-                    type="color"
-                    value={
-                      /^#[\da-f]{6}$/i.test(tema[key]) ? tema[key] : "#000000"
-                    }
-                    onChange={(e) => update({ [key]: e.target.value })}
-                  />
-                </label>
-                <label>
-                  <span>{label}</span>
-                  <input
-                    aria-label={`${label} (HEX)`}
-                    type="text"
-                    spellCheck={false}
-                    maxLength={7}
-                    value={tema[key]}
-                    onChange={(e) => {
-                      if (/^#[\da-f]{0,6}$/i.test(e.target.value))
-                        update({ [key]: e.target.value });
-                    }}
-                  />
-                </label>
-              </div>
             ))}
           </div>
         </section>
@@ -323,24 +247,9 @@ function ThemeEditor({
           </section>
         ))}
       </fieldset>
-      {enabled && (
-        <button
-          type="button"
-          className="te-button"
-          onClick={save}
-          disabled={busy || !dirty}
-        >
-          {busy ? "Guardando…" : "Guardar apariencia"}
-        </button>
-      )}
       {error && (
         <p role="alert" className="te-error">
           {error}
-        </p>
-      )}
-      {saved && (
-        <p role="status" className="te-success">
-          Apariencia guardada.
         </p>
       )}
     </div>

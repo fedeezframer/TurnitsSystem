@@ -3,6 +3,7 @@ import {
   MenuFooter_getSlug,
   MenuFooter_getToken,
   SeccionHeader,
+  TurnitsGlobalSaveManager_get,
 } from "./common";
 import { TeamManager, TeamManager_ServiciosVinculados } from "./equipo";
 import { TurnitsPlanRequirement } from "./shared";
@@ -13,7 +14,8 @@ const LocationPicker = React.lazy(() =>
   })),
 );
 import "./perfil-publico.css";
-import { SOCIAL_LINKS, normalizarEnlaceRed } from "../../shared/socials.js";
+import { SOCIAL_LINKS } from "../../shared/socials.js";
+import { perfilVacio, perfilDraft } from "../../shared/profile-draft";
 import { SocialProfileField } from "../../components/SocialProfileField";
 import { BusinessAvatar } from "../../components/BusinessAvatar";
 import type { IconShape } from "../../shared/appearance.js";
@@ -70,22 +72,7 @@ async function request(url: string, options: RequestInit = {}) {
     throw new Error(d.error || "No se pudo completar la solicitud.");
   return d;
 }
-export const perfilVacio = {
-  nombre: "",
-  descripcion: "",
-  categoria: "",
-  direccion: "",
-  ciudad: "",
-  provincia: "",
-  telefono_publico: "",
-  instagram: "",
-  sitio_web: "",
-  redes_sociales: {} as Record<string, string>,
-  fotos: [] as string[],
-  foto_perfil_url: "",
-  banner_url: "",
-  publicado: false,
-};
+export { perfilVacio } from "../../shared/profile-draft";
 export function PerfilNegocio({
   baseUrl,
   isMobile,
@@ -104,14 +91,53 @@ export function PerfilNegocio({
     [busy, setBusy] = React.useState(false),
     [uploading, setUploading] = React.useState(false),
     [uploadProgress, setUploadProgress] = React.useState(""),
-    [error, setError] = React.useState(""),
-    [saved, setSaved] = React.useState("");
+    [error, setError] = React.useState("");
+  const draftRef = React.useRef(form);
+  const capabilities = React.useRef({ redes: false, imagenes: false });
+  const updateDraft = (
+    update: (value: typeof perfilVacio) => typeof perfilVacio,
+  ) => {
+    const manager = TurnitsGlobalSaveManager_get();
+    const next = update({
+      ...draftRef.current,
+      ...manager?.getPending("perfil"),
+    });
+    draftRef.current = next;
+    setForm(next);
+    manager?.markDirty(
+      "perfil",
+      perfilDraft(
+        next,
+        capabilities.current.redes,
+        capabilities.current.imagenes,
+      ),
+    );
+  };
   React.useEffect(() => {
     let alive = true;
     request(`${api}/admin/perfil/${slug}`)
       .then((d) => {
         if (alive) {
-          setForm({ ...perfilVacio, ...d.perfil });
+          const manager = TurnitsGlobalSaveManager_get();
+          capabilities.current = {
+            redes: !!d.redes_habilitadas,
+            imagenes: !!d.imagenes_habilitadas,
+          };
+          manager?.setBaseline(
+            "perfil",
+            perfilDraft(
+              d.perfil,
+              capabilities.current.redes,
+              capabilities.current.imagenes,
+            ),
+          );
+          const next = {
+            ...perfilVacio,
+            ...d.perfil,
+            ...manager?.getPending("perfil"),
+          };
+          draftRef.current = next;
+          setForm(next);
           setHabilitado(d.habilitado);
           setRedesHabilitadas(!!d.redes_habilitadas);
           setImagenesHabilitadas(!!d.imagenes_habilitadas);
@@ -124,52 +150,30 @@ export function PerfilNegocio({
       alive = false;
     };
   }, [api, slug]);
-  const change = (key: string, value: any) => {
-    setForm((f) => ({ ...f, [key]: value }));
-    setSaved("");
-  };
-  const guardar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy || uploading) return;
-    setBusy(true);
-    setError("");
-    setSaved("");
-    try {
-      const payload: any = {
-        ...form,
-        instagram: normalizarEnlaceRed("instagram", form.instagram),
+  React.useEffect(() => {
+    const manager = TurnitsGlobalSaveManager_get();
+    setBusy(!!manager?.isSaving());
+    const onState = (e: any) => setBusy(!!e.detail?.saving);
+    const onSaved = (e: any) => {
+      if (e.detail?.section !== "perfil") return;
+      const next = {
+        ...perfilVacio,
+        ...e.detail.data,
+        ...manager?.getPending("perfil"),
       };
-      if (redesHabilitadas)
-        payload.redes_sociales = Object.fromEntries(
-          SOCIAL_LINKS.filter((red) => red.key !== "instagram")
-            .map((red) => [
-              red.key,
-              normalizarEnlaceRed(
-                red.key,
-                form.redes_sociales?.[red.key] || "",
-              ),
-            ])
-            .filter(([, value]) => value),
-        );
-      else delete payload.redes_sociales;
-      if (!imagenesHabilitadas) {
-        delete payload.foto_perfil_url;
-        delete payload.banner_url;
-      }
-      const d = await request(`${api}/admin/perfil/${slug}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-      setForm({ ...perfilVacio, ...d.perfil });
-      window.dispatchEvent(
-        new CustomEvent("turnits_business_photo_changed", { detail: { slug } }),
-      );
-      setSaved("Perfil guardado.");
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
+      draftRef.current = next;
+      setForm(next);
+      setError("");
+    };
+    window.addEventListener("turnits_global_save_state", onState);
+    window.addEventListener("turnits_global_saved", onSaved);
+    return () => {
+      window.removeEventListener("turnits_global_save_state", onState);
+      window.removeEventListener("turnits_global_saved", onSaved);
+    };
+  }, []);
+  const change = (key: string, value: any) => {
+    updateDraft((f) => ({ ...f, [key]: value }));
   };
   const subir = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -177,7 +181,12 @@ export function PerfilNegocio({
   ) => {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!files.length || uploading) return;
+    if (
+      !files.length ||
+      uploading ||
+      TurnitsGlobalSaveManager_get()?.getBlocker()
+    )
+      return;
     if (
       files.some(
         (file) =>
@@ -189,6 +198,8 @@ export function PerfilNegocio({
       return;
     }
     setUploading(true);
+    const manager = TurnitsGlobalSaveManager_get();
+    manager?.setBlocker("perfil", "Esperá a que terminen de subir las fotos.");
     setError("");
     try {
       for (const [index, file] of files.entries()) {
@@ -203,18 +214,18 @@ export function PerfilNegocio({
         const d = await r.json();
         if (!r.ok || !d.success)
           throw new Error(d.error || "No se pudo subir la foto.");
-        setForm((f) =>
+        updateDraft((f) =>
           destino === "fotos"
             ? { ...f, fotos: [...new Set([...f.fotos, d.url])] }
             : { ...f, [destino]: d.url },
         );
-        setSaved("");
       }
     } catch (e: any) {
       setError(e.message);
     } finally {
       setUploading(false);
       setUploadProgress("");
+      manager?.setBlocker("perfil", "");
     }
   };
   if (!loading && error && !habilitado) {
@@ -262,7 +273,13 @@ export function PerfilNegocio({
               Falta instalar la actualización de Perfil en la base de datos.
             </p>
           )}
-          <form onSubmit={guardar} className="negocio-card negocio-stack">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              TurnitsGlobalSaveManager_get()?.saveAll();
+            }}
+            className="negocio-card negocio-stack"
+          >
             <div className="negocio-between">
               <div>
                 <h2>Presentá tu negocio</h2>
@@ -491,9 +508,6 @@ export function PerfilNegocio({
                 ficha pública. Podés ocultarla cuando quieras.
               </p>
               <div className="negocio-row">
-                <button className="negocio-button" disabled={uploading || busy}>
-                  {busy ? "Guardando…" : "Guardar perfil"}
-                </button>
                 {form.publicado && (
                   <a
                     href={`/perfil/${slug}`}
@@ -509,11 +523,6 @@ export function PerfilNegocio({
             {error && (
               <p className="negocio-error" role="alert">
                 {error}
-              </p>
-            )}
-            {saved && (
-              <p className="negocio-success" role="status">
-                {saved}
               </p>
             )}
           </form>

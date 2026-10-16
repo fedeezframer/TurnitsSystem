@@ -62,9 +62,9 @@
   color: #172033;
 }
 .te-palettes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 10px;
   margin: 14px 0;
 }
 .te-palette,
@@ -105,55 +105,6 @@
   height: 15px;
   border-radius: 50%;
   border: 1px solid #0000000d;
-}
-.te-colors {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-}
-.te-color-field {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 12px;
-  background: #f8faf9;
-  border: 1px solid #e8eee9;
-  min-width: 0;
-}
-.te-color-swatch {
-  position: relative;
-  overflow: hidden;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  flex-shrink: 0;
-  border: 1px solid #00000012;
-}
-.te-color-swatch input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-}
-.te-color-field > label:last-child {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: #475569;
-}
-.te-color-field input[type="text"] {
-  width: 100%;
-  min-width: 0;
-  background: transparent;
-  border: 0;
-  font: 12px monospace;
-  color: #64748b;
-  padding: 0;
 }
 .te-shapes {
   display: grid;
@@ -209,8 +160,5 @@
 @media (max-width: 540px) {
   .te-shapes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .te-colors {
-    grid-template-columns: minmax(0, 1fr);
   }
 }

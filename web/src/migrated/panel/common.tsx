@@ -1,6 +1,7 @@
 import { appConfig } from "../../config"
 import { DEFAULT_APPEARANCE, CARD_SHAPES, ICON_SHAPES } from "../../shared/appearance.js"
 import type { BusinessAppearance } from "../../shared/appearance.js"
+import { perfilDraft, perfilPayload } from "../../shared/profile-draft"
 import * as React from "react"
 import {
     useState,
@@ -395,7 +396,7 @@ function usePanelAutoUpdate({
     }
 }
 
-type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema"
+type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil"
 
 type TurnitsGlobalPending = Record<string, any>
 
@@ -495,9 +496,9 @@ function TurnitsGlobalSave_partialEqual(data: any, baseline: any): boolean {
     )
 }
 
-function TurnitsGlobalSave_emit() {
+function TurnitsGlobalSave_emit(edited = false) {
     if (typeof window === "undefined") return
-    window.dispatchEvent(new CustomEvent("turnits_global_dirty_changed"))
+    window.dispatchEvent(new CustomEvent("turnits_global_dirty_changed", { detail: { edited } }))
 }
 
 function TurnitsGlobalSaveManager_get() {
@@ -508,6 +509,8 @@ function TurnitsGlobalSaveManager_get() {
         let baseline: TurnitsGlobalPending = {}
         let baseUrl = appConfig.apiUrl
         let saving = false
+        let inFlight: TurnitsGlobalPending = {}
+        const blockers: Record<string, string> = {}
 
         const getSlug = () => {
             let fromUrl = ""
@@ -541,6 +544,14 @@ function TurnitsGlobalSaveManager_get() {
             isSaving() {
                 return saving
             },
+            setBlocker(section: TurnitsGlobalSaveSection, message: string) {
+                if (message) blockers[section] = message
+                else delete blockers[section]
+                TurnitsGlobalSave_emit()
+            },
+            getBlocker() {
+                return Object.values(blockers)[0] || ""
+            },
             hasDirty() {
                 return Object.keys(pending).length > 0
             },
@@ -573,7 +584,7 @@ function TurnitsGlobalSaveManager_get() {
                         : data
                 // Limpia cambios viejos de sessionStorage si ya coinciden con
                 // lo que realmente está guardado en Supabase.
-                if (pending[section] !== undefined) {
+                if (pending[section] !== undefined && inFlight[section] === undefined) {
                     if (section === "pagos") {
                         const diff = TurnitsGlobalSave_pagosDiff(
                             pending.pagos,
@@ -610,13 +621,13 @@ function TurnitsGlobalSaveManager_get() {
                             delete next.pagos
                             pending = next
                             TurnitsGlobalSave_safeWrite(pending)
-                            TurnitsGlobalSave_emit()
+                            TurnitsGlobalSave_emit(true)
                         }
                         return
                     }
                     pending = { ...pending, pagos: diff }
                     TurnitsGlobalSave_safeWrite(pending)
-                    TurnitsGlobalSave_emit()
+                    TurnitsGlobalSave_emit(true)
                     return
                 }
                 // Si el usuario volvió al valor guardado, deja de estar dirty.
@@ -626,6 +637,7 @@ function TurnitsGlobalSaveManager_get() {
                 // borrar la última excepción NO aparecería "Guardar cambios".
                 const equalToBaseline =
                     baseline[section] !== undefined &&
+                    inFlight[section] === undefined &&
                     (section === "excepciones"
                         ? TurnitsGlobalSave_stable(data) ===
                           TurnitsGlobalSave_stable(baseline[section])
@@ -639,13 +651,13 @@ function TurnitsGlobalSaveManager_get() {
                         delete next[section]
                         pending = next
                         TurnitsGlobalSave_safeWrite(pending)
-                        TurnitsGlobalSave_emit()
+                        TurnitsGlobalSave_emit(true)
                     }
                     return
                 }
                 pending = { ...pending, [section]: data }
                 TurnitsGlobalSave_safeWrite(pending)
-                TurnitsGlobalSave_emit()
+                TurnitsGlobalSave_emit(true)
             },
             clear(section: TurnitsGlobalSaveSection) {
                 if (pending[section] === undefined) return
@@ -656,7 +668,7 @@ function TurnitsGlobalSaveManager_get() {
                 TurnitsGlobalSave_emit()
             },
             async saveAll() {
-                if (saving || !Object.keys(pending).length) return
+                if (saving || Object.keys(blockers).length || !Object.keys(pending).length) return
                 saving = true
                 window.dispatchEvent(
                     new CustomEvent("turnits_global_save_state", {
@@ -666,6 +678,8 @@ function TurnitsGlobalSaveManager_get() {
                 const slug = getSlug()
                 const token = getToken()
                 const results: Record<string, boolean> = {}
+                const errors: Record<string, string> = {}
+                const savedData: TurnitsGlobalPending = {}
 
                 if (!slug || !token) {
                     saving = false
@@ -683,6 +697,7 @@ function TurnitsGlobalSaveManager_get() {
                 }
 
                 const current = { ...pending }
+                inFlight = current
                 const sesionToken = GuardaSesion_leerJwt(token)
                 const configUrl =
                     sesionToken?.rol === "empleado"
@@ -709,6 +724,7 @@ function TurnitsGlobalSaveManager_get() {
                         results[section] = true
                     } catch (e: any) {
                         results[section] = false
+                        errors[section] = e.message || "Error al guardar."
                         console.error(`[TurnitsGlobalSave] ${section}:`, e)
                     }
                 }
@@ -758,15 +774,41 @@ function TurnitsGlobalSaveManager_get() {
                                         d.error || "Error al guardar el tema."
                                     )
                                 results.tema = true
-                            } catch (e) {
+                                savedData.tema = ThemeEditor_temaCompleto(d.tema || current.tema)
+                            } catch (e: any) {
                                 results.tema = false
+                                errors.tema = e.message || "Error al guardar el tema."
                                 console.error("[TurnitsGlobalSave] tema:", e)
                             }
                         })()
                     )
                 }
 
+                if (current.perfil !== undefined) {
+                    tasks.push((async () => {
+                        try {
+                            const body = perfilPayload(current.perfil)
+                            const res = await fetch(`${api()}/admin/perfil/${slug}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify(body),
+                            })
+                            const d = await res.json().catch(() => ({}))
+                            if (!res.ok || !d.success) throw new Error(d.error || "Error al guardar el perfil.")
+                            savedData.perfil = perfilDraft(d.perfil || body,
+                                Object.hasOwn(current.perfil, "redes_sociales"),
+                                Object.hasOwn(current.perfil, "foto_perfil_url"))
+                            results.perfil = true
+                            window.dispatchEvent(new CustomEvent("turnits_business_photo_changed", { detail: { slug } }))
+                        } catch (e: any) {
+                            results.perfil = false
+                            errors.perfil = e.message || "Error al guardar el perfil."
+                        }
+                    })())
+                }
+
                 await Promise.all(tasks)
+                inFlight = {}
 
                 Object.keys(results).forEach((section) => {
                     if (results[section]) {
@@ -776,13 +818,15 @@ function TurnitsGlobalSaveManager_get() {
                                       ...(baseline.pagos || {}),
                                       ...current.pagos,
                                   }
-                                : current[section]
+                                : savedData[section] || current[section]
                         const next = { ...pending }
-                        delete next[section]
+                        // Edits made while the request was in flight stay pending.
+                        if (TurnitsGlobalSave_stable(next[section]) === TurnitsGlobalSave_stable(current[section]))
+                            delete next[section]
                         pending = next
                         window.dispatchEvent(
                             new CustomEvent("turnits_global_saved", {
-                                detail: { section },
+                                detail: { section, data: baseline[section], submitted: current[section] },
                             })
                         )
                     }
@@ -795,7 +839,7 @@ function TurnitsGlobalSaveManager_get() {
                     window.dispatchEvent(
                         new CustomEvent("turnits_global_save_error", {
                             detail: {
-                                error: "No se pudieron guardar todos los cambios.",
+                                error: failed.map((key) => `${key === "perfil" ? "Perfil" : key === "tema" ? "Temas" : key}: ${errors[key] || "No se pudo guardar."}`).join(" "),
                                 failed,
                             },
                         })
@@ -3739,6 +3783,13 @@ const ThemeEditor_PALETAS = [
             acento: "#CBBB9F",
         },
     },
+    { nombre: "Lavanda", tema: { primario: "#6D598C", secundario: "#E8E0F1", fondo: "#FDFBFF", texto: "#352C43", acento: "#C7B5DD" } },
+    { nombre: "Durazno", tema: { primario: "#9C614B", secundario: "#F3E2D9", fondo: "#FFFCFA", texto: "#48332B", acento: "#DEB6A1" } },
+    { nombre: "Oliva", tema: { primario: "#66714B", secundario: "#E5E9D9", fondo: "#FCFDF9", texto: "#343A29", acento: "#BCC79E" } },
+    { nombre: "Coral", tema: { primario: "#A45655", secundario: "#F4DFDD", fondo: "#FFFBFA", texto: "#482D2D", acento: "#DDA5A0" } },
+    { nombre: "Lino", tema: { primario: "#776754", secundario: "#EBE5DC", fondo: "#FEFCF8", texto: "#3F372E", acento: "#C9BBA6" } },
+    { nombre: "Celeste gris", tema: { primario: "#546F87", secundario: "#DFE7EE", fondo: "#FAFCFE", texto: "#2B3742", acento: "#ADC0D0" } },
+    { nombre: "Malva", tema: { primario: "#875F7C", secundario: "#EDDFE9", fondo: "#FFFBFE", texto: "#402F3B", acento: "#D2ACC7" } },
 ]
 
 const ThemeEditor_cardBase: React.CSSProperties = {
