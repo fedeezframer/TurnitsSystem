@@ -1,3 +1,4 @@
+import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
 import {
   MenuFooter_getSlug,
@@ -920,7 +921,9 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
   );
 }
 export function EquipoSecciones(props: any) {
+  const branch = useBranchAdmin();
   const [tab, setTab] = React.useState("miembros");
+  if (branch) return <TeamManager {...props}/>;
   return (
     <div className="negocio-editor negocio-stack">
       <div

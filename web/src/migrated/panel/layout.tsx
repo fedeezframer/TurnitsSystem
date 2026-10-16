@@ -1,3 +1,4 @@
+import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -14,7 +15,7 @@ import { TurnitsBetaInstallPrompt, TurnitsPanel_Splash, QrFlotante, TurnitsGloba
 import { PanelUpdateBanner } from "./shared"
 import { OnboardingNube } from "./onboarding"
 import { AmbientOrbs, BrandMark, NavButton, TeamManager, BottomNavIcon, BottomNavMore } from "./equipo"
-import { MenuFooter, MenuCuentaPagoRetorno, NotificacionesFlotantes } from "./cuenta"
+import { MenuFooter as OwnerMenuFooter, MenuCuentaPagoRetorno, NotificacionesFlotantes } from "./cuenta"
 import { SeccionInicio, TurnitsDashboardSidePanel } from "./dashboard"
 import { ServiciosManager } from "./servicios"
 import { ClientesGrid } from "./clientes"
@@ -26,7 +27,10 @@ import { ThemeEditor } from "./temas"
 import { CopyTurnosButton } from "./inicio"
 import { PerfilNegocio, EquipoSecciones } from "./perfil"
 
+function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter logoutUrl={props.logoutUrl}/> : <OwnerMenuFooter {...props}/> }
+
 function TurnitsPanel_Inner(props: any) {
+    const branchAdmin = useBranchAdmin()
     const {
         baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
@@ -130,12 +134,13 @@ function TurnitsPanel_Inner(props: any) {
     })
 
     const irA = (id: SeccionId) => {
+        if (branchAdmin && !["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(id)) return
         setSeccionActiva(id)
         setMenuMobileAbierto(false)
     }
 
     const navItemsVisibles = NAV_ITEMS.filter(
-        (item) => item.id !== "equipo" || equipoDisponible
+        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible)
     )
 
     // Igual que irA: si el banner de referidos del menú se toca desde la
@@ -213,12 +218,12 @@ function TurnitsPanel_Inner(props: any) {
             />
 
             {true && (
-                <OnboardingNube
+                <OwnerOnly><OnboardingNube
                     baseUrl={baseUrl}
                     accentColor={accentColor}
                     mpClientId={mpClientId}
                     onFinish={() => setOnboardingListo(true)}
-                />
+                /></OwnerOnly>
             )}
 
             {/* Preloader: tapa el "trabón" del primer render mientras los
@@ -460,7 +465,7 @@ function TurnitsPanel_Inner(props: any) {
                 )}
             </AnimatePresence>
 
-            <MenuCuentaPagoRetorno api={baseUrl} logo={logoImage} />
+            <OwnerOnly><MenuCuentaPagoRetorno api={baseUrl} logo={logoImage} /></OwnerOnly>
             {/* Botón flotante de notificaciones + overlay (fuera del menú) */}
             <NotificacionesFlotantes
                 baseUrl={baseUrl}
@@ -541,6 +546,7 @@ function TurnitsPanel_Inner(props: any) {
                     />
                 </div>
 
+                {branchAdmin && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
                 {seccionActiva === "inicio" && (
                     <SeccionInicio
                         baseUrl={baseUrl}
@@ -652,7 +658,7 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Definí tu disponibilidad y excepciones"
                             isMobile={isMobile}
                         />
-                        <HorariosConfig
+{branchAdmin ? <BranchSchedule baseUrl={baseUrl} accentColor={accentColor}/> : <>                        <HorariosConfig
                             baseUrl={baseUrl}
                             accentColor={accentColor}
                             mostrarBotonGuardar={false}
@@ -660,7 +666,7 @@ function TurnitsPanel_Inner(props: any) {
                         <ExcepcionesConfig
                             baseUrl={baseUrl}
                             accentColor={accentColor}
-                        />
+                        /></>}
                     </div>
                 )}
 
@@ -770,7 +776,7 @@ function TurnitsPanel_Inner(props: any) {
                 {seccionActiva === "perfil" && <PerfilNegocio baseUrl={baseUrl} isMobile={isMobile}/>}
             </div>
 
-            <TurnitsDashboardSidePanel
+            <OwnerOnly><TurnitsDashboardSidePanel
                 baseUrl={baseUrl}
                 accentColor={accentColor}
                 isMobile={isMobile}
@@ -779,7 +785,7 @@ function TurnitsPanel_Inner(props: any) {
                 onNavigate={irA}
                 referidosPlusIcono={referidosPlusIcono}
                 ilustracionRendimientoVacio={ilustracionRendimientoVacio}
-            />
+            /></OwnerOnly>
 
             {/* ─────────────── NAV FLOTANTE (mobile, estilo Instagram) ─── */}
             {isMobile && (

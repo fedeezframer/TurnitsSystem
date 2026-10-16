@@ -1,4 +1,5 @@
 import { appConfig } from "../../config"
+import { useBranchAdmin } from "../../components/BranchAdmin"
 import * as React from "react"
 import {
     useState,
@@ -13,6 +14,7 @@ import './perfil.css'
 import { AgendaPanel_useContainerWidth, AgendaPanel_getSlug, AgendaPanel_getToken, AgendaPanel_filtrarPasados, AgendaPanel_esPendienteAprobacion, AgendaPanel_hoyISO, AgendaPanel_cleanTel, AgendaPanel_formatFecha, AgendaPanel_wrapperBase, AgendaPanel_mockDias, AgendaPanel_globalCSS, AgendaPanel_FONT_BODY, AgendaPanel_SURFACE, AgendaPanel_HAIRLINE, AgendaPanel_INK, AgendaPanel_FONT_DISPLAY, AgendaPanel_SLATE, AgendaPanel_tieneExtras, AgendaPanel_GHOST, AgendaPanel_extrasLabel, AgendaPanel_metodoPagoLabel, AgendaPanel_formatMonto, AgendaPanel_estadoPagoLabel, AgendaPanel_labelStyle, AgendaPanel_inputStyle, AgendaPanel_tieneReprogramacionPendiente, AgendaPanel_faltaProfesional, AgendaPanel_formatFechaParts } from "./common"
 
 function AgendaPanel(props: any) {
+    const branchAdmin = useBranchAdmin()
     const {
         baseUrl = appConfig.apiUrl,
         accentColor = "#22c55e",
@@ -44,7 +46,7 @@ function AgendaPanel(props: any) {
     const [sucursales,setSucursales]=React.useState<any[]>([])
     const [sucursalFiltro,setSucursalFiltro]=React.useState('todas')
     const [principalNombre,setPrincipalNombre]=React.useState('Sede principal')
-    React.useEffect(()=>{let alive=true;const slug=AgendaPanel_getSlug(),token=AgendaPanel_getToken();if(slug && token)fetch(`${baseUrl.replace(/\/+$/,'')}/admin/sucursales/${slug}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(alive && d?.premium && d?.habilitado){setSucursales(d.sucursales || []);setPrincipalNombre(d.principal?.nombre || 'Sede principal')}}).catch(()=>{});return()=>{alive=false}},[baseUrl]);
+    React.useEffect(()=>{if(branchAdmin)return;let alive=true;const slug=AgendaPanel_getSlug(),token=AgendaPanel_getToken();if(slug && token)fetch(`${baseUrl.replace(/\/+$/,'')}/admin/sucursales/${slug}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(alive && d?.premium && d?.habilitado){setSucursales(d.sucursales || []);setPrincipalNombre(d.principal?.nombre || 'Sede principal')}}).catch(()=>{});return()=>{alive=false}},[baseUrl,branchAdmin]);
     const agendaRequestId = React.useRef(0)
     const [loading, setLoading] = React.useState(true)
     const [error, setError] = React.useState("")
@@ -554,13 +556,14 @@ function AgendaPanel(props: any) {
         if (!slug) return
         const api = baseUrl.replace(/\/+$/, "")
         try {
-            const res = await fetch(`${api}/servicios/${slug}`, {
+            const res = await fetch(`${api}/${branchAdmin ? "admin/servicios" : "servicios"}/${slug}`, {
+                ...(branchAdmin ? {headers:{Authorization:`Bearer ${AgendaPanel_getToken()}`}} : {}),
                 cache: "no-cache",
             })
             const data = await res.json()
             if (data.success) setServicios(data.servicios || [])
         } catch {}
-    }, [baseUrl])
+    }, [baseUrl,branchAdmin])
 
     const abrirNuevo = () => {
         setNuevoError("")
@@ -571,7 +574,7 @@ function AgendaPanel(props: any) {
             fecha: AgendaPanel_hoyISO(),
             hora: "",
             servicio_id: "",
-            equipo_id: "",
+            equipo_id: branchAdmin?.equipo_id || "",
         })
         fetchServicios()
     }

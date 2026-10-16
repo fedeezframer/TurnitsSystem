@@ -11,6 +11,7 @@ import crypto         from "crypto";
 import webpush        from "web-push";
 import { normalizePromoDays, promoAppliesOn, promoHasMatchingDate } from "../web/src/shared/promotions.js";
 import { crearSucursales } from "./perfil-sucursales.js";
+import { createBranchPanel } from "./branch-panel.js";
 import { businessIcon } from "./business-appearance.js";
 import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appearance.js";
 
@@ -717,10 +718,15 @@ async function crearNotificacion({ slug, tipo, titulo, mensaje, data = {} }) {
   let equipoIdPush = null;
   try {
     const datosNotificacion = { ...(data || {}) };
-    if (!datosNotificacion.equipo_id && datosNotificacion.turno_id) {
-      const { data: turnoRelacionado } = await supabase.from("turnos").select("equipo_id")
+    if (datosNotificacion.turno_id) {
+      const { data: turnoRelacionado } = await supabase.from("turnos").select("equipo_id,sucursal_id")
         .eq("id", datosNotificacion.turno_id).eq("slug", slug).maybeSingle();
       if (turnoRelacionado?.equipo_id) datosNotificacion.equipo_id = turnoRelacionado.equipo_id;
+      if (turnoRelacionado) datosNotificacion.sucursal_id = turnoRelacionado.sucursal_id || "principal";
+    } else if (datosNotificacion.equipo_id) {
+      const { data: miembroNotificacion } = await supabase.from("equipo").select("sucursal_id")
+        .eq("id", datosNotificacion.equipo_id).eq("slug", slug).maybeSingle();
+      if (miembroNotificacion) datosNotificacion.sucursal_id = miembroNotificacion.sucursal_id || "principal";
     }
     equipoIdPush = datosNotificacion.equipo_id || null;
     const { error } = await supabase.from("notificaciones").insert([{
@@ -967,11 +973,11 @@ async function requireAuth(req, res, next) {
       const puedeGestionarPush = req.path === "/push/subscribe" && ["POST", "DELETE"].includes(req.method);
       const puedeAprobarTurnoPropio = req.path === `/turnos/${req.params.id}` && req.method === "PUT" && !!req.params.id;
       const puedeCrearTurnoManualPropio = req.path === "/admin/turnos/manual" && req.method === "POST";
-      if ((!req.path.startsWith("/empleado/") && !puedeGestionarPush && !puedeAprobarTurnoPropio && !puedeCrearTurnoManualPropio) || !payload.equipoId) {
+      if (!payload.equipoId) {
         return res.status(403).json({ success: false, error: "Esta sección no está disponible para tu perfil." });
       }
       const { data: miembro, error: miembroError } = await supabase.from("equipo")
-        .select("id, slug, nombre, apellido, rol, activo, foto_url, es_dueño, login_email, login_activado, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, agenda_sin_pagos, mp_access_token, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios")
+        .select("id, slug, nombre, apellido, rol, activo, foto_url, es_dueño, sucursal_id, login_email, login_activado, horarios, excepciones, anticipacion_minutos, metodo_pago, porcentaje_sena, agenda_sin_pagos, mp_access_token, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios")
         .eq("id", payload.equipoId).eq("slug", payload.slug).eq("es_dueño", false).maybeSingle();
       if (miembroError) throw miembroError;
       if (!miembro || !isActivo(miembro.activo) || !miembro.login_activado) {
@@ -986,6 +992,15 @@ async function requireAuth(req, res, next) {
       }
       req.auth = payload;
       req.empleado = miembro;
+      req.sucursalAdmin = await sucursalesApp.resolverAdmin(req);
+      if (req.sucursalAdmin) {
+        try { await branchPanel.guard(req); }
+        catch (error) {
+          return res.status(error.status || 500).json({ success: false, error: error.publicMessage || "No se pudo verificar el acceso a la sucursal." });
+        }
+      } else if (!req.path.startsWith("/empleado/") && !puedeGestionarPush && !puedeAprobarTurnoPropio && !puedeCrearTurnoManualPropio && !/^\/sesion\/panel\//.test(req.path)) {
+        return res.status(403).json({ success: false, error: "Esta sección no está disponible para tu perfil." });
+      }
       return next();
     }
     req.auth = payload;
@@ -1002,6 +1017,7 @@ async function requireAuth(req, res, next) {
 // COMISIONES TURNITS — saldo mensual por efectivo / transferencia
 // ══════════════════════════════════════════════════════════════
 const sucursalesApp=crearSucursales({app,supabase,requireAuth,cleanSlug,isActivo,invalidateCache,multer});
+const branchPanel=createBranchPanel({app,supabase,requireAuth,cleanSlug});
 
 app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
   try {
@@ -2718,9 +2734,9 @@ function validarServicioBody({ nombre, precio }) {
 
 
 // Sólo información pública de profesionales activos, con sus asignaciones reales.
-async function catalogoConProfesionales(slug,items,tipo) {
+async function catalogoConProfesionales(slug,items,tipo,req) {
   if(!items?.length)return [];
-  const {data:equipo,error:ee}=await supabase.from('equipo').select('id,nombre,apellido,foto_url,color,activo').eq('slug',slug).order('created_at',{ascending:true});if(ee)throw ee;
+  const {data:equipo,error:ee}=await (req ? branchPanel.from(req,'equipo') : supabase.from('equipo')).select('id,nombre,apellido,foto_url,color,activo').eq('slug',slug).order('created_at',{ascending:true});if(ee)throw ee;
   if(!equipo?.length)return items.map(item=>({...item,profesionales:[]}));
   const ids=equipo.map(e=>e.id);
   let servicios=[],promos=[];
@@ -2752,7 +2768,7 @@ async function catalogoConProfesionales(slug,items,tipo) {
 app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
-    const { data, error } = await supabase.from("servicios")
+    const { data, error } = await branchPanel.from(req, "servicios")
       .select("id, nombre, descripcion, duracion, precio, capacidad, activo, orden, owner_equipo_id")
       .eq("slug", slug)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
@@ -2764,7 +2780,7 @@ app.get("/admin/servicios/:slug", requireAuth, async (req, res) => {
     const servicios = (data || []).map((s) => ({ ...s, activo: isActivo(s.activo) }));
     const {data:negocio,error:planError}=await supabase.from("usuarios").select("plan").eq("slug",slug).maybeSingle();
     if(planError)throw planError;
-    res.json({ success: true, servicios: await catalogoConProfesionales(slug,servicios,"servicio"), plan: negocio?.plan || "gratis" });
+    res.json({ success: true, servicios: await catalogoConProfesionales(slug,servicios,"servicio",req), plan: negocio?.plan || "gratis" });
   } catch (e) {
     console.error("Error en GET /admin/servicios:", e.message);
     res.status(500).json({ success: false, error: "Error al obtener los servicios." });
@@ -2903,16 +2919,16 @@ app.get(["/admin/equipo/:id/servicios-disponibles","/empleado/:slug/sucursal/mie
     const { id } = req.params;
     const slugClean = cleanSlug(req.query.slug || req.auth.slug);
     if (req.auth.rol !== "superadmin" && slugClean !== req.auth.slug) return res.status(403).json({ success: false, error: "No autorizado." });
-    const { data: miembro, error: miembroError } = await supabase.from("equipo").select("id")
+    const { data: miembro, error: miembroError } = await branchPanel.from(req, "equipo").select("id")
       .eq("id", id).eq("slug", slugClean).maybeSingle();
     if (miembroError) throw miembroError;
     if (!miembro) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
 
     const [{ data: servicios, error: e1 }, { data: vinculos, error: e2 }] = await Promise.all([
-      supabase.from("servicios").select("id, nombre, precio, duracion, activo")
+      branchPanel.from(req, "servicios").select("id, nombre, precio, duracion, activo")
         .eq("slug", slugClean).or(`owner_equipo_id.is.null,owner_equipo_id.eq.${id}`)
         .order("orden", { ascending: true }).order("created_at", { ascending: true }),
-      supabase.from("servicio_equipo").select("servicio_id, precio_override, imagen_url_override, orden_override").eq("equipo_id", id),
+      branchPanel.from(req, "servicio_equipo").select("servicio_id, precio_override, imagen_url_override, orden_override").eq("equipo_id", id),
     ]);
     if (e1) throw e1;
     if (e2) throw e2;
@@ -2943,14 +2959,14 @@ app.post(["/admin/equipo/:id/servicios","/empleado/:slug/sucursal/miembros/:id/s
     if (!servicio_id) return res.status(400).json({ success: false, error: "Falta servicio_id." });
 
     const [{ data: miembro }, { data: servicio }] = await Promise.all([
-      supabase.from("equipo").select("id").eq("id", id).eq("slug", slugClean).maybeSingle(),
-      supabase.from("servicios").select("id, owner_equipo_id").eq("id", servicio_id).eq("slug", slugClean).maybeSingle(),
+      branchPanel.from(req, "equipo").select("id").eq("id", id).eq("slug", slugClean).maybeSingle(),
+      branchPanel.from(req, "servicios").select("id, owner_equipo_id").eq("id", servicio_id).eq("slug", slugClean).maybeSingle(),
     ]);
     if (!miembro)  return res.status(404).json({ success: false, error: "Miembro no encontrado." });
     if(servicio?.owner_equipo_id && servicio.owner_equipo_id !== id)return res.status(403).json({success:false,error:"El servicio solo puede asignarse a su creador."});
     if (!servicio) return res.status(404).json({ success: false, error: "Servicio no encontrado." });
 
-    const { error } = await supabase.from("servicio_equipo")
+    const { error } = await branchPanel.from(req, "servicio_equipo")
       .upsert([{ servicio_id, equipo_id: id }], { onConflict: "servicio_id,equipo_id" });
     if (error) throw error;
 
@@ -2968,8 +2984,8 @@ app.put("/admin/equipo/:id/servicios/:servicio_id", requireAuth, async (req, res
     const slug = cleanSlug(req.body?.slug || req.auth.slug);
     if (req.auth.rol !== "superadmin" && slug !== req.auth.slug) return res.status(403).json({ success: false, error: "No autorizado." });
     const [{ data: miembro }, { data: servicio }] = await Promise.all([
-      supabase.from("equipo").select("id").eq("id", id).eq("slug", slug).maybeSingle(),
-      supabase.from("servicios").select("id").eq("id", servicio_id).eq("slug", slug).maybeSingle(),
+      branchPanel.from(req, "equipo").select("id").eq("id", id).eq("slug", slug).maybeSingle(),
+      branchPanel.from(req, "servicios").select("id").eq("id", servicio_id).eq("slug", slug).maybeSingle(),
     ]);
     if (!miembro || !servicio) return res.status(404).json({ success: false, error: "Integrante o servicio no encontrado." });
     const update = {};
@@ -2990,7 +3006,7 @@ app.put("/admin/equipo/:id/servicios/:servicio_id", requireAuth, async (req, res
       update.orden_override = orden === null ? null : Number(orden);
     }
     if (!Object.keys(update).length) return res.status(400).json({ success: false, error: "No hay cambios para guardar." });
-    const { data, error } = await supabase.from("servicio_equipo")
+    const { data, error } = await branchPanel.from(req, "servicio_equipo")
       .update(update)
       .eq("equipo_id", id).eq("servicio_id", servicio_id)
       .select("servicio_id, precio_override, imagen_url_override, orden_override").maybeSingle();
@@ -3011,11 +3027,11 @@ app.delete(["/admin/equipo/:id/servicios/:servicio_id","/empleado/:slug/sucursal
     // FIX-SEC: verificar que el miembro del equipo sea de ESTE negocio
     // (antes cualquier negocio logueado podía desvincular los de otro).
     if (req.auth.rol !== "superadmin") {
-      const { data: propio } = await supabase.from("equipo")
+      const { data: propio } = await branchPanel.from(req, "equipo")
         .select("id").eq("id", id).eq("slug", req.auth.slug).maybeSingle();
       if (!propio) return res.status(404).json({ success: false, error: "No encontrado." });
     }
-    const { error } = await supabase.from("servicio_equipo")
+    const { error } = await branchPanel.from(req, "servicio_equipo")
       .delete().eq("equipo_id", id).eq("servicio_id", servicio_id);
     if (error) throw error;
     res.json({ success: true });
@@ -3062,11 +3078,11 @@ app.post("/admin/equipo/upload-foto", requireAuth, (req, res, next) => {
 app.get("/admin/extras/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
-    const { data, error } = await supabase.from("extras")
+    const { data, error } = await branchPanel.from(req, "extras")
       .select("*").eq("slug", slug)
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
-    res.json({ success: true, extras: await catalogoConProfesionales(slug,data || [],"producto") });
+    res.json({ success: true, extras: await catalogoConProfesionales(slug,data || [],"producto",req) });
   } catch (e) {
     res.status(500).json({ success: false, error: "Error al obtener los productos." });
   }
@@ -3875,7 +3891,7 @@ app.get("/turnos/by-payment", async (req, res) => {
 app.get("/admin/turnos-pendientes/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
-    const { data, error } = await supabase.from("turnos")
+    const { data, error } = await branchPanel.from(req, "turnos")
       .select("id, nombre, apellido, telefono, email, fecha, hora, servicio_nombre, precio_cobrado, metodo_pago, pago_estado, comprobante_path, created_at")
       .eq("slug", slug).eq("estado", "pendiente").in("metodo_pago", ["transferencia", "efectivo"])
       .order("fecha", { ascending: true }).order("hora", { ascending: true });
@@ -3894,7 +3910,7 @@ app.get("/admin/turnos-pendientes/:slug", requireAuth, async (req, res) => {
 app.get("/admin/turnos/:id/comprobante", requireAuth, async (req, res) => {
   try {
     const slugClean = cleanSlug(req.query.slug || req.auth.slug);
-    const { data: turno, error } = await supabase.from("turnos")
+    const { data: turno, error } = await branchPanel.from(req, "turnos")
       .select("comprobante_path").eq("id", req.params.id).eq("slug", slugClean).maybeSingle();
     if (error) throw error;
     if (!turno?.comprobante_path) return res.status(404).json({ success: false, error: "No hay comprobante para este turno." });
@@ -3940,7 +3956,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       if (equipo_id === null || equipo_id === "") {
         equipoAsignado = { id: null, nombre: null };
       } else if (UUID_REGEX.test(equipo_id)) {
-        const { data: prof } = await supabase.from("equipo")
+        const { data: prof } = await branchPanel.from(req, "equipo")
           .select("id, nombre, apellido")
           .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
         if (!prof) {
@@ -3952,8 +3968,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       }
     }
 
-  const { data: turnoExistente, error: fetchError } = await supabase
-  .from("turnos")
+  const { data: turnoExistente, error: fetchError } = await branchPanel.from(req, "turnos")
   .select("id, slug, equipo_id, estado, fecha, hora, nombre, apellido, email, telefono, servicio_nombre, equipo_nombre, metodo_pago, pago_estado, precio_cobrado, tipo_cobro, porcentaje_sena, extras, gestion_token")
   .eq("id", id).eq("slug", slugClean).maybeSingle();
 
@@ -3962,7 +3977,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 
     // Un empleado sólo puede aprobar o rechazar turnos manuales pendientes
     // asignados a su perfil. El resto de acciones siguen siendo exclusivas del titular.
-    if (req.auth?.rol === "empleado" && (
+    if (req.auth?.rol === "empleado" && !req.sucursalAdmin && (
       !["confirmado", "cancelado"].includes(estado) || notas !== undefined || equipo_id !== undefined ||
       !(await sucursalesApp.puedeGestionarTurno(req,turnoExistente)) || turnoExistente.estado !== "pendiente" ||
       !["transferencia", "efectivo"].includes(turnoExistente.metodo_pago)
@@ -4009,7 +4024,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
 
     const updateData = {};
     if (estado !== undefined) updateData.estado = estado;
-    if (req.auth?.rol === "empleado" && estado === "cancelado") updateData.pago_estado = "rechazado";
+    if (req.auth?.rol === "empleado" && !req.sucursalAdmin && estado === "cancelado") updateData.pago_estado = "rechazado";
     if (notas !== undefined) updateData.notas = notas;
     if (equipoAsignado !== undefined) {
       updateData.equipo_id     = equipoAsignado.id;
@@ -4034,8 +4049,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       updateData.fecha_pago   = new Date().toISOString();
     }
 
-    const { data: turnoActualizado, error: updateError } = await supabase
-      .from("turnos").update(updateData).eq("id", id).eq("slug", slugClean).select().single();
+    const { data: turnoActualizado, error: updateError } = await branchPanel.from(req, "turnos").update(updateData).eq("id", id).eq("slug", slugClean).select().single();
 
     if (updateError) throw updateError;
 
@@ -4065,7 +4079,7 @@ app.put("/turnos/:id", requireAuth, async (req, res) => {
       }
       if (comisionError) {
         // No dejar la reserva confirmada sin su cargo asociado.
-        await supabase.from("turnos").update({ estado: "pendiente", pago_estado: turnoExistente.pago_estado }).eq("id", id).eq("slug", slugClean);
+        await branchPanel.from(req, "turnos").update({ estado: "pendiente", pago_estado: turnoExistente.pago_estado }).eq("id", id).eq("slug", slugClean);
         throw comisionError;
       }
     }
@@ -4194,7 +4208,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
     let miembroManual = null;
-    if (req.auth?.rol === "empleado") {
+    if (req.auth?.rol === "empleado" && !req.sucursalAdmin) {
       if (req.empleado?.slug !== slugClean || String(equipo_id || "") !== String(req.empleado.id)) {
         return res.status(403).json({ success: false, error: "Sólo podés agendar turnos para tu propio perfil." });
       }
@@ -4202,7 +4216,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
       equipo_id = miembroManual.id;
     } else if (equipo_id) {
       if (!UUID_REGEX.test(String(equipo_id))) return res.status(400).json({ success: false, error: "Profesional inválido." });
-      const { data: miembro, error: miembroError } = await supabase.from("equipo")
+      const { data: miembro, error: miembroError } = await branchPanel.from(req, "equipo")
         .select("id, slug, nombre, apellido, activo, es_dueño, horarios, excepciones, anticipacion_minutos, puede_configurar_horarios, puede_recibir_pagos_personales, metodo_pago, porcentaje_sena, agenda_sin_pagos, mp_access_token")
         .eq("id", equipo_id).eq("slug", slugClean).eq("activo", true).maybeSingle();
       if (miembroError) throw miembroError;
@@ -4210,7 +4224,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
       miembroManual = miembro;
     }
 
-    if (req.auth?.rol === "empleado") {
+    if (req.auth?.rol === "empleado" && !req.sucursalAdmin) {
       const configEmpleado = configNegocioParaEquipo(user, miembroManual);
       if (!horaDentroDeIntervalos(configEmpleado.horarios, configEmpleado.excepciones, fecha, hora)) {
         return res.status(400).json({ success: false, error: "Ese horario no está dentro de tu disponibilidad." });
@@ -4222,13 +4236,13 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     let duracion       = user.duracion_turno      || 30;
     let capacidad      = user.capacidad_por_turno || 1;
     if (servicio_id) {
-      const { data: srvBase, error: srvError } = await supabase.from("servicios")
+      const { data: srvBase, error: srvError } = await branchPanel.from(req, "servicios")
         .select("nombre, precio, duracion, capacidad").eq("id", servicio_id).eq("slug", slugClean).maybeSingle();
       if (srvError) throw srvError;
       if (!srvBase) return res.status(400).json({ success: false, error: "Servicio no encontrado." });
       let srv = srvBase;
       if (miembroManual && !miembroManual.es_dueño) {
-        const { data: variante, error: varianteError } = await supabase.from("servicio_equipo")
+        const { data: variante, error: varianteError } = await branchPanel.from(req, "servicio_equipo")
           .select("precio_override").eq("servicio_id", servicio_id).eq("equipo_id", miembroManual.id).maybeSingle();
         if (varianteError) throw varianteError;
         if (!variante) return res.status(400).json({ success: false, error: "Ese servicio no está disponible para el profesional seleccionado." });
@@ -4260,13 +4274,13 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     // Chequeo de solapamiento (misma lógica que /slots-disponibles).
     if (forzar !== true) {
       const toMin = (t) => { const [h, m] = String(t).slice(0, 5).split(":").map(Number); return h * 60 + m; };
-      let queryTurnosDia = supabase.from("turnos").select("hora, servicio_id")
+      let queryTurnosDia = branchPanel.from(req, "turnos").select("hora, servicio_id")
           .eq("slug", slugClean).eq("fecha", fecha).in("estado", ["confirmado", "pendiente"]);
       if (miembroManual?.es_dueño) queryTurnosDia = queryTurnosDia.or(`equipo_id.eq.${miembroManual.id},equipo_id.is.null`);
       else if (miembroManual) queryTurnosDia = queryTurnosDia.eq("equipo_id", miembroManual.id);
       const [{ data: turnosDia }, { data: todosServicios }] = await Promise.all([
         queryTurnosDia,
-        supabase.from("servicios").select("id, duracion").eq("slug", slugClean),
+        branchPanel.from(req, "servicios").select("id, duracion").eq("slug", slugClean),
       ]);
       const duracionPorServicio = Object.fromEntries((todosServicios || []).map((s) => [s.id, s.duracion]));
       const ini = toMin(hora), fin = ini + duracion;
@@ -4309,7 +4323,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
       ...(precio > 0 ? { fecha_pago: new Date().toISOString() } : {}),
     };
 
-    let { data: turno, error: insertError } = await supabase.from("turnos")
+    let { data: turno, error: insertError } = await branchPanel.from(req, "turnos")
       .insert([filaTurno]).select().single();
 
     // Si la tabla exige teléfono/email (NOT NULL), reintentamos con texto
@@ -4317,7 +4331,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     // truthiness), así que el turno sigue sin contacto y sin avisos.
     if (insertError?.code === "23502") {
       console.warn(`⚠️  turnos exige NOT NULL (${insertError.message}). Reintento con telefono/email vacíos.`);
-      ({ data: turno, error: insertError } = await supabase.from("turnos")
+      ({ data: turno, error: insertError } = await branchPanel.from(req, "turnos")
         .insert([{ ...filaTurno, telefono: "", email: "" }]).select().single());
     }
     if (insertError) throw insertError;
@@ -4339,7 +4353,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
       }]);
       if (comisionError) {
         // No dejar el turno agendado sin su cargo asociado.
-        await supabase.from("turnos").delete().eq("id", turno.id).eq("slug", slugClean);
+        await branchPanel.from(req, "turnos").delete().eq("id", turno.id).eq("slug", slugClean);
         throw comisionError;
       }
     }
@@ -4365,13 +4379,13 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
     const hasta    = new Date(ahoraArg); hasta.setDate(hasta.getDate() + 30);
     const hastaISO = hasta.toISOString().split("T")[0];
 
-    const { data: turnos, error } = await supabase.from("turnos").select("*")
+    const { data: turnos, error } = await branchPanel.from(req, "turnos").select("*")
       .eq("slug", slug).gte("fecha", hoyISO).lte("fecha", hastaISO).neq("estado", "cancelado")
       .order("fecha", { ascending: true }).order("hora", { ascending: true });
     if (error) throw error;
 
     // ── Reprogramaciones pendientes ──
-    const { data: pendientesReprog } = await supabase.from("reprogramaciones")
+    const { data: pendientesReprog } = await branchPanel.from(req, "reprogramaciones")
       .select("turno_id, fecha_propuesta, hora_propuesta, id")
       .eq("slug", slug).eq("estado", "pendiente");
     const reprogPorTurno = {};
@@ -4442,6 +4456,19 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
 
     const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
 
+    if (req.sucursalAdmin) return res.json({ success: true, settings: {
+      slug: user.slug, business_name: `${user.business_name} · ${req.sucursalAdmin.nombre}`,
+      nombre_persona: req.empleado.nombre, apellido: req.empleado.apellido,
+      plan: user.plan, activo: isActivo(user.activo), estado_suscripcion: user.estado_suscripcion,
+      duracion_turno: user.duracion_turno, capacidad_por_turno: user.capacidad_por_turno,
+      anticipacion_minutos: user.anticipacion_minutos, horarios: req.empleado.horarios ?? user.horarios ?? {},
+      excepciones: req.empleado.excepciones ?? user.excepciones ?? [],
+      metodo_pago: user.metodo_pago, porcentaje_sena: user.porcentaje_sena,
+      agenda_sin_pagos: mediosOfflinePermitidos(user) && user.agenda_sin_pagos === true,
+      acepta_transferencia: mediosOfflinePermitidos(user) && !!user.acepta_transferencia,
+      acepta_efectivo: mediosOfflinePermitidos(user) && !!user.acepta_efectivo,
+      sucursal_admin: { id: req.sucursalAdmin.id, nombre: req.sucursalAdmin.nombre },
+    } });
     res.json({
       success: true,
       settings: {
@@ -4757,7 +4784,7 @@ app.post("/reprogramar/solicitar", limiterBooking, async (req, res) => {
 app.get("/admin/reprogramaciones/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
-    const { data, error } = await supabase.from("reprogramaciones")
+    const { data, error } = await branchPanel.from(req, "reprogramaciones")
       .select("id, turno_id, fecha_actual, hora_actual, fecha_propuesta, hora_propuesta, created_at, turnos!inner(nombre, apellido, telefono, email, servicio_nombre)")
       .eq("slug", slug).eq("estado", "pendiente")
       .order("created_at", { ascending: true });
@@ -4792,7 +4819,7 @@ app.put("/admin/reprogramaciones/:id", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Acción inválida." });
     }
  
-    const { data: solicitud, error: fetchError } = await supabase.from("reprogramaciones")
+    const { data: solicitud, error: fetchError } = await branchPanel.from(req, "reprogramaciones")
       .select("*, turnos!inner(id, nombre, telefono, email, servicio_nombre, servicio_id)")
       .eq("id", id).eq("slug", slugClean).eq("estado", "pendiente").maybeSingle();
     if (fetchError) throw fetchError;
@@ -4801,7 +4828,7 @@ app.put("/admin/reprogramaciones/:id", requireAuth, async (req, res) => {
     const turno = solicitud.turnos;
  
     if (accion === "rechazar") {
-      await supabase.from("reprogramaciones")
+      await branchPanel.from(req, "reprogramaciones")
         .update({ estado: "rechazada", resuelto_at: new Date().toISOString() })
         .eq("id", id);
  
@@ -4831,10 +4858,10 @@ app.put("/admin/reprogramaciones/:id", requireAuth, async (req, res) => {
     const { data: userCap } = await supabase.from("usuarios").select("capacidad_por_turno").eq("slug", slugClean).maybeSingle();
     capacidad = userCap?.capacidad_por_turno || 1;
     if (turno.servicio_id) {
-      const { data: srv } = await supabase.from("servicios").select("capacidad").eq("id", turno.servicio_id).maybeSingle();
+      const { data: srv } = await branchPanel.from(req, "servicios").select("capacidad").eq("id", turno.servicio_id).maybeSingle();
       if (srv?.capacidad) capacidad = srv.capacidad;
     }
-    const { count } = await supabase.from("turnos").select("id", { count: "exact" })
+    const { count } = await branchPanel.from(req, "turnos").select("id", { count: "exact" })
       .eq("slug", slugClean).eq("fecha", solicitud.fecha_propuesta).eq("hora", solicitud.hora_propuesta)
       .neq("estado", "cancelado").neq("id", turno.id);
     if (count >= capacidad) {
@@ -4844,11 +4871,11 @@ app.put("/admin/reprogramaciones/:id", requireAuth, async (req, res) => {
       });
     }
  
-    await supabase.from("turnos")
+    await branchPanel.from(req, "turnos")
       .update({ fecha: solicitud.fecha_propuesta, hora: solicitud.hora_propuesta })
       .eq("id", turno.id);
  
-    await supabase.from("reprogramaciones")
+    await branchPanel.from(req, "reprogramaciones")
       .update({ estado: "aprobada", resuelto_at: new Date().toISOString() })
       .eq("id", id);
  
@@ -5055,7 +5082,7 @@ app.delete("/admin/logo/:slug", requireAuth, async (req, res) => {
 app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
-    const { data, error } = await supabase.from("equipo")
+    const { data, error } = await branchPanel.from(req, "equipo")
       .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios")
       .eq("slug", slug)
       .order("es_dueño", { ascending: false })
@@ -5094,7 +5121,7 @@ app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, suc
       return res.status(403).json({ success: false, error: "El acceso individual del equipo requiere el plan Básico." });
     }
     if (negocio.plan === "basico") {
-      const {count,error:limitError}=await supabase.from("equipo").select("id",{count:"exact",head:true}).eq("slug",slugClean).eq("es_dueño",false);
+      const {count,error:limitError}=await branchPanel.from(req, "equipo").select("id",{count:"exact",head:true}).eq("slug",slugClean).eq("es_dueño",false);
       if(limitError)throw limitError;
       if(count>=2)return res.status(403).json({success:false,codigo:"limite_equipo_basico",error:"Básico incluye al titular y hasta 2 miembros adicionales. Para ampliar el equipo necesitás Premium."});
     }
@@ -5111,7 +5138,7 @@ app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, suc
     let loginResetToken = null;
     let loginResetExpiry = null;
     if (loginEmail) {
-      const { data: existente, error: existenteError } = await supabase.from("equipo")
+      const { data: existente, error: existenteError } = await branchPanel.from(req, "equipo")
         .select("id").eq("login_email", loginEmail).eq("es_dueño", false).maybeSingle();
       if (existenteError) throw existenteError;
       if (existente) return res.status(409).json({ success: false, error: "Ese email ya está asociado a un integrante." });
@@ -5124,7 +5151,7 @@ app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, suc
     const ROLES_VALIDOS = ["colaborador", "admin"];
     const rolFinal = ROLES_VALIDOS.includes(rol) ? rol : "colaborador";
 
-    const { data, error } = await supabase.from("equipo").insert([{
+    const { data, error } = await branchPanel.from(req, "equipo").insert([{
       slug:     slugClean,
       nombre:   nombre.trim(),
       apellido: apellido?.trim().slice(0, 80) || null,
@@ -5169,11 +5196,10 @@ app.put(["/admin/equipo/:id","/empleado/:slug/sucursal/miembros/:id"], requireAu
     const slugClean = req.sucursalAdmin?.slug || cleanSlug(req.body.slug || req.auth.slug);
     const { nombre, apellido, color, rol, activo, foto_url } = req.body;
 
-    const { data: actual, error: fetchError } = await supabase
-      .from("equipo").select(req.sucursalAdmin ? "es_dueño,sucursal_id" : "es_dueño").eq("id", id).eq("slug", slugClean).maybeSingle();
+    const { data: actual, error: fetchError } = await branchPanel.from(req, "equipo").select(req.sucursalAdmin ? "es_dueño,sucursal_id" : "es_dueño").eq("id", id).eq("slug", slugClean).maybeSingle();
     if (fetchError) throw fetchError;
     if (!actual) return res.status(404).json({ success: false, error: "Miembro no encontrado." });
-    if(req.sucursalAdmin && (actual.sucursal_id!==sucursalesApp.idEquipoSede(req.sucursalAdmin) || actual.es_dueño || id===req.empleado.id || Object.keys(req.body).some(key=>!["slug","nombre","apellido","color","foto_url","activo"].includes(key)))) {
+    if(req.sucursalAdmin && (actual.sucursal_id!==sucursalesApp.idEquipoSede(req.sucursalAdmin) || actual.es_dueño || Object.keys(req.body).some(key=>!["slug","nombre","apellido","color","foto_url","activo"].includes(key)))) {
       return res.status(403).json({success:false,error:"Sólo podés editar los datos de otros miembros de tu sucursal. Los permisos los define el dueño general."});
     }
 
@@ -5216,7 +5242,7 @@ app.put(["/admin/equipo/:id","/empleado/:slug/sucursal/miembros/:id"], requireAu
       return res.status(400).json({ success: false, error: "No hay campos para actualizar." });
     }
 
-    const { data, error } = await supabase.from("equipo")
+    const { data, error } = await branchPanel.from(req, "equipo")
       .update(update).eq("id", id).eq("slug", slugClean)
       .select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios").single();
 
@@ -5238,13 +5264,13 @@ app.delete("/admin/equipo/:id", requireAuth, async (req, res) => {
     const { id }    = req.params;
     const slugClean = cleanSlug(req.body?.slug || req.query?.slug || req.auth.slug);
 
-    const { data: actual } = await supabase.from("equipo")
+    const { data: actual } = await branchPanel.from(req, "equipo")
       .select("es_dueño").eq("id", id).eq("slug", slugClean).maybeSingle();
     if (actual?.es_dueño) {
       return res.status(403).json({ success: false, error: "No podés eliminar al titular de la cuenta." });
     }
 
-    const { error } = await supabase.from("equipo").delete().eq("id", id).eq("slug", slugClean);
+    const { error } = await branchPanel.from(req, "equipo").delete().eq("id", id).eq("slug", slugClean);
     if (error) throw error;
     res.json({ success: true });
   } catch (e) {
@@ -5886,7 +5912,8 @@ app.put("/empleado/:slug/config", requireAuth, async (req, res) => {
 });
 
 // El titular puede ajustar los mismos campos de cualquier integrante desde
-// Equipo; requireAuth impide que una sesión de empleado acceda a esta ruta.
+// Equipo; el administrador de sucursal sólo puede modificar disponibilidad
+// de integrantes de su sede. requireAuth bloquea los campos de cobro.
 app.put("/admin/equipo/:id/config", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.body?.slug || req.auth.slug);
@@ -5958,9 +5985,9 @@ async function requirePromocionesPlan(req,res,next) {
   }catch{return res.status(500).json({success:false,error:"No pudimos verificar tu plan."});}
 }
 app.get('/admin/promociones/:slug',requireAuth,requirePromocionesPlan,promocionesAsync(async(req,res)=>{
-  const {data,error}=await supabase.from('promociones').select('*').eq('slug',cleanSlug(req.params.slug)).order('created_at',{ascending:false});
+  const {data,error}=await branchPanel.from(req, 'promociones').select('*').eq('slug',cleanSlug(req.params.slug)).order('created_at',{ascending:false});
   if(error) return res.status(500).json({success:false,error:error.code === '42P01' || error.code === 'PGRST205' ? 'Falta instalar Promociones.sql en Supabase.' : 'No se pudieron cargar las promociones.'});
-  res.json({success:true,dias_semana_habilitado:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo")});
+  res.json({success:true,dias_semana_habilitado:true,promociones:await catalogoConProfesionales(cleanSlug(req.params.slug),data || [],"promo",req)});
 }));
 async function promocionesGuardar(req,res) {
   try {
@@ -5968,7 +5995,7 @@ async function promocionesGuardar(req,res) {
     try {promocionesValidar(req.body);} catch(e) {return res.status(400).json({success:false,error:e.message});}
     let ownerId=req.empleado?.id || null;
     if(req.params.id){
-      const {data:existing,error:xe}=await supabase.from('promociones').select('*').eq('slug',slug).eq('id',req.params.id).maybeSingle();if(xe)throw xe;
+      const {data:existing,error:xe}=await branchPanel.from(req, 'promociones').select('*').eq('slug',slug).eq('id',req.params.id).maybeSingle();if(xe)throw xe;
       if(!existing || (req.empleado && existing.owner_equipo_id !== req.empleado.id))return res.status(404).json({success:false,error:'Promoción no encontrada en tu perfil.'});
       ownerId=existing.owner_equipo_id || null;
       // Older clients do not send this field; preserve an existing schedule.
@@ -5977,7 +6004,7 @@ async function promocionesGuardar(req,res) {
     datos=await promocionesPreparar(slug,body,ownerId);
     datos.owner_equipo_id=ownerId;
     const write=()=>{
-      let query=req.params.id ? supabase.from('promociones').update(datos).eq('slug',slug).eq('id',req.params.id) : supabase.from('promociones').insert(datos);
+      let query=req.params.id ? branchPanel.from(req, 'promociones').update(datos).eq('slug',slug).eq('id',req.params.id) : branchPanel.from(req, 'promociones').insert(datos);
       if(req.params.id)query=ownerId ? query.eq('owner_equipo_id',ownerId) : query.is('owner_equipo_id',null);
       return query.select('*').maybeSingle();
     };
@@ -6051,8 +6078,8 @@ app.get('/admin/equipo/:id/promociones-disponibles',requireAuth,promocionesAsync
   const context=await contextoPromocionesEquipo(req,res);if(!context)return;
   const {slug,equipoId}=context;
   const [{data:promos,error:pe},{data:links,error:le}]=await Promise.all([
-    supabase.from('promociones').select('id,nombre,precio_final,activo,items,fecha_inicio,fecha_fin').eq('slug',slug).is('owner_equipo_id',null).order('created_at',{ascending:false}),
-    supabase.from('promocion_equipo').select('promocion_id').eq('equipo_id',equipoId)
+    branchPanel.from(req, 'promociones').select('id,nombre,precio_final,activo,items,fecha_inicio,fecha_fin').eq('slug',slug).is('owner_equipo_id',null).order('created_at',{ascending:false}),
+    branchPanel.from(req, 'promocion_equipo').select('promocion_id').eq('equipo_id',equipoId)
   ]);if(pe)throw pe;if(le)throw le;
   const selected=new Set((links || []).map(v=>v.promocion_id));
   res.json({success:true,promociones:(promos || []).map(p=>({...p,precio:Number(p.precio_final),vinculado:selected.has(p.id)}))});
@@ -6061,19 +6088,19 @@ app.post('/admin/equipo/:id/promociones',requireAuth,promocionesAsync(async(req,
   const context=await contextoPromocionesEquipo(req,res);if(!context)return;
   const {slug,equipoId}=context, promocionId=req.body?.promocion_id;
   if(!UUID_REGEX.test(String(promocionId)))return res.status(400).json({success:false,error:'Promoción inválida.'});
-  const {data:promo,error:pe}=await supabase.from('promociones').select('*').eq('slug',slug).eq('id',promocionId).maybeSingle();if(pe)throw pe;
+  const {data:promo,error:pe}=await branchPanel.from(req, 'promociones').select('*').eq('slug',slug).eq('id',promocionId).maybeSingle();if(pe)throw pe;
   if(!promo)return res.status(404).json({success:false,error:'Promoción no encontrada.'});
   try{await validarAsignacionPromo(slug,promo,equipoId);}catch(e){if(!e.promoValidacion)throw e;return res.status(400).json({success:false,error:e.message});}
-  const {error}=await supabase.from('promocion_equipo').upsert({promocion_id:promocionId,equipo_id:equipoId},{onConflict:'promocion_id,equipo_id'});if(error)throw error;
+  const {error}=await branchPanel.from(req, 'promocion_equipo').upsert({promocion_id:promocionId,equipo_id:equipoId},{onConflict:'promocion_id,equipo_id'});if(error)throw error;
   invalidateCache(slug);res.status(201).json({success:true});
 }));
 app.delete('/admin/equipo/:id/promociones/:promocionId',requireAuth,promocionesAsync(async(req,res)=>{
   const context=await contextoPromocionesEquipo(req,res);if(!context)return;
   const {slug,equipoId}=context, promocionId=req.params.promocionId;
   if(!UUID_REGEX.test(String(promocionId)))return res.status(400).json({success:false,error:'Promoción inválida.'});
-  const {data:promo,error:pe}=await supabase.from('promociones').select('id,owner_equipo_id').eq('slug',slug).eq('id',promocionId).maybeSingle();if(pe)throw pe;
+  const {data:promo,error:pe}=await branchPanel.from(req, 'promociones').select('id,owner_equipo_id').eq('slug',slug).eq('id',promocionId).maybeSingle();if(pe)throw pe;
   if(!promo || promo.owner_equipo_id)return res.status(404).json({success:false,error:'Promoción no encontrada en el catálogo compartido.'});
-  const {error}=await supabase.from('promocion_equipo').delete().eq('equipo_id',equipoId).eq('promocion_id',promocionId);if(error)throw error;
+  const {error}=await branchPanel.from(req, 'promocion_equipo').delete().eq('equipo_id',equipoId).eq('promocion_id',promocionId);if(error)throw error;
   invalidateCache(slug);res.json({success:true});
 }));
 
@@ -6097,9 +6124,9 @@ app.get("/finanzas/:slug", requireAuth, async (req, res) => {
       return filas;
     };
     const [turnosConsultados, gastosDb, { data: comisiones, error: comisionesError }] = await Promise.all([
-      cargarPaginas(() => supabase.from("turnos").select("id, fecha, precio_cobrado, estado, comision_mp, comision_plataforma").eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).not("estado", "in", "(cancelado,pendiente)").order("id", { ascending: true })),
-      cargarPaginas(() => supabase.from("finanzas_gastos").select("id, descripcion, categoria, monto, fecha, tipo, recurrente, recurrencia_hasta, created_at").eq("slug", slug).lte("fecha", hasta).order("fecha", { ascending: true })),
-      supabase.from("turnits_comisiones").select("importe, estado").eq("slug", slug).eq("periodo", desde).neq("estado", "anulada"),
+      cargarPaginas(() => branchPanel.from(req, "turnos").select("id, fecha, precio_cobrado, estado, comision_mp, comision_plataforma").eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).not("estado", "in", "(cancelado,pendiente)").order("id", { ascending: true })),
+      cargarPaginas(() => branchPanel.from(req, "finanzas_gastos").select("id, descripcion, categoria, monto, fecha, tipo, recurrente, recurrencia_hasta, created_at").eq("slug", slug).lte("fecha", hasta).order("fecha", { ascending: true })),
+      req.sucursalAdmin ? Promise.resolve({data:[],error:null}) : supabase.from("turnits_comisiones").select("importe, estado").eq("slug", slug).eq("periodo", desde).neq("estado", "anulada"),
     ]);
     if (comisionesError) throw comisionesError;
     // Defensa adicional: ningún turno fuera del mes entra en ingresos ni comisiones.
@@ -6161,7 +6188,7 @@ app.post("/finanzas/:slug/gastos", requireAuth, async (req, res) => {
     const importe = Number(monto);
     if (!String(descripcion || "").trim() || String(descripcion).length > 160 || !FINANZAS_CATEGORIAS.has(categoria) || !Number.isFinite(importe) || importe <= 0 || importe > 100000000000 || !fechaISOValida(fecha) || !["fijo", "variable"].includes(tipo)) return res.status(400).json({ success: false, error: "Revisá descripción, categoría, monto, fecha y tipo de gasto." });
     const esRecurrente = recurrente === true;
-    const { data, error } = await supabase.from("finanzas_gastos").insert({ slug, descripcion: String(descripcion).trim(), categoria, monto: importe, fecha, tipo: esRecurrente ? "fijo" : tipo, recurrente: esRecurrente }).select("id").single();
+    const { data, error } = await branchPanel.from(req, "finanzas_gastos").insert({ slug, descripcion: String(descripcion).trim(), categoria, monto: importe, fecha, tipo: esRecurrente ? "fijo" : tipo, recurrente: esRecurrente }).select("id").single();
     if (error) throw error;
     res.status(201).json({ success: true, id: data.id });
   } catch (e) { console.error("Error creando gasto:", e.message); res.status(500).json({ success: false, error: "No se pudo guardar el gasto." }); }
@@ -6174,7 +6201,7 @@ app.put("/finanzas/:slug/gastos/:id", requireAuth, async (req, res) => {
     const importe = Number(monto);
     if (!String(descripcion || "").trim() || String(descripcion).length > 160 || !FINANZAS_CATEGORIAS.has(categoria) || !Number.isFinite(importe) || importe <= 0 || importe > 100000000000 || !fechaISOValida(fecha) || !["fijo", "variable"].includes(tipo)) return res.status(400).json({ success: false, error: "Revisá descripción, categoría, monto, fecha y tipo de gasto." });
     const esRecurrente = recurrente === true;
-    const { data: gastoActual, error: buscarError } = await supabase.from("finanzas_gastos").select("id, fecha, recurrente").eq("slug", slug).eq("id", req.params.id).maybeSingle();
+    const { data: gastoActual, error: buscarError } = await branchPanel.from(req, "finanzas_gastos").select("id, fecha, recurrente").eq("slug", slug).eq("id", req.params.id).maybeSingle();
     if (buscarError) throw buscarError;
     if (!gastoActual) return res.status(404).json({ success: false, error: "No encontramos ese gasto." });
     const datos = { slug, descripcion: String(descripcion).trim(), categoria, monto: importe, fecha, tipo: esRecurrente ? "fijo" : tipo, recurrente: esRecurrente, recurrencia_hasta: null };
@@ -6182,13 +6209,13 @@ app.put("/finanzas/:slug/gastos/:id", requireAuth, async (req, res) => {
     if (gastoActual.recurrente && fecha.slice(0, 7) > String(gastoActual.fecha).slice(0, 7)) {
       const [anio, mes] = fecha.slice(0, 7).split("-").map(Number);
       const finMesAnterior = new Date(Date.UTC(anio, mes - 1, 0)).toISOString().slice(0, 10);
-      const { error: cerrarError } = await supabase.from("finanzas_gastos").update({ recurrencia_hasta: finMesAnterior, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id);
+      const { error: cerrarError } = await branchPanel.from(req, "finanzas_gastos").update({ recurrencia_hasta: finMesAnterior, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id);
       if (cerrarError) throw cerrarError;
-      const { data: nuevo, error } = await supabase.from("finanzas_gastos").insert(datos).select("id").single();
+      const { data: nuevo, error } = await branchPanel.from(req, "finanzas_gastos").insert(datos).select("id").single();
       if (error) throw error;
       data = nuevo;
     } else {
-      const { data: actualizado, error } = await supabase.from("finanzas_gastos").update({ ...datos, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
+      const { data: actualizado, error } = await branchPanel.from(req, "finanzas_gastos").update({ ...datos, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
       if (error) throw error;
       data = actualizado;
     }
@@ -6200,7 +6227,7 @@ app.put("/finanzas/:slug/gastos/:id", requireAuth, async (req, res) => {
 app.delete("/finanzas/:slug/gastos/:id", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
-    const { data: gastoActual, error: buscarError } = await supabase.from("finanzas_gastos").select("id, fecha, recurrente").eq("slug", slug).eq("id", req.params.id).maybeSingle();
+    const { data: gastoActual, error: buscarError } = await branchPanel.from(req, "finanzas_gastos").select("id, fecha, recurrente").eq("slug", slug).eq("id", req.params.id).maybeSingle();
     if (buscarError) throw buscarError;
     if (!gastoActual) return res.status(404).json({ success: false, error: "No encontramos ese gasto." });
     const desdeMes = String(req.query.desde || "");
@@ -6208,11 +6235,11 @@ app.delete("/finanzas/:slug/gastos/:id", requireAuth, async (req, res) => {
     if (gastoActual.recurrente && /^\d{4}-\d{2}$/.test(desdeMes) && desdeMes > String(gastoActual.fecha).slice(0, 7)) {
       const [anio, mes] = desdeMes.split("-").map(Number);
       const finMesAnterior = new Date(Date.UTC(anio, mes - 1, 0)).toISOString().slice(0, 10);
-      const { data: cerrado, error } = await supabase.from("finanzas_gastos").update({ recurrencia_hasta: finMesAnterior, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
+      const { data: cerrado, error } = await branchPanel.from(req, "finanzas_gastos").update({ recurrencia_hasta: finMesAnterior, updated_at: new Date().toISOString() }).eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
       if (error) throw error;
       data = cerrado;
     } else {
-      const { data: borrado, error } = await supabase.from("finanzas_gastos").delete().eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
+      const { data: borrado, error } = await branchPanel.from(req, "finanzas_gastos").delete().eq("slug", slug).eq("id", req.params.id).select("id").maybeSingle();
       if (error) throw error;
       data = borrado;
     }
@@ -6231,7 +6258,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
     const now = Date.now();
-    if (globalCache[slug] && now - globalCache[slug].timestamp < CACHE_DURATION) {
+    if (!req.sucursalAdmin && globalCache[slug] && now - globalCache[slug].timestamp < CACHE_DURATION) {
       return res.json(globalCache[slug].data);
     }
 
@@ -6262,13 +6289,13 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     const finMesActualDate      = new Date(hoyISO + "T23:59:59");
 
     const [{ data: turnosMes }, { data: serviciosNegocio }, { count: turnosMesAnteriorTotal }] = await Promise.all([
-      supabase.from("turnos").select("*")
+      branchPanel.from(req, "turnos").select("*")
         // Contar también las reservas futuras ya agendadas en el mes actual.
         .eq("slug", slug).gte("fecha", inicioMes).lte("fecha", finMesActual).neq("estado", "cancelado")
         .order("fecha", { ascending: true }).order("hora", { ascending: true }),
-      supabase.from("servicios").select("id, duracion")
+      branchPanel.from(req, "servicios").select("id, duracion")
         .eq("slug", slug).eq("activo", "true"),
-      supabase.from("turnos").select("id", { count: "exact", head: true })
+      branchPanel.from(req, "turnos").select("id", { count: "exact", head: true })
         .eq("slug", slug).gte("fecha", inicioMesAnterior).lte("fecha", finMesAnteriorComparable)
         .not("estado", "in", "(cancelado,pendiente)"),
     ]);
@@ -6340,14 +6367,14 @@ const turnosHoyDetalle = turnosData
 
     const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
     const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
-    const { data: turnosPago } = await supabase.from("turnos")
+    const { data: turnosPago } = await branchPanel.from(req, "turnos")
       .select("monto_pagado, pago_estado, fecha_pago, fecha, email, telefono, created_at, precio_cobrado, estado")
       .eq("slug", slug)
       .gte("fecha", desde90.toISOString().split("T")[0])
       .lte("fecha", hasta7.toISOString().split("T")[0])
       .neq("pago_estado", "sin_pago");
 
-    const { data: turnosSinPago, error: turnosSinPagoError } = await supabase.from("turnos")
+    const { data: turnosSinPago, error: turnosSinPagoError } = await branchPanel.from(req, "turnos")
       .select("precio_cobrado, fecha, email, telefono, estado")
       .eq("slug", slug)
       .eq("pago_estado", "sin_pago")
@@ -6376,7 +6403,7 @@ const turnosHoyDetalle = turnosData
       fecha, ...(metricas.porDia[fecha] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 }),
     }));
 
-    const { data: todosLosTurnos } = await supabase.from("turnos")
+    const { data: todosLosTurnos } = await branchPanel.from(req, "turnos")
       .select("telefono, email, created_at, fecha, hora, estado, monto_pagado, pago_estado, precio_cobrado")
       .eq("slug", slug).neq("estado", "cancelado");
     const inicioMesDate = new Date(inicioMes + "T00:00:00");
@@ -6452,7 +6479,7 @@ const turnosHoyDetalle = turnosData
     // evaluarGrupoReferidos); alcanza con mirar si algún grupo ya quedó
     // completo en su momento.
     let programaAfiliadosCompleto = false;
-    const { data: referidosPropios } = await supabase.from("referidos")
+    const { data: referidosPropios } = req.sucursalAdmin ? { data: [] } : await supabase.from("referidos")
       .select("grupo_nro, premio_entregado_at").eq("referidor_slug", slug);
     if (referidosPropios && referidosPropios.length) {
       const gruposPorNro = {};
@@ -6498,7 +6525,7 @@ const turnosHoyDetalle = turnosData
     const resumenTurnosRango = async (desde, hasta) => {
       const turnosRango = [];
       for (let pagina = 0; pagina < 50; pagina++) {
-        const { data, error } = await supabase.from("turnos")
+        const { data, error } = await branchPanel.from(req, "turnos")
           .select("id, precio_cobrado, fecha, estado")
           .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
           .not("estado", "in", "(cancelado,pendiente)")
@@ -6604,7 +6631,12 @@ const turnosHoyDetalle = turnosData
       plan:           user.plan || "gratis",
     };
 
-    globalCache[slug] = { timestamp: now, data: finalData };
+    if (req.sucursalAdmin) {
+      finalData.businessName = `${user.business_name} · ${req.sucursalAdmin.nombre}`;
+      finalData.nombre_persona = req.empleado.nombre;
+      finalData.apellido = req.empleado.apellido || "";
+      finalData.suscripcion = { estado: "activo", alerta: false, vencida: false };
+    } else globalCache[slug] = { timestamp: now, data: finalData };
     res.json(finalData);
   } catch (e) {
     console.error("Error en /admin-stats:", e.message, e.stack);
@@ -6672,7 +6704,7 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
       });
     }
 
-    const { data: integrante, error: equipoError } = await supabase.from("equipo")
+    const { data: integrante, error: equipoError } = await branchPanel.from(req, "equipo")
       .select("id, nombre").eq("id", equipo_id).eq("slug", slug).maybeSingle();
     if (equipoError) throw equipoError;
     if (!integrante) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
@@ -6681,12 +6713,12 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
 
     const [{ data: userConfig }, { data: servicios }] = await Promise.all([
       supabase.from("usuarios").select("duracion_turno").eq("slug", slug).maybeSingle(),
-      supabase.from("servicios").select("id, duracion").eq("slug", slug),
+      branchPanel.from(req, "servicios").select("id, duracion").eq("slug", slug),
     ]);
     const duracionPorServicio = new Map((servicios || []).map((s) => [s.id, Number(s.duracion) || 0]));
     const duracionDefault = Number(userConfig?.duracion_turno) || 30;
 
-    const { data: turnosPeriodo, error: turnosError } = await supabase.from("turnos")
+    const { data: turnosPeriodo, error: turnosError } = await branchPanel.from(req, "turnos")
       .select("id, fecha, hora, estado, servicio_id, servicio_nombre, nombre, apellido, precio_cobrado")
       .eq("slug", slug).eq("equipo_id", equipo_id)
       .gte("fecha", desde).lte("fecha", hasta)
@@ -6765,7 +6797,7 @@ app.get("/admin/rendimiento-equipo-resumen/:slug", requireAuth, async (req, res)
 
     const { desde, hasta } = rangoPeriodoArg(periodo);
 
-    const { data: equipo, error: equipoError } = await supabase.from("equipo")
+    const { data: equipo, error: equipoError } = await branchPanel.from(req, "equipo")
       .select("id, nombre, apellido, rol")
       .eq("slug", slug).eq("activo", true)
       .order("es_dueño", { ascending: false }).order("created_at", { ascending: true });
@@ -6775,7 +6807,7 @@ app.get("/admin/rendimiento-equipo-resumen/:slug", requireAuth, async (req, res)
     // un negocio grande con varios profesionales no quede truncado.
     const turnos = [];
     for (let pagina = 0; pagina < 50; pagina++) {
-      const { data: lote, error: turnosError } = await supabase.from("turnos")
+      const { data: lote, error: turnosError } = await branchPanel.from(req, "turnos")
         .select("id, equipo_id, estado, precio_cobrado")
         .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
         .neq("estado", "cancelado")
@@ -6857,7 +6889,7 @@ app.get("/admin/equipo/:id/neto", requireAuth, async (req, res) => {
 
     const periodo = PERIODOS_RENDIMIENTO.includes(req.query.periodo) ? req.query.periodo : "mes";
 
-    const { data: miembro, error: miembroError } = await supabase.from("equipo")
+    const { data: miembro, error: miembroError } = await branchPanel.from(req, "equipo")
       .select("id, slug").eq("id", id).maybeSingle();
     if (miembroError) throw miembroError;
     // Mismo criterio que DELETE /admin/equipo/:id/servicios: no revelar si existe en otro negocio.
@@ -6869,7 +6901,7 @@ app.get("/admin/equipo/:id/neto", requireAuth, async (req, res) => {
 
     const turnos = [];
     for (let pagina = 0; pagina < 20; pagina++) {
-      const { data: lote, error: turnosError } = await supabase.from("turnos")
+      const { data: lote, error: turnosError } = await branchPanel.from(req, "turnos")
         .select("id, estado, precio_cobrado, metodo_pago, comision_mp, comision_plataforma")
         .eq("slug", miembro.slug).eq("equipo_id", id)
         .gte("fecha", desde).lte("fecha", hasta)
@@ -9215,7 +9247,7 @@ app.get("/notificaciones/:slug", requireAuth, async (req, res) => {
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
 
     if (req.query.no_leidas === "true") {
-      const { count, error } = await supabase.from("notificaciones")
+      const { count, error } = await branchPanel.from(req, "notificaciones")
         .select("id", { count: "exact", head: true })
         .eq("slug", slug).eq("leida", false);
       if (error) throw error;
@@ -9223,10 +9255,10 @@ app.get("/notificaciones/:slug", requireAuth, async (req, res) => {
     }
 
     const [{ data: notifs, error: errNotifs }, { count, error: errCount }] = await Promise.all([
-      supabase.from("notificaciones")
+      branchPanel.from(req, "notificaciones")
         .select("*").eq("slug", slug)
         .order("created_at", { ascending: false }).limit(50),
-      supabase.from("notificaciones")
+      branchPanel.from(req, "notificaciones")
         .select("id", { count: "exact", head: true })
         .eq("slug", slug).eq("leida", false),
     ]);
@@ -9244,7 +9276,7 @@ app.put("/notificaciones/:id/leida", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const slugClean = cleanSlug(req.body?.slug || req.auth.slug);
-    const { error } = await supabase.from("notificaciones")
+    const { error } = await branchPanel.from(req, "notificaciones")
       .update({ leida: true }).eq("id", id).eq("slug", slugClean);
     if (error) throw error;
     res.json({ success: true });
@@ -9256,7 +9288,7 @@ app.put("/notificaciones/:id/leida", requireAuth, async (req, res) => {
 app.put("/notificaciones/:slug/leer-todas", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
-    const { error } = await supabase.from("notificaciones")
+    const { error } = await branchPanel.from(req, "notificaciones")
       .update({ leida: true }).eq("slug", slug).eq("leida", false);
     if (error) throw error;
     res.json({ success: true });
@@ -9269,7 +9301,7 @@ app.delete("/notificaciones/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const slugClean = cleanSlug(req.body?.slug || req.query?.slug || req.auth.slug);
-    const { error } = await supabase.from("notificaciones")
+    const { error } = await branchPanel.from(req, "notificaciones")
       .delete().eq("id", id).eq("slug", slugClean);
     if (error) throw error;
     res.json({ success: true });

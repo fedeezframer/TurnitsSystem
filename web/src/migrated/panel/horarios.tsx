@@ -99,6 +99,7 @@ function HorariosConfig(props: any) {
         accentColor = "#2F8A2F",
         mostrarBotonGuardar = true,
         employeeMode = false,
+        settingsUrl,
         style,
     } = props
 
@@ -140,9 +141,9 @@ function HorariosConfig(props: any) {
             }
 
             try {
-                const configUrl = employeeMode
+                const configUrl = settingsUrl || (employeeMode
                     ? `${api}/empleado/${encodeURIComponent(slug)}/config`
-                    : `${api}/settings/${slug}`
+                    : `${api}/settings/${slug}`)
                 const res = await fetch(configUrl, {
                     headers: { Authorization: `Bearer ${token}` },
                     cache: "no-cache",
@@ -339,9 +340,9 @@ function HorariosConfig(props: any) {
         setError("")
         const api = baseUrl.replace(/\/+$/, "")
         try {
-            const configUrl = employeeMode
+            const configUrl = settingsUrl || (employeeMode
                 ? `${api}/empleado/${encodeURIComponent(slug)}/config`
-                : `${api}/settings/${slug}`
+                : `${api}/settings/${slug}`)
             const res = await fetch(configUrl, {
                 method: "PUT",
                 headers: {
@@ -1736,6 +1737,7 @@ function ExcepcionesConfig({
     baseUrl,
     accentColor,
     employeeMode = false,
+    settingsUrl,
     style,
 }: ExcepcionesConfig_Props) {
     const api = baseUrl.replace(/\/+$/, "")
@@ -1803,9 +1805,9 @@ function ExcepcionesConfig({
         let attempt = 0
         const tryLoad = async () => {
             try {
-                const configUrl = employeeMode
+                const configUrl = settingsUrl || (employeeMode
                     ? `${api}/empleado/${encodeURIComponent(slug)}/config`
-                    : `${api}/admin-stats/${slug}`
+                    : `${api}/admin-stats/${slug}`)
                 const res = await fetch(configUrl, {
                     headers: { Authorization: `Bearer ${token}` },
                     cache: "no-cache",

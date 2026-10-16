@@ -184,8 +184,8 @@ function TurnitsGlobalSaveBar({
     const [blocker, setBlocker] = React.useState("")
     React.useEffect(() => {
         if (typeof window === "undefined") return
-        const manager = TurnitsGlobalSaveManager_get()
         const sync = (e?: any) => {
+            const manager = TurnitsGlobalSaveManager_get()
             if (e?.detail?.edited) {
                 setError("")
                 setSuccess(false)
@@ -209,7 +209,7 @@ function TurnitsGlobalSaveBar({
         const onState = (e: any) => setSaving(!!e?.detail?.saving)
         const onSuccess = () => {
             setError("")
-            setSuccess(!manager?.hasDirty())
+            setSuccess(!TurnitsGlobalSaveManager_get()?.hasDirty())
             setTimeout(() => setSuccess(false), 2200)
             sync()
         }

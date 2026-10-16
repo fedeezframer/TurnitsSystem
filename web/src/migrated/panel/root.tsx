@@ -13,13 +13,19 @@ import { TurnitsPanel_Inner } from "./layout"
 import { TurnitsEmpleadoPanel } from "./empleado"
 import { TurnitsPanel_GuardaSesion } from "./sesion"
 import { PanelErrorBoundary } from "./shared"
+import { appConfig } from "../../config"
+import { setPanelScope, type BranchPanelScope } from "../../shared/panel-scope"
+import { BranchAdminContext } from "../../components/BranchAdmin"
 
 function TurnitsPanel_SessionRouter(props: any) {
     const [sesion, setSesion] = React.useState<{
         rol: string
         slug: string
+        sucursal?: BranchPanelScope
     } | null>(null)
+    const [error, setError] = React.useState("")
     React.useEffect(() => {
+        let alive = true
         const token =
             [
                 "access_token",
@@ -46,8 +52,18 @@ function TurnitsPanel_SessionRouter(props: any) {
                     return ""
                 }
             })()
-        setSesion({ rol: claims?.rol || "owner", slug })
-    }, [])
+        if (claims?.rol !== "empleado") {
+            setPanelScope(null)
+            setSesion({ rol: claims?.rol || "owner", slug })
+        } else {
+            fetch(`${(props.baseUrl || appConfig.apiUrl).replace(/\/+$/, "")}/sesion/panel/${encodeURIComponent(slug)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
+                .then(async r => { const d = await r.json(); if (!r.ok || !d.success) throw Error(d.error || "No se pudo verificar tu acceso."); return d; })
+                .then(d => { if (!alive) return; const branch = d.tipo === "admin_sucursal" ? d.sucursal : null; setPanelScope(branch); setSesion({ rol: branch ? "admin_sucursal" : "empleado", slug, sucursal: branch }); })
+                .catch(e => alive && setError(e.message))
+        }
+        return () => { alive = false }
+    }, [props.baseUrl])
+    if (error) return <div className="app-page"><section className="app-card"><p role="alert">{error}</p><a className="app-button" href="/login">Volver a iniciar sesión</a></section></div>
     if (false)
         return <TurnitsPanel_Inner {...props} />
     if (!sesion)
@@ -65,7 +81,9 @@ function TurnitsPanel_SessionRouter(props: any) {
         <TurnitsPanel_GuardaSesion
             logoutUrl={props.logoutUrl || "/login"}
         >
-            <TurnitsPanel_Inner {...props} />
+            <BranchAdminContext.Provider value={sesion.sucursal || null}>
+                <TurnitsPanel_Inner {...props} branchAdmin={sesion.sucursal} />
+            </BranchAdminContext.Provider>
         </TurnitsPanel_GuardaSesion>
     )
 }

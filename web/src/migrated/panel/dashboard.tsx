@@ -1,3 +1,4 @@
+import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import * as React from "react"
 import {
     useState,
@@ -2737,6 +2738,7 @@ function TurnitsDashboard_Content({
     ilustracionProximosTurnosVacio,
     ilustracionRendimientoVacio,
 }: any) {
+    const branch = useBranchAdmin()
     const turnos = Number(stats?.turnosMes || 0)
     const prevTurnos = Number(stats?.turnosMesAnterior || 0)
     const ingresos = Number(stats?.ventas?.volumenMes || 0)
@@ -2933,7 +2935,7 @@ function TurnitsDashboard_Content({
                     display: "grid",
                     gridTemplateColumns: isMobile
                         ? "1fr"
-                        : "minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)",
+                        : branch ? "repeat(2,minmax(0,1fr))" : "minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)",
                     gap: 12,
                 }}
             >
@@ -2941,14 +2943,14 @@ function TurnitsDashboard_Content({
                     stats={stats}
                     accentColor={accentColor}
                 />
-                <TurnitsDashboard_ReferralPromo
+                <OwnerOnly><TurnitsDashboard_ReferralPromo
                     accentColor={accentColor}
                     isMobile={isMobile}
                     backgroundImage={referidosPromoBg}
                     colorDesde={referidosPromoBgDesde}
                     colorHasta={referidosPromoBgHasta}
                     onOpenPanel={onOpenPanel}
-                />
+                /></OwnerOnly>
                 <TurnitsDashboard_RecentClients stats={stats} />
             </div>
 
@@ -2957,7 +2959,7 @@ function TurnitsDashboard_Content({
                     display: "grid",
                     gridTemplateColumns: isMobile
                         ? "1fr"
-                        : "minmax(0,1.55fr) minmax(300px,.8fr)",
+                        : branch ? "1fr" : "minmax(0,1.55fr) minmax(300px,.8fr)",
                     gap: 12,
                 }}
             >
@@ -2967,7 +2969,7 @@ function TurnitsDashboard_Content({
                     variant="resumen"
                     ilustracionVacia={ilustracionRendimientoVacio}
                 />
-                <TurnitsDashboard_Achievements
+                <OwnerOnly><TurnitsDashboard_Achievements
                     stats={stats}
                     accentColor={accentColor}
                     logroPrimerTurno={logroPrimerTurno}
@@ -2979,7 +2981,7 @@ function TurnitsDashboard_Content({
                     logroSemanaCompleta={logroSemanaCompleta}
                     logroAfiliados={logroAfiliados}
                     logroFacturacion={logroFacturacion}
-                />
+                /></OwnerOnly>
             </div>
 
             <TurnitsDashboard_WeeklySummary

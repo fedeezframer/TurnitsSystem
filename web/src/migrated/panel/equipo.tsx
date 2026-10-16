@@ -1,3 +1,4 @@
+import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -947,6 +948,7 @@ function TeamManager_MiembroForm({
     isMobile: boolean
     esDueño?: boolean
 }) {
+    const branch = useBranchAdmin()
     const [form, setForm] = React.useState<TeamManager_FormData>(initial)
     const set = (key: keyof TeamManager_FormData) => (val: string) =>
         setForm((p) => ({ ...p, [key]: val }))
@@ -1077,7 +1079,7 @@ function TeamManager_MiembroForm({
             )}
 
             {/* Rol — el dueño queda fijo, el resto elige colaborador/admin */}
-            {esDueño ? (
+            <OwnerOnly>{esDueño ? (
                 <TeamManager_Field label="Rol">
                     <div>
                         <TeamManager_RolBadge
@@ -1127,7 +1129,7 @@ function TeamManager_MiembroForm({
                 </TeamManager_Field>
             )}
 
-            {/* Color */}
+            </OwnerOnly>{/* Color */}
             <TeamManager_Field label="Color identificador">
                 <TeamManager_ColorPicker
                     value={form.color}
@@ -1135,7 +1137,7 @@ function TeamManager_MiembroForm({
                 />
             </TeamManager_Field>
 
-            {!esDueño && (
+            {!branch && !esDueño && (
                 <>
                     <div
                         style={{
@@ -1436,6 +1438,9 @@ function TeamManager_MiembroCard({
     isMobile: boolean
 }) {
     const [confirmDelete, setConfirmDelete] = React.useState(false)
+    const branch = useBranchAdmin()
+    const locked = !!branch && miembro.es_dueño
+    const ownBranchAccess = !!branch && miembro.id === branch.equipo_id
     const esDueño = miembro.es_dueño
 
     return (
@@ -1523,14 +1528,14 @@ function TeamManager_MiembroCard({
 
             <div
                 style={{
-                    display: "flex",
+                    display: locked ? "none" : "flex",
                     gap: isMobile ? 3 : 4,
                     alignItems: "center",
                     flexShrink: 0,
                 }}
             >
                 {/* Toggle activo / disponible — el dueño no se puede desactivar */}
-                {!esDueño && (
+                {!esDueño && !ownBranchAccess && (
                     <button
                         className="tm-btn-icon"
                         title={miembro.activo ? "Desactivar" : "Activar"}
@@ -1607,7 +1612,7 @@ function TeamManager_MiembroCard({
                 </button>
 
                 {/* Eliminar — el dueño no se puede eliminar */}
-                {!esDueño &&
+                {!esDueño && !ownBranchAccess &&
                     (confirmDelete ? (
                         <div style={{ display: "flex", gap: 3 }}>
                             <button
@@ -1991,6 +1996,7 @@ function TeamManager(props: any) {
         style,
     } = props
 
+    const branch = useBranchAdmin()
     const api = baseUrl.replace(/\/+$/, "")
     const containerRef = React.useRef<HTMLDivElement>(null)
     const containerWidth = TeamManager_useContainerWidth(containerRef)
@@ -2083,7 +2089,7 @@ function TeamManager(props: any) {
                 // de dueño en `equipo` (backfill no corrido todavía).
                 // Ya tenemos los settings de la llamada de arriba, no
                 // hace falta pedirlos de nuevo.
-                if (!listaEquipo.some((m) => m.es_dueño) && cfg) {
+                if (!branch && !listaEquipo.some((m) => m.es_dueño) && cfg) {
                     setOwnerFallback({
                         nombre: cfg.nombre_persona || "",
                         apellido: cfg.apellido || "",
@@ -2171,9 +2177,9 @@ function TeamManager(props: any) {
                     color: form.color,
                     // El dueño no manda rol: el backend lo ignora/protege
                     // igual, pero evitamos mandar un valor que no aplica.
-                    ...(editando.es_dueño ? {} : { rol: form.rol }),
+                    ...(editando.es_dueño || branch ? {} : { rol: form.rol }),
                     foto_url: form.foto_url.trim() || null,
-                    ...(editando.es_dueño
+                    ...(editando.es_dueño || branch
                         ? {}
                         : {
                               puede_configurar_horarios:

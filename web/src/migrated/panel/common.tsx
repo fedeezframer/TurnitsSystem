@@ -3,6 +3,7 @@ import { DEFAULT_APPEARANCE, CARD_SHAPES, ICON_SHAPES } from "../../shared/appea
 import type { BusinessAppearance } from "../../shared/appearance.js"
 import { perfilDraft, perfilPayload } from "../../shared/profile-draft"
 import * as React from "react"
+import { getPanelScope } from "../../shared/panel-scope"
 import {
     useState,
     useEffect,
@@ -422,7 +423,8 @@ function TurnitsGlobalSave_key(): string {
         claims?.rol === "empleado"
             ? `empleado:${claims.equipoId || "sin-id"}`
             : "owner"
-    return `${TURNITS_GLOBAL_PENDING_KEY}:${slug}:${identidad}`
+    const branch = getPanelScope()
+    return `${TURNITS_GLOBAL_PENDING_KEY}:${slug}:${identidad}${branch ? `:sucursal:${branch.registro_id}:horarios:${branch.scheduleMemberId}` : ""}`
 }
 
 const TURNITS_PAGOS_CAMPOS = [
@@ -700,7 +702,9 @@ function TurnitsGlobalSaveManager_get() {
                 inFlight = current
                 const sesionToken = GuardaSesion_leerJwt(token)
                 const configUrl =
-                    sesionToken?.rol === "empleado"
+                    getPanelScope()?.scheduleMemberId
+                        ? `${api()}/admin/equipo/${encodeURIComponent(getPanelScope()!.scheduleMemberId!)}/config`
+                    : sesionToken?.rol === "empleado"
                         ? `${api()}/empleado/${encodeURIComponent(slug)}/config`
                         : `${api()}/settings/${slug}`
                 const saveSettings = async (
@@ -3380,6 +3384,7 @@ interface ExcepcionesConfig_DayPanelProps {
 }
 
 interface ExcepcionesConfig_Props {
+    settingsUrl?: string
     baseUrl: string
     accentColor: string
     employeeMode?: boolean

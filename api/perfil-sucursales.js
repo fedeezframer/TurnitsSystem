@@ -226,6 +226,7 @@ export function crearSucursales({
       if (faltaSchemaSucursales(error)) return null;
       throw error;
     }
+    if (data && (req.empleado.sucursal_id || null) !== (data.es_principal ? null : data.id)) return null;
     return data?.es_principal
       ? { ...data, registro_id: data.id, id: "principal" }
       : data;
@@ -272,7 +273,7 @@ export function crearSucursales({
             error: "Miembro no encontrado en tu sucursal.",
           });
       }
-      req.sucursalAdmin = sucursal;
+      req.sucursalAdmin = { ...req.sucursalAdmin, ...sucursal };
       next();
     } catch (e) {
       res.status(500).json({

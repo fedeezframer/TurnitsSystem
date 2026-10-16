@@ -1,3 +1,4 @@
+import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -1997,6 +1998,7 @@ function ServiciosManager_ServicioCard({
     employeeMode?: boolean
     employeeCanEdit?: boolean
 }) {
+    const branch = useBranchAdmin()
     const [confirmDelete, setConfirmDelete] = React.useState(false)
     const [imgError, setImgError] = React.useState(false)
 
@@ -2144,7 +2146,7 @@ function ServiciosManager_ServicioCard({
                     marginLeft: isMobile ? "auto" : 0,
                 }}
             >
-                {!employeeMode && (
+                {!branch && !employeeMode && (
                     <button
                         className="svc-btn-icon"
                         title={svc.activo ? "Desactivar" : "Activar"}
@@ -2217,7 +2219,7 @@ function ServiciosManager_ServicioCard({
                         )}
                     </button>
                 )}
-                {(employeeMode || employeeCanEdit) &&
+                {!branch && (employeeMode || employeeCanEdit) &&
                     (confirmDelete ? (
                         <div style={{ display: "flex", gap: 3 }}>
                             <button
@@ -2637,6 +2639,7 @@ function ServiciosManager(props: any) {
         style,
     } = props
 
+    const branch = useBranchAdmin()
     const api = baseUrl.replace(/\/+$/, "")
     const containerRef = React.useRef<HTMLDivElement>(null)
     const containerWidth = ServiciosManager_useContainerWidth(containerRef)
@@ -3210,7 +3213,7 @@ function ServiciosManager(props: any) {
                         </div>
                         {!mostrarForm &&
                             !editando &&
-                            (!employeeMode || employeeCanCreate) && (
+                            (!branch && (!employeeMode || employeeCanCreate)) && (
                                 <motion.button
                                     whileHover={{ scale: 1.04 }}
                                     whileTap={{ scale: 0.96 }}
@@ -3376,7 +3379,7 @@ function ServiciosManager(props: any) {
                                         isMobile={isMobile}
                                         employeeMode={employeeMode}
                                         employeeCanEdit={
-                                            !employeeMode || employeeCanCreate
+                                            !branch && (!employeeMode || employeeCanCreate)
                                         }
                                     />
                                 )
@@ -3549,7 +3552,7 @@ function ServiciosManager(props: any) {
                                         key={extra.id}
                                         extra={extra}
                                         employeeMode={employeeMode}
-                                        canEdit={!employeeMode || (employeeCanCreate && extra.puede_editar === true)}
+                                        canEdit={!branch && (!employeeMode || (employeeCanCreate && extra.puede_editar === true))}
                                         accentColor={accentColor}
                                         iconoPlaceholderUrl={
                                             iconoPlaceholderUrl || undefined
@@ -3585,6 +3588,7 @@ function ServiciosManager(props: any) {
 }
 
 function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMobile,employeeMode=false}:{api:string;servicios:any[];productos:any[];accentColor:string;isMobile:boolean;employeeMode?:boolean}) {
+    const branch = useBranchAdmin();
     const hoy = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
     const initial = () => ({nombre:"",tipo:"combo",items:[] as {tipo:string;id:string;cantidad:number}[],descuento_tipo:"precio_final",valor:"",fecha_inicio:hoy(),fecha_fin:hoy(),dias_semana:null as number[] | null,activo:true})
     const [form,setForm]=React.useState(initial)
@@ -3631,7 +3635,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
         <style>{` .svc-promos .promo-input:focus {outline:none;border-color:var(--promo-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--promo-accent) 12%,transparent)} .svc-promos button:focus-visible,.svc-promos .promo-check:focus-visible + span,.svc-promos .promo-switch:focus-visible {outline:2px solid var(--promo-accent);outline-offset:3px} .svc-promos .promo-check {position:absolute;opacity:0;width:20px;height:20px;margin:0} .svc-promos .promo-switch {appearance:none;-webkit-appearance:none;width:36px;height:21px;border:0;border-radius:99px;background:#cbd5e1;position:relative;flex-shrink:0;cursor:pointer;margin:0;transition:background .18s} .svc-promos .promo-switch:checked {background:var(--promo-accent)} .svc-promos .promo-switch:after {content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:white;box-shadow:0 1px 3px #0002;transition:transform .18s} .svc-promos .promo-switch:checked:after {transform:translateX(15px)} .svc-promos .promo-input::-webkit-inner-spin-button {appearance:none} .svc-promos button:disabled {opacity:.55;cursor:wait} `}</style>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div><div style={{display:"flex",alignItems:"center",gap:8,fontSize:16,fontWeight:700}}>Promociones</div><p style={{margin:"6px 0",color:"#64748b",fontSize:12}}>Armá combos o descuentos con una vigencia definida.</p></div>
-            {!mostrar && <button type="button" style={button} onClick={()=>{setForm(initial());setEditando(null);setError("");setMostrar(true)}}>+ Crear promo</button>}
+            {!branch && !mostrar && <button type="button" style={button} onClick={()=>{setForm(initial());setEditando(null);setError("");setMostrar(true)}}>+ Crear promo</button>}
         </div>
         {error && <div role="alert" style={{padding:12,marginTop:12,borderRadius:10,background:"#fff1f2",color:"#b91c1c"}}>{error}</div>}
         {mostrar && <form noValidate onSubmit={guardar} style={{marginTop:18,padding:isMobile ? 14 : 22,border:"1px solid #e2e8f0",borderRadius:16,display:"grid",gap:18}}>
@@ -3687,7 +3691,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                     <div style={{fontSize:10,color:"#64748b",lineHeight:1.5,marginTop:1}}>{date(p.fecha_inicio)} al {date(p.fecha_fin)} · inclusive</div>
                     {today>p.fecha_fin && <div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>La vigencia terminó. Editá las fechas para volver a mostrarla.</div>}
                     {p.dias_semana != null && <div style={{fontSize:11,color:accentColor,lineHeight:1.5}}>Sólo los {promoDaysLabel(p.dias_semana)}</div>}
-                    <div style={{display:"flex",gap:7,marginTop:3,flexWrap:"wrap"}}><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#f1f5f9",color:"#475569",fontSize:12}} onClick={()=>editar(p)}>Editar</button><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#f1f5f9",color:p.activo ? "#475569" : accentColor,fontSize:12}} onClick={()=>cambiarEstado(p)}>{p.activo ? "Pausar" : "Reactivar"}</button><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#fff1f2",color:"#b91c1c",fontSize:12}} onClick={()=>eliminar(p.id)}>Eliminar</button></div>
+                    <div style={{display:branch ? "none" : "flex",gap:7,marginTop:3,flexWrap:"wrap"}}><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#f1f5f9",color:"#475569",fontSize:12}} onClick={()=>editar(p)}>Editar</button><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#f1f5f9",color:p.activo ? "#475569" : accentColor,fontSize:12}} onClick={()=>cambiarEstado(p)}>{p.activo ? "Pausar" : "Reactivar"}</button><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#fff1f2",color:"#b91c1c",fontSize:12}} onClick={()=>eliminar(p.id)}>Eliminar</button></div>
                 </div>
             </div>
         })}</div>}
