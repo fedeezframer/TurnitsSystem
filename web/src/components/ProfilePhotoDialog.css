@@ -1,0 +1,52 @@
+.perfil-photo-dialog {
+  box-sizing: border-box;
+  width: min(1100px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  padding: 48px 0 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  overflow: visible;
+}
+.perfil-photo-dialog::backdrop {
+  background: #07100ce6;
+}
+.perfil-photo-dialog > img {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - 112px);
+  object-fit: contain;
+}
+.perfil-photo-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ffffff55;
+  border-radius: 50%;
+  background: #ffffff14;
+  color: #fff;
+  cursor: pointer;
+}
+.perfil-photo-close svg {
+  width: 24px;
+  height: 24px;
+}
+.perfil-photo-close:hover {
+  background: #ffffff30;
+}
+.perfil-photo-close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+.perfil-photo-dialog > p {
+  padding: 48px 20px;
+  text-align: center;
+  font:
+    15px "Inter Display",
+    sans-serif;
+}

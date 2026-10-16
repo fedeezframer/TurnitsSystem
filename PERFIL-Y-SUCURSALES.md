@@ -134,3 +134,14 @@ para imágenes que no puedan cargarse. No requiere SQL ni cambios del servidor.
 Verificación: `work/verify-profile-publications.cjs`, con API simulada y sin
 escrituras reales, cubre doce imágenes, rutas y recarga, navegación, tamaños
 1920/390/320 px, imágenes fallidas, textos largos y perfil no publicado.
+
+Las publicaciones, el banner y la foto de perfil se pueden ampliar en un
+overlay que conserva la imagen completa. Se cierra con la cruz, Escape o al
+tocar el fondo exterior; restaura el scroll y el foco al control de origen.
+Las iniciales y las imágenes fallidas no ofrecen ampliación. Se retiraron las
+flechas decorativas de los enlaces y el SVG del encabezado del editor de Perfil.
+Los caracteres de tilde de confirmación se retiraron de la interfaz; las
+selecciones conservan su estado y los miembros de sucursales dicen «Asignado».
+`work/verify-profile-photo-overlay.cjs` verifica apertura/cierre con mouse y
+teclado, foco/scroll, imágenes originales y límites del overlay a 1440/390/320 px,
+además de la limpieza del editor, con API simulada y sin escrituras reales.

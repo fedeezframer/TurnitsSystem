@@ -287,7 +287,6 @@ export function PerfilNegocio({
                   Completá sólo los datos que quieras mostrar a tus clientes.
                 </p>
               </div>
-              <NegocioIcon kind="perfil" />
             </div>
             <fieldset
               disabled={!habilitado || busy}
@@ -516,7 +515,7 @@ export function PerfilNegocio({
                     rel="noopener noreferrer"
                     className="negocio-button secondary"
                   >
-                    Ver perfil público ↗
+                    Ver perfil público
                   </a>
                 )}
               </div>
@@ -753,7 +752,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                           </small>
                         </span>
                         <span style={{ marginLeft: "auto" }}>
-                          {selected ? "✓" : "+"}
+                          {selected ? "Asignado" : "+"}
                         </span>
                       </button>
                     );

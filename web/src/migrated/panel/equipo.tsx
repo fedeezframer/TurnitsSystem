@@ -1564,7 +1564,7 @@ function TeamManager_MiembroCard({
                                 }}
                             />
                         ) : miembro.activo ? (
-                            "✓"
+                            "●"
                         ) : (
                             "○"
                         )}
@@ -1921,7 +1921,7 @@ function TeamManager_CanvasPreview({
                         <div style={{ display: "flex", gap: isMobile ? 3 : 4 }}>
                             {[
                                 {
-                                    ico: "✓",
+                                    ico: "●",
                                     img: iconoCheck,
                                     bg: accentColor + "12",
                                     border: "#e2e8f0",

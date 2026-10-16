@@ -6,6 +6,7 @@ import type { MapBranch } from "../../components/BranchMap";
 import { enlacesPublicos } from "../../shared/socials.js";
 import { SocialIcon } from "../../components/SocialIcon";
 import { ProfileMapDialog } from "../../components/ProfileMapDialog";
+import { ProfilePhotoDialog } from "../../components/ProfilePhotoDialog";
 import { BusinessAvatar } from "../../components/BusinessAvatar";
 import { cardRadius } from "../../shared/appearance.js";
 import "./perfil.css";
@@ -62,6 +63,9 @@ export function PerfilContenido({
     [mapLoading, setMapLoading] = React.useState(!!slug),
     [coverFailed, setCoverFailed] = React.useState(false),
     [mapOpen, setMapOpen] = React.useState(false);
+  const [photo, setPhoto] = React.useState<{ src: string; alt: string } | null>(
+    null,
+  );
   const cover = perfil.banner_url;
   React.useEffect(() => setCoverFailed(false), [cover]);
   React.useEffect(() => {
@@ -131,12 +135,22 @@ export function PerfilContenido({
           className={`perfil-cover${!cover || coverFailed ? " perfil-cover-empty" : ""}`}
         >
           {cover && !coverFailed && (
-            <img
-              className="perfil-cover-photo"
-              src={cover}
-              alt={`Portada de ${name}`}
-              onError={() => setCoverFailed(true)}
-            />
+            <button
+              type="button"
+              className="perfil-cover-open"
+              aria-label={`Ampliar portada de ${name}`}
+              aria-haspopup="dialog"
+              onClick={() =>
+                setPhoto({ src: cover, alt: `Portada de ${name}` })
+              }
+            >
+              <img
+                className="perfil-cover-photo"
+                src={cover}
+                alt={`Portada de ${name}`}
+                onError={() => setCoverFailed(true)}
+              />
+            </button>
           )}
           {publicationsUrl && (
             <Link className="perfil-publications-link" to={publicationsUrl}>
@@ -150,6 +164,12 @@ export function PerfilContenido({
               name={name}
               src={perfil.foto_perfil_url}
               shape={perfil.tema?.forma_icono}
+              onOpen={() =>
+                setPhoto({
+                  src: perfil.foto_perfil_url,
+                  alt: `Foto de perfil de ${name}`,
+                })
+              }
             />
             <p className="perfil-category">{perfil.categoria || "Negocio"}</p>
             <h1>{name}</h1>
@@ -255,6 +275,9 @@ export function PerfilContenido({
           </div>
         </div>
       </article>
+      {photo && (
+        <ProfilePhotoDialog {...photo} onClose={() => setPhoto(null)} />
+      )}
       {mapOpen && location && (
         <ProfileMapDialog
           location={location}
@@ -286,9 +309,6 @@ export function PerfilContenido({
                   <strong>Llamar</strong>
                   <small>{perfil.telefono_publico}</small>
                 </span>
-                <span className="perfil-social-arrow" aria-hidden="true">
-                  ↗
-                </span>
               </a>
             )}
             {socials.map((red) => (
@@ -313,9 +333,6 @@ export function PerfilContenido({
                           .replace(/\/$/, "") || "Ver perfil"}
                   </small>
                 </span>
-                <span className="perfil-social-arrow" aria-hidden="true">
-                  ↗
-                </span>
               </a>
             ))}
             {perfil.sitio_web && (
@@ -332,9 +349,6 @@ export function PerfilContenido({
                   <strong>Sitio web</strong>
                   <small>Conocé más</small>
                 </span>
-                <span className="perfil-social-arrow" aria-hidden="true">
-                  ↗
-                </span>
               </a>
             )}
           </div>
@@ -348,10 +362,12 @@ function PublicationPhoto({
   src,
   name,
   index,
+  onOpen,
 }: {
   src: string;
   name: string;
   index: number;
+  onOpen: () => void;
 }) {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [src]);
@@ -365,13 +381,21 @@ function PublicationPhoto({
       <span>Imagen no disponible</span>
     </div>
   ) : (
-    <img
-      src={src}
-      loading="lazy"
-      decoding="async"
-      alt={`Publicación ${index + 1} de ${name}`}
-      onError={() => setFailed(true)}
-    />
+    <button
+      type="button"
+      className="perfil-publication-open"
+      aria-label={`Ampliar publicación ${index + 1} de ${name}`}
+      aria-haspopup="dialog"
+      onClick={onOpen}
+    >
+      <img
+        src={src}
+        loading="lazy"
+        decoding="async"
+        alt={`Publicación ${index + 1} de ${name}`}
+        onError={() => setFailed(true)}
+      />
+    </button>
   );
 }
 
@@ -386,6 +410,9 @@ export function PerfilPublicaciones({
 }) {
   const name = perfil.nombre || "Nombre del negocio";
   const photos = Array.isArray(perfil.fotos) ? perfil.fotos : [];
+  const [photo, setPhoto] = React.useState<{ src: string; alt: string } | null>(
+    null,
+  );
   return (
     <div className="perfil-publications">
       <header className="perfil-publications-header">
@@ -393,6 +420,12 @@ export function PerfilPublicaciones({
           name={name}
           src={perfil.foto_perfil_url}
           shape={perfil.tema?.forma_icono}
+          onOpen={() =>
+            setPhoto({
+              src: perfil.foto_perfil_url,
+              alt: `Foto de perfil de ${name}`,
+            })
+          }
         />
         <div className="perfil-publications-identity">
           <h1>{name}</h1>
@@ -417,6 +450,12 @@ export function PerfilPublicaciones({
                 src={url}
                 name={name}
                 index={index}
+                onOpen={() =>
+                  setPhoto({
+                    src: url,
+                    alt: `Publicación ${index + 1} de ${name}`,
+                  })
+                }
               />
             ))}
           </div>
@@ -426,6 +465,9 @@ export function PerfilPublicaciones({
           </p>
         )}
       </section>
+      {photo && (
+        <ProfilePhotoDialog {...photo} onClose={() => setPhoto(null)} />
+      )}
     </div>
   );
 }

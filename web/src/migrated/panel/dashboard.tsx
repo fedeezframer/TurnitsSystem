@@ -2098,7 +2098,7 @@ function TurnitsDashboard_Achievements({
                                     }}
                                 />
                             ) : done ? (
-                                "✓"
+                                "●"
                             ) : (
                                 "•"
                             )}

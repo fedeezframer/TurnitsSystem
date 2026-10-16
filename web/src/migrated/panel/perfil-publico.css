@@ -104,6 +104,7 @@
   min-width: 0;
 }
 .perfil-business-avatar {
+  position: relative;
   width: 80px;
   height: 80px;
   border-radius: 50%;
@@ -122,6 +123,25 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.perfil-avatar-open,
+.perfil-cover-open {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.perfil-avatar-open {
+  border-radius: inherit;
+}
+.perfil-avatar-open:focus-visible,
+.perfil-cover-open:focus-visible {
+  outline: 3px solid #1b6b1a;
+  outline-offset: -4px;
 }
 .perfil-identity > .perfil-business-avatar {
   position: relative;
@@ -707,11 +727,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.perfil-social-arrow {
-  color: #a0b0a3;
-  margin-left: auto;
-  font-size: 15px;
 }
 @media (max-width: 640px) {
   .perfil-contact-links {

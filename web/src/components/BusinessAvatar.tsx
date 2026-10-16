@@ -5,10 +5,12 @@ export function BusinessAvatar({
   name,
   src,
   shape,
+  onOpen,
 }: {
   name: string;
   src?: string;
   shape?: IconShape;
+  onOpen?: () => void;
 }) {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [src]);
@@ -34,11 +36,22 @@ export function BusinessAvatar({
       style={{ background: color, borderRadius: iconRadius(shape) }}
     >
       {src && !failed ? (
-        <img
-          src={src}
-          alt={`Foto de perfil de ${name}`}
-          onError={() => setFailed(true)}
-        />
+        <>
+          <img
+            src={src}
+            alt={`Foto de perfil de ${name}`}
+            onError={() => setFailed(true)}
+          />
+          {onOpen && (
+            <button
+              type="button"
+              className="perfil-avatar-open"
+              aria-label={`Ampliar foto de perfil de ${name}`}
+              aria-haspopup="dialog"
+              onClick={onOpen}
+            />
+          )}
+        </>
       ) : (
         <span role="img" aria-label={`Iniciales de ${name}`}>
           {initials}

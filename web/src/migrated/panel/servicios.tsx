@@ -3870,7 +3870,7 @@ function ServiciosManager_CanvasPreview({
                         <div style={{ display: "flex", gap: isMobile ? 3 : 4 }}>
                             {[
                                 {
-                                    ico: "✓",
+                                    ico: "●",
                                     img: iconoCheck,
                                     bg: "#f8fafc",
                                     border: "#e2e8f0",

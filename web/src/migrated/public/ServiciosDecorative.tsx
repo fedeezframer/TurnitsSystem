@@ -559,7 +559,7 @@ function ServiceRow({
                     {isToggling ? (
                         <Spinner color={accentColor} size={10} />
                     ) : svc.activo ? (
-                        "✓"
+                        "●"
                     ) : (
                         "○"
                     )}

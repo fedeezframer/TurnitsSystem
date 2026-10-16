@@ -167,7 +167,7 @@ function ThemeEditor({
         <span>La foto del negocio se cambia desde Perfil.</span>
         {onOpenProfile && (
           <button type="button" onClick={onOpenProfile}>
-            Editar foto ↗
+            Editar foto
           </button>
         )}
       </div>
