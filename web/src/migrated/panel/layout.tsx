@@ -732,14 +732,14 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title="Tema y Marca"
-                            subtitle="Personalizá el logo y los colores de tu agenda"
+                            title="Temas"
+                            subtitle="Personalizá los colores y las formas de tu agenda"
                             isMobile={isMobile}
                         />
                         <ThemeEditor
                             baseUrl={baseUrl}
                             accentColor={accentColor}
-                            iconoLogoUrl={iconos.logo}
+                            onOpenProfile={() => irA("perfil")}
                         />
                     </div>
                 )}

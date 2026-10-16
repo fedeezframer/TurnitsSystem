@@ -1,6 +1,15 @@
 import * as React from "react";
+import { iconRadius, type IconShape } from "../shared/appearance.js";
 
-export function BusinessAvatar({ name, src }: { name: string; src?: string }) {
+export function BusinessAvatar({
+  name,
+  src,
+  shape,
+}: {
+  name: string;
+  src?: string;
+  shape?: IconShape;
+}) {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [src]);
   const initials =
@@ -20,7 +29,10 @@ export function BusinessAvatar({ name, src }: { name: string; src?: string }) {
       ) % colors.length
     ];
   return (
-    <span className="perfil-business-avatar" style={{ background: color }}>
+    <span
+      className="perfil-business-avatar"
+      style={{ background: color, borderRadius: iconRadius(shape) }}
+    >
       {src && !failed ? (
         <img
           src={src}

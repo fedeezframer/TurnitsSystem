@@ -16,6 +16,7 @@ import "./perfil-publico.css";
 import { SOCIAL_LINKS, normalizarEnlaceRed } from "../../shared/socials.js";
 import { SocialProfileField } from "../../components/SocialProfileField";
 import { BusinessAvatar } from "../../components/BusinessAvatar";
+import type { IconShape } from "../../shared/appearance.js";
 
 export function NegocioIcon({
   kind = "sucursal",
@@ -98,6 +99,7 @@ export function PerfilNegocio({
     [habilitado, setHabilitado] = React.useState(false),
     [redesHabilitadas, setRedesHabilitadas] = React.useState(false),
     [imagenesHabilitadas, setImagenesHabilitadas] = React.useState(false),
+    [formaIcono, setFormaIcono] = React.useState<IconShape>("original"),
     [loading, setLoading] = React.useState(true),
     [busy, setBusy] = React.useState(false),
     [uploading, setUploading] = React.useState(false),
@@ -113,6 +115,7 @@ export function PerfilNegocio({
           setHabilitado(d.habilitado);
           setRedesHabilitadas(!!d.redes_habilitadas);
           setImagenesHabilitadas(!!d.imagenes_habilitadas);
+          setFormaIcono(d.tema?.forma_icono || "original");
         }
       })
       .catch((e) => alive && setError(e.message))
@@ -158,6 +161,9 @@ export function PerfilNegocio({
         body: JSON.stringify(payload),
       });
       setForm({ ...perfilVacio, ...d.perfil });
+      window.dispatchEvent(
+        new CustomEvent("turnits_business_photo_changed", { detail: { slug } }),
+      );
       setSaved("Perfil guardado.");
     } catch (e: any) {
       setError(e.message);
@@ -290,6 +296,7 @@ export function PerfilNegocio({
                         <BusinessAvatar
                           name={form.nombre || "Negocio"}
                           src={form.foto_perfil_url}
+                          shape={formaIcono}
                         />
                       ) : (
                         form.banner_url && (
@@ -299,7 +306,7 @@ export function PerfilNegocio({
                     </div>
                     <p className="negocio-muted">
                       {key === "foto_perfil_url"
-                        ? "Una imagen cuadrada para identificar tu negocio."
+                        ? "Se usa como ícono de tu negocio en el perfil y en la agenda."
                         : "Una imagen horizontal, sin texto agregado por Turnits."}
                     </p>
                     <div className="negocio-row">

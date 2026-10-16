@@ -1,4 +1,6 @@
 import { appConfig } from "../../config"
+import { DEFAULT_APPEARANCE, CARD_SHAPES, ICON_SHAPES } from "../../shared/appearance.js"
+import type { BusinessAppearance } from "../../shared/appearance.js"
 import * as React from "react"
 import {
     useState,
@@ -3643,7 +3645,7 @@ function ThemeEditor_getToken(): string {
     )
 }
 
-interface ThemeEditor_Tema {
+interface ThemeEditor_Tema extends BusinessAppearance {
     primario: string
     secundario: string
     fondo: string
@@ -3652,6 +3654,7 @@ interface ThemeEditor_Tema {
 }
 
 const ThemeEditor_TEMA_DEFAULT: ThemeEditor_Tema = {
+    ...DEFAULT_APPEARANCE,
     primario: "#1F2937",
     secundario: "#6B7280",
     fondo: "#FFFFFF",
@@ -3670,14 +3673,17 @@ const ThemeEditor_COLOR_KEYS: Array<keyof ThemeEditor_Tema> = [
 function ThemeEditor_temaCompleto(
     raw?: Partial<ThemeEditor_Tema> | null
 ): ThemeEditor_Tema {
-    return { ...ThemeEditor_TEMA_DEFAULT, ...(raw || {}) }
+    return { ...ThemeEditor_TEMA_DEFAULT, ...(raw || {}),
+        forma_tarjetas: CARD_SHAPES.some(s => s.value === raw?.forma_tarjetas) ? raw!.forma_tarjetas : DEFAULT_APPEARANCE.forma_tarjetas,
+        forma_icono: ICON_SHAPES.some(s => s.value === raw?.forma_icono) ? raw!.forma_icono : DEFAULT_APPEARANCE.forma_icono }
 }
 
 function ThemeEditor_mismoTema(
     a: ThemeEditor_Tema,
     b: ThemeEditor_Tema
 ): boolean {
-    return ThemeEditor_COLOR_KEYS.every(
+    return (a.forma_tarjetas || "original") === (b.forma_tarjetas || "original") &&
+        (a.forma_icono || "original") === (b.forma_icono || "original") && ThemeEditor_COLOR_KEYS.every(
         (k) => (a[k] || "").toLowerCase() === (b[k] || "").toLowerCase()
     )
 }
@@ -4026,19 +4032,23 @@ function MenuFooter_getToken(): string {
 function MenuFooter_useLogoNegocio(baseUrl: string): string | null {
     const [logoUrl, setLogoUrl] = React.useState<string | null>(null)
     React.useEffect(() => {
-        if (false) return
         const slug = MenuFooter_getSlug()
         const token = MenuFooter_getToken()
         if (!slug || !token) return
-        fetch(`${baseUrl.replace(/\/+$/, "")}/admin/tema/${slug}`, {
+        let alive = true
+        const load = () => fetch(`${baseUrl.replace(/\/+$/, "")}/admin/perfil/${slug}`, {
             headers: { Authorization: `Bearer ${token}` },
             cache: "no-cache",
         })
             .then((r) => r.json())
             .then((d) => {
-                if (d.success && d.logo_url) setLogoUrl(d.logo_url)
+                if (alive && d.success) setLogoUrl(d.imagenes_habilitadas ? d.perfil?.foto_perfil_url || null : d.logo_url || null)
             })
             .catch(() => {})
+        load()
+        const onChanged = (e: any) => { if (e.detail?.slug === slug) load() }
+        window.addEventListener("turnits_business_photo_changed", onChanged)
+        return () => { alive = false; window.removeEventListener("turnits_business_photo_changed", onChanged) }
     }, [baseUrl])
     return logoUrl
 }

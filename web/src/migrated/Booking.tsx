@@ -1,5 +1,6 @@
 import { appConfig } from "../config"
 import * as React from "react"
+import { cardRadius, iconRadius, type BusinessAppearance } from "../shared/appearance.js"
 import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
 import type {MapBranch} from "../components/BranchMap"
 const BranchSelection=React.lazy(()=>import("../components/BranchMap").then(m=>({default:m.BranchSelection})))
@@ -56,7 +57,7 @@ const PAISES = [
     { code: "ES", flag: "🇪🇸", dial: "+34", name: "España" },
 ]
 
-interface Tema {
+interface Tema extends BusinessAppearance {
     primario: string
     secundario: string
     fondo: string
@@ -290,8 +291,12 @@ function withAlpha(hex: string, alphaHex: string): string {
 }
 
 function buildTemaVars(tema: Tema): React.CSSProperties {
+    const cardShape = tema.forma_tarjetas && tema.forma_tarjetas !== "original" ? cardRadius(tema.forma_tarjetas) : undefined
     return {
         "--bf-bg": tema.fondo,
+        "--bf-service-radius": cardShape,
+        "--bf-row-radius": cardShape,
+        "--bf-card-radius": cardShape,
         "--bf-text": tema.texto,
         "--bf-text-muted": withAlpha(tema.texto, "99"), // ~60%
         "--bf-text-faint": withAlpha(tema.texto, "66"), // ~40%
@@ -2955,6 +2960,7 @@ export default function BookingFlow(props: any) {
 
 function LogoBlock({ negocio, accent }: { negocio: Negocio; accent: string }) {
     const [error, setError] = React.useState(false)
+    React.useEffect(() => setError(false), [negocio.logo_url])
     const size = 64
     const initials =
         negocio.business_name
@@ -2968,7 +2974,7 @@ function LogoBlock({ negocio, accent }: { negocio: Negocio; accent: string }) {
             style={{
                 width: size,
                 height: size,
-                borderRadius: size * 0.18,
+                borderRadius: iconRadius(negocio.tema?.forma_icono, `${size * 0.18}px`),
                 overflow: "hidden",
                 display: "flex",
                 alignItems: "center",
@@ -2985,7 +2991,7 @@ function LogoBlock({ negocio, accent }: { negocio: Negocio; accent: string }) {
                     style={{
                         width: "100%",
                         height: "100%",
-                        objectFit: "contain",
+                        objectFit: "cover",
                     }}
                 />
             ) : (
@@ -3046,7 +3052,7 @@ const filaStyle: React.CSSProperties = {
     alignItems: "center",
     gap: 14,
     padding: "12px 16px 12px 12px",
-    borderRadius: 20,
+    borderRadius: "var(--bf-row-radius, 20px)",
     border: "none",
     background: "var(--bf-card-bg)",
     cursor: "pointer",
@@ -3254,7 +3260,7 @@ function BookingCombosDesktop({promociones,servicios,accent,onSelect}:{promocion
     if(!promociones.length)return null
     return <aside className="bf-combos-desktop-menu" aria-label="Combos disponibles" style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{fontSize:15,fontWeight:700,color:"var(--bf-text)"}}>Combos disponibles</div>
-        {promociones.map(p=><div key={p.id} style={{padding:14,border:"1px solid var(--bf-border)",borderRadius:12,background:"var(--bf-card-bg)",display:"flex",flexDirection:"column",gap:9,minWidth:0}}>
+        {promociones.map(p=><div key={p.id} style={{padding:14,border:"1px solid var(--bf-border)",borderRadius:"var(--bf-card-radius, 12px)",background:"var(--bf-card-bg)",display:"flex",flexDirection:"column",gap:9,minWidth:0}}>
             <strong style={{fontSize:13,lineHeight:1.4,color:"var(--bf-text)",overflowWrap:"anywhere"}}>{p.nombre}</strong>
             {p.dias_semana != null && <span style={{fontSize:11,lineHeight:1.4,color:"var(--bf-text-muted)"}}>Sólo los {promoDaysLabel(p.dias_semana)}</span>}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:5}}>{p.items.map(item=>{const url=p.imagenes?.find(i=>i.tipo===item.tipo && i.id===item.id)?.url || (item.tipo === "servicio" ? servicios.find(s=>s.id===item.id)?.imagen : "");return <span key={item.tipo+item.id} title={`${item.cantidad} × ${item.nombre}`} style={{aspectRatio:"1",position:"relative",display:"grid",placeItems:"center",borderRadius:5,overflow:"hidden",background:"var(--bf-panel-bg)",minWidth:0}}>{url ? <img src={url} alt={item.nombre} style={{width:"100%",height:"100%",objectFit:item.tipo === "producto" ? "contain" : "cover",borderRadius:5}}/> : <span style={{fontSize:10,padding:4,textAlign:"center",color:"var(--bf-text-muted)",overflowWrap:"anywhere"}}>{item.nombre}</span>}{item.cantidad>1 && <span style={{position:"absolute",right:2,bottom:2,fontSize:9,padding:"1px 3px",borderRadius:3,background:"var(--bf-card-bg)",color:"var(--bf-text)"}}>×{item.cantidad}</span>}</span>})}</div>
@@ -3315,7 +3321,7 @@ function BookingCombosSubheader({promociones,servicios,accent,icono,onSelect}:{p
     if(!promociones.length)return null
     return <div style={{position:"sticky",top:0,height:34,width:"calc(100% - 20px)",maxWidth:420,margin:"0 auto",zIndex:30,flexShrink:0}} onKeyDown={event=>{if(event.key === "Escape")setAbierto(false)}}>
         <style>{`@keyframes bf-combos-shine {0%,65% {transform:translateX(-140%) skewX(-18deg)} 100% {transform:translateX(520%) skewX(-18deg)}} .bf-combos-shine {animation:bf-combos-shine 4.5s ease-in-out infinite} @media(prefers-reduced-motion:reduce){.bf-combos-shine {animation:none;display:none}}`}</style>
-        <motion.div id={id} initial={false} animate={{height:abierto ? alturaCombo : 34}} transition={{duration:0.3,ease:[0.22,1,0.36,1]}} style={{position:"absolute",inset:"0 0 auto",boxSizing:"border-box",border:"1px solid var(--bf-border)",borderRadius:4,background:"var(--bf-card-bg)",overflow:"hidden"}}>
+        <motion.div id={id} initial={false} animate={{height:abierto ? alturaCombo : 34}} transition={{duration:0.3,ease:[0.22,1,0.36,1]}} style={{position:"absolute",inset:"0 0 auto",boxSizing:"border-box",border:"1px solid var(--bf-border)",borderRadius:"var(--bf-card-radius, 4px)",background:"var(--bf-card-bg)",overflow:"hidden"}}>
         {!abierto ? <button type="button" aria-expanded={false} aria-controls={id} onClick={()=>setAbierto(true)} style={{width:"100%",height:32,boxSizing:"border-box",padding:"6px 8px",textAlign:"left",display:"flex",alignItems:"center",gap:5,border:0,borderRadius:4,position:"relative",overflow:"hidden",background:"transparent",color:"var(--bf-text)",font:"inherit",fontSize:12,fontWeight:700,cursor:"pointer"}}><span>Ver Combos</span>{icono ? <img src={icono} alt="" aria-hidden="true" style={{width:14,height:14,objectFit:"contain",flexShrink:0}}/> : <span aria-hidden="true">↘</span>}<span aria-hidden="true" className="bf-combos-shine" style={{position:"absolute",inset:"0 auto 0 0",width:"28%",background:"linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent)",pointerEvents:"none"}}/></button> : <div>
             <div ref={carrusel} aria-label="Combos disponibles" onPointerDown={()=>{destinoSlide.current=null}} onWheel={()=>{destinoSlide.current=null}} onScroll={event=>{const el=event.currentTarget;if(!el.clientWidth)return;if(destinoSlide.current!==null){if(Math.abs(el.scrollLeft-destinoSlide.current*el.clientWidth)>1)return;destinoSlide.current=null}setIndice(Math.max(0,Math.min(promociones.length-1,Math.round(el.scrollLeft/el.clientWidth))))}} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",alignItems:"flex-start",scrollbarWidth:"none"}}>
                 {promociones.map(p=>{const imagenes=p.items.map(item=>({...item,url:p.imagenes?.find(image=>image.tipo===item.tipo && image.id===item.id)?.url || (item.tipo === "servicio" ? servicios.find(service=>service.id===item.id)?.imagen : "")}));return <div key={p.id} style={{flex:"0 0 100%",minWidth:0,boxSizing:"border-box",scrollSnapAlign:"start",display:"flex",flexDirection:"column",gap:8,padding:"8px 10px 10px"}}>
@@ -3433,7 +3439,7 @@ function ServicioCard({
                     boxSizing: "border-box",
                     cursor: "pointer",
                     overflow: "hidden",
-                    borderRadius: 0,
+                    borderRadius: "var(--bf-service-radius, 0px)",
                     background: "#fff",
                     border: "1px solid color-mix(in srgb, var(--bf-text) 16%, transparent)",
                     outline: `2px solid ${isSelected ? accentColor : "transparent"}`,
@@ -4693,7 +4699,7 @@ function ExtrasBlock({
                     border: activo
                         ? `1.5px solid ${accent}`
                         : "1.5px solid var(--bf-border)",
-                    borderRadius: 14,
+                    borderRadius: "var(--bf-card-radius, 14px)",
                     overflow: "hidden",
                     display: "flex",
                     flexDirection: "column",

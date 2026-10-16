@@ -6,6 +6,7 @@ import { enlacesPublicos } from "../../shared/socials.js";
 import { SocialIcon } from "../../components/SocialIcon";
 import { ProfileMapDialog } from "../../components/ProfileMapDialog";
 import { BusinessAvatar } from "../../components/BusinessAvatar";
+import { cardRadius } from "../../shared/appearance.js";
 import "./perfil.css";
 import "./perfil-publico.css";
 const BranchMap = React.lazy(() =>
@@ -95,7 +96,18 @@ export function PerfilContenido({
       perfil.sitio_web ||
       perfil.fotos?.length > 0;
   return (
-    <div className="perfil-publico">
+    <div
+      className="perfil-publico"
+      style={
+        {
+          "--perfil-card-radius":
+            perfil.tema?.forma_tarjetas &&
+            perfil.tema.forma_tarjetas !== "original"
+              ? cardRadius(perfil.tema.forma_tarjetas)
+              : undefined,
+        } as React.CSSProperties
+      }
+    >
       <article className="perfil-main-card" aria-label={`Perfil de ${name}`}>
         <div
           className={`perfil-cover${!cover || coverFailed ? " perfil-cover-empty" : ""}`}
@@ -111,7 +123,11 @@ export function PerfilContenido({
         </div>
         <div className="perfil-overview">
           <div className="perfil-identity">
-            <BusinessAvatar name={name} src={perfil.foto_perfil_url} />
+            <BusinessAvatar
+              name={name}
+              src={perfil.foto_perfil_url}
+              shape={perfil.tema?.forma_icono}
+            />
             <p className="perfil-category">{perfil.categoria || "Negocio"}</p>
             <h1>{name}</h1>
             {city && <p className="perfil-city">{city}</p>}

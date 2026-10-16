@@ -48,7 +48,7 @@
 }
 .perfil-main-card {
   border: 1px solid #e1e5e8;
-  border-radius: 18px;
+  border-radius: var(--perfil-card-radius, 18px);
   background: #fff;
   overflow: hidden;
   box-shadow: 0 2px 5px #192a3303;
@@ -277,7 +277,7 @@
   padding: 27px 30px;
   background: #fff;
   border: 1px solid #e1e5e4;
-  border-radius: 17px;
+  border-radius: var(--perfil-card-radius, 17px);
   min-width: 0;
 }
 .perfil-reviews {

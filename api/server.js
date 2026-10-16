@@ -11,6 +11,8 @@ import crypto         from "crypto";
 import webpush        from "web-push";
 import { normalizePromoDays, promoAppliesOn, promoHasMatchingDate } from "../web/src/shared/promotions.js";
 import { crearSucursales } from "./perfil-sucursales.js";
+import { businessIcon } from "./business-appearance.js";
+import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appearance.js";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
@@ -767,12 +769,12 @@ async function generarTips(slug) {
       });
     }
 
-    if (!user.logo_url && !(await yaExiste("subir_logo"))) {
+    if (!(await businessIcon(supabase, slug, user.logo_url)) && !(await yaExiste("subir_logo"))) {
       await crearNotificacion({
         slug, tipo: "tip",
-        titulo: "Sumá tu logo",
-        mensaje: "Un logo propio le da más confianza a tus clientes al momento de reservar.",
-        data: { clave: "subir_logo", seccion: "temas" },
+        titulo: "Sumá la foto de tu negocio",
+        mensaje: "Cargá una foto de perfil para que tus clientes identifiquen tu negocio al reservar.",
+        data: { clave: "subir_logo", seccion: "perfil" },
       });
     }
   } catch (e) {
@@ -2262,8 +2264,8 @@ const { data: user, error } = await supabase.from("usuarios")
         tiene_mp:            !!mpDisponibleToken,
         plan:                user.plan                || "gratis",
         agenda_sin_pagos:    agendaSinPagos,
-        tema:                user.tema                || null,
-        logo_url:            user.logo_url            || null,
+        tema:                user.tema ? { ...user.tema, ...(!planTieneFuncionesPremium(user.plan) ? DEFAULT_APPEARANCE : {}) } : null,
+        logo_url:            await businessIcon(supabase, slug, user.logo_url),
         metodos_pago_disponibles,
         datos_bancarios:     transferenciaDisponible ? (datosBancariosPublicos || {}) : null,
       },
@@ -4908,6 +4910,19 @@ app.put("/admin/tema/:slug", requireAuth, async (req, res) => {
       const v = temaActual[key];
       if (v !== undefined && v !== null && v !== "") temaFiltrado[key] = v;
     });
+    try {
+      const colorValido = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+      if (Object.values(temaFiltrado).some(value => typeof value !== "string" || !colorValido.test(value)))
+        return res.status(400).json({ success: false, error: "Revisá los colores del tema." });
+      for (const key of COLOR_KEYS) {
+        const color = temaFiltrado[key];
+        if (typeof color === "string" && color.length === 4)
+          temaFiltrado[key] = "#" + [...color.slice(1)].map(c => c + c).join("");
+      }
+      Object.assign(temaFiltrado, appearanceChanges(req.body));
+    } catch (e) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
 
     const { data: user, error: fetchError } = await supabase.from("usuarios")
       .select("plan, tema, paletas_personalizadas").eq("slug", slug).maybeSingle();
@@ -4960,7 +4975,7 @@ app.get("/admin/tema/:slug", requireAuth, async (req, res) => {
       success: true,
       plan: user.plan || "gratis",
       tema: user.tema || {},
-      logo_url: user.logo_url || null,
+      logo_url: await businessIcon(supabase, slug, user.logo_url),
       paletas_personalizadas: user.paletas_personalizadas || [],
     });
   } catch (e) {

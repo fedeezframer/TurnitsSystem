@@ -120,7 +120,7 @@ export function crearSucursales({
     const { data, error } = await supabase
       .from("usuarios")
       .select(
-        "slug,business_name,logo_url,plan,activo,estado_suscripcion,fecha_vencimiento",
+        "slug,business_name,logo_url,plan,tema,activo,estado_suscripcion,fecha_vencimiento",
       )
       .eq("slug", slug)
       .maybeSingle();
@@ -296,6 +296,7 @@ export function crearSucursales({
         habilitado: !error,
         redes_habilitadas,
         imagenes_habilitadas,
+        tema: ["basico", "premium"].includes(user.plan) ? user.tema || {} : {},
         logo_url: user.logo_url,
         perfil: data || {
           nombre: user.business_name || "",
@@ -309,7 +310,7 @@ export function crearSucursales({
           sitio_web: "",
           redes_sociales: {},
           fotos: [],
-          foto_perfil_url: "",
+          foto_perfil_url: user.logo_url || "",
           banner_url: "",
           publicado: false,
         },
@@ -322,6 +323,7 @@ export function crearSucursales({
     owner,
     asyncRoute(async (req, res) => {
       const slug = cleanSlug(req.params.slug);
+      const user = await negocio(slug);
       let perfil;
       try {
         perfil = validarPerfil(req.body || {});
@@ -348,7 +350,11 @@ export function crearSucursales({
             );
           delete perfil[key];
         } else if (!Object.hasOwn(perfil, key))
-          perfil[key] = existente.data?.[key] || "";
+          perfil[key] = existente.data
+            ? existente.data[key] || ""
+            : key === "foto_perfil_url"
+              ? user.logo_url || ""
+              : "";
       }
       if (!existente.imagenes_habilitadas && perfil.fotos.length > 8)
         fail(
@@ -360,7 +366,7 @@ export function crearSucursales({
         .from("logos")
         .getPublicUrl(`${slug}/perfil/`).data.publicUrl;
       if (
-        [...perfil.fotos, perfil.foto_perfil_url, perfil.banner_url]
+        [...perfil.fotos, perfil.banner_url]
           .filter(Boolean)
           .some(
             (url) =>
@@ -368,6 +374,13 @@ export function crearSucursales({
           )
       )
         fail("Subí las fotos desde este perfil.");
+      if (
+        perfil.foto_perfil_url &&
+        perfil.foto_perfil_url !== user.logo_url &&
+        (!perfil.foto_perfil_url.startsWith(prefix) ||
+          perfil.foto_perfil_url.slice(prefix.length).includes("/"))
+      )
+        fail("Subí la foto desde este perfil.");
       const { data, error } = await supabase
         .from("negocio_perfiles")
         .upsert({ slug, ...perfil, updated_at: new Date().toISOString() })
@@ -439,7 +452,13 @@ export function crearSucursales({
       if (!data) fail("Perfil no publicado.", 404);
       res.json({
         success: true,
-        perfil: { ...data, slug, logo_url: user.logo_url },
+        perfil: {
+          ...data,
+          slug,
+          tema: ["basico", "premium"].includes(user.plan)
+            ? user.tema || {}
+            : {},
+        },
       });
     }),
   );
