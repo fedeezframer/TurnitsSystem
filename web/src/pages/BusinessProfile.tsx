@@ -1,8 +1,15 @@
 import * as React from "react";
 import { useParams, Link } from "react-router";
 import { appConfig } from "../config";
-import { PerfilContenido } from "../migrated/panel/perfil-publico";
-export default function BusinessProfile() {
+import {
+  PerfilContenido,
+  PerfilPublicaciones,
+} from "../migrated/panel/perfil-publico";
+export default function BusinessProfile({
+  publications = false,
+}: {
+  publications?: boolean;
+}) {
   const { slug } = useParams(),
     [perfil, setPerfil] = React.useState<any>(null),
     [error, setError] = React.useState("");
@@ -22,8 +29,19 @@ export default function BusinessProfile() {
       alive = false;
     };
   }, [slug]);
+  React.useEffect(() => {
+    const previousTitle = document.title;
+    document.title = `${perfil?.nombre || "Negocio"} | ${publications ? "Publicaciones" : "Perfil"} | Turnits`;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [perfil?.nombre, publications]);
+  const profileUrl = `/perfil/${encodeURIComponent(slug || "")}`;
+  const bookingUrl = `/agenda/${encodeURIComponent(slug || "")}`;
   return (
-    <main className="perfil-page">
+    <main
+      className={`perfil-page${publications ? " perfil-page-publications" : ""}`}
+    >
       <div className="perfil-page-inner">
         <Link
           to="/"
@@ -40,12 +58,19 @@ export default function BusinessProfile() {
           <p role="status" className="perfil-page-status">
             Cargando perfil…
           </p>
+        ) : publications ? (
+          <PerfilPublicaciones
+            perfil={perfil}
+            bookingUrl={bookingUrl}
+            profileUrl={profileUrl}
+          />
         ) : (
           <PerfilContenido
             perfil={perfil}
             logo={perfil.logo_url}
-            bookingUrl={`/agenda/${slug}`}
+            bookingUrl={bookingUrl}
             slug={slug}
+            publicationsUrl={`${profileUrl}/publicaciones`}
           />
         )}
       </div>

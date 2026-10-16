@@ -10,13 +10,13 @@
   box-sizing: border-box;
 }
 .perfil-page-inner {
-  max-width: 854px;
+  max-width: 940px;
   margin: 0 auto;
 }
 .perfil-turnits-link {
   display: flex;
   justify-content: center;
-  margin: 0 auto 34px;
+  margin: 0 auto 40px;
   position: relative;
   width: 140px;
   height: 26px;
@@ -55,7 +55,7 @@
 }
 .perfil-cover {
   position: relative;
-  height: 306px;
+  height: 336px;
   border-radius: 10px;
   overflow: hidden;
   display: flex;
@@ -74,7 +74,7 @@
   background: linear-gradient(120deg, #e4eee6, #f0f3ee);
 }
 .perfil-overview {
-  padding: 18px 29px 19px;
+  padding: 24px 32px 22px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.3fr);
   gap: 34px;
@@ -93,7 +93,7 @@
   overflow-wrap: anywhere;
 }
 .perfil-identity h1 {
-  font-size: 29px;
+  font-size: 32px;
   letter-spacing: -0.7px;
   font-weight: 700;
   line-height: 1.3;
@@ -125,8 +125,39 @@
 }
 .perfil-identity > .perfil-business-avatar {
   position: relative;
-  margin-top: -55px;
-  margin-bottom: 10px;
+  width: 88px;
+  height: 88px;
+  margin-top: -61px;
+  margin-bottom: 18px;
+}
+.perfil-publications-link {
+  position: absolute;
+  top: 20px;
+  right: 16px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #101310;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #101310;
+  text-decoration: none;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+.perfil-publications-link svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.perfil-publications-link:hover {
+  background: #f5f7f5;
+}
+.perfil-publico .tn-branch-map-compact .tn-map-surface {
+  height: 145px;
 }
 .perfil-booking-link {
   display: flex;
@@ -316,18 +347,7 @@
   font-size: 13px;
   text-underline-offset: 4px;
 }
-.perfil-photo-gallery {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 22px;
-}
-.perfil-photo-gallery img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 10px;
-}
+.perfil-publications-link:focus-visible,
 .perfil-booking-link:focus-visible,
 .perfil-location select:focus-visible,
 .perfil-contact-links a:focus-visible,
@@ -381,6 +401,23 @@
   .perfil-identity {
     padding: 0;
   }
+  .perfil-identity > .perfil-business-avatar {
+    width: 72px;
+    height: 72px;
+    margin-top: -48px;
+    margin-bottom: 10px;
+  }
+  .perfil-publications-link {
+    top: 12px;
+    right: 12px;
+    padding: 9px 10px;
+    gap: 7px;
+    font-size: 13px;
+  }
+  .perfil-publications-link svg {
+    width: 18px;
+    height: 18px;
+  }
   .perfil-category,
   .perfil-city {
     font-size: 14px;
@@ -418,7 +455,8 @@
     font-size: 18px;
     margin-bottom: 8px;
   }
-  .perfil-map-placeholder {
+  .perfil-map-placeholder,
+  .perfil-publico .tn-branch-map-compact .tn-map-surface {
     height: 175px;
   }
   .perfil-publico .perfil-reviews h2 {
@@ -430,9 +468,6 @@
   }
   .perfil-reviews {
     min-height: 190px;
-  }
-  .perfil-photo-gallery {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .negocio-preview:has(.perfil-publico) {
     padding: 0;

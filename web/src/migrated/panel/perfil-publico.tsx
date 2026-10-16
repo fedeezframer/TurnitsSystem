@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Link } from "react-router";
 import { appConfig } from "../../config";
 import { validPoint } from "../../shared/locations.js";
 import type { MapBranch } from "../../components/BranchMap";
@@ -9,9 +10,25 @@ import { BusinessAvatar } from "../../components/BusinessAvatar";
 import { cardRadius } from "../../shared/appearance.js";
 import "./perfil.css";
 import "./perfil-publico.css";
+import "./perfil-publicaciones.css";
 const BranchMap = React.lazy(() =>
   import("../../components/BranchMap").then((m) => ({ default: m.BranchMap })),
 );
+function PublicationsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
+      <rect x="5" y="3" width="15" height="16" rx="1" />
+      <path d="M2 7v15h15M7 16l4-5 3 3 2-2 2 4" />
+      <circle cx="15.5" cy="7.5" r="1" />
+    </svg>
+  );
+}
 function Stars() {
   return (
     <span
@@ -32,11 +49,13 @@ export function PerfilContenido({
   logo,
   bookingUrl,
   slug,
+  publicationsUrl,
 }: {
   perfil: any;
   logo?: string;
   bookingUrl?: string;
   slug?: string;
+  publicationsUrl?: string;
 }) {
   const [locations, setLocations] = React.useState<MapBranch[]>([]),
     [mapError, setMapError] = React.useState(false),
@@ -93,8 +112,7 @@ export function PerfilContenido({
       perfil.descripcion ||
       perfil.telefono_publico ||
       socials.length > 0 ||
-      perfil.sitio_web ||
-      perfil.fotos?.length > 0;
+      perfil.sitio_web;
   return (
     <div
       className="perfil-publico"
@@ -119,6 +137,11 @@ export function PerfilContenido({
               alt={`Portada de ${name}`}
               onError={() => setCoverFailed(true)}
             />
+          )}
+          {publicationsUrl && (
+            <Link className="perfil-publications-link" to={publicationsUrl}>
+              Ver Publicaciones <PublicationsIcon />
+            </Link>
           )}
         </div>
         <div className="perfil-overview">
@@ -315,20 +338,94 @@ export function PerfilContenido({
               </a>
             )}
           </div>
-          {perfil.fotos?.length > 0 && (
-            <div className="perfil-photo-gallery">
-              {perfil.fotos.map((url: string, i: number) => (
-                <img
-                  key={`${url}-${i}`}
-                  src={url}
-                  loading="lazy"
-                  alt={`Foto ${i + 1} de ${name}`}
-                />
-              ))}
-            </div>
-          )}
         </section>
       )}
+    </div>
+  );
+}
+
+function PublicationPhoto({
+  src,
+  name,
+  index,
+}: {
+  src: string;
+  name: string;
+  index: number;
+}) {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [src]);
+  return failed ? (
+    <div
+      className="perfil-publication-unavailable"
+      role="img"
+      aria-label={`Publicación ${index + 1} de ${name}: imagen no disponible`}
+    >
+      <PublicationsIcon />
+      <span>Imagen no disponible</span>
+    </div>
+  ) : (
+    <img
+      src={src}
+      loading="lazy"
+      decoding="async"
+      alt={`Publicación ${index + 1} de ${name}`}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+export function PerfilPublicaciones({
+  perfil,
+  bookingUrl,
+  profileUrl,
+}: {
+  perfil: any;
+  bookingUrl: string;
+  profileUrl: string;
+}) {
+  const name = perfil.nombre || "Nombre del negocio";
+  const photos = Array.isArray(perfil.fotos) ? perfil.fotos : [];
+  return (
+    <div className="perfil-publications">
+      <header className="perfil-publications-header">
+        <BusinessAvatar
+          name={name}
+          src={perfil.foto_perfil_url}
+          shape={perfil.tema?.forma_icono}
+        />
+        <div className="perfil-publications-identity">
+          <h1>{name}</h1>
+          {perfil.descripcion && <p>{perfil.descripcion}</p>}
+        </div>
+        <div className="perfil-publications-actions">
+          <a className="perfil-publications-booking" href={bookingUrl}>
+            Ver agenda
+          </a>
+          <Link className="perfil-publications-profile" to={profileUrl}>
+            Ver perfil
+          </Link>
+        </div>
+      </header>
+      <section aria-labelledby="perfil-publications-title">
+        <h2 id="perfil-publications-title">Publicaciones</h2>
+        {photos.length ? (
+          <div className="perfil-publications-grid">
+            {photos.map((url: string, index: number) => (
+              <PublicationPhoto
+                key={`${url}-${index}`}
+                src={url}
+                name={name}
+                index={index}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="perfil-publications-empty">
+            Todavía no hay publicaciones.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

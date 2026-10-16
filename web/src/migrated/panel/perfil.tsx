@@ -445,7 +445,7 @@ export function PerfilNegocio({
               </section>
               <div className="negocio-stack" style={{ gap: 10 }}>
                 <div className="negocio-between">
-                  <h3>Galería de fotos</h3>
+                  <h3>Publicaciones</h3>
                   <label
                     className="negocio-button secondary"
                     style={{
@@ -466,6 +466,7 @@ export function PerfilNegocio({
                   </label>
                 </div>
                 <p className="negocio-muted">
+                  Estas fotos se muestran en «Ver Publicaciones» de tu perfil.
                   Sin límite de cantidad. Podés seleccionar varias a la vez.
                   JPG, PNG o WebP, hasta 3 MB por imagen.
                 </p>

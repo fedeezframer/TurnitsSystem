@@ -117,3 +117,20 @@ tema a opacidad completa, en lugar del secundario que puede ser demasiado claro.
 Verificación: `work/verify-branch-direct-choice.cjs`, con API simulada y datos
 cartográficos locales reales, cubre mapa/tarjeta, volver/cambiar de sede,
 geolocalización, sedes no disponibles, una única sede, temas claro/oscuro y móvil.
+
+## Perfil y publicaciones — 15/10/2026
+
+El perfil público conserva la ficha con banner, avatar superpuesto, datos,
+mapa ampliable y reseñas pendientes de implementación. «Ver Publicaciones»,
+ubicado sobre el banner, abre `/perfil/:slug/publicaciones`. Esta vista usa
+las fotos existentes de Perfil en una grilla de tres columnas, sin límite de
+ocho fotos, y ofrece los accesos «Ver agenda» y «Ver perfil».
+
+El editor llama ahora «Publicaciones» a la galería; las subidas y el guardado
+global conservan su funcionamiento. Ambas vistas consultan el mismo perfil
+público y respetan su disponibilidad. Se muestran estados vacíos y un marcador
+para imágenes que no puedan cargarse. No requiere SQL ni cambios del servidor.
+
+Verificación: `work/verify-profile-publications.cjs`, con API simulada y sin
+escrituras reales, cubre doce imágenes, rutas y recarga, navegación, tamaños
+1920/390/320 px, imágenes fallidas, textos largos y perfil no publicado.

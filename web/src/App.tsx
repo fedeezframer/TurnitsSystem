@@ -48,6 +48,7 @@ export default function App() {
     <Route path="/agenda/:slug" element={<BookingRoute />} />
     <Route path="/planes" element={<PublicPlans />} />
     <Route path="/perfil/:slug" element={<BusinessProfile />} />
+    <Route path="/perfil/:slug/publicaciones" element={<BusinessProfile publications />} />
     <Route path="/store-login" element={<Store />} />
     <Route path="/app" element={<AppGateway />} />
     <Route path="/internal" element={<Internal loginPath="/login" refreshSeconds={60} />} />
