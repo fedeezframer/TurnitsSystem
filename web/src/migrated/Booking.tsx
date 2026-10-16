@@ -1408,15 +1408,12 @@ export default function BookingFlow(props: any) {
             detalle: string
         }[] = []
         if (disp.includes("mercadopago")) {
-            if(tarjetaDisponible)out.push({key:"tarjeta",emoji:"💳",label:"Tarjeta de crédito o débito",detalle:"Pagá acá, procesado por Mercado Pago"})
+            if(tarjetaDisponible)out.push({key:"tarjeta",emoji:"💳",label:"Tarjeta de crédito o débito",detalle:"Pagá con tu tarjeta bancaria o de una billetera digital"})
             out.push({
                 key: "mercadopago",
                 emoji: "💳",
                 label: "Mercado Pago",
-                detalle:
-                    negocio.metodo_pago === "sena"
-                        ? `Seña del ${negocio.porcentaje_sena || 30}%. Tarjetas aceptadas y dinero en cuenta de Mercado Pago`
-                        : "Tarjetas aceptadas y dinero en cuenta de Mercado Pago",
+                detalle: "Dinero en cuenta y tarjetas aceptadas por Mercado Pago",
             })
         }
         if (negocio.plan !== "gratis" && disp.includes("transferencia")) {
