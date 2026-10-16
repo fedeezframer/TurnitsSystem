@@ -209,24 +209,7 @@
   opacity: 0.5;
   cursor: default;
 }
-.tn-location-continue {
-  align-self: flex-start;
-  border: 0;
-  border-radius: 10px;
-  background: var(--tn-map-accent, #197128);
-  color: #fff;
-  padding: 13px 18px;
-  font:
-    600 14px "Inter Display",
-    sans-serif;
-  cursor: pointer;
-}
-.tn-location-continue:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
 .tn-location-button:focus-visible,
-.tn-location-continue:focus-visible,
 .tn-branch-option:focus-visible {
   outline: 2px solid var(--tn-map-accent, #197128);
   outline-offset: 3px;
@@ -240,8 +223,5 @@
   }
   .tn-branch-options {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .tn-location-continue {
-    width: 100%;
   }
 }

@@ -401,13 +401,13 @@ export function BranchSelection({
   branches,
   selected,
   onSelect,
-  onContinue,
+  onChoose,
   accent = "#197128",
 }: {
   branches: MapBranch[];
   selected: string;
   onSelect: (id: string) => void;
-  onContinue: () => void;
+  onChoose: (id: string) => void;
   accent?: string;
 }) {
   const geo = useDeviceLocation(),
@@ -425,8 +425,7 @@ export function BranchSelection({
       })),
     [branches],
   );
-  const chosen = branches.find((s) => s.id === selected),
-    previousLocation = React.useRef<GeoPoint | null>(null);
+  const previousLocation = React.useRef<GeoPoint | null>(null);
   React.useEffect(() => {
     if (!geo.position || previousLocation.current === geo.position) return;
     previousLocation.current = geo.position;
@@ -459,7 +458,7 @@ export function BranchSelection({
             branches.find((s) => s.id === id)?.equipo_ids?.length ||
             branches.find((s) => s.id === id)?.sin_equipo
           )
-            onSelect(id);
+            onChoose(id);
         }}
       />
       {geo.error && (
@@ -496,11 +495,10 @@ export function BranchSelection({
               className="tn-branch-option"
               aria-pressed={selected === s.id}
               disabled={!available}
-              onClick={() => onSelect(s.id)}
+              onClick={() => onChoose(s.id)}
             >
               <span className="tn-branch-option-title">
                 {s.nombre}
-                {selected === s.id && <span aria-hidden="true">✓</span>}
               </span>
               {s.direccion && <span>{s.direccion}</span>}
               <small>
@@ -516,14 +514,6 @@ export function BranchSelection({
           );
         })}
       </div>
-      <button
-        type="button"
-        className="tn-location-continue"
-        disabled={!chosen?.equipo_ids?.length && !chosen?.sin_equipo}
-        onClick={onContinue}
-      >
-        Continuar{chosen ? ` con ${chosen.nombre}` : ""} →
-      </button>
     </section>
   );
 }

@@ -1551,9 +1551,13 @@ export default function BookingFlow(props: any) {
         if (prev) setStepId(prev)
     }
 
-    function elegirSucursal(id:string) {
-        if(id===sucursalId)return
-        setSucursalId(id);setEquipoId(null);setEquipoIdReservado(null);setServicioId(null);setPromocionId(null);setExtrasSeleccionados([]);setFecha('');setHora('');setServicios([])
+    function elegirSucursal(id:string, avanzar=false) {
+        const sede = sucursales.find(s=>s.id===id)
+        if (!sede || (!sede.equipo_ids?.length && !sede.sin_equipo)) return
+        if (id!==sucursalId) {
+            setSucursalId(id);setEquipoId(null);setEquipoIdReservado(null);setServicioId(null);setPromocionId(null);setExtrasSeleccionados([]);setFecha('');setHora('');setServicios([])
+        }
+        if (avanzar && stepId==='sucursal') irSiguientePaso()
     }
     function elegirProfesional(p: Profesional) {
         setEquipoId(p.id)
@@ -2181,7 +2185,7 @@ export default function BookingFlow(props: any) {
                     >
                         {enCheckoutStep && headerBlock}
 
-                        {sucursalId && stepId!=='sucursal' && <p style={{fontSize:12,margin:'0 0 12px',color:tema.secundario}}>{sucursales.find(s=>s.id===sucursalId)?.nombre}</p>}
+                        {sucursalId && stepId!=='sucursal' && <p className="bf-branch-name" style={{fontSize:12,fontWeight:500,margin:'0 0 12px',color:'var(--bf-text)'}}>{sucursales.find(s=>s.id===sucursalId)?.nombre}</p>}
                         {stepId && (
                             <ProgressBar
                                 steps={steps}
@@ -2210,7 +2214,7 @@ export default function BookingFlow(props: any) {
                                     gap: 14,
                                 }}
                             >
-                                {stepId === "sucursal" && <div><StepTitle title="Elegí la sucursal"/><React.Suspense fallback={<Skeleton/>}><BranchSelection branches={sucursales} selected={sucursalId} accent={accent} onSelect={elegirSucursal} onContinue={irSiguientePaso}/></React.Suspense></div>}
+                                {stepId === "sucursal" && <div><StepTitle title="Elegí la sucursal"/><React.Suspense fallback={<Skeleton/>}><BranchSelection branches={sucursales} selected={sucursalId} accent={accent} onSelect={elegirSucursal} onChoose={id=>elegirSucursal(id,true)}/></React.Suspense></div>}
                                 {stepId === "profesional" && (
                                     <div>
                                         {stepIndex>0 && <div style={{marginBottom:14}}><BackLink onClick={volverPaso}/></div>}

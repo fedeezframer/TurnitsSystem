@@ -102,3 +102,18 @@ desde el mismo alojamiento de la web. Se mantiene la atribución necesaria a
 OpenStreetMap y se retira OpenMapTiles porque los datos ahora usan Shortbread.
 No se mantiene un fallback externo. Ver [MAPAS-ARGENTINA.md](MAPAS-ARGENTINA.md)
 para tamaño, origen, licencias, pruebas y procedimiento de actualización.
+
+## Elección directa de sucursal — 15/10/2026
+
+Tocar una sede disponible en el mapa o su tarjeta avanza al paso siguiente sin
+botón Continuar ni checks en las tarjetas. «Usar mi ubicación» sólo ordena y
+recomienda; no avanza por su cuenta. Las sedes sin profesionales siguen sin poder
+elegirse. Volver y tocar la misma sede permite avanzar otra vez; cambiar de sede
+limpia servicio, promo, extras, fecha, hora y profesional previos. Con una sola
+sede se sigue omitiendo este paso.
+
+El nombre de la sucursal debajo del nombre del negocio usa el color de texto del
+tema a opacidad completa, en lugar del secundario que puede ser demasiado claro.
+Verificación: `work/verify-branch-direct-choice.cjs`, con API simulada y datos
+cartográficos locales reales, cubre mapa/tarjeta, volver/cambiar de sede,
+geolocalización, sedes no disponibles, una única sede, temas claro/oscuro y móvil.
