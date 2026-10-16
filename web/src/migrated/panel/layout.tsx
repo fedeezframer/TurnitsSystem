@@ -27,7 +27,7 @@ import { ThemeEditor } from "./temas"
 import { CopyTurnosButton } from "./inicio"
 import { PerfilNegocio, EquipoSecciones } from "./perfil"
 
-function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter logoutUrl={props.logoutUrl}/> : <OwnerMenuFooter {...props}/> }
+function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
 function TurnitsPanel_Inner(props: any) {
     const branchAdmin = useBranchAdmin()
@@ -311,6 +311,7 @@ function TurnitsPanel_Inner(props: any) {
 
                     {/* Footer: usuario, soporte y cerrar sesión */}
                     <MenuFooter
+                        mobile={isMobile}
                         checkoutLogo={logoImage}
                         baseUrl={baseUrl}
                         accentColor={accentColor}
@@ -447,6 +448,7 @@ function TurnitsPanel_Inner(props: any) {
 
                             <div style={{ marginTop: 16 }}>
                                 <MenuFooter
+                                    mobile={isMobile}
                         checkoutLogo={logoImage}
                         baseUrl={baseUrl}
                                     accentColor={accentColor}

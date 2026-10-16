@@ -5,6 +5,7 @@ import {
   setBranchScheduleMember,
 } from "../shared/panel-scope";
 import { HorariosConfig, ExcepcionesConfig } from "../migrated/panel/horarios";
+import { MenuFooterMiembro } from "../migrated/panel/cuenta";
 import {
   MenuFooter_cerrarSesion,
   MenuFooter_getToken,
@@ -20,56 +21,59 @@ export function OwnerOnly({ children }: { children: React.ReactNode }) {
 }
 export function BranchAccountFooter({
   logoutUrl = "/login",
+  baseUrl,
+  soporteUrl,
+  iconos,
+  accentColor = "#197128",
+  mobile = false,
 }: {
   logoutUrl?: string;
+  baseUrl: string;
+  soporteUrl: string;
+  iconos?: Record<string, string>;
+  accentColor?: string;
+  mobile?: boolean;
 }) {
   const branch = useBranchAdmin();
+  const [member, setMember] = React.useState<any>(null);
+  React.useEffect(() => {
+    if (!branch?.equipo_id) return;
+    let alive = true;
+    fetch(
+      `${baseUrl.replace(/\/+$/, "")}/admin/equipo/${encodeURIComponent(MenuFooter_getSlug())}`,
+      {
+        headers: { Authorization: `Bearer ${MenuFooter_getToken()}` },
+        cache: "no-store",
+      },
+    )
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.success
+          ? data.equipo?.find((row: any) => row.id === branch.equipo_id)
+          : null;
+      })
+      .then((row) => {
+        if (alive) setMember(row);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [baseUrl, branch?.equipo_id]);
+  const nombre = member
+    ? `${member.nombre || ""} ${member.apellido || ""}`.trim()
+    : branch?.nombre_admin || "Mi panel";
   return (
-    <div
-      style={{
-        marginTop: "auto",
-        padding: "18px 12px",
-        borderTop: "1px solid #e2e8f0",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <strong style={{ display: "block", fontSize: 13 }}>
-          {branch?.nombre_admin}
-        </strong>
-        <span style={{ fontSize: 11, color: "#64748b" }}>
-          Administrador · {branch?.nombre}
-        </span>
-      </div>
-      <button
-        type="button"
-        aria-label="Cerrar sesión"
-        onClick={() => MenuFooter_cerrarSesion(logoutUrl)}
-        style={{
-          border: "1px solid #e2e8f0",
-          background: "#fff",
-          borderRadius: 9,
-          width: 34,
-          height: 34,
-          cursor: "pointer",
-          color: "#334155",
-        }}
-      >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          aria-hidden="true"
-        >
-          <path d="M9 4H4v16h5M12 12h9m-4-4 4 4-4 4" />
-        </svg>
-      </button>
-    </div>
+    <MenuFooterMiembro
+      nombre={nombre}
+      fotoUrl={member?.foto_url}
+      color={member?.color || accentColor}
+      iconos={iconos}
+      soporteUrl={soporteUrl}
+      onLogout={() => MenuFooter_cerrarSesion(logoutUrl)}
+      mobile={mobile}
+    />
   );
 }
 export function BranchSchedule({

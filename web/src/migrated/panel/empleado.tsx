@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
 import { AgendaPanel_hoyISO, MenuFooter_cerrarSesion, NAV_ITEMS, TurnitsDashboard_shortMoney, AgendaPanel_labelStyle, AgendaPanel_inputStyle, TurnitsDashboard_money } from "./common"
-import { MenuFooterIconButton, MenuFooterSoporteIcon, MenuFooterLogoutIcon, NotificacionesFlotantes } from "./cuenta"
+import { MenuFooterMiembro, NotificacionesFlotantes } from "./cuenta"
 import { TurnitsBetaInstallPrompt, TurnitsGlobalSaveBar, QrFlotante } from "./interfaz"
 import { AmbientOrbs, BrandMark, NavButton, BottomNavIcon, BottomNavMore } from "./equipo"
 import { TurnitsDashboard_MetricCard, TurnitsDashboard_Chart, TurnitsDashboard_Upcoming } from "./dashboard"
@@ -512,75 +512,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
     const fotoEmpleado = data?.perfil?.foto_url
     const colorEmpleado = data?.perfil?.color || accentColor
     const FooterEmpleado = ({ mobile = false }: { mobile?: boolean }) => (
-        <div
-            style={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: mobile ? "14px 4px 0" : "12px 4px",
-                borderTop: "1px solid #e9edf3",
-                marginTop: mobile ? 16 : 12,
-            }}
-        >
-            {fotoEmpleado ? (
-                <img
-                    src={fotoEmpleado}
-                    alt=""
-                    style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        objectFit: "cover",
-                        flexShrink: 0,
-                    }}
-                />
-            ) : (
-                <div
-                    style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        display: "grid",
-                        placeItems: "center",
-                        background: colorEmpleado,
-                        color: "white",
-                        fontWeight: 800,
-                        flexShrink: 0,
-                    }}
-                >
-                    {nombreEmpleado.slice(0, 1) || "E"}
-                </div>
-            )}
-            <div
-                style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: 12,
-                    fontWeight: 650,
-                    color: "#334155",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                }}
-            >
-                {nombreEmpleado}
-            </div>
-            <MenuFooterIconButton
-                icon={iconos.soporte}
-                defaultIcon={MenuFooterSoporteIcon}
-                ariaLabel="Contacto y soporte"
-                onClick={() =>
-                    window.open(soporteUrl, "_blank", "noopener,noreferrer")
-                }
-            />
-            <MenuFooterIconButton
-                icon={iconos.logout}
-                defaultIcon={MenuFooterLogoutIcon}
-                ariaLabel="Cerrar sesión"
-                onClick={salir}
-            />
-        </div>
+        <MenuFooterMiembro nombre={nombreEmpleado} fotoUrl={fotoEmpleado} color={colorEmpleado} iconos={iconos} soporteUrl={soporteUrl} onLogout={salir} mobile={mobile} />
     )
     const formatoFecha = (iso: string) => {
         if (!iso) return "Fecha sin definir"

@@ -1542,6 +1542,88 @@ function MenuFooterReferidosBanner({
     )
 }
 
+function MenuFooterMiembro({ nombre, fotoUrl, color, iconos = {}, soporteUrl, onLogout, mobile = false }: {
+    nombre: string
+    fotoUrl?: string
+    color: string
+    iconos?: Record<string, string>
+    soporteUrl: string
+    onLogout: () => void
+    mobile?: boolean
+}) {
+    return (
+        <div role="group" aria-label="Perfil de la cuenta"
+            style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: mobile ? "14px 4px 0" : "12px 4px",
+                borderTop: "1px solid #e9edf3",
+                marginTop: mobile ? 16 : 12,
+            }}
+        >
+            {fotoUrl ? (
+                <img
+                    src={fotoUrl}
+                    alt=""
+                    style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        objectFit: "cover",
+                        flexShrink: 0,
+                    }}
+                />
+            ) : (
+                <div
+                    style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        background: color,
+                        color: "white",
+                        fontWeight: 800,
+                        flexShrink: 0,
+                    }}
+                >
+                    {nombre.slice(0, 1) || "E"}
+                </div>
+            )}
+            <div
+                style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 12,
+                    fontWeight: 650,
+                    color: "#334155",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                }}
+            >
+                {nombre}
+            </div>
+            <MenuFooterIconButton
+                icon={iconos.soporte}
+                defaultIcon={MenuFooterSoporteIcon}
+                ariaLabel="Contacto y soporte"
+                onClick={() =>
+                    window.open(soporteUrl, "_blank", "noopener,noreferrer")
+                }
+            />
+            <MenuFooterIconButton
+                icon={iconos.logout}
+                defaultIcon={MenuFooterLogoutIcon}
+                ariaLabel="Cerrar sesión"
+                onClick={onLogout}
+            />
+        </div>
+    )
+}
+
 function MenuFooter({
     baseUrl,
     checkoutLogo,
@@ -2181,4 +2263,4 @@ function OnboardingNube_Input({
     )
 }
 
-export { MenuFooterIconButton, MenuFooterSoporteIcon, MenuFooterLogoutIcon, MenuCuentaSvg, MenuCuentaIconPlanes, MenuCuentaIconInfo, MenuCuentaIconTrash, MenuCuentaIconExterno, MenuCuentaItem, MenuCuentaDivider, MenuCuentaEliminarModal, MenuCuentaCheckoutLock, MenuCuentaCheckoutBrand, MenuCuentaCheckoutMethods, MenuCuentaPlanTarjeta, MenuCuentaGraciasCalendario, MenuCuentaGraciasPlanes, MenuCuentaPlanesModal, MenuCuentaGraciasDemo, MenuCuentaPagoRetorno, MenuCuenta, MenuFooterReferidosBanner, MenuFooter, NotificacionesFlotantes, OnboardingNube_Fondo, OnboardingNube_Folio, OnboardingNube_Glass, OnboardingNube_Input }
+export { MenuFooterMiembro, MenuFooterIconButton, MenuFooterSoporteIcon, MenuFooterLogoutIcon, MenuCuentaSvg, MenuCuentaIconPlanes, MenuCuentaIconInfo, MenuCuentaIconTrash, MenuCuentaIconExterno, MenuCuentaItem, MenuCuentaDivider, MenuCuentaEliminarModal, MenuCuentaCheckoutLock, MenuCuentaCheckoutBrand, MenuCuentaCheckoutMethods, MenuCuentaPlanTarjeta, MenuCuentaGraciasCalendario, MenuCuentaGraciasPlanes, MenuCuentaPlanesModal, MenuCuentaGraciasDemo, MenuCuentaPagoRetorno, MenuCuenta, MenuFooterReferidosBanner, MenuFooter, NotificacionesFlotantes, OnboardingNube_Fondo, OnboardingNube_Folio, OnboardingNube_Glass, OnboardingNube_Input }
