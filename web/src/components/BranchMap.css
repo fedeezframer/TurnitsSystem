@@ -117,6 +117,12 @@
   font-size: 12px;
   line-height: 1.5;
 }
+.tn-branch-selection > .tn-map-actions {
+  align-items: flex-start;
+}
+.tn-branch-selection > .tn-map-actions p {
+  margin: 0;
+}
 .tn-map-actions strong {
   font-size: 13px;
   color: #334155;

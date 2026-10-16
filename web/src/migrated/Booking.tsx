@@ -2214,7 +2214,7 @@ export default function BookingFlow(props: any) {
                                     gap: 14,
                                 }}
                             >
-                                {stepId === "sucursal" && <div><StepTitle title="Elegí la sucursal"/><React.Suspense fallback={<Skeleton/>}><BranchSelection branches={sucursales} selected={sucursalId} accent={accent} onSelect={elegirSucursal} onChoose={id=>elegirSucursal(id,true)}/></React.Suspense></div>}
+                                {stepId === "sucursal" && <div><StepTitle title="Elegí la sucursal" bottomGap={4}/><React.Suspense fallback={<Skeleton/>}><BranchSelection branches={sucursales} selected={sucursalId} accent={accent} onSelect={elegirSucursal} onChoose={id=>elegirSucursal(id,true)}/></React.Suspense></div>}
                                 {stepId === "profesional" && (
                                     <div>
                                         {stepIndex>0 && <div style={{marginBottom:14}}><BackLink onClick={volverPaso}/></div>}
@@ -3067,9 +3067,9 @@ const filaStyle: React.CSSProperties = {
     color: "var(--bf-text)",
 }
 
-function StepTitle({ title, hint }: { title: string; hint?: string }) {
+function StepTitle({ title, hint, bottomGap = 16 }: { title: string; hint?: string; bottomGap?: number }) {
     return (
-        <div style={{ marginTop: 10, marginBottom: 16 }}>
+        <div style={{ marginTop: 10, marginBottom: bottomGap }}>
             <div
                 style={{
                     fontSize: 20,
