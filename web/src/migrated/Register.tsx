@@ -528,7 +528,6 @@ export default function Register({
           <form className={`registration-form ${type}`} onSubmit={nextDetails}>
             {field("nombre_persona", "Nombre", "text", "given-name")}
             {field("apellido", "Apellido", "text", "family-name")}
-            {field("email", "Correo Electrónico", "email", "email")}
             <div className="registration-field">
               <label htmlFor="registration-phone">Número Telefónico</label>
               <div className="registration-phone">
@@ -573,6 +572,7 @@ export default function Register({
                 />
               </div>
             </div>
+            {field("email", "Correo Electrónico", "email", "email")}
             {type === "negocio" &&
               field("usuario", "Usuario", "text", "username")}
             {field("password", "Contraseña", "password", "new-password")}
