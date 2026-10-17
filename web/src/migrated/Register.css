@@ -213,6 +213,26 @@
 .registration-next:disabled {
   opacity: 0.55;
 }
+.registration-reveal {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition:
+    opacity 240ms ease-out,
+    transform 240ms ease-out,
+    visibility 0s 240ms,
+    background-color 160ms ease;
+}
+.registration-reveal[data-ready="true"] {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+.registration-reveal[data-ready="false"] {
+  opacity: 0;
+  pointer-events: none;
+}
 .registration-form.negocio .registration-next {
   grid-column: 1;
   margin-top: 42px;
@@ -222,20 +242,10 @@
 }
 .registration-consent {
   grid-column: 1/-1;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
   font-size: 12px;
   line-height: 1.5;
   color: #526352;
-  margin-top: 4px;
-}
-.registration-consent input {
-  width: 16px;
-  height: 16px;
-  margin: 1px 0 0;
-  accent-color: #1b6b1a;
-  flex: none;
+  margin: 4px 0 0;
 }
 .registration-consent a {
   color: inherit;

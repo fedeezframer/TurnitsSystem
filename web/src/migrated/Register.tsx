@@ -21,6 +21,26 @@ const empty: Fields = {
   password: "",
 };
 const cleanEmail = (email: string) => email.trim().toLowerCase();
+function detailsError(fields: Fields, type: AccountType) {
+  if (!fields.nombre_persona.trim() || !fields.apellido.trim())
+    return "Completá tu nombre y apellido.";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail(fields.email)))
+    return "Revisá tu correo electrónico.";
+  if (!/^[0-9]{7,15}$/.test(fields.telefono.replace(/[\s()+-]/g, "")))
+    return "Ingresá un teléfono de 7 a 15 dígitos, con código de área.";
+  if (
+    fields.password.length < 6 ||
+    new TextEncoder().encode(fields.password).length > 72
+  )
+    return "La contraseña debe tener al menos 6 caracteres y no superar 72 bytes.";
+  if (
+    type === "negocio" &&
+    (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(fields.usuario) ||
+      fields.usuario.endsWith("-"))
+  )
+    return "El usuario del enlace debe tener entre 2 y 60 letras minúsculas, números o guiones.";
+  return "";
+}
 function maskEmail(email: string) {
   const [name, domain] = email.split("@");
   return `${name.slice(0, 3)}${"*".repeat(Math.max(3, Math.min(12, name.length - 3)))}@${domain}`;
@@ -90,7 +110,6 @@ export default function Register({
   const [type, setType] = useState<AccountType>("usuario");
   const [fields, setFields] = useState<Fields>(empty);
   const [categories, setCategories] = useState<string[]>([]);
-  const [accepted, setAccepted] = useState(false);
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [registrationId, setRegistrationId] = useState("");
   const [error, setError] = useState("");
@@ -102,6 +121,7 @@ export default function Register({
   const title = useRef<HTMLHeadingElement>(null);
   const mounted = useRef(true);
   const request = useRef<AbortController | null>(null);
+  const detailsComplete = !detailsError(fields, type);
   const [plan] = useState(() => {
     const value = new URLSearchParams(window.location.search).get("plan");
     return ["gratis", "basico", "premium"].includes(value || "")
@@ -176,41 +196,9 @@ export default function Register({
   function nextDetails(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    if (!fields.nombre_persona.trim() || !fields.apellido.trim()) {
-      setError("Completá tu nombre y apellido.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail(fields.email))) {
-      setError("Revisá tu correo electrónico.");
-      return;
-    }
-    if (!/^[0-9]{7,15}$/.test(fields.telefono.replace(/[\s()+-]/g, ""))) {
-      setError("Ingresá un teléfono de 7 a 15 dígitos, con código de área.");
-      return;
-    }
-    if (
-      fields.password.length < 6 ||
-      new TextEncoder().encode(fields.password).length > 72
-    ) {
-      setError(
-        "La contraseña debe tener al menos 6 caracteres y no superar 72 bytes.",
-      );
-      return;
-    }
-    if (
-      type === "negocio" &&
-      (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(fields.usuario) ||
-        fields.usuario.endsWith("-"))
-    ) {
-      setError(
-        "El usuario del enlace debe tener entre 2 y 60 letras minúsculas, números o guiones.",
-      );
-      return;
-    }
-    if (!accepted) {
-      setError(
-        "Aceptá los términos y la política de privacidad para continuar.",
-      );
+    const invalid = detailsError(fields, type);
+    if (invalid) {
+      setError(invalid);
       return;
     }
     setStep(3);
@@ -501,28 +489,27 @@ export default function Register({
             {type === "negocio" &&
               field("usuario", "Usuario", "text", "username")}
             {field("password", "Contraseña", "password", "new-password")}
-            <button className="registration-next" type="submit">
+            <button
+              className="registration-next registration-reveal"
+              type="submit"
+              data-ready={detailsComplete}
+              disabled={!detailsComplete}
+              aria-hidden={!detailsComplete}
+              aria-describedby="registration-consent"
+            >
               Siguiente
             </button>
-            <label className="registration-consent">
-              <input
-                type="checkbox"
-                checked={accepted}
-                onChange={(event) => setAccepted(event.target.checked)}
-                required
-              />
-              <span>
-                Acepto los{" "}
-                <a href={termsUrl} target="_blank" rel="noreferrer">
-                  Términos y condiciones
-                </a>{" "}
-                y la{" "}
-                <a href={privacyUrl} target="_blank" rel="noreferrer">
-                  Política de privacidad
-                </a>
-                .
-              </span>
-            </label>
+            <p className="registration-consent" id="registration-consent">
+              Al presionar «Siguiente», aceptás los{" "}
+              <a href={termsUrl} target="_blank" rel="noreferrer">
+                Términos y condiciones
+              </a>{" "}
+              y la{" "}
+              <a href={privacyUrl} target="_blank" rel="noreferrer">
+                Política de privacidad
+              </a>
+              .
+            </p>
           </form>
         )}
         {step === 3 && (
@@ -550,8 +537,10 @@ export default function Register({
             </div>
             {type === "usuario" && (
               <button
-                className="registration-next registration-interests-next"
+                className="registration-next registration-interests-next registration-reveal"
                 type="button"
+                data-ready={categories.length > 0}
+                aria-hidden={categories.length === 0}
                 disabled={busy || !categories.length}
                 onClick={() => void start(categories)}
               >
