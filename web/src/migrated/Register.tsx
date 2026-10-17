@@ -67,6 +67,23 @@ function maskEmail(email: string) {
   return `${name.slice(0, 3)}${"*".repeat(Math.max(3, Math.min(12, name.length - 3)))}@${domain}`;
 }
 function CategoryIcon({ icon }: { icon: string }) {
+  const assets: Record<string, string> = {
+    moustache: "mingcute_beard-fill.svg",
+    nails: "fluent-emoji-high-contrast_nail-polish.svg",
+    wheel: "boxicons_steering-wheel.svg",
+    scissors: "akar-icons_cut.svg",
+    tie: "iconoven_tie.svg",
+  };
+  if (assets[icon]) {
+    const mask = `url("/assets/categories/${assets[icon]}")`;
+    return (
+      <span
+        className="registration-category-icon"
+        aria-hidden="true"
+        style={{ maskImage: mask, WebkitMaskImage: mask }}
+      />
+    );
+  }
   return (
     <svg
       width="34"
@@ -79,31 +96,7 @@ function CategoryIcon({ icon }: { icon: string }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {icon === "moustache" ? (
-        <path
-          fill="currentColor"
-          stroke="none"
-          d="M16 12c-4-6-9 6-15 1 0 10 12 13 15 5 3 8 15 5 15-5-6 5-11-7-15-1Z"
-        />
-      ) : icon === "nails" ? (
-        <path d="m5 26 3-9L19 6a3 3 0 0 1 4 4L12 21l-7 5Zm6-6 11-11M6 25h12l9-9a3 3 0 0 0-4-4L12 23M7 18l4 3M25 3v4m-2-2h4m0 4v3m-2-1h4" />
-      ) : icon === "wheel" ? (
-        <>
-          <circle cx="16" cy="16" r="13" />
-          <circle cx="16" cy="16" r="3" />
-          <path d="M4 12c6-3 18-3 24 0M13 18l-2 10m8-10 2 10" />
-        </>
-      ) : icon === "scissors" ? (
-        <>
-          <circle cx="8" cy="24" r="4" />
-          <circle cx="24" cy="24" r="4" />
-          <path d="m10 20 13-17M22 20 9 3m7 9v4" />
-        </>
-      ) : icon === "tie" ? (
-        <path d="M13 3h6l-1 5h-4l-1-5Zm1 9h4l4 13-6 5-6-5 4-13Zm-2 9 7-5" />
-      ) : (
-        <path strokeWidth="3.5" d="M8 16h16M16 8v16" />
-      )}
+      <path strokeWidth="3.5" d="M8 16h16M16 8v16" />
     </svg>
   );
 }

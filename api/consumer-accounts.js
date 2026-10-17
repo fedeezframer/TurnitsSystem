@@ -39,15 +39,13 @@ export function createConsumerAccounts({
       "Consumer account error:",
       error.code || error.name || "unknown",
     );
-    return res
-      .status(error.code === "23505" ? 409 : 503)
-      .json({
-        success: false,
-        error:
-          error.code === "23505"
-            ? "Ya existe una cuenta con ese email."
-            : "No se pudo completar la operación. Probá de nuevo en un momento.",
-      });
+    return res.status(error.code === "23505" ? 409 : 503).json({
+      success: false,
+      error:
+        error.code === "23505"
+          ? "Ya existe una cuenta con ese email."
+          : "No se pudo completar la operación. Probá de nuevo en un momento.",
+    });
   };
   const check = (result) => {
     if (result.error) throw result.error;
@@ -102,12 +100,10 @@ export function createConsumerAccounts({
   app.post("/consumidores/registro/iniciar", limiterAuth, async (req, res) => {
     try {
       if (!secret || !mailUrl)
-        return res
-          .status(503)
-          .json({
-            success: false,
-            error: "El registro no está disponible en este momento.",
-          });
+        return res.status(503).json({
+          success: false,
+          error: "El registro no está disponible en este momento.",
+        });
       const body = req.body || {},
         email = emailOf(body.email),
         nombre = nameOf(body.nombre_persona),
@@ -130,34 +126,17 @@ export function createConsumerAccounts({
         Buffer.byteLength(body.password) > 72 ||
         !intereses
       )
-        return res
-          .status(400)
-          .json({
-            success: false,
-            error:
-              "Revisá tus datos y elegí al menos un rubro. La contraseña debe tener entre 6 y 72 bytes.",
-          });
-      const identities = await Promise.all([
-        supabase.from("usuarios").select("id").eq("email", email).maybeSingle(),
-        supabase
-          .from("equipo")
-          .select("id")
-          .eq("login_email", email)
-          .maybeSingle(),
-        supabase.from("admins").select("id").eq("email", email).maybeSingle(),
-        supabase
-          .from("consumidores")
-          .select("id")
-          .eq("email", email)
-          .maybeSingle(),
-      ]);
-      if (identities.some((result) => check(result)))
-        return res
-          .status(409)
-          .json({
-            success: false,
-            error: "Ya existe una cuenta con ese email. Iniciá sesión.",
-          });
+        return res.status(400).json({
+          success: false,
+          error:
+            "Revisá tus datos y elegí al menos un rubro. La contraseña debe tener entre 6 y 72 bytes.",
+        });
+      if (await findByEmail(email))
+        return res.status(409).json({
+          success: false,
+          error:
+            "Ya existe una cuenta de usuario con ese email. Iniciá sesión.",
+        });
       const pending = check(
         await supabase
           .from("registros_consumidores")
@@ -166,33 +145,29 @@ export function createConsumerAccounts({
           .maybeSingle(),
       );
       if (pending && Date.now() - Date.parse(pending.enviado_at) < 60000)
-        return res
-          .status(429)
-          .json({
-            success: false,
-            error: "Esperá un minuto antes de iniciar el registro de nuevo.",
-          });
+        return res.status(429).json({
+          success: false,
+          error: "Esperá un minuto antes de iniciar el registro de nuevo.",
+        });
       const registro_id = crypto.randomUUID(),
         codigo = crypto.randomInt(100000, 1000000).toString();
       check(
-        await supabase
-          .from("registros_consumidores")
-          .upsert(
-            {
-              email,
-              registro_id,
-              nombre_persona: nombre,
-              apellido,
-              telefono,
-              password_hash: await bcrypt.hash(body.password, rounds),
-              intereses,
-              codigo_hash: codeHash(email, registro_id, codigo),
-              codigo_expiry: new Date(Date.now() + 15 * 60000).toISOString(),
-              intentos: 0,
-              enviado_at: new Date().toISOString(),
-            },
-            { onConflict: "email" },
-          ),
+        await supabase.from("registros_consumidores").upsert(
+          {
+            email,
+            registro_id,
+            nombre_persona: nombre,
+            apellido,
+            telefono,
+            password_hash: await bcrypt.hash(body.password, rounds),
+            intereses,
+            codigo_hash: codeHash(email, registro_id, codigo),
+            codigo_expiry: new Date(Date.now() + 15 * 60000).toISOString(),
+            intentos: 0,
+            enviado_at: new Date().toISOString(),
+          },
+          { onConflict: "email" },
+        ),
       );
       await mail({ action: "verificarCodigo", email, nombre, codigo });
       return res.json({
@@ -220,12 +195,10 @@ export function createConsumerAccounts({
           typeof codigo !== "string" ||
           !/^\d{6}$/.test(codigo)
         )
-          return res
-            .status(400)
-            .json({
-              success: false,
-              error: "Revisá el código de seis dígitos.",
-            });
+          return res.status(400).json({
+            success: false,
+            error: "Revisá el código de seis dígitos.",
+          });
         const data = check(
           await supabase.rpc("verificar_registro_consumidor", {
             p_email: email,
@@ -234,14 +207,12 @@ export function createConsumerAccounts({
           }),
         );
         if (!data?.success)
-          return res
-            .status(400)
-            .json(
-              data || {
-                success: false,
-                error: "No se pudo verificar el código.",
-              },
-            );
+          return res.status(400).json(
+            data || {
+              success: false,
+              error: "No se pudo verificar el código.",
+            },
+          );
         return res.status(201).json(session(data));
       } catch (error) {
         return fail(res, error);
@@ -272,12 +243,10 @@ export function createConsumerAccounts({
             .status(404)
             .json({ success: false, error: "Iniciá el registro de nuevo." });
         if (Date.now() - Date.parse(pending.enviado_at) < 60000)
-          return res
-            .status(429)
-            .json({
-              success: false,
-              error: "Esperá un minuto antes de pedir otro código.",
-            });
+          return res.status(429).json({
+            success: false,
+            error: "Esperá un minuto antes de pedir otro código.",
+          });
         const codigo = crypto.randomInt(100000, 1000000).toString();
         const updated = check(
           await supabase
@@ -295,12 +264,10 @@ export function createConsumerAccounts({
             .maybeSingle(),
         );
         if (!updated)
-          return res
-            .status(409)
-            .json({
-              success: false,
-              error: "Ya se solicitó otro código. Esperá un minuto.",
-            });
+          return res.status(409).json({
+            success: false,
+            error: "Ya se solicitó otro código. Esperá un minuto.",
+          });
         await mail({
           action: "verificarCodigo",
           email,
@@ -316,10 +283,21 @@ export function createConsumerAccounts({
   // Se ejecutan antes de los recuperadores existentes de dueños y empleados.
   app.post("/auth/forgot-password", limiterAuth, async (req, res, next) => {
     try {
+      const type = req.body?.tipo_cuenta;
+      if (type && !["usuario", "negocio"].includes(type))
+        return res
+          .status(400)
+          .json({ success: false, error: "Elegí el tipo de cuenta." });
+      if (type === "negocio") return next();
       const email = emailOf(req.body?.email);
       if (!emailValid(email)) return next();
       const user = await findByEmail(email);
-      if (!user) return next();
+      if (!user && type !== "usuario") return next();
+      if (!user)
+        return res.json({
+          success: true,
+          message: "Si el email existe, vas a recibir un enlace.",
+        });
       if (user.activo && user.email_verificado) {
         const token = crypto.randomBytes(32).toString("hex");
         check(
@@ -367,24 +345,20 @@ export function createConsumerAccounts({
         !user.reset_token_expiry ||
         Date.parse(user.reset_token_expiry) <= Date.now()
       )
-        return res
-          .status(400)
-          .json({
-            success: false,
-            error: "El enlace expiró o ya se usó. Solicitá uno nuevo.",
-          });
+        return res.status(400).json({
+          success: false,
+          error: "El enlace expiró o ya se usó. Solicitá uno nuevo.",
+        });
       const password = req.body?.new_password;
       if (
         typeof password !== "string" ||
         password.length < 6 ||
         Buffer.byteLength(password) > 72
       )
-        return res
-          .status(400)
-          .json({
-            success: false,
-            error: "La contraseña debe tener entre 6 y 72 bytes.",
-          });
+        return res.status(400).json({
+          success: false,
+          error: "La contraseña debe tener entre 6 y 72 bytes.",
+        });
       const updated = check(
         await supabase
           .from("consumidores")
@@ -401,12 +375,10 @@ export function createConsumerAccounts({
           .maybeSingle(),
       );
       if (!updated)
-        return res
-          .status(400)
-          .json({
-            success: false,
-            error: "El enlace expiró o ya se usó. Solicitá uno nuevo.",
-          });
+        return res.status(400).json({
+          success: false,
+          error: "El enlace expiró o ya se usó. Solicitá uno nuevo.",
+        });
       return res.json({
         success: true,
         message: "Contraseña actualizada correctamente.",

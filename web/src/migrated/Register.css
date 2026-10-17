@@ -327,6 +327,19 @@
   gap: 46px 23px;
   margin: 60px auto 0;
 }
+.registration-category-icon {
+  display: inline-block;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  background: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
 .registration-category {
   height: 100px;
   border: 1px solid #000;
@@ -552,7 +565,8 @@
     gap: 8px;
     padding: 8px;
   }
-  .registration-category svg {
+  .registration-category svg,
+  .registration-category-icon {
     width: 25px;
     height: 25px;
   }
@@ -602,7 +616,8 @@
     font-size: 17px !important;
     gap: 5px;
   }
-  .registration-category svg {
+  .registration-category svg,
+  .registration-category-icon {
     width: 22px;
     height: 22px;
   }

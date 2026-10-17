@@ -132,6 +132,7 @@ const css = `
 .tt-login-v2 h1{font-size:28px;font-weight:500;letter-spacing:-1px;line-height:1.2;text-align:center;margin:0}
 .tt-login-v2-intro{font-size:13px;line-height:1.5;text-align:center;color:#787e78;margin:10px 0 25px}
 .tt-login-v2-divider{height:1px;background:#eaede9;margin-bottom:24px}
+.tt-login-v2-account-types{display:flex;gap:4px;padding:4px;border-radius:24px;background:#f1f5f0;margin-bottom:20px}.tt-login-v2-account-types button{flex:1;height:34px;border:0;border-radius:20px;background:transparent;color:#666e66;font-size:13px}.tt-login-v2-account-types button[aria-pressed=true]{background:white;color:var(--accent);box-shadow:0 1px 4px #16291612}.tt-login-v2-account-types button:disabled{cursor:wait}
 .tt-login-v2-field{display:block;margin-bottom:20px}.tt-login-v2-label{display:block;font-size:12px;font-weight:500;margin-bottom:8px}
 .tt-login-v2-wrap{position:relative}.tt-login-v2 input{width:100%;height:46px;border:1px solid #d9ddd8;border-radius:24px;padding:0 17px;outline:none;font:inherit;font-size:16px;background:white;color:#191b19;transition:border-color .18s,box-shadow .18s}
 .tt-login-v2 input::placeholder{color:#a0a59f;font-size:13px}.tt-login-v2 input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}.tt-login-v2 input[aria-invalid=true]{border-color:#d74747;background:#fffafa}.tt-login-v2 input[aria-invalid=true]:focus{border-color:#d74747;box-shadow:0 0 0 3px #d7474715}
@@ -191,6 +192,7 @@ export default function LoginApp(props: Props) {
     const canvas = false
     const id = React.useId()
     const [email, setEmail] = React.useState("")
+    const [accountType, setAccountType] = React.useState<"usuario" | "negocio">("negocio")
     const [password, setPassword] = React.useState("")
     const [visible, setVisible] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
@@ -315,7 +317,7 @@ export default function LoginApp(props: Props) {
             controller.abort()
             resize?.disconnect()
         }
-    }, [canvas, recover, apiUrl, googleAttempt])
+    }, [canvas, recover, apiUrl, googleAttempt, accountType])
     React.useEffect(() => {
         if (canvas) return
         const oldBody = document.body.style.overflow
@@ -411,7 +413,7 @@ export default function LoginApp(props: Props) {
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ credential, nonce }),
+                    body: JSON.stringify({ credential, nonce, tipo_cuenta: accountType }),
                     signal: controller.signal,
                     cache: "no-store",
                 }
@@ -480,8 +482,8 @@ export default function LoginApp(props: Props) {
                     signal: controller.signal,
                     body: JSON.stringify(
                         recover
-                            ? { email: email.trim() }
-                            : { email: email.trim(), password }
+                            ? { email: email.trim(), tipo_cuenta: accountType }
+                            : { email: email.trim(), password, tipo_cuenta: accountType }
                     ),
                 }
             )
@@ -603,9 +605,30 @@ export default function LoginApp(props: Props) {
                     <p className="tt-login-v2-intro">
                         {recover
                             ? "Te enviamos un enlace para cambiar tu contraseña."
-                            : "Tu agenda, tu equipo y tu negocio en un lugar."}
+                            : accountType === "usuario"
+                              ? "Ingresá para encontrar y reservar tus turnos."
+                              : "Tu agenda, tu equipo y tu negocio en un lugar."}
                     </p>
                     <div className="tt-login-v2-divider" />
+                    <div className="tt-login-v2-account-types" role="group" aria-label="Tipo de cuenta">
+                        {(["usuario", "negocio"] as const).map((type) => (
+                            <button
+                                key={type}
+                                type="button"
+                                aria-pressed={accountType === type}
+                                disabled={loading}
+                                onClick={() => {
+                                    setAccountType(type)
+                                    setPassword("")
+                                    setMessage("")
+                                    setSuccess(false)
+                                    setFieldErrors({ email: false, password: false })
+                                }}
+                            >
+                                {type === "usuario" ? "Usuario" : "Negocio"}
+                            </button>
+                        ))}
+                    </div>
                     <label
                         className="tt-login-v2-field"
                         htmlFor={`${id}-email`}

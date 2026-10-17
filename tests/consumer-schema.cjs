@@ -105,9 +105,53 @@ const { PGlite } = require(process.env.PGLITE_MODULE || "@electric-sql/pglite");
     ),
     /check constraint/,
   );
+  const splitSql = fs.readFileSync(
+    "supabase/migrations/20261016_cuentas_por_tipo.sql",
+    "utf8",
+  );
+  await db.exec(splitSql);
+  await db.exec(splitSql);
+  await db.query("INSERT INTO usuarios(email) VALUES ('user@test.example')");
+  assert.equal(
+    (await verify("owner@test.example", id, "correct")).success,
+    true,
+  );
+  await assert.rejects(
+    db.query(
+      `INSERT INTO consumidores SELECT * FROM consumidores WHERE email='user@test.example'`,
+    ),
+    /unique constraint/,
+  );
+  const owner = (
+    await db.query("SELECT id FROM usuarios WHERE email='owner@test.example'")
+  ).rows[0];
+  await db.query(
+    "INSERT INTO google_login_accounts(google_sub,usuario_id) VALUES ('google-user',$1)",
+    [owner.id],
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*)::int AS n FROM google_login_accounts WHERE google_sub='google-user'",
+      )
+    ).rows[0].n,
+    2,
+  );
+  await assert.rejects(
+    db.query(
+      "INSERT INTO google_login_accounts(google_sub,usuario_id) SELECT 'google-user',id FROM usuarios WHERE email='user@test.example'",
+    ),
+    /unique constraint/,
+  );
+  await db.exec("SET ROLE anon");
+  await assert.rejects(
+    db.query("SELECT * FROM google_login_accounts"),
+    /permission denied/,
+  );
+  await db.exec("RESET ROLE");
   await db.close();
   console.log(
-    "Consumer SQL: idempotence, preserved owners, OTP limits/null/replay, email isolation, Google binding and grants PASS",
+    "Consumer SQL: idempotence, preserved owners/Google bindings, OTP limits/null/replay, shared emails across types, per-type uniqueness and grants PASS",
   );
 })().catch((e) => {
   console.error(e);

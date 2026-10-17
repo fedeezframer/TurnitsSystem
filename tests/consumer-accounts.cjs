@@ -98,6 +98,8 @@ class Query {
           rows.push(row);
         }
         Object.assign(row, copy(value));
+        if (this.table === "google_login_accounts")
+          row.tipo_cuenta = row.consumidor_id ? "usuario" : "negocio";
         found.push(row);
       }
     } else if (this.operation === "update")
@@ -256,7 +258,11 @@ async function call(method, url, body = {}, headers = {}) {
     PLANES_VALIDOS: ["gratis", "basico", "premium"],
     validarHorarios: () => true,
     normalizarReferralCode: (r) => r || null,
-    APPS_SCRIPT_URL: "",
+    APPS_SCRIPT_URL: "https://mail.invalid",
+    fetch: async (_url, options) => {
+      sent.push(JSON.parse(options.body));
+      return { ok: true };
+    },
     isActivo: (v) => v === true || v === "true",
     planTieneFuncionesPremium: (p) => ["basico", "premium"].includes(p),
     diasHastaVencer: () => 30,
@@ -276,6 +282,14 @@ async function call(method, url, body = {}, headers = {}) {
   });
   for (const url of ["/registro/iniciar", "/registro/verificar", "/login"])
     captureRoute("post", url, ctx);
+  for (const url of ["/auth/forgot-password", "/auth/reset-password"]) {
+    const consumerHandlers = routes.get("POST " + url);
+    captureRoute("post", url, ctx);
+    routes.set("POST " + url, [
+      ...consumerHandlers,
+      ...routes.get("POST " + url),
+    ]);
+  }
   captureRoute("get", "/verify-session", ctx);
   const authFunction = ast.statements.find(
     (n) => ts.isFunctionDeclaration(n) && n.name?.text === "requireAuth",
@@ -636,15 +650,23 @@ async function call(method, url, body = {}, headers = {}) {
   );
   assert.equal(r.body.rol, "empleado");
   assert.equal(tables.google_login_accounts.at(-1).consumidor_id, null);
-  assert.equal(
-    (
-      await post("/consumidores/registro/iniciar", {
-        ...data,
-        email: pending.email,
-      })
-    ).status,
-    409,
+  // Owner first, then a consumer at the same normalized email.
+  r = await post("/consumidores/registro/iniciar", {
+    ...data,
+    email: pending.email.toUpperCase(),
+    password: "consumer-only",
+  });
+  assert.equal(r.status, 200);
+  r = await post("/consumidores/registro/verificar", {
+    email: pending.email,
+    registro_id: r.body.registro_id,
+    codigo: sent.at(-1).codigo,
+  });
+  assert.equal(r.status, 201);
+  const dualConsumer = tables.consumidores.find(
+    (c) => c.email === pending.email,
   );
+  // Consumer first, then an owner. Existing same-type accounts stay unique.
   assert.equal(
     (
       await post("/registro/iniciar", {
@@ -654,7 +676,238 @@ async function call(method, url, body = {}, headers = {}) {
         rubros: ["barberia"],
       })
     ).status,
+    200,
+  );
+  const otherPending = tables.registros_pendientes.find(
+    (p) => p.email === data.email,
+  );
+  assert.equal(
+    (
+      await post("/registro/verificar", {
+        email: data.email,
+        codigo: otherPending.codigo,
+      })
+    ).status,
+    201,
+  );
+  assert.equal(
+    (await post("/consumidores/registro/iniciar", data)).status,
     409,
+  );
+  assert.equal(
+    (
+      await post("/registro/iniciar", {
+        ...data,
+        business_name: "duplicate",
+        usuario: "duplicate",
+        rubros: ["barberia"],
+      })
+    ).status,
+    409,
+  );
+  for (const [tipo_cuenta, password, expected] of [
+    ["usuario", "consumer-only", "consumidor"],
+    ["negocio", data.password, "owner"],
+  ]) {
+    r = await post("/login", { email: pending.email, password, tipo_cuenta });
+    assert.equal(r.status, 200);
+    assert.equal(jwt.verify(r.body.token, secret).rol, expected);
+    const wrongPassword =
+      tipo_cuenta === "usuario" ? data.password : "consumer-only";
+    assert.equal(
+      (
+        await post("/login", {
+          email: pending.email,
+          password: wrongPassword,
+          tipo_cuenta,
+        })
+      ).status,
+      401,
+    );
+  }
+  assert.equal(
+    (
+      await post("/login", {
+        email: data.email,
+        password: "updated123",
+        tipo_cuenta: "usuario",
+      })
+    ).body.rol,
+    "consumidor",
+  );
+  assert.equal(
+    (
+      await post("/login", {
+        email: data.email,
+        password: data.password,
+        tipo_cuenta: "negocio",
+      })
+    ).body.slug,
+    "other-shop",
+  );
+  assert.equal(
+    (
+      await post("/login", {
+        email: pending.email,
+        password: data.password,
+        tipo_cuenta: "invalid",
+      })
+    ).status,
+    400,
+  );
+  // The same verified Google identity can bind to both types, never to the wrong one.
+  for (const type of ["usuario", "negocio", "usuario"]) {
+    const nonce = (await call("POST", "/auth/google/challenge", {}, headers))
+      .body.nonce;
+    googlePayload = {
+      nonce,
+      sub: "google-owner",
+      email: pending.email,
+      email_verified: true,
+      hd: "test.example",
+    };
+    r = await call(
+      "POST",
+      "/auth/google",
+      { credential: "verified-in-test", nonce, tipo_cuenta: type },
+      headers,
+    );
+    assert.equal(r.status, 200);
+    assert.equal(
+      jwt.verify(r.body.token, secret).rol,
+      type === "usuario" ? "consumidor" : "owner",
+    );
+  }
+  assert.equal(
+    tables.google_login_accounts.filter((b) => b.google_sub === "google-owner")
+      .length,
+    2,
+  );
+  const ambiguousNonce = (
+    await call("POST", "/auth/google/challenge", {}, headers)
+  ).body.nonce;
+  googlePayload.nonce = ambiguousNonce;
+  assert.equal(
+    (
+      await call(
+        "POST",
+        "/auth/google",
+        { credential: "verified-in-test", nonce: ambiguousNonce },
+        headers,
+      )
+    ).body.code,
+    "account_type_required",
+  );
+  // Recovery must target only the selected type.
+  const consumerResetBefore = dualConsumer.reset_token;
+  assert.equal(
+    (
+      await post("/auth/forgot-password", {
+        email: pending.email,
+        tipo_cuenta: "negocio",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(dualConsumer.reset_token, consumerResetBefore);
+  const ownerReset = new URL(sent.at(-1).resetUrl).searchParams.get("token");
+  const ownerPasswordBefore = tables.usuarios[0].password;
+  r = await post("/auth/forgot-password", {
+    email: pending.email,
+    tipo_cuenta: "usuario",
+  });
+  assert.equal(r.status, 200);
+  const dualReset = new URL(sent.at(-1).resetUrl).searchParams.get("token");
+  assert.equal(
+    (
+      await post("/auth/reset-password", {
+        token: dualReset,
+        new_password: "new-consumer",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(tables.usuarios[0].password, ownerPasswordBefore);
+  assert.equal(
+    (
+      await post("/login", {
+        email: pending.email,
+        password: "new-consumer",
+        tipo_cuenta: "usuario",
+      })
+    ).body.rol,
+    "consumidor",
+  );
+  assert.equal(
+    (
+      await post("/login", {
+        email: pending.email,
+        password: data.password,
+        tipo_cuenta: "negocio",
+      })
+    ).body.slug,
+    "new-shop",
+  );
+  assert.equal(
+    (
+      await post("/auth/forgot-password", {
+        email: "missing@test.example",
+        tipo_cuenta: "usuario",
+      })
+    ).status,
+    200,
+  );
+  const consumerPasswordBefore = dualConsumer.password;
+  assert.equal(
+    (
+      await post("/auth/reset-password", {
+        token: ownerReset,
+        new_password: "new-owner",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(dualConsumer.password, consumerPasswordBefore);
+  assert.equal(
+    (
+      await post("/login", {
+        email: pending.email,
+        password: "new-owner",
+        tipo_cuenta: "negocio",
+      })
+    ).body.slug,
+    "new-shop",
+  );
+  assert.equal(
+    (
+      await post("/login", {
+        email: pending.email,
+        password: "new-owner",
+        tipo_cuenta: "usuario",
+      })
+    ).status,
+    401,
+  );
+  dualConsumer.password = tables.usuarios[0].password;
+  assert.equal(
+    (
+      await post("/login", {
+        email: pending.email,
+        password: "new-owner",
+        tipo_cuenta: "usuario",
+      })
+    ).body.rol,
+    "consumidor",
+  );
+  assert.equal(
+    (
+      await post("/login", {
+        email: pending.email,
+        password: "new-owner",
+        tipo_cuenta: "negocio",
+      })
+    ).body.slug,
+    "new-shop",
   );
   await post("/auth/forgot-password", { email: data.email });
   const expiredToken = new URL(sent.at(-1).resetUrl).searchParams.get("token");
@@ -671,7 +924,7 @@ async function call(method, url, body = {}, headers = {}) {
     400,
   );
   console.log(
-    "Consumer API: registration/validation, hashed OTP/password, verified-only creation, role isolation, login/session/Google nonce/binding, one-use password reset, business slug/category/trial compatibility PASS",
+    "Consumer API: registration/OTP, shared email both creation orders, per-type login/password/Google/recovery isolation, roles, existing business compatibility PASS",
   );
 })().catch((error) => {
   console.error(error);

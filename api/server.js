@@ -1483,7 +1483,6 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
 
     if (rubros) {
       const conflicts = await Promise.all([
-        supabase.from("consumidores").select("id").eq("email",emailClean).maybeSingle(),
         supabase.from("equipo").select("id").eq("login_email",emailClean).maybeSingle(),
         supabase.from("admins").select("id").eq("email",emailClean).maybeSingle(),
       ]);
@@ -1805,7 +1804,8 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
   app.post('/auth/google', limiterAuth, onlyOrigin, async (req, res) => {
     try {
       if (!env.GOOGLE_CLIENT_ID || !env.JWT_SECRET) return res.status(503).json({success:false,error:'El acceso con Google todavía no está configurado.'});
-      const {credential, nonce} = req.body || {};
+      const {credential, nonce, tipo_cuenta} = req.body || {};
+      if (tipo_cuenta && !['usuario','negocio'].includes(tipo_cuenta)) return res.status(400).json({success:false,error:'Elegí el tipo de cuenta.'});
       if (typeof credential !== 'string' || credential.length > 16000 || typeof nonce !== 'string' || !challenges.has(nonce) || challenges.get(nonce) < Date.now()) return res.status(401).json({success:false,error:'Volvé a seleccionar tu cuenta de Google.'});
       let google;
       try { google = await verifyGoogle(credential, env.GOOGLE_CLIENT_ID); }
@@ -1814,8 +1814,12 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
         return res.status(401).json({success:false,error:'No pudimos verificar tu cuenta de Google. Volvé a intentar.'});
       }
       if (!google || google.nonce !== nonce || typeof google.sub !== 'string' || !google.sub || google.email_verified !== true) return res.status(401).json({success:false,error:'La credencial de Google no es válida.'});
-      const {data:binding,error:bindingError} = await supabase.from('google_login_accounts').select('google_sub,usuario_id,equipo_id,consumidor_id').eq('google_sub',google.sub).maybeSingle();
+      let bindingQuery = supabase.from('google_login_accounts').select('google_sub,usuario_id,equipo_id,consumidor_id').eq('google_sub',google.sub);
+      if (tipo_cuenta) bindingQuery = bindingQuery.eq('tipo_cuenta',tipo_cuenta);
+      const {data:bindings,error:bindingError} = await bindingQuery;
       if (bindingError) throw bindingError;
+      if (bindings.length > 1) return res.status(409).json({success:false,code:'account_type_required',error:'Elegí Usuario o Negocio para iniciar sesión.'});
+      const binding = bindings[0];
       let user = null, member = null, consumer = null;
       const email = typeof google.email === 'string' ? google.email.trim().toLowerCase() : '';
       if (binding) {
@@ -1828,15 +1832,17 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
         // Sólo el email del token verificado; nunca se toma un email enviado por el navegador.
         const authoritative = email.endsWith('@gmail.com') || (typeof google.hd === 'string' && google.hd.length > 0);
         if (!email || !authoritative) return res.status(403).json({success:false,code:'google_email_not_authoritative',error:'Para este correo, ingresá con tu acceso habitual. También podés usar una cuenta Gmail o Google Workspace.'});
-        const {data:owner,error:ownerError} = await supabase.from('usuarios').select('*').eq('email',email).maybeSingle();
-        if (ownerError) throw ownerError;
-        if (owner) user = owner;
-        else {
-          const {data:employee,error:employeeError} = await supabase.from('equipo').select('*').eq('login_email',email).eq('es_dueño',false).maybeSingle();
-          if (employeeError) throw employeeError;
-          member = employee;
+        if (tipo_cuenta !== 'usuario') {
+          const {data:owner,error:ownerError} = await supabase.from('usuarios').select('*').eq('email',email).maybeSingle();
+          if (ownerError) throw ownerError;
+          if (owner) user = owner;
+          else {
+            const {data:employee,error:employeeError} = await supabase.from('equipo').select('*').eq('login_email',email).eq('es_dueño',false).maybeSingle();
+            if (employeeError) throw employeeError;
+            member = employee;
+          }
         }
-        if (!user && !member) {
+        if (tipo_cuenta !== 'negocio' && !user && !member) {
           const {data,error}=await supabase.from('consumidores').select('*').eq('email',email).maybeSingle();
           if(error) throw error;
           consumer=data;
@@ -1892,6 +1898,11 @@ app.post("/login", limiterAuth, async (req, res) => {
     const rawSlug  = cleanSlug(req.body.slug || "");
     const email    = req.body.email?.trim().toLowerCase() || "";
     const password = req.body.password;
+    const accountType = req.body.tipo_cuenta;
+    if (accountType && !["usuario", "negocio"].includes(accountType))
+      return res.status(400).json({ success: false, error: "Elegí el tipo de cuenta." });
+    if (accountType === "usuario" && rawSlug)
+      return res.status(400).json({ success: false, error: "Ingresá con el correo de tu cuenta de usuario." });
 
     if ((!rawSlug && !email) || typeof password !== "string") {
       return res.status(400).json({ success: false, error: "Faltan email (o slug) y contraseña." });
@@ -1904,6 +1915,16 @@ app.post("/login", limiterAuth, async (req, res) => {
         success: false,
         error: `Demasiados intentos fallidos. Probá de nuevo en ${estadoBloqueo.minutosRestantes} minuto(s).`,
       });
+    }
+
+    if (accountType === "usuario") {
+      const consumer = await consumerAccounts.findByEmail(email);
+      if (consumer && consumer.activo === true && consumer.email_verificado === true && await bcrypt.compare(password, consumer.password)) {
+        limpiarIntentosLogin(claveBloqueo);
+        return res.json(consumerAccounts.session(consumer));
+      }
+      registrarIntentoFallidoLogin(claveBloqueo);
+      return res.status(401).json({ success: false, error: "Credenciales incorrectas." });
     }
 
     // ── Login como ADMIN (tabla separada "admins") ──
@@ -1988,7 +2009,7 @@ app.post("/login", limiterAuth, async (req, res) => {
             email,
           });
         }
-        if(!miembro) {
+        if(!miembro && accountType !== "negocio") {
           const consumer=await consumerAccounts.findByEmail(email);
           if(consumer && consumer.activo === true && consumer.email_verificado === true && await bcrypt.compare(password,consumer.password)) {
             limpiarIntentosLogin(claveBloqueo);
