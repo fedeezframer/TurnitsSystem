@@ -3,9 +3,25 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { appConfig } from "../config";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import { consumerHeaders } from "../shared/consumer-session";
+import BrowseCalendar from "./BrowseCalendar";
 import "./Browse.css";
 
 type View = "inicio" | "ofertas" | "agenda" | "buscar" | "coins" | "perfil";
+const NAV_LABELS = {
+  inicio: "Inicio",
+  ofertas: "Ofertas",
+  agenda: "Tu agenda",
+  buscar: "Buscar",
+};
+const PROVIDED_ICONS: Record<string, string> = {
+  inicio: "bx_home.svg",
+  ofertas: "ant-design_fire-outlined.svg",
+  "ofertas-active": "ant-design_fire-outlined2.svg",
+  agenda: "boxicons_calendar-alt.svg",
+  buscar: "bitcoin-icons_search-filled.svg",
+  coins: "boxicons_coin.svg",
+  perfil: "bxs_user.svg",
+};
 const money = (n: number) =>
   new Intl.NumberFormat("es-AR", {
     style: "currency",
@@ -43,44 +59,21 @@ export function BrowseIcon({
   name: string;
   [key: string]: any;
 }) {
+  if (PROVIDED_ICONS[name])
+    return (
+      <span
+        aria-hidden="true"
+        className="browse-glyph"
+        style={
+          {
+            width: props.width || 32,
+            height: props.height || 32,
+            "--browse-icon": `url("/assets/browse/${PROVIDED_ICONS[name]}")`,
+          } as React.CSSProperties
+        }
+      />
+    );
   const paths: Record<string, React.ReactNode> = {
-    inicio: (
-      <>
-        <path d="m3 10 9-8 9 8M5 9v12h5v-7h4v7h5V9" />
-        <path d="M8 11h1" />
-      </>
-    ),
-    ofertas: (
-      <path d="M13 2c1 5-3 6-2 10 2-1 3-3 3-5 5 4 7 8 4 12-4 5-13 2-13-4 0-3 2-5 3-7 0 4 1 4 2 5-2-5 3-7 3-11Z" />
-    ),
-    agenda: (
-      <>
-        <rect x="3" y="5" width="18" height="17" rx="1" />
-        <path d="M7 2v6m10-6v6M3 10h18M7 14h1m4 0h1m4 0h1M7 18h1m4 0h1m4 0h1" />
-      </>
-    ),
-    buscar: (
-      <>
-        <circle cx="10" cy="10" r="7" />
-        <path d="m15 15 6 6" />
-      </>
-    ),
-    coins: (
-      <g transform="rotate(24 12 12)">
-        <ellipse cx="11" cy="12" rx="5" ry="10" />
-        <path d="M11 2h4c7 0 7 20 0 20h-4M16 6h3m-2 5h4m-5 5h3" />
-      </g>
-    ),
-    perfil: (
-      <>
-        <circle cx="12" cy="7" r="4" fill="currentColor" stroke="none" />
-        <path
-          d="M4 22v-4a8 8 0 0 1 16 0v4Z"
-          fill="currentColor"
-          stroke="none"
-        />
-      </>
-    ),
     pin: (
       <>
         <path d="M19 10c0 5-7 12-7 12S5 15 5 10a7 7 0 0 1 14 0Z" />
@@ -134,7 +127,7 @@ export function BrowseIcon({
       aria-hidden="true"
       {...props}
     >
-      {paths[name] || paths.buscar}
+      {paths[name] || paths.imagen}
     </svg>
   );
 }
@@ -151,8 +144,13 @@ function Avatar({ name, src }: any) {
     </span>
   );
 }
-function Empty({ children }: any) {
-  return <p className="browse-empty">{children}</p>;
+function Empty({ children, icon = "buscar" }: any) {
+  return (
+    <div className="browse-empty">
+      <BrowseIcon name={icon} />
+      <p>{children}</p>
+    </div>
+  );
 }
 function Distance({ item, location }: any) {
   const n = item?.negocio;
@@ -198,7 +196,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
         </Link>
         {kind === "offer" && (
           <span className="browse-card-fire">
-            <BrowseIcon name="ofertas" />
+            <BrowseIcon name="ofertas-active" />
           </span>
         )}
       </div>
@@ -367,7 +365,7 @@ export default function Browse() {
     [more, setMore] = React.useState(false),
     [location, setLocation] = React.useState<any>(null),
     [geoError, setGeoError] = React.useState(""),
-    [selectedDate, setSelectedDate] = React.useState(today()),
+    [currentDay, setCurrentDay] = React.useState(today()),
     [modal, setModal] = React.useState<any>(null),
     [busy, setBusy] = React.useState(false),
     [actionError, setActionError] = React.useState(""),
@@ -377,7 +375,21 @@ export default function Browse() {
     [form, setForm] = React.useState<any>({}),
     [revision, setRevision] = React.useState(0);
   const searchInput = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    const update = () => setCurrentDay(today());
+    const timer = setInterval(update, 60000);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, []);
   const changeView = (v: View) => {
+    if (v === "inicio") {
+      setQuery("");
+      setCategory("");
+      setMore(false);
+    }
     setParams(v === "inicio" ? {} : { vista: v });
     setNotice("");
     window.scrollTo({
@@ -551,15 +563,7 @@ export default function Browse() {
   const suggestions = [...new Set(catalog.servicios.map((s: any) => s.nombre))]
     .filter((s: any) => !query || clean(s).includes(clean(query)))
     .slice(0, 8) as string[];
-  const days = Array.from({ length: 28 }, (_, i) => {
-    const d = new Date(`${today()}T12:00:00`);
-    d.setDate(d.getDate() + i);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  });
-  const appointments = me?.turnos || [],
-    events = appointments.filter(
-      (t: any) => t.fecha === selectedDate && t.estado !== "cancelado",
-    );
+  const appointments = me?.turnos || [];
   const recent = appointments.find(
       (t: any) => t.estado === "confirmado" && t.fecha < today(),
     ),
@@ -620,16 +624,43 @@ export default function Browse() {
           to="/browse"
           aria-label="Turnits, inicio"
           className="browse-wordmark"
+          onClick={() => {
+            setQuery("");
+            setCategory("");
+            setMore(false);
+          }}
         >
-          turnits
+          <img
+            src="/assets/browse/LogoTurnitsCompletoB.png"
+            alt="Turnits"
+            width="190"
+            height="44"
+          />
         </Link>
-        <div>
+        <nav className="browse-dock" aria-label="Navegación de Browse">
+          {(["inicio", "ofertas", "agenda", "buscar"] as const).map((v) => (
+            <button
+              key={v}
+              className={view === v ? "selected" : ""}
+              aria-label={NAV_LABELS[v]}
+              aria-current={view === v ? "page" : undefined}
+              onClick={() => changeView(v)}
+            >
+              <BrowseIcon
+                name={v === "ofertas" && view === v ? "ofertas-active" : v}
+              />
+              <span className="browse-nav-label">{NAV_LABELS[v]}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="browse-header-actions">
           <button
             aria-label="T-Coins"
             className={view === "coins" ? "selected" : ""}
             onClick={() => changeView("coins")}
           >
             <BrowseIcon name="coins" />
+            <span className="browse-header-label">T-Coins</span>
           </button>
           <button
             aria-label="Mi perfil"
@@ -637,6 +668,7 @@ export default function Browse() {
             onClick={() => changeView("perfil")}
           >
             <BrowseIcon name="perfil" />
+            <span className="browse-header-label">Mi perfil</span>
           </button>
         </div>
       </header>
@@ -654,13 +686,19 @@ export default function Browse() {
                 <div className="browse-home-layout">
                   {recent && recentService ? (
                     <article className="browse-last-visit">
-                      <img
-                        src={
-                          recentService.imagen ||
-                          recentService.negocio.banner_url
-                        }
-                        alt={recentService.nombre}
-                      />
+                      <div className="browse-last-photo">
+                        <BrowseIcon name="imagen" />
+                        <img
+                          src={
+                            recentService.imagen ||
+                            recentService.negocio.banner_url
+                          }
+                          alt={recentService.nombre}
+                          onError={(e) => {
+                            e.currentTarget.style.visibility = "hidden";
+                          }}
+                        />
+                      </div>
                       <Avatar
                         name={recentService.negocio.nombre}
                         src={recentService.negocio.foto_perfil_url}
@@ -675,14 +713,64 @@ export default function Browse() {
                     </article>
                   ) : (
                     <div className="browse-welcome">
-                      <h2>Tu próximo turno empieza acá</h2>
+                      <span className="browse-eyebrow">
+                        Encontrá tu próximo plan
+                      </span>
+                      <h2>
+                        Un turno para vos.
+                        <br />
+                        Un momento para disfrutar.
+                      </h2>
                       <p>
-                        Encontrá un servicio y reservá en la agenda del negocio.
+                        Explorá negocios, descubrí servicios y elegí tu próximo
+                        turno.
                       </p>
                     </div>
                   )}
                   <section className="browse-categories">
                     <h2>Categorías</h2>
+                    <div className="browse-desktop-categories">
+                      {[
+                        {
+                          id: "barberia",
+                          label: "Barberías",
+                          icon: "mingcute_beard-fill",
+                        },
+                        {
+                          id: "manicura",
+                          label: "Estéticas",
+                          icon: "fluent-emoji-high-contrast_nail-polish",
+                        },
+                        {
+                          id: "consultoria",
+                          label: "Consultoría",
+                          icon: "iconoven_tie",
+                        },
+                      ].map((c) => (
+                        <button
+                          key={c.id}
+                          className={"category-" + c.id}
+                          onClick={() => {
+                            setCategory(c.id);
+                            changeView("buscar");
+                          }}
+                        >
+                          <span>{c.label}</span>
+                          <img
+                            src={"/assets/categories/" + c.icon + ".svg"}
+                            alt=""
+                          />
+                        </button>
+                      ))}
+                      <button
+                        className="category-more"
+                        aria-label="Más categorías"
+                        onClick={() => setMore(!more)}
+                      >
+                        <span>Más categorías</span>
+                        <b aria-hidden="true">+</b>
+                      </button>
+                    </div>
                     <div className="browse-category-art">
                       <svg viewBox="22 525 400 300" aria-hidden="true">
                         <image
@@ -940,60 +1028,19 @@ export default function Browse() {
               <>
                 <h1>Tu agenda</h1>
                 <p>Gestioná todos tus turnos desde aquí</p>
-                <div className="browse-calendar">
-                  {Array.from({ length: 7 }, (_, row) => (
-                    <React.Fragment key={row}>
-                      {days.slice(row * 4, row * 4 + 4).map((d) => (
-                        <button
-                          key={d}
-                          className={`${d === selectedDate ? "selected" : ""}${appointments.some((t: any) => t.fecha === d && t.estado !== "cancelado") ? " has-events" : ""}`}
-                          onClick={() => setSelectedDate(d)}
-                        >
-                          {d === today() ? "Hoy" : dateLabel(d)}
-                        </button>
-                      ))}
-                      {days
-                        .slice(row * 4, row * 4 + 4)
-                        .includes(selectedDate) && (
-                        <section className="browse-calendar-events">
-                          <span>{dateLabel(selectedDate)}</span>
-                          {events.length ? (
-                            events.map((t: any) => (
-                              <div key={t.id}>
-                                <Avatar
-                                  name={
-                                    catalog.negocios.find(
-                                      (n: any) => n.slug === t.slug,
-                                    )?.nombre || t.slug
-                                  }
-                                />
-                                <span>{t.servicio_nombre}</span>
-                                <strong>{String(t.hora).slice(0, 5)}hs</strong>
-                                <button
-                                  onClick={() =>
-                                    act(async () => {
-                                      const d = await api(
-                                        "/browse/turnos/" + t.id,
-                                      );
-                                      open({
-                                        type: "appointment",
-                                        item: d.turno,
-                                      });
-                                    })
-                                  }
-                                >
-                                  Ver Detalles
-                                </button>
-                              </div>
-                            ))
-                          ) : (
-                            <p>No tenés turnos para este día.</p>
-                          )}
-                        </section>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </div>
+                <BrowseCalendar
+                  today={currentDay}
+                  appointments={appointments}
+                  businesses={catalog.negocios}
+                  busy={busy}
+                  onDetails={(t: any) =>
+                    act(async () => {
+                      const d = await api("/browse/turnos/" + t.id);
+                      open({ type: "appointment", item: d.turno });
+                    })
+                  }
+                  onExplore={() => changeView("buscar")}
+                />
                 {appointments.some((t: any) => t.fecha < today()) && (
                   <details className="browse-history">
                     <summary>Turnos anteriores</summary>
@@ -1129,26 +1176,6 @@ export default function Browse() {
           </>
         )}
       </main>
-      <nav className="browse-dock" aria-label="Navegación de Browse">
-        {(["inicio", "ofertas", "agenda", "buscar"] as View[]).map((v) => (
-          <button
-            key={v}
-            className={view === v ? "selected" : ""}
-            aria-label={
-              {
-                inicio: "Inicio",
-                ofertas: "Ofertas",
-                agenda: "Tu agenda",
-                buscar: "Buscar",
-              }[v as "inicio"]
-            }
-            aria-current={view === v ? "page" : undefined}
-            onClick={() => changeView(v)}
-          >
-            <BrowseIcon name={v} />
-          </button>
-        ))}
-      </nav>
       {modal && (
         <Modal
           title={
