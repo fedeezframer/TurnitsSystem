@@ -183,6 +183,62 @@
   border-color: #1b6b1a;
   box-shadow: 0 0 0 2px #1b6b1a26;
 }
+.registration-phone {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 50px;
+  border: 1px solid #000;
+  border-radius: 10px;
+  background: #fff;
+}
+.registration-phone:focus-within {
+  border-color: #1b6b1a;
+  box-shadow: 0 0 0 2px #1b6b1a26;
+}
+.registration-phone-country {
+  position: relative;
+  flex: 0 0 112px;
+  border-right: 1px solid #d8ded8;
+  font-size: 16px;
+  font-weight: 400;
+}
+.registration-phone-country span {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 25px 0 12px;
+  white-space: nowrap;
+}
+.registration-phone-country::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: calc(50% - 4px);
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.registration-phone-country select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;
+}
+.registration-field .registration-phone input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
 .registration-field small {
   position: absolute;
   top: calc(100% + 5px);
@@ -233,19 +289,21 @@
   opacity: 0;
   pointer-events: none;
 }
-.registration-form.negocio .registration-next {
+.registration-actions .registration-next {
+  width: 100%;
+}
+.registration-form.negocio .registration-actions {
   grid-column: 1;
   margin-top: 42px;
 }
-.registration-form.usuario .registration-next {
+.registration-form.usuario .registration-actions {
   margin-top: 32px;
 }
 .registration-consent {
-  grid-column: 1/-1;
   font-size: 12px;
   line-height: 1.5;
   color: #526352;
-  margin: 4px 0 0;
+  margin: 12px 0 0;
 }
 .registration-consent a {
   color: inherit;
@@ -467,8 +525,8 @@
     height: 56px;
     font-size: 20px !important;
   }
-  .registration-form.negocio .registration-next,
-  .registration-form.usuario .registration-next {
+  .registration-form.negocio .registration-actions,
+  .registration-form.usuario .registration-actions {
     margin-top: 4px;
     grid-column: 1;
   }
@@ -594,7 +652,13 @@
   .registration-form.negocio .registration-next,
   .registration-form.usuario .registration-next {
     height: 56px;
+  }
+  .registration-form.negocio .registration-actions,
+  .registration-form.usuario .registration-actions {
     margin-top: 20px;
+  }
+  .registration-phone {
+    height: 44px;
   }
   .registration-step-3 .registration-main {
     padding-top: 50px;
@@ -627,6 +691,7 @@
   .registration-account,
   .registration-category,
   .registration-next,
+  .registration-actions,
   .registration-error,
   .registration-notice {
     transition: none;

@@ -21,13 +21,34 @@ const empty: Fields = {
   password: "",
 };
 const cleanEmail = (email: string) => email.trim().toLowerCase();
-function detailsError(fields: Fields, type: AccountType) {
+const PHONE_COUNTRIES = [
+  { code: "AR", dial: "+54", name: "Argentina" },
+  { code: "UY", dial: "+598", name: "Uruguay" },
+  { code: "CL", dial: "+56", name: "Chile" },
+  { code: "PY", dial: "+595", name: "Paraguay" },
+  { code: "BO", dial: "+591", name: "Bolivia" },
+  { code: "BR", dial: "+55", name: "Brasil" },
+  { code: "PE", dial: "+51", name: "Perú" },
+  { code: "CO", dial: "+57", name: "Colombia" },
+  { code: "MX", dial: "+52", name: "México" },
+  { code: "US", dial: "+1", name: "Estados Unidos" },
+  { code: "ES", dial: "+34", name: "España" },
+];
+function internationalPhone(
+  number: string,
+  country: (typeof PHONE_COUNTRIES)[number],
+) {
+  if (!/^[\d\s()-]+$/.test(number)) return "";
+  const national = number.replace(/\D/g, "");
+  return national.length >= 7 ? country.dial.slice(1) + national : "";
+}
+function detailsError(fields: Fields, type: AccountType, phone: string) {
   if (!fields.nombre_persona.trim() || !fields.apellido.trim())
     return "Completá tu nombre y apellido.";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail(fields.email)))
     return "Revisá tu correo electrónico.";
-  if (!/^[0-9]{7,15}$/.test(fields.telefono.replace(/[\s()+-]/g, "")))
-    return "Ingresá un teléfono de 7 a 15 dígitos, con código de área.";
+  if (!/^[0-9]{7,15}$/.test(phone))
+    return "Elegí el país e ingresá tu teléfono con código de área.";
   if (
     fields.password.length < 6 ||
     new TextEncoder().encode(fields.password).length > 72
@@ -109,6 +130,7 @@ export default function Register({
   const [step, setStep] = useState(1);
   const [type, setType] = useState<AccountType>("usuario");
   const [fields, setFields] = useState<Fields>(empty);
+  const [phoneCountry, setPhoneCountry] = useState("AR");
   const [categories, setCategories] = useState<string[]>([]);
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [registrationId, setRegistrationId] = useState("");
@@ -121,7 +143,11 @@ export default function Register({
   const title = useRef<HTMLHeadingElement>(null);
   const mounted = useRef(true);
   const request = useRef<AbortController | null>(null);
-  const detailsComplete = !detailsError(fields, type);
+  const selectedCountry =
+    PHONE_COUNTRIES.find((country) => country.code === phoneCountry) ||
+    PHONE_COUNTRIES[0];
+  const phone = internationalPhone(fields.telefono, selectedCountry);
+  const detailsComplete = !detailsError(fields, type, phone);
   const [plan] = useState(() => {
     const value = new URLSearchParams(window.location.search).get("plan");
     return ["gratis", "basico", "premium"].includes(value || "")
@@ -196,7 +222,7 @@ export default function Register({
   function nextDetails(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    const invalid = detailsError(fields, type);
+    const invalid = detailsError(fields, type, phone);
     if (invalid) {
       setError(invalid);
       return;
@@ -214,7 +240,7 @@ export default function Register({
         nombre_persona: fields.nombre_persona.trim(),
         apellido: fields.apellido.trim(),
         email: cleanEmail(fields.email),
-        telefono: fields.telefono,
+        telefono: phone,
         password: fields.password,
       };
       const result = await post(
@@ -372,6 +398,24 @@ export default function Register({
       if (mounted.current) setBusy(false);
     }
   }
+  function changePhone(value: string) {
+    let national = value;
+    if (/^\s*(\+|00)/.test(value)) {
+      const full = value
+        .trim()
+        .replace(/^00/, "+")
+        .replace(/[\s()-]/g, "");
+      const country = [...PHONE_COUNTRIES]
+        .sort((a, b) => b.dial.length - a.dial.length)
+        .find((item) => full.startsWith(item.dial));
+      if (country) {
+        setPhoneCountry(country.code);
+        national = full.slice(country.dial.length);
+      }
+    }
+    setFields((values) => ({ ...values, telefono: national }));
+    setError("");
+  }
   function field(
     key: keyof Fields,
     label: string,
@@ -485,31 +529,83 @@ export default function Register({
             {field("nombre_persona", "Nombre", "text", "given-name")}
             {field("apellido", "Apellido", "text", "family-name")}
             {field("email", "Correo Electrónico", "email", "email")}
-            {field("telefono", "Número Telefónico", "tel", "tel")}
+            <div className="registration-field">
+              <label htmlFor="registration-phone">Número Telefónico</label>
+              <div className="registration-phone">
+                <div className="registration-phone-country">
+                  <span aria-hidden="true">
+                    {selectedCountry.code} {selectedCountry.dial}
+                  </span>
+                  <select
+                    aria-label="País del teléfono"
+                    autoComplete="tel-country-code"
+                    value={phoneCountry}
+                    onChange={(event) => {
+                      setPhoneCountry(event.target.value);
+                      setError("");
+                    }}
+                  >
+                    {PHONE_COUNTRIES.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.name} ({country.dial})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <input
+                  id="registration-phone"
+                  name="telefono"
+                  type="tel"
+                  autoComplete="tel-national"
+                  inputMode="tel"
+                  required
+                  maxLength={30}
+                  value={fields.telefono}
+                  onChange={(event) => changePhone(event.target.value)}
+                  aria-describedby={error ? "registration-error" : undefined}
+                />
+              </div>
+            </div>
             {type === "negocio" &&
               field("usuario", "Usuario", "text", "username")}
             {field("password", "Contraseña", "password", "new-password")}
-            <button
-              className="registration-next registration-reveal"
-              type="submit"
+            <div
+              className="registration-actions registration-reveal"
               data-ready={detailsComplete}
-              disabled={!detailsComplete}
               aria-hidden={!detailsComplete}
-              aria-describedby="registration-consent"
             >
-              Siguiente
-            </button>
-            <p className="registration-consent" id="registration-consent">
-              Al presionar «Siguiente», aceptás los{" "}
-              <a href={termsUrl} target="_blank" rel="noreferrer">
-                Términos y condiciones
-              </a>{" "}
-              y la{" "}
-              <a href={privacyUrl} target="_blank" rel="noreferrer">
-                Política de privacidad
-              </a>
-              .
-            </p>
+              <button
+                className="registration-next"
+                type="submit"
+                data-ready={detailsComplete}
+                disabled={!detailsComplete}
+                aria-hidden={!detailsComplete}
+                aria-describedby="registration-consent"
+              >
+                Siguiente
+              </button>
+              <p className="registration-consent" id="registration-consent">
+                Al presionar «Siguiente», aceptás los{" "}
+                <a
+                  href={termsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  tabIndex={detailsComplete ? undefined : -1}
+                >
+                  Términos y condiciones
+                </a>{" "}
+                y la{" "}
+                <a
+                  href={privacyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  tabIndex={detailsComplete ? undefined : -1}
+                >
+                  Política de privacidad
+                </a>
+                .
+              </p>
+            </div>
           </form>
         )}
         {step === 3 && (
