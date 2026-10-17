@@ -491,6 +491,81 @@
     font-size: 30px;
   }
 }
+@media (min-width: 701px) and (max-height: 800px) {
+  .registration-main {
+    padding-top: 60px;
+    padding-bottom: 32px;
+  }
+  .registration-main h1 {
+    font-size: 40px;
+  }
+  .registration-subtitle {
+    font-size: 22px;
+  }
+  .registration-accounts {
+    margin-top: 36px;
+    gap: 80px;
+  }
+  .registration-account {
+    width: 360px;
+    height: 340px;
+  }
+  .registration-account strong {
+    font-size: 44px;
+  }
+  .registration-account > span {
+    font-size: 22px;
+  }
+  .registration-art {
+    height: 190px;
+  }
+  .registration-step-2 .registration-main {
+    padding-top: 40px;
+    padding-bottom: 24px;
+  }
+  .registration-form {
+    margin-top: 24px;
+    row-gap: 12px;
+  }
+  .registration-field {
+    font-size: 20px;
+    gap: 8px;
+  }
+  .registration-field input {
+    height: 44px;
+    font-size: 18px;
+  }
+  .registration-form.negocio .registration-next,
+  .registration-form.usuario .registration-next {
+    height: 56px;
+    margin-top: 20px;
+  }
+  .registration-step-3 .registration-main {
+    padding-top: 50px;
+    padding-bottom: 24px;
+  }
+  .registration-categories {
+    margin-top: 36px;
+    row-gap: 24px;
+  }
+  .registration-category {
+    height: 80px;
+    font-size: 30px !important;
+  }
+  .registration-interests-next {
+    height: 56px;
+    margin-top: 30px;
+  }
+  .registration-step-4 .registration-main {
+    padding-top: 80px;
+  }
+  .registration-code {
+    margin-top: 60px;
+  }
+  .registration-code input {
+    height: 125px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .registration-account {
     transition: none;
