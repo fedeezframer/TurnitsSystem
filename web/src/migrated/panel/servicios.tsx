@@ -1,5 +1,6 @@
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
+import BrowseBusiness from "./browse-config"
 import * as React from "react"
 import {
     useState,
@@ -2646,7 +2647,7 @@ function ServiciosManager(props: any) {
     const isMobile = containerWidth < 480
 
     const [puedePromociones, setPuedePromociones] = React.useState(false)
-    const [vista, setVista] = React.useState<"servicios" | "extras" | "promociones">(
+    const [vista, setVista] = React.useState<"servicios" | "extras" | "promociones" | "offers" | "coins">(
         "servicios"
     )
 
@@ -3178,7 +3179,8 @@ function ServiciosManager(props: any) {
                 {<><button type="button" className={`svc-tab${vista === "extras" ? " active" : ""}`} aria-pressed={vista === "extras"} onClick={() => setVista("extras")} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="extras" />Productos</button>{(!employeeMode || employeeCanCreate) && <button type="button" className={`svc-tab${vista === "promociones" ? " active" : ""}`} aria-pressed={vista === "promociones"} onClick={() => setVista("promociones")} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="promociones" />{isMobile ? "Promos" : "Promociones"}</button>}</>}
             </div>
 
-            {vista === "servicios" ? (
+            {!employeeMode && !branch && <div className="browse-business-tabs" role="group" aria-label="Herramientas de Browse"><button aria-pressed={vista==='offers'} onClick={()=>setVista('offers')}>Turnits Offers</button><button aria-pressed={vista==='coins'} onClick={()=>setVista('coins')}>Turnits T-Coins</button></div>}
+            {vista==='offers'||vista==='coins' ? <BrowseBusiness api={api} view={vista}/> : vista === "servicios" ? (
                 <>
                     <div
                         style={{

@@ -6,6 +6,7 @@ import ResetPassword from "./pages/ResetPassword"
 
 const Login = lazy(() => import("./migrated/Login"))
 const Register = lazy(() => import("./migrated/Register"))
+const Browse = lazy(() => import("./pages/Browse"))
 const Booking = lazy(() => import("./migrated/Booking"))
 const Panel = lazy(() => import("./migrated/panel"))
 const Home = lazy(() => import("./pages/Home"))
@@ -41,7 +42,7 @@ export default function App() {
     <Route path="/login" element={<Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
     <Route path="/registro" element={<Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" />} />
     <Route path="/register" element={<Navigate to={`/registro${window.location.search}`} replace />} />
-    <Route path="/browse" element={<main aria-label="Browse" style={{ minHeight: "100dvh", background: "#fff" }} />} />
+    <Route path="/browse" element={<Browse />} />
     <Route path="/panel" element={<PanelRoute />} />
     <Route path="/panel/:slug" element={<PanelRoute />} />
     <Route path="/renovar" element={<RenewRoute />} />

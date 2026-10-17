@@ -1,4 +1,5 @@
 import { appConfig } from "../config"
+import { consumerHeaders } from "../shared/consumer-session"
 import * as React from "react"
 import { cardRadius, iconRadius, type BusinessAppearance } from "../shared/appearance.js"
 import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
@@ -873,6 +874,21 @@ export default function BookingFlow(props: any) {
     const [paisDropdownOpen, setPaisDropdownOpen] = React.useState(false)
     const [emailError, setEmailError] = React.useState("")
     const [telError, setTelError] = React.useState("")
+    React.useEffect(()=>{
+        const headers=consumerHeaders();if(!headers.Authorization)return;
+        const controller=new AbortController();
+        fetch(`${api}/browse/identidad`,{headers,signal:controller.signal}).then(r=>r.json()).then(d=>{
+            if(!d.success||controller.signal.aborted)return;const c=d.perfil;
+            setNombre(v=>v||c.nombre_persona||"");setApellido(v=>v||c.apellido||"");setEmail(v=>v||c.email||"");
+            const digits=String(c.telefono||"").replace(/\D/g,"");const country=[...PAISES].sort((a,b)=>b.dial.length-a.dial.length).find(p=>digits.startsWith(p.dial.slice(1)));
+            if(country){setPais(country);setTelefono(v=>v||digits.slice(country.dial.length-1))}
+        }).catch(()=>{});return ()=>controller.abort();
+    },[api]);
+    const browsePreselect=React.useRef(false);
+    React.useEffect(()=>{
+        if(browsePreselect.current||!servicios.length)return;const id=new URLSearchParams(window.location.search).get('servicio_id');
+        if(id&&servicios.some(s=>s.id===id)){setServicioId(id);browsePreselect.current=true}
+    },[servicios]);
     const paisBtnRef = React.useRef<HTMLButtonElement>(null)
 
     const [nota, setNota] = React.useState("")
@@ -1798,7 +1814,7 @@ export default function BookingFlow(props: any) {
                 }
                 const res = await fetch(`${api}/turnos/reservar`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json", ...consumerHeaders() },
                     body: JSON.stringify({
                         name: nombreTrim,
                         apellido: apellidoTrim,
@@ -1836,7 +1852,7 @@ export default function BookingFlow(props: any) {
             if (metodo === "mercadopago" || metodo === "tarjeta") {
                 const res = await fetch(`${api}/api/create-preference`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json", ...consumerHeaders() },
                     body: JSON.stringify({
                         card_checkout: metodo === "tarjeta",
                         nombre: nombreTrim,
@@ -1902,6 +1918,7 @@ export default function BookingFlow(props: any) {
             }
             const res = await fetch(`${api}/turnos/reservar-manual`, {
                 method: "POST",
+                headers: consumerHeaders(),
                 body: form,
             })
             const data = await res.json().catch(() => ({}))

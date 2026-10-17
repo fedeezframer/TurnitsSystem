@@ -16,6 +16,7 @@ import { businessIcon } from "./business-appearance.js";
 import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appearance.js";
 import { createConsumerAccounts, consumerIdentity } from "./consumer-accounts.js";
 import { validCategories } from "../web/src/shared/categories.js";
+import { createBrowse } from "./browse.js";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
@@ -89,6 +90,7 @@ if (!MP_TOKEN_ENC_KEY) {
 }
 const PANEL_URL          = process.env.PANEL_URL                  || "https://turnits.com/panel";
 const SUCCESS_URL        = process.env.SUCCESS_URL                || "https://turnits.com/success";
+const PENDIENTE_URL      = process.env.PENDING_URL                || "https://turnits.com/pendiente";
 const ERROR_URL          = process.env.ERROR_URL                  || "https://turnits.com/error";
 const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_URL}?status=renovacion_ok`;
 const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
@@ -1025,6 +1027,21 @@ const sucursalesApp=crearSucursales({app,supabase,requireAuth,cleanSlug,isActivo
 const branchPanel=createBranchPanel({app,supabase,requireAuth,cleanSlug});
 const consumerAccounts=createConsumerAccounts({app,supabase,bcrypt,jwt,limiterAuth,limiterCodigo,fetch,
   mailUrl:APPS_SCRIPT_URL,rounds:BCRYPT_ROUNDS,expiry:JWT_EXPIRY});
+const browse=createBrowse({app,supabase,jwt,bcrypt,requireAuth,consumerAccounts,limiterAuth,limiterBooking,limiterRead:rateLimit({windowMs:60000,max:90,standardHeaders:true,legacyHeaders:false}),multer,
+ configForMember:configNegocioParaEquipo,intervals:obtenerIntervalosDia,available:promoDisponibilidad,validateMember:(slug,id)=>sucursalesApp.validarEquipoReserva(slug,id),
+ checkCommissions:agendaPausadaPorComisiones,createCheckout:crearCheckoutOffer,
+ notifyBooking:(t,u)=>{crearNotificacion({slug:t.slug,tipo:'turno_nuevo',titulo:'Canje de T-Coins',mensaje:`${t.nombre} canjeó ${t.tc_gastados} T-Coins por ${t.servicio_nombre}.`,data:{turno_id:t.id,equipo_id:t.equipo_id,fecha:t.fecha,hora:t.hora}});enviarMailTurno({adminEmail:u.email,emailCliente:t.email,nombreCliente:t.nombre,fechaHora:`${t.fecha} ${t.hora}`,slug:t.slug,servicio:t.servicio_nombre,profesional:t.equipo_nombre,precioTotal:Number(t.precio_cobrado),montoOnline:0,metodoPago:'canje',reprogramarUrl:armarReprogramarUrl(t.id,t.gestion_token,t.slug),extras:t.extras});invalidateCache(t.slug)},
+ mail:async body=>{if(!APPS_SCRIPT_URL)throw new Error('Mail unavailable');const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error('Mail unavailable')}
+});
+
+// Sólo se asocian reservas a una cuenta verificada mediante su JWT, nunca por email del formulario.
+async function consumidorReserva(req) {
+ const raw=req.headers.authorization?.split(' ')[1];if(!raw)return null;
+ let payload;try{payload=jwt.verify(raw,process.env.JWT_SECRET)}catch{throw Object.assign(new Error('Tu sesión venció. Volvé a iniciar sesión.'),{status:401})}
+ if(payload.rol!=='consumidor')return null;
+ const c=await consumerAccounts.findById(payload.consumidorId);
+ if(!c?.activo||!c?.email_verificado)throw new Error('La cuenta de usuario ya no está activa.');return c.id;
+}
 
 app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
   try {
@@ -3610,6 +3627,8 @@ let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, s
       monto_extras:    montoExtras,
       monto_pagado:    0,
       estado:          "confirmado",
+      consumidor_id: await consumidorReserva(req),
+      tc_elegible: true,
       metodo_pago:     "none",
       pago_estado:     "sin_pago",
     }]).select().single();
@@ -3813,6 +3832,8 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
       tipo_cobro: tipoCobro,
       porcentaje_sena: tipoCobro === "sena" ? porcSenaTransferencia : null,
       estado: "pendiente", metodo_pago,
+      consumidor_id: await consumidorReserva(req),
+      tc_elegible: true,
       // Tanto efectivo como transferencia requieren aprobación del profesional.
       pago_estado: "pendiente",
       comprobante_path: comprobantePath,
@@ -7468,6 +7489,25 @@ function cardProviderDiagnostic(httpStatus, response) {
 function verifyCardSession(value) {
   return jwt.verify(value, process.env.JWT_SECRET + ":card-checkout", {algorithms:["HS256"], audience:"turnits-card"});
 }
+const browseCheckoutLocks=new Set();
+async function crearCheckoutOffer(t,ctx,cardCheckout) {
+ if(cardCheckout)throw Object.assign(new Error('Usá Mercado Pago para completar el pago de esta oferta.'),{publicMessage:'Pagá esta oferta desde Mercado Pago, donde también podés usar tu tarjeta.',status:400});
+ if(browseCheckoutLocks.has(t.id))throw Object.assign(new Error('Pago en preparación.'),{publicMessage:'Estamos preparando tu pago. Esperá unos segundos.',status:409});
+ browseCheckoutLocks.add(t.id);
+ try {
+  const {user,member,config}=ctx;
+  const token=usaCuentaMpPersonal(member)?await obtenerTokenMpVigenteEquipo(t.slug,member.id,member):await obtenerTokenMpVigente(t.slug,user);
+  if(!token)throw new Error('Mercado Pago no conectado.');
+  let {data:pending,error:pe}=await supabase.from('pagos_pendientes').select('*').eq('browse_turno_id',t.id).maybeSingle();if(pe)throw pe;
+  if(pending?.browse_payment_url)return {success:true,payment_url:pending.browse_payment_url,monto:Number(t.precio_cobrado)};
+  if(!pending){const inserted=await supabase.from('pagos_pendientes').insert({slug:t.slug,nombre:t.nombre,apellido:t.apellido,telefono:t.telefono,email:t.email,fecha:t.fecha,hora:t.hora,servicio_id:t.servicio_id,servicio_nombre:t.servicio_nombre,equipo_id:t.equipo_id,equipo_nombre:t.equipo_nombre,precio_servicio:Number(t.precio_cobrado),metodo_pago:'total',monto:Number(t.precio_cobrado),extras:[],monto_extras:0,estado:'pendiente',consumidor_id:t.consumidor_id,browse_turno_id:t.id,duracion_reservada:t.duracion_reservada}).select('*').single();if(inserted.error)throw inserted.error;pending=inserted.data;}
+  const fee=planCobraComision(user.plan,user.estado_suscripcion)?calcularComisionTurnits(Number(t.precio_cobrado),user.plan,user.estado_suscripcion):0;
+  const body={items:[{title:`${t.servicio_nombre} · Turnits Offer`,unit_price:Number(t.precio_cobrado),quantity:1,currency_id:'ARS'}],payer:{name:t.nombre,email:t.email,...(t.apellido?{surname:t.apellido}:{})},external_reference:pending.id,metadata:{slug:t.slug,browse_turno_id:t.id},notification_url:`${API_URL}/webhook/mp`,back_urls:{success:`${SUCCESS_URL}?slug=${t.slug}&turno_id=${t.id}`,pending:`${PENDIENTE_URL}?slug=${t.slug}&turno_id=${t.id}`,failure:`${ERROR_URL}?slug=${t.slug}&turno_id=${t.id}`},auto_return:'approved',expires:true,expiration_date_to:new Date(t.browse_cierre).toISOString(),...(fee>0?{marketplace_fee:fee}:{})};
+  const pref=await new Preference(new MercadoPagoConfig({accessToken:token})).create({body,requestOptions:{idempotencyKey:`offer-${t.id}`}});
+  const {error:saveError}=await supabase.from('pagos_pendientes').update({preference_id:pref.id,browse_payment_url:pref.init_point}).eq('id',pending.id);if(saveError)throw saveError;
+  return {success:true,payment_url:pref.init_point,monto:Number(t.precio_cobrado)};
+ }finally{browseCheckoutLocks.delete(t.id)}
+}
 async function cardContext(session) {
   const {data:pending,error}=await supabase.from("pagos_pendientes").select("*").eq("id",session.pending_id).maybeSingle();
   if(error)throw error;
@@ -7660,6 +7700,7 @@ const fee = planCobraComision(user.plan, user.estado_suscripcion)
 
         const metaPendiente = {
           slug: slugClean,
+          consumidor_id: await consumidorReserva(req),
           nombre, telefono: cleanPhone(telefono), email: email || "",
           apellido: apellido || "", fecha, hora,
           servicio_id: servicio_id || null, servicio_nombre: nombreServicio,
@@ -8470,10 +8511,24 @@ app.get("/oauth-callback", async (req, res) => {
 // función solo procesa pagos de Mercado Pago, así que el canal real es
 // siempre "mercadopago"; lo que llega en tipo_cobro es lo que antes se
 // guardaba (mal) en la columna metodo_pago del turno.
-async function procesarPagoConfirmado({ promocion, duracion_reservada, slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, equipo_id, equipo_nombre, monto, moneda, tipo_cobro, precio_servicio, payment_id, estado, porcentaje_sena, extras, monto_extras, comision_mp, comision_plataforma }) {
+async function procesarPagoConfirmado({ consumidor_id, browse_turno_id, estado_original, promocion, duracion_reservada, slug, nombre, apellido, telefono, email, fecha, hora, servicio_id, servicio_nombre, equipo_id, equipo_nombre, monto, moneda, tipo_cobro, precio_servicio, payment_id, estado, porcentaje_sena, extras, monto_extras, comision_mp, comision_plataforma }) {
   const { data: turnoExistente } = await supabase
     .from("turnos").select("id").eq("payment_id", String(payment_id)).maybeSingle();
-  if (turnoExistente) { console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`); return; }
+  if (turnoExistente) {
+    if(['refunded','charged_back'].includes(estado_original)) {
+      const {error}=await supabase.from('turnos').update({pago_estado:estado_original==='refunded'?'reembolsado':'contracargo'}).eq('id',turnoExistente.id);if(error)throw error;
+    }
+    console.log(`⚠️ Pago ${payment_id} ya procesado, ignorando.`); return;
+  }
+  if(browse_turno_id) {
+    const {data:held,error:he}=await supabase.from('turnos').select('*').eq('id',browse_turno_id).eq('slug',slug).eq('browse_tipo','offer').maybeSingle();if(he)throw he;
+    if(!held || held.consumidor_id!==consumidor_id || Math.abs(Number(held.precio_cobrado)-Number(monto))>.005)throw new Error('La reserva de Offer no coincide con el pago.');
+    if(estado!=='aprobado')return;
+    if(held.estado==='cancelado') {enviarMailConflictoTurno({adminEmail:(await supabase.from('usuarios').select('email').eq('slug',slug).maybeSingle()).data?.email,nombreCliente:nombre,fechaHora:`${fecha} ${hora}`,slug,payment_id,monto});return;}
+    const {data:confirmed,error:ce}=await supabase.from('turnos').update({estado:'confirmado',pago_estado:'aprobado',monto_pagado:Number(monto),payment_id:String(payment_id),fecha_pago:new Date().toISOString(),comision_mp:comision_mp??null,comision_plataforma:comision_plataforma??null}).eq('id',held.id).eq('estado','pendiente').select('id').maybeSingle();if(ce)throw ce;
+    if(confirmed){const {data:u}=await supabase.from('usuarios').select('email').eq('slug',slug).maybeSingle();enviarMailTurno({adminEmail:u?.email,emailCliente:held.email,nombreCliente:held.nombre,fechaHora:`${held.fecha} ${held.hora}`,slug,servicio:held.servicio_nombre,profesional:held.equipo_nombre,precioTotal:Number(monto),montoOnline:Number(monto),metodoPago:'mercadopago',tipoCobro:'total',reprogramarUrl:armarReprogramarUrl(held.id,held.gestion_token,slug),extras:[]});crearNotificacion({slug,tipo:'pago_aprobado',titulo:'Turnits Offer reservada',mensaje:`${held.nombre} pagó $${monto} por ${held.servicio_nombre}.`,data:{turno_id:held.id,equipo_id:held.equipo_id,fecha:held.fecha,hora:held.hora}});invalidateCache(slug)}
+    return;
+  }
 
   const { data: user } = await supabase.from("usuarios")
     .select("email, business_name, porcentaje_sena, capacidad_por_turno").eq("slug", slug).maybeSingle();
@@ -8541,6 +8596,7 @@ async function procesarPagoConfirmado({ promocion, duracion_reservada, slug, nom
       // Comisiones reales cobradas por MP en este pago (null = no se pudo leer). Base de los ingresos netos.
       comision_mp: comision_mp ?? null, comision_plataforma: comision_plataforma ?? null,
       moneda: moneda || "ARS", estado: "confirmado", payment_id: String(payment_id),
+      consumidor_id: consumidor_id || null, tc_elegible: true,
     }]).select().single();
 
 
@@ -8701,6 +8757,9 @@ app.post("/webhook/mp", async (req, res) => {
       }
 
       await procesarPagoConfirmado({
+  consumidor_id: pendiente?.consumidor_id || null,
+  browse_turno_id: pendiente?.browse_turno_id || null,
+  estado_original: finalPayData.status,
   slug,
   nombre:           meta.nombre,
   apellido:         meta.apellido || null,

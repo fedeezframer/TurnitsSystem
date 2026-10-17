@@ -1,0 +1,109 @@
+.browse-business h3 {
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+.browse-business > p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #64748b;
+  max-width: 780px;
+}
+.browse-business fieldset {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px;
+  margin: 20px 0;
+  min-width: 0;
+  background: #fff;
+}
+.browse-business legend {
+  font-size: 13px;
+  font-weight: 650;
+  padding: 0 6px;
+  color: #334155;
+}
+.browse-business-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 15px;
+}
+.browse-business-fields label {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #475569;
+}
+.browse-business input:not([type="checkbox"]),
+.browse-business select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid #dbe3ec;
+  border-radius: 9px;
+  padding: 0 10px;
+  background: white;
+  color: #172033;
+  font: inherit;
+  font-size: 14px;
+}
+.browse-business small {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.browse-business-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  margin: 18px 0 10px;
+}
+.browse-business-toggle input {
+  accent-color: #1b6b1a;
+}
+.browse-business button {
+  border: 1px solid #d5e3d2;
+  background: #edf6eb;
+  color: #216820;
+  border-radius: 9px;
+  padding: 9px 13px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.browse-business .browse-business-remove {
+  border: 0;
+  background: none;
+  color: #a44b4b;
+  padding: 4px 0;
+}
+.browse-business button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.browse-business-save-note {
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+}
+.browse-business-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.browse-business-tabs button {
+  border: 1px solid #dce8d8;
+  color: #52664a;
+  background: #f7faf6;
+  padding: 9px 13px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.browse-business-tabs button[aria-pressed="true"] {
+  background: #eaf4e7;
+  border-color: #adc7a4;
+  color: #1b6b1a;
+}

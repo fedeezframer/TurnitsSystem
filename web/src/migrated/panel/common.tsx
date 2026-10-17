@@ -397,7 +397,7 @@ function usePanelAutoUpdate({
     }
 }
 
-type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil"
+type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse"
 
 type TurnitsGlobalPending = Record<string, any>
 
@@ -811,6 +811,24 @@ function TurnitsGlobalSaveManager_get() {
                     })())
                 }
 
+                if (current.browse !== undefined) {
+                    tasks.push((async () => {
+                        try {
+                            const res = await fetch(`${api()}/admin/browse/${slug}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify(current.browse),
+                            })
+                            const data=await res.json().catch(()=>({}))
+                            if(!res.ok || !data.success)throw new Error(data.error || "No se pudo guardar Offers y T-Coins.")
+                            results.browse=true
+                            savedData.browse={offers:data.offers,recompensas:data.recompensas}
+                        } catch(e:any) {
+                            results.browse=false
+                            errors.browse=e.message || "No se pudo guardar Offers y T-Coins."
+                        }
+                    })())
+                }
                 await Promise.all(tasks)
                 inFlight = {}
 
