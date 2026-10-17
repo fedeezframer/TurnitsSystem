@@ -209,6 +209,15 @@
   height: 100%;
   padding: 0 25px 0 12px;
   white-space: nowrap;
+  gap: 7px;
+}
+.registration-phone-flag {
+  flex: none;
+  width: 24px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #00000012;
 }
 .registration-phone-country::after {
   content: "";

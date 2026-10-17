@@ -534,7 +534,14 @@ export default function Register({
               <div className="registration-phone">
                 <div className="registration-phone-country">
                   <span aria-hidden="true">
-                    {selectedCountry.code} {selectedCountry.dial}
+                    <img
+                      className="registration-phone-flag"
+                      src={`/assets/flags/${selectedCountry.code.toLowerCase()}.svg`}
+                      alt=""
+                      width="24"
+                      height="18"
+                    />
+                    {selectedCountry.dial}
                   </span>
                   <select
                     aria-label="País del teléfono"
