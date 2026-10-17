@@ -400,7 +400,7 @@ export default function Browse() {
       });
       const d = await r.json().catch(() => null);
       if (r.status === 401) {
-        navigate("/login", { replace: true });
+        navigate("/login?tipo=usuario", { replace: true });
         throw new Error("Iniciá sesión para continuar.");
       }
       if (!r.ok || !d?.success)
@@ -419,7 +419,7 @@ export default function Browse() {
   }, []);
   React.useEffect(() => {
     if (!consumerHeaders().Authorization) {
-      navigate("/login", { replace: true });
+      navigate("/login?tipo=usuario", { replace: true });
       return;
     }
     const controller = new AbortController();
@@ -519,7 +519,7 @@ export default function Browse() {
       "account_type",
       "user_email",
     ].forEach((k) => localStorage.removeItem(k));
-    navigate("/login", { replace: true });
+    navigate("/login?tipo=usuario", { replace: true });
   };
   const eligible = catalog.servicios.filter(
     (s: any) =>

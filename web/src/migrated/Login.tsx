@@ -192,7 +192,9 @@ export default function LoginApp(props: Props) {
     const canvas = false
     const id = React.useId()
     const [email, setEmail] = React.useState("")
-    const [accountType, setAccountType] = React.useState<"usuario" | "negocio">("negocio")
+    const [accountType, setAccountType] = React.useState<"usuario" | "negocio">(() =>
+        typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tipo") === "usuario" ? "usuario" : "negocio"
+    )
     const [password, setPassword] = React.useState("")
     const [visible, setVisible] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
