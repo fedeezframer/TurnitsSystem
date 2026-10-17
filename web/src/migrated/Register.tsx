@@ -439,7 +439,11 @@ export default function Register({
           Volver
         </button>
       )}
-      <main className="registration-main" aria-busy={busy}>
+      <main
+        key={`${step}-${type}`}
+        className="registration-main"
+        aria-busy={busy}
+      >
         <h1 ref={title} tabIndex={-1}>
           {step === 1
             ? "¿Qué tipo de cuenta quieres crear?"
