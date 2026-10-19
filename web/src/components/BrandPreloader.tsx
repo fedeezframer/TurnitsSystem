@@ -12,11 +12,38 @@ let routeReady = false;
 let finished = !startup;
 let writingStarted = false;
 let startFrame = 0;
+const afterWriting = new Set<() => void>();
+
+// A version refresh must not tear down the document halfway through a stroke.
+export function afterStartupWriting(callback: () => void) {
+  if (finished || !startup) callback();
+  else afterWriting.add(callback);
+}
+
+if (startup?.dataset.skipWriting === "true") {
+  try {
+    sessionStorage.removeItem("turnits-writing-reload-once");
+  } catch {}
+}
 
 function finishStartup() {
   if (finished || !startup) return;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const image = startup.querySelector(".turnits-writing-finished");
+  if (
+    !reduced &&
+    startup.dataset.skipWriting !== "true" &&
+    !startup.classList.contains("is-art-error") &&
+    image &&
+    Number(getComputedStyle(image).opacity) < 0.999
+  ) {
+    requestAnimationFrame(finishStartup);
+    return;
+  }
   finished = true;
+  const callbacks = [...afterWriting];
+  afterWriting.clear();
+  callbacks.forEach((callback) => callback());
   startup.classList.add("is-leaving");
   setTimeout(() => startup.remove(), reduced ? 0 : 230);
 }
@@ -39,6 +66,10 @@ function startWhenReady() {
       startFrame = 0;
       if (!readyToWrite() || !startup) return;
       writingStarted = true;
+      if (startup.dataset.skipWriting === "true") {
+        finishStartup();
+        return;
+      }
       startup.dataset.startedAt = String(performance.now());
       startup.classList.add("is-writing");
       const reduced = window.matchMedia(

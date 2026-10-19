@@ -1,4 +1,5 @@
 import { appConfig } from "../../config"
+import { afterStartupWriting } from "../../components/BrandPreloader"
 import { DEFAULT_APPEARANCE, CARD_SHAPES, ICON_SHAPES } from "../../shared/appearance.js"
 import type { BusinessAppearance } from "../../shared/appearance.js"
 import { perfilDraft, perfilPayload } from "../../shared/profile-draft"
@@ -244,6 +245,9 @@ function AutoUpdate_yaIntentado(target: string): boolean {
 function AutoUpdate_recargarLimpio() {
     const ir = () => {
         try {
+            sessionStorage.setItem("turnits-writing-reload-once", JSON.stringify({path:window.location.pathname,at:Date.now()}))
+        } catch {}
+        try {
             const url = new URL(window.location.href)
             url.searchParams.set(AUTO_UPDATE_CACHE_PARAM, String(Date.now()))
             window.location.replace(url.toString())
@@ -267,7 +271,7 @@ function AutoUpdate_recargarLimpio() {
     Promise.race([
         limpiar(),
         new Promise<void>((r) => window.setTimeout(r, 1500)),
-    ]).then(ir, ir)
+    ]).then(() => afterStartupWriting(ir), () => afterStartupWriting(ir))
 }
 
 function AutoUpdate_ejecutar(target: string | null) {
