@@ -1,0 +1,293 @@
+.service-browse-config {
+  color: #1e293b;
+  display: grid;
+  gap: 26px;
+  min-width: 0;
+}
+.service-browse-config fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.service-browse-config fieldset:disabled {
+  opacity: 0.6;
+}
+.service-browse-heading {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  margin-bottom: 14px;
+}
+.service-browse-heading h4 {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+}
+.service-browse-heading p {
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0;
+}
+.service-browse-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  color: #64748b;
+  mask: var(--service-browse-icon) center / contain no-repeat;
+  -webkit-mask: var(--service-browse-icon) center / contain no-repeat;
+}
+.service-browse-icon.coin {
+  --service-browse-icon: url("/assets/browse/boxicons_coin.svg");
+}
+.service-browse-icon.fire {
+  --service-browse-icon: url("/assets/browse/ant-design_fire-outlined.svg");
+}
+.service-browse-rate {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  font-size: 10px;
+  color: #737373;
+  line-height: 15px;
+}
+.service-browse-rate .service-browse-icon {
+  width: 13px;
+  height: 13px;
+  color: inherit;
+}
+.service-browse-reward + .service-browse-reward {
+  margin-top: 18px;
+}
+.service-browse-config button,
+.service-browse-config input,
+.service-browse-config select {
+  font-family: inherit;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.service-browse-config button {
+  cursor: pointer;
+}
+.service-browse-config button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.service-browse-modes {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.service-browse-modes button {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 9px;
+  color: #475569;
+  background: white;
+  font-weight: 600;
+  line-height: 16px;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.service-browse-modes button[aria-pressed="true"] {
+  background: var(--accent, #196b1f);
+  border-color: var(--accent, #196b1f);
+  color: white;
+}
+.service-browse-equation {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+.service-browse-object {
+  background: #f0f0f0;
+  color: #111;
+  border: 0;
+  border-radius: 10px;
+  min-height: 33px;
+  padding: 8px 12px;
+  min-width: 128px;
+  max-width: min(240px, 58%);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.service-browse-equation select {
+  padding-right: 24px;
+}
+.service-browse-coins {
+  display: inline-flex;
+  align-items: center;
+  height: 33px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0 6px;
+  color: #111;
+  background: white;
+}
+.service-browse-coins input {
+  width: 31px;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  padding: 0;
+  text-align: center;
+  font-size: 16px;
+  color: #111;
+  background: transparent;
+  -moz-appearance: textfield;
+}
+.service-browse-coins input::-webkit-inner-spin-button,
+.service-browse-coins input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.service-browse-coins .service-browse-icon {
+  color: #111;
+  width: 19px;
+  height: 23px;
+}
+.service-browse-coins:focus-within {
+  outline: 2px solid var(--accent, #196b1f);
+  outline-offset: 2px;
+}
+.service-browse-config input::placeholder {
+  color: #a3a3a3;
+  opacity: 1;
+}
+.service-browse-config input:disabled {
+  opacity: 0.5;
+}
+.service-browse-condition {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 10px;
+}
+.service-browse-condition label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.service-browse-condition input {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  height: 29px;
+  width: 100px;
+  padding: 4px 8px;
+}
+.service-browse-config .service-browse-text-button {
+  color: #64748b;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-top: 10px;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.service-browse-options {
+  color: #64748b;
+  font-size: 10px;
+  margin-top: 10px;
+}
+.service-browse-options summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.service-browse-options > div {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+}
+.service-browse-options label {
+  display: grid;
+  gap: 5px;
+  max-width: 100%;
+}
+.service-browse-options input {
+  max-width: 100%;
+  width: 180px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  height: 30px;
+  padding: 4px 8px;
+}
+.service-browse-options button {
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #475569;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 10px;
+}
+.service-browse-options .service-browse-remove {
+  color: #c24141;
+}
+.service-browse-professional {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 5px 8px;
+  color: #475569;
+  background: white;
+  max-width: 100%;
+  margin-bottom: 8px;
+}
+.service-browse-minimum-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.service-browse-minimum-row input {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  height: 27px;
+  width: 128px;
+  padding: 4px 8px;
+  color: #1e293b;
+  background: white;
+  font-size: 10px;
+  text-align: center;
+}
+.service-browse-minimum-row > span {
+  font-size: 9px;
+  color: #94a3b8;
+}
+.service-browse-explanation {
+  max-width: 228px;
+  font-size: 9px;
+  line-height: 1.28;
+  color: #111;
+  margin: 8px 0 0;
+}
+.service-browse-hint,
+.service-browse-loading {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 10px 0 0;
+}
+.service-browse-error {
+  color: #c24141;
+  font-size: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .service-browse-modes button {
+    transition: none;
+  }
+}

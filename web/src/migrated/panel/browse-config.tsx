@@ -6,13 +6,7 @@ import {
 } from "./common";
 import "./browse-config.css";
 const id = () => crypto.randomUUID();
-export default function BrowseBusiness({
-  api,
-  view,
-}: {
-  api: string;
-  view: "offers" | "coins";
-}) {
+export function useBrowseBusiness(api: string) {
   const [data, setData] = React.useState<any>(null),
     [draft, setDraft] = React.useState<any>({ offers: [], recompensas: [] }),
     [error, setError] = React.useState(""),
@@ -77,11 +71,31 @@ export default function BrowseBusiness({
         i === index ? { ...row, ...values } : row,
       ),
     }));
+  return {
+    data,
+    draft,
+    error,
+    busy,
+    update,
+    patch,
+    retry: () => setReload((v) => v + 1),
+  };
+}
+
+export default function BrowseBusiness({
+  api,
+  view,
+}: {
+  api: string;
+  view: "offers" | "coins";
+}) {
+  const { data, draft, error, busy, update, patch, retry } =
+    useBrowseBusiness(api);
   if (error)
     return (
       <div className="browse-business">
         <p role="alert">{error}</p>
-        <button onClick={() => setReload((v) => v + 1)}>Reintentar</button>
+        <button onClick={retry}>Reintentar</button>
       </div>
     );
   if (!data) return <p role="status">Cargando configuración…</p>;
