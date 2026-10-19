@@ -1,3 +1,4 @@
+import { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import { useGlobalDiscardRevision } from "./common"
@@ -553,6 +554,7 @@ function TurnitsPanel_Inner(props: any) {
 
                 {branchAdmin && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
                 {seccionActiva === "inicio" && (
+                    <SectionLoadingBoundary>
                     <SeccionInicio
                         baseUrl={baseUrl}
                         accentColor={accentColor}
@@ -579,6 +581,7 @@ function TurnitsPanel_Inner(props: any) {
                             ilustracionRendimientoVacio
                         }
                     />
+                    </SectionLoadingBoundary>
                 )}
 
                 {seccionActiva === "servicios" && (
@@ -594,6 +597,7 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Los servicios que ofrecés a tus clientes"
                             isMobile={isMobile}
                         />
+                        <SectionLoadingBoundary>
                         <ServiciosManager
                             baseUrl={baseUrl}
                             accentColor={accentColor}
@@ -604,6 +608,7 @@ function TurnitsPanel_Inner(props: any) {
                             iconoEditar={iconos.editar}
                             iconoEliminar={iconos.eliminar}
                         />
+                        </SectionLoadingBoundary>
                     </div>
                 )}
 
@@ -620,10 +625,12 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Todas las personas que reservaron turno con vos"
                             isMobile={isMobile}
                         />
+                        <SectionLoadingBoundary>
                         <ClientesGrid
                             baseUrl={baseUrl}
                             accentColor={accentColor}
                         />
+                        </SectionLoadingBoundary>
                     </div>
                 )}
 
@@ -640,6 +647,7 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Tus turnos organizados por día"
                             isMobile={isMobile}
                         />
+                        <SectionLoadingBoundary>
                         <AgendaPanel
                             baseUrl={baseUrl}
                             accentColor={accentColor}
@@ -647,6 +655,7 @@ function TurnitsPanel_Inner(props: any) {
                                 iconosNotificaciones.reprogramacion
                             }
                         />
+                        </SectionLoadingBoundary>
                     </div>
                 )}
 
@@ -663,15 +672,23 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Definí tu disponibilidad y excepciones"
                             isMobile={isMobile}
                         />
-{branchAdmin ? <BranchSchedule baseUrl={baseUrl} accentColor={accentColor}/> : <>                        <HorariosConfig
-                            baseUrl={baseUrl}
-                            accentColor={accentColor}
-                            mostrarBotonGuardar={false}
-                        />
-                        <ExcepcionesConfig
-                            baseUrl={baseUrl}
-                            accentColor={accentColor}
-                        /></>}
+                        <SectionLoadingBoundary>
+                            {branchAdmin ? (
+                                <BranchSchedule baseUrl={baseUrl} accentColor={accentColor}/>
+                            ) : (
+                                <>
+                                    <HorariosConfig
+                                        baseUrl={baseUrl}
+                                        accentColor={accentColor}
+                                        mostrarBotonGuardar={false}
+                                    />
+                                    <ExcepcionesConfig
+                                        baseUrl={baseUrl}
+                                        accentColor={accentColor}
+                                    />
+                                </>
+                            )}
+                        </SectionLoadingBoundary>
                     </div>
                 )}
 
@@ -688,6 +705,7 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Configurá cómo te pagan tus clientes"
                             isMobile={isMobile}
                         />
+                        <SectionLoadingBoundary>
                         <PagosSettingsGuard baseUrl={baseUrl}>
                             <div
                                 style={{
@@ -710,6 +728,7 @@ function TurnitsPanel_Inner(props: any) {
                                 />
                             </div>
                         </PagosSettingsGuard>
+                        </SectionLoadingBoundary>
                     </div>
                 )}
 
@@ -726,10 +745,12 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Ingresos, gastos, comisiones y rentabilidad estimada de tu negocio"
                             isMobile={isMobile}
                         />
+                        <SectionLoadingBoundary>
                         <FinanzasPanel
                             baseUrl={baseUrl}
                             accentColor={accentColor}
                         />
+                        </SectionLoadingBoundary>
 
                     </div>
                 )}
@@ -747,11 +768,13 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Personalizá los colores y las formas de tu agenda"
                             isMobile={isMobile}
                         />
+                        <SectionLoadingBoundary>
                         <ThemeEditor
                             baseUrl={baseUrl}
                             accentColor={accentColor}
                             onOpenProfile={() => irA("perfil")}
                         />
+                        </SectionLoadingBoundary>
                     </div>
                 )}
 
@@ -768,6 +791,7 @@ function TurnitsPanel_Inner(props: any) {
                             subtitle="Gestioná a las personas que trabajan con vos"
                             isMobile={isMobile}
                         />
+                        <SectionLoadingBoundary>
                         <EquipoSecciones
                             baseUrl={baseUrl}
                             accentColor={accentColor}
@@ -776,6 +800,7 @@ function TurnitsPanel_Inner(props: any) {
                             iconoEditar={iconos.editar}
                             iconoEliminar={iconos.eliminar}
                         />
+                        </SectionLoadingBoundary>
                     </div>
                 )}
                 {seccionActiva === "perfil" && <PerfilNegocio baseUrl={baseUrl} isMobile={isMobile}/>}

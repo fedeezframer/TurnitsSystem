@@ -2,18 +2,33 @@
   --runner-size: 160px;
   display: grid;
   place-items: center;
-  min-height: clamp(300px, 56dvh, 560px);
+  place-content: center;
+  gap: 8px;
+  height: 420px;
   width: 100%;
   position: relative;
   box-sizing: border-box;
 }
-.turnits-runner-loading.is-compact {
-  --runner-size: 96px;
-  min-height: 160px;
+.turnits-section-loading {
+  position: relative;
+  width: 100%;
+  min-width: 0;
 }
-.turnits-runner-loading.is-inline {
-  --runner-size: 56px;
-  min-height: 64px;
+.turnits-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.turnits-section-loading[aria-busy="true"] > .turnits-section-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  max-height: 420px;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
 }
 .turnits-runner-loading.is-card {
   background: #fff;
@@ -47,20 +62,10 @@
   }
 }
 .turnits-runner-description {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-@media (max-width: 600px) {
-  .turnits-runner-loading.is-section {
-    --runner-size: 144px;
-  }
+  color: #172033;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
 }
 @media (prefers-reduced-motion: reduce) {
   .turnits-runner-frame {

@@ -1,4 +1,4 @@
-import LoadingRunner from "../../components/LoadingRunner"
+import LoadingRunner, { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
@@ -754,6 +754,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                             {error}
                         </div>
                     )}
+                    <SectionLoadingBoundary key={tab}>
                     {loading ? (
                         <LoadingRunner card label="Cargando tu información…" />
                     ) : tab === "equipo" ? (
@@ -1114,6 +1115,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                             )}
                         </section>
                     )}
+                    </SectionLoadingBoundary>
                 </div>
             </main>
             <AnimatePresence>

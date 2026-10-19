@@ -1,4 +1,4 @@
-import LoadingRunner from "../../components/LoadingRunner"
+import LoadingRunner, { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
 import {
@@ -266,6 +266,7 @@ export function PerfilNegocio({
         subtitle="Tu presentación pública y la base de tu espacio en Browse"
         isMobile={isMobile}
       />
+      <SectionLoadingBoundary>
       {loading ? (
         <LoadingRunner card label="Cargando perfil…" />
       ) : (
@@ -530,6 +531,7 @@ export function PerfilNegocio({
           </form>
         </>
       )}
+      </SectionLoadingBoundary>
     </div>
   );
 }

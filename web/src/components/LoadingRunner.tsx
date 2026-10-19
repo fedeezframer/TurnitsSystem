@@ -1,6 +1,47 @@
 import * as React from "react";
 import "./LoadingRunner.css";
 
+const SectionLoadingContext = React.createContext<
+  ((id: string) => () => void) | null
+>(null);
+
+// Keep requests mounted while a section loads. Multiple pending blocks share
+// one loader, which stays visible until the last block has finished.
+export function SectionLoadingBoundary({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const pending = React.useRef(new Set<string>());
+  const [count, setCount] = React.useState(0);
+  const register = React.useCallback((id: string) => {
+    pending.current.add(id);
+    setCount(pending.current.size);
+    return () => {
+      pending.current.delete(id);
+      setCount(pending.current.size);
+    };
+  }, []);
+  const loading = count > 0;
+  return (
+    <div className="turnits-section-loading" aria-busy={loading}>
+      {loading && (
+        <SectionLoadingContext.Provider value={null}>
+          <LoadingRunner card />
+        </SectionLoadingContext.Provider>
+      )}
+      <div
+        className="turnits-section-content"
+        aria-hidden={loading || undefined}
+      >
+        <SectionLoadingContext.Provider value={register}>
+          {children}
+        </SectionLoadingContext.Provider>
+      </div>
+    </div>
+  );
+}
+
 // Crop the original transparent sheet in SVG. Each pose keeps the same scale,
 // calendar center and ground line; the neighboring poses stay clipped out.
 const frames: { left: number; right: number; center: number; clip?: string }[] =
@@ -30,7 +71,6 @@ const frames: { left: number; right: number; center: number; clip?: string }[] =
 
 export default function LoadingRunner({
   label = "Cargando…",
-  size = "section",
   card = false,
 }: {
   label?: string;
@@ -38,12 +78,16 @@ export default function LoadingRunner({
   card?: boolean;
 }) {
   const instanceId = React.useId().replace(/:/g, "");
+  const register = React.useContext(SectionLoadingContext);
+  React.useLayoutEffect(() => register?.(instanceId), [register, instanceId]);
+  if (register) return null;
   return (
     <div
-      className={["turnits-runner-loading", `is-${size}`, card ? "is-card" : ""]
+      className={["turnits-runner-loading", card ? "is-card" : ""]
         .filter(Boolean)
         .join(" ")}
       role="status"
+      aria-label={label}
     >
       <svg
         className="turnits-runner-animation"
@@ -92,7 +136,7 @@ export default function LoadingRunner({
           </g>
         ))}
       </svg>
-      <span className="turnits-runner-description">{label}</span>
+      <span className="turnits-runner-description">Cargando</span>
     </div>
   );
 }
