@@ -162,17 +162,21 @@ export default function ServiceBrowseConfig({
           </select>
         )}
         <div className="service-browse-minimum-row">
-          <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            max={price > 0 ? price - 0.01 : undefined}
-            aria-label="Tarifa mínima"
-            placeholder="Tarifa Mínima"
-            value={offer?.precio_minimo ?? ""}
-            disabled={!selectedMember}
-            onChange={(e) => setMinimum(e.target.value)}
-          />
+          <div className="service-browse-money">
+            <span aria-hidden="true">$</span>
+            <input
+              className="svc-input"
+              type="number"
+              min="0.01"
+              step="0.01"
+              max={price > 0 ? price - 0.01 : undefined}
+              aria-label="Tarifa mínima"
+              placeholder="Tarifa Mínima"
+              value={offer?.precio_minimo ?? ""}
+              disabled={!selectedMember}
+              onChange={(e) => setMinimum(e.target.value)}
+            />
+          </div>
           <span>
             La tarifa mínima es el valor al que aceptas rebajarte para el
             descuento
@@ -280,18 +284,21 @@ function Reward({
       </div>
       <div className="service-browse-equation">
         {mode === "conditional" ? (
-          <input
-            className="service-browse-object service-browse-amount"
-            aria-label="Importe del premio condicional"
-            type="number"
-            inputMode="decimal"
-            min="0.01"
-            max={maxAmount}
-            step="0.01"
-            placeholder="Importe ($)"
-            value={amount}
-            onChange={(e) => changeAmount(e.target.value)}
-          />
+          <div className="service-browse-money">
+            <span aria-hidden="true">$</span>
+            <input
+              className="svc-input"
+              aria-label="Importe del premio condicional"
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              max={maxAmount}
+              step="0.01"
+              placeholder="Importe"
+              value={amount}
+              onChange={(e) => changeAmount(e.target.value)}
+            />
+          </div>
         ) : (
           <span className="service-browse-object">Este servicio</span>
         )}
