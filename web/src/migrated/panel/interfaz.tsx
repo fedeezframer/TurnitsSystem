@@ -247,6 +247,7 @@ function TurnitsGlobalSaveBar({
                 alignItems: "center",
                 gap: 12,
                 minHeight: 52,
+                flexWrap: "wrap",
                 padding: "8px 12px 10px",
                 marginTop: isMobile ? 0 : -34,
                 marginBottom: isMobile ? 8 : 16,
@@ -259,7 +260,7 @@ function TurnitsGlobalSaveBar({
                 WebkitBackdropFilter: isMobile ? "none" : "blur(10px)",
             }}
         >
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: isMobile ? "1 0 100%" : 1, minWidth: 0 }}>
                 <div
                     style={{
                         fontSize: 13,
@@ -290,6 +291,18 @@ function TurnitsGlobalSaveBar({
                 {blocker && <div role="status" style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{blocker}</div>}
             </div>
             {!success && (
+                <div style={{display:"flex",gap:8,marginLeft:"auto",width:isMobile ? "100%" : undefined}}>
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (TurnitsGlobalSaveManager_get()?.discardAll()) {
+                            setError("")
+                            setSuccess(false)
+                        }
+                    }}
+                    disabled={saving || !dirty || !!blocker}
+                    style={{padding:isMobile ? "9px 10px" : "9px 12px",borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",color:saving || !dirty || blocker ? "#94a3b8" : "#475569",fontSize:isMobile ? 11 : 12,fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap",cursor:saving || !dirty || blocker ? "default" : "pointer",flex:isMobile ? 1 : undefined,minWidth:0}}
+                >Descartar cambios</button>
                 <motion.button
                     // No escalar al pulsar: el transform de Framer se veía
                     // cortado dentro de la barra sticky en pantallas chicas.
@@ -302,23 +315,25 @@ function TurnitsGlobalSaveBar({
                     }}
                     disabled={saving || !dirty || !!blocker}
                     style={{
-                        padding: "9px 16px",
+                        padding: isMobile ? "9px 10px" : "9px 16px",
                         borderRadius: 10,
                         border: "none",
                         boxSizing: "border-box",
-                        minWidth: 124,
+                        minWidth: isMobile ? 0 : 124,
                         background: dirty && !saving && !blocker ? accentColor : "#e2e8f0",
                         color: dirty && !saving && !blocker ? "#fff" : "#94a3b8",
-                        fontSize: 12,
+                        fontSize: isMobile ? 11 : 12,
                         fontWeight: 700,
                         cursor: dirty && !saving && !blocker ? "pointer" : "default",
                         fontFamily: "inherit",
                         whiteSpace: "nowrap",
                         flexShrink: 0,
+                        flex: isMobile ? 1 : undefined,
                     }}
                 >
                     {saving ? "Guardando…" : "Guardar cambios"}
                 </motion.button>
+                </div>
             )}
         </motion.div>
     )

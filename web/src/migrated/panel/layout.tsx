@@ -1,5 +1,6 @@
 import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
+import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
 import {
     useState,
@@ -30,6 +31,7 @@ import { PerfilNegocio, EquipoSecciones } from "./perfil"
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
 function TurnitsPanel_Inner(props: any) {
+    const discardRevision = useGlobalDiscardRevision()
     const branchAdmin = useBranchAdmin()
     const {
         baseUrl = appConfig.apiUrl,
@@ -507,6 +509,7 @@ function TurnitsPanel_Inner(props: any) {
 
             {/* ─────────────── CONTENIDO ─────────────── */}
             <div
+                key={discardRevision}
                 // Le avisa a librerías de smooth-scroll (Lenis y similares, muy
                 // comunes en sitios de Framer) que este contenedor scrollea solo.
                 data-lenis-prevent={isMobile ? undefined : "true"}

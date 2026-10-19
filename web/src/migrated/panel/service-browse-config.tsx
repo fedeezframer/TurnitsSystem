@@ -24,6 +24,8 @@ export default function ServiceBrowseConfig({
 }) {
   const { data, draft, error, busy, update, retry } = useBrowseBusiness(api);
   const [memberId, setMemberId] = React.useState("");
+  const [coinsEnabled, setCoinsEnabled] = React.useState<boolean | null>(null);
+  const [offerEnabled, setOfferEnabled] = React.useState<boolean | null>(null);
   if (error)
     return (
       <div className="service-browse-config">
@@ -39,9 +41,10 @@ export default function ServiceBrowseConfig({
         Cargando T-Coins y Offers…
       </p>
     );
-  const rewards = draft.recompensas.filter(
-    (r: any) => r.servicio_id === serviceId && r.tipo === "servicio",
+  const serviceRewards = draft.recompensas.filter(
+    (r: any) => r.servicio_id === serviceId,
   );
+  const rewards = serviceRewards.filter((r: any) => r.tipo === "servicio");
   const offers = draft.offers.filter((o: any) => o.servicio_id === serviceId);
   const members = data.equipo.filter(
     (m: any) => m.activo === true || m.activo === "true",
@@ -51,6 +54,8 @@ export default function ServiceBrowseConfig({
     offers[0]?.equipo_id ||
     (members.length === 1 ? members[0].id : "");
   const offer = offers.find((o: any) => o.equipo_id === selectedMember);
+  const enableCoins = coinsEnabled ?? serviceRewards.some((r: any) => r.activo);
+  const enableOffer = offerEnabled ?? !!offer?.activo;
   const normalPrice = Math.max(
     0,
     Math.min(
@@ -60,7 +65,8 @@ export default function ServiceBrowseConfig({
       ),
     ),
   );
-  const saveReward = (row: any, values: any) =>
+  const saveReward = (row: any, values: any) => {
+    setCoinsEnabled(true);
     update((d) => ({
       ...d,
       recompensas: row
@@ -80,6 +86,7 @@ export default function ServiceBrowseConfig({
             },
           ],
     }));
+  };
   const setMinimum = (value: string) => {
     if (!selectedMember) return;
     update((d) => {
@@ -106,7 +113,7 @@ export default function ServiceBrowseConfig({
                 servicio_id: serviceId,
                 equipo_id: selectedMember,
                 ...values,
-                activo: true,
+                activo: enableOffer,
               },
             ],
       };
@@ -126,15 +133,39 @@ export default function ServiceBrowseConfig({
           <span className="service-browse-rate">
             1 <Icon coin /> = $10.000 gastados en Turnits
           </span>
+          <label className="service-browse-toggle">
+            <span>Habilitar</span>
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Habilitar T-Coins"
+              checked={enableCoins}
+              onChange={(e) => {
+                const enabled = e.target.checked;
+                setCoinsEnabled(enabled);
+                if (serviceRewards.length)
+                  update((d) => ({
+                    ...d,
+                    recompensas: d.recompensas.map((r: any) =>
+                      r.servicio_id === serviceId
+                        ? { ...r, activo: enabled }
+                        : r,
+                    ),
+                  }));
+              }}
+            />
+          </label>
         </div>
-        {(rewards.length ? rewards : [null]).map((r: any, index: number) => (
-          <Reward
-            key={index}
-            row={r}
-            price={normalPrice}
-            save={(values) => saveReward(r, values)}
-          />
-        ))}
+        <fieldset className="service-browse-controls" disabled={!enableCoins}>
+          {(rewards.length ? rewards : [null]).map((r: any, index: number) => (
+            <Reward
+              key={index}
+              row={r}
+              price={normalPrice}
+              save={(values) => saveReward(r, values)}
+            />
+          ))}
+        </fieldset>
       </fieldset>
       <fieldset disabled={busy} aria-label="Turnits Offers de este servicio">
         <div className="service-browse-heading">
@@ -145,13 +176,36 @@ export default function ServiceBrowseConfig({
             </h4>
             <p>Establece un descuento para horas donde no hay reservas.</p>
           </div>
+          <label className="service-browse-toggle">
+            <span>Habilitar</span>
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Habilitar Turnits Offers"
+              checked={enableOffer}
+              onChange={(e) => {
+                const enabled = e.target.checked;
+                setOfferEnabled(enabled);
+                if (offer)
+                  update((d) => ({
+                    ...d,
+                    offers: d.offers.map((o: any) =>
+                      o.id === offer.id ? { ...o, activo: enabled } : o,
+                    ),
+                  }));
+              }}
+            />
+          </label>
         </div>
         {members.length > 1 && (
           <select
             className="service-browse-professional"
             aria-label="Profesional de la Offer"
             value={selectedMember}
-            onChange={(e) => setMemberId(e.target.value)}
+            onChange={(e) => {
+              setMemberId(e.target.value);
+              setOfferEnabled(null);
+            }}
           >
             <option value="">Elegí un profesional</option>
             {members.map((m: any) => (
@@ -161,45 +215,47 @@ export default function ServiceBrowseConfig({
             ))}
           </select>
         )}
-        <div className="service-browse-minimum-row">
-          <div className="service-browse-money">
-            <span aria-hidden="true">$</span>
-            <input
-              className="svc-input"
-              type="number"
-              min="0.01"
-              step="0.01"
-              max={price > 0 ? price - 0.01 : undefined}
-              aria-label="Tarifa mínima"
-              placeholder="Tarifa Mínima"
-              value={offer?.precio_minimo ?? ""}
-              disabled={!selectedMember}
-              onChange={(e) => setMinimum(e.target.value)}
-            />
+        <fieldset className="service-browse-controls" disabled={!enableOffer}>
+          <div className="service-browse-minimum-row">
+            <div className="service-browse-money">
+              <span aria-hidden="true">$</span>
+              <input
+                className="svc-input"
+                type="number"
+                min="0.01"
+                step="0.01"
+                max={price > 0 ? price - 0.01 : undefined}
+                aria-label="Tarifa mínima"
+                placeholder="Tarifa Mínima"
+                value={offer?.precio_minimo ?? ""}
+                disabled={!selectedMember}
+                onChange={(e) => setMinimum(e.target.value)}
+              />
+            </div>
+            <span>
+              La tarifa mínima es el valor al que aceptas rebajarte para el
+              descuento
+            </span>
           </div>
-          <span>
-            La tarifa mínima es el valor al que aceptas rebajarte para el
-            descuento
-          </span>
-        </div>
-        {offer &&
-          (offer.precio_minimo <= 0 || offer.precio_minimo >= price) && (
-            <p className="service-browse-error" role="alert">
-              La tarifa mínima debe ser mayor a $0 y menor al precio del
-              profesional.
+          {offer &&
+            (offer.precio_minimo <= 0 || offer.precio_minimo >= price) && (
+              <p className="service-browse-error" role="alert">
+                La tarifa mínima debe ser mayor a $0 y menor al precio del
+                profesional.
+              </p>
+            )}
+          {!members.length && (
+            <p className="service-browse-hint">
+              Asigná el servicio a un profesional para configurar Offers.
             </p>
           )}
-        {!members.length && (
-          <p className="service-browse-hint">
-            Asigná el servicio a un profesional para configurar Offers.
+          <p className="service-browse-explanation">
+            Turnits rebajará el precio normal hasta llegar a la tarifa mínima
+            para los horarios en los que queda poca antelación y no son
+            reservados. Estas rebajas se realizan automáticamente a medida que
+            sea más probable que no se reserve.
           </p>
-        )}
-        <p className="service-browse-explanation">
-          Turnits rebajará el precio normal hasta llegar a la tarifa mínima para
-          los horarios en los que queda poca antelación y no son reservados.
-          Estas rebajas se realizan automáticamente a medida que sea más
-          probable que no se reserve.
-        </p>
+        </fieldset>
       </fieldset>
     </div>
   );

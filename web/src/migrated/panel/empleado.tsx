@@ -1,4 +1,5 @@
 import { appConfig } from "../../config"
+import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
 import {
     useState,
@@ -20,6 +21,7 @@ import { MercadoPagoConexion, ConfigPagos } from "./pagos"
 import { SucursalEmpleado } from "./perfil"
 
 function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
+    const discardRevision = useGlobalDiscardRevision()
     const api = String(
         props.baseUrl || appConfig.apiUrl
     ).replace(/\/+$/, "")
@@ -639,6 +641,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                 </aside>
             )}
             <main
+                key={discardRevision}
                 style={{
                     flex: 1,
                     minWidth: 0,

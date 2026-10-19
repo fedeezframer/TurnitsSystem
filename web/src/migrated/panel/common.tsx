@@ -503,6 +503,16 @@ function TurnitsGlobalSave_emit(edited = false) {
     window.dispatchEvent(new CustomEvent("turnits_global_dirty_changed", { detail: { edited } }))
 }
 
+export function useGlobalDiscardRevision() {
+    const [revision, setRevision] = React.useState(0)
+    React.useEffect(() => {
+        const reset = () => setRevision(value => value + 1)
+        window.addEventListener("turnits_global_discarded", reset)
+        return () => window.removeEventListener("turnits_global_discarded", reset)
+    }, [])
+    return revision
+}
+
 function TurnitsGlobalSaveManager_get() {
     if (typeof window === "undefined") return null
     const w = window as any
@@ -668,6 +678,14 @@ function TurnitsGlobalSaveManager_get() {
                 pending = next
                 TurnitsGlobalSave_safeWrite(pending)
                 TurnitsGlobalSave_emit()
+            },
+            discardAll() {
+                if (saving || Object.keys(blockers).length) return false
+                pending = {}
+                TurnitsGlobalSave_safeWrite(pending)
+                TurnitsGlobalSave_emit(true)
+                window.dispatchEvent(new CustomEvent("turnits_global_discarded"))
+                return true
             },
             async saveAll() {
                 if (saving || Object.keys(blockers).length || !Object.keys(pending).length) return
