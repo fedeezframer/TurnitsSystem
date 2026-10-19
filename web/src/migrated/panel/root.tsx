@@ -11,12 +11,14 @@ import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
 import { GuardaSesion_leerJwt } from "./common"
 import { TurnitsPanel_Inner } from "./layout"
-import { TurnitsEmpleadoPanel } from "./empleado"
 import { TurnitsPanel_GuardaSesion } from "./sesion"
 import { PanelErrorBoundary } from "./shared"
 import { appConfig } from "../../config"
 import { setPanelScope, type BranchPanelScope } from "../../shared/panel-scope"
 import { BranchAdminContext } from "../../components/BranchAdmin"
+
+const loadEmployeePanel = () => import("./empleado").then(m => ({ default: m.TurnitsEmpleadoPanel }))
+const TurnitsEmpleadoPanel = React.lazy(loadEmployeePanel)
 
 function TurnitsPanel_SessionRouter(props: any) {
     const [sesion, setSesion] = React.useState<{
@@ -62,6 +64,7 @@ function TurnitsPanel_SessionRouter(props: any) {
             setPanelScope(null)
             setSesion({ rol: claims?.rol || "owner", slug })
         } else {
+            void loadEmployeePanel().catch(() => {})
             fetch(`${(props.baseUrl || appConfig.apiUrl).replace(/\/+$/, "")}/sesion/panel/${encodeURIComponent(slug)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
                 .then(async r => { const d = await r.json(); if (!r.ok || !d.success) throw Error(d.error || "No se pudo verificar tu acceso."); return d; })
                 .then(d => { if (!alive) return; const branch = d.tipo === "admin_sucursal" ? d.sucursal : null; setPanelScope(branch); setSesion({ rol: branch ? "admin_sucursal" : "empleado", slug, sucursal: branch }); })
@@ -74,7 +77,7 @@ function TurnitsPanel_SessionRouter(props: any) {
         return <TurnitsPanel_Inner {...props} />
     if (!sesion) return <BrandPreloader />
     if (sesion.rol === "empleado")
-        return <TurnitsEmpleadoPanel props={props} slug={sesion.slug} />
+        return <React.Suspense fallback={<BrandPreloader />}><TurnitsEmpleadoPanel props={props} slug={sesion.slug} /></React.Suspense>
     return (
         <TurnitsPanel_GuardaSesion
             logoutUrl={props.logoutUrl || "/login"}

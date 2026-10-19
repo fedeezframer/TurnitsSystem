@@ -1,5 +1,5 @@
 .turnits-brand-preloader {
-  --writing-speed: 0.78;
+  --writing-speed: 0.55;
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -8,7 +8,7 @@
   overflow: hidden;
   background: #fff;
   opacity: 1;
-  transition: opacity 0.22s ease;
+  transition: opacity 0.18s ease;
 }
 .turnits-brand-preloader.is-leaving {
   opacity: 0;

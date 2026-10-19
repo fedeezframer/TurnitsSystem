@@ -1,10 +1,9 @@
-import LoadingRunner, { SectionLoadingBoundary, InlineLoading } from "../../components/LoadingRunner"
+import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
 import {
   MenuFooter_getSlug,
   MenuFooter_getToken,
-  SeccionHeader,
   TurnitsGlobalSaveManager_get,
 } from "./common";
 import { TeamManager, TeamManager_ServiciosVinculados } from "./equipo";
@@ -233,11 +232,6 @@ export function PerfilNegocio({
   if (!loading && error && !habilitado) {
     return (
       <div className="negocio-editor negocio-stack">
-        <SeccionHeader
-          title="Perfil del negocio"
-          subtitle="Tu presentación pública"
-          isMobile={isMobile}
-        />
         <section className="negocio-card negocio-stack">
           <p role="alert" className="negocio-error">
             {error}
@@ -261,12 +255,6 @@ export function PerfilNegocio({
   }
   return (
     <div className="negocio-editor negocio-stack">
-      <SeccionHeader
-        title="Perfil del negocio"
-        subtitle="Tu presentación pública y la base de tu espacio en Browse"
-        isMobile={isMobile}
-      />
-      <SectionLoadingBoundary>
       {loading ? (
         <LoadingRunner card label="Cargando perfil…" />
       ) : (
@@ -531,7 +519,6 @@ export function PerfilNegocio({
           </form>
         </>
       )}
-      </SectionLoadingBoundary>
     </div>
   );
 }

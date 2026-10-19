@@ -32,7 +32,7 @@ function finishStartup() {
   }
   finished = true;
   startup.classList.add("is-leaving");
-  setTimeout(() => startup.remove(), reduced ? 0 : 230);
+  setTimeout(() => startup.remove(), reduced ? 0 : 190);
 }
 
 function readyToWrite() {

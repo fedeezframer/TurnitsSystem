@@ -52,7 +52,7 @@ const strokes = [
   },
 ];
 
-export const BRAND_WRITING_DURATION = 2200;
+export const BRAND_WRITING_DURATION = 1600;
 export const BRAND_IMAGE = "/assets/loading/turnits-script-original.webp";
 
 // The installed app uses this route only to validate the session and redirect.

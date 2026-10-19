@@ -4,7 +4,7 @@ import {
   getPanelScope,
   setBranchScheduleMember,
 } from "../shared/panel-scope";
-import { HorariosConfig, ExcepcionesConfig } from "../migrated/panel/horarios";
+import { HorariosConfig, ExcepcionesConfig } from "../migrated/panel/section-components";
 import { MenuFooterMiembro } from "../migrated/panel/cuenta";
 import {
   MenuFooter_cerrarSesion,

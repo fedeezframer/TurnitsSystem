@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "npm run check && vite build",
+    "build": "npm run check && vite build && node scripts/check-panel-startup.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "check": "tsc --noEmit && node scripts/check-migration.mjs && node scripts/check-map-assets.mjs"
   },

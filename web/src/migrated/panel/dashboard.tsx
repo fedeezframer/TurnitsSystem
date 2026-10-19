@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
 import { Turnits_useElementWidth, TurnitsDashboard_shortMoney, TurnitsDashboard_dateLabel, TurnitsDashboard_money, TurnitsDashboard_COLOR_SUBE, TurnitsDashboard_COLOR_BAJA, TurnitsDashboard_COLOR_IGUAL, TurnitsDashboard_rangoLabel, TurnitsDashboard_variacion, TurnitsDashboard_getSlug, TurnitsDashboard_getToken, QrPanel_slug, TurnitsDashboard_percent } from "./common"
 import { PlanEstado, RendimientoEquipo } from "./inicio"
-import { MercadoPagoConexion_LinkIcon } from "./pagos"
+import { MercadoPagoConexion_LinkIcon } from "./link-icon"
 
 function TurnitsDashboard_MetricCard({ label, value, trend, cardStyle }: any) {
     const trendColor =

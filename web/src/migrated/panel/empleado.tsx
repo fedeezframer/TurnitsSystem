@@ -1,3 +1,4 @@
+import { ServiciosManager, HorariosConfig, ExcepcionesConfig, MercadoPagoConexion, ConfigPagos, SucursalEmpleado } from "./section-components"
 import LoadingRunner, { SectionLoadingBoundary, InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import { useGlobalDiscardRevision } from "./common"
@@ -14,12 +15,8 @@ import { createPortal } from "react-dom"
 import { AgendaPanel_hoyISO, MenuFooter_cerrarSesion, NAV_ITEMS, TurnitsDashboard_shortMoney, AgendaPanel_labelStyle, AgendaPanel_inputStyle, TurnitsDashboard_money } from "./common"
 import { MenuFooterMiembro, NotificacionesFlotantes } from "./cuenta"
 import { TurnitsBetaInstallPrompt, TurnitsGlobalSaveBar, QrFlotante } from "./interfaz"
-import { AmbientOrbs, BrandMark, NavButton, BottomNavIcon, BottomNavMore } from "./equipo"
+import { AmbientOrbs, BrandMark, NavButton, BottomNavIcon, BottomNavMore } from "./navigation"
 import { TurnitsDashboard_MetricCard, TurnitsDashboard_Chart, TurnitsDashboard_Upcoming } from "./dashboard"
-import { ServiciosManager } from "./servicios"
-import { HorariosConfig, ExcepcionesConfig } from "./horarios"
-import { MercadoPagoConexion, ConfigPagos } from "./pagos"
-import { SucursalEmpleado } from "./perfil"
 
 function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
     const discardRevision = useGlobalDiscardRevision()
