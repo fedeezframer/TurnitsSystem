@@ -128,6 +128,14 @@
 .service-browse-equation select {
   padding-right: 24px;
 }
+.service-browse-amount {
+  width: 128px;
+  font-weight: 600;
+}
+.service-browse-amount:focus-visible {
+  outline: 2px solid var(--accent, #196b1f);
+  outline-offset: 2px;
+}
 .service-browse-coins {
   display: inline-flex;
   align-items: center;

@@ -1,6 +1,5 @@
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
-import BrowseBusiness from "./browse-config"
 import ServiceBrowseConfig from "./service-browse-config"
 import * as React from "react"
 import {
@@ -2653,7 +2652,7 @@ function ServiciosManager(props: any) {
     const isMobile = containerWidth < 480
 
     const [puedePromociones, setPuedePromociones] = React.useState(false)
-    const [vista, setVista] = React.useState<"servicios" | "extras" | "promociones" | "offers" | "coins">(
+    const [vista, setVista] = React.useState<"servicios" | "extras" | "promociones">(
         "servicios"
     )
 
@@ -3185,8 +3184,7 @@ function ServiciosManager(props: any) {
                 {<><button type="button" className={`svc-tab${vista === "extras" ? " active" : ""}`} aria-pressed={vista === "extras"} onClick={() => setVista("extras")} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="extras" />Productos</button>{(!employeeMode || employeeCanCreate) && <button type="button" className={`svc-tab${vista === "promociones" ? " active" : ""}`} aria-pressed={vista === "promociones"} onClick={() => setVista("promociones")} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="promociones" />{isMobile ? "Promos" : "Promociones"}</button>}</>}
             </div>
 
-            {!employeeMode && !branch && !editando && !mostrarForm && <div className="browse-business-tabs" role="group" aria-label="Herramientas de Browse"><button aria-pressed={vista==='offers'} onClick={()=>setVista('offers')}>Turnits Offers</button><button aria-pressed={vista==='coins'} onClick={()=>setVista('coins')}>Turnits T-Coins</button></div>}
-            {vista==='offers'||vista==='coins' ? <BrowseBusiness api={api} view={vista}/> : vista === "servicios" ? (
+            {vista === "servicios" ? (
                 <>
                     <div
                         style={{
