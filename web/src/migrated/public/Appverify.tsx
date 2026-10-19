@@ -1,8 +1,9 @@
 import { appConfig } from "../../config"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useNavigate } from "react-router"
 import { prepareAppDestinationPreloader } from "../../components/BrandPreloader"
 import { preloadSessionDestination } from "../../shared/session-routes"
+import { clearStartupVerification, selectStoredSession, takeStartupVerification, type StoredSession, type SessionVerification } from "../../shared/session-startup"
 
 
 const API_BASE = appConfig.apiUrl
@@ -15,55 +16,7 @@ const TOKEN_KEYS = [
 ]
 const SLUG_KEYS = ["user_slug", "auth_slug", "slug"]
 
-type TokenSession = {
-    token: string
-    slug: string
-    exp: number
-    iat: number
-    role: string
-}
-
-function decodeToken(token: string): TokenSession | null {
-    try {
-        const payload = token.split(".")[1]
-        if (!payload) return null
-        const base64 = payload.replace(/-/g, "+").replace(/_/g, "/")
-        const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4)
-        const binary = atob(padded)
-        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
-        const claims = JSON.parse(new TextDecoder().decode(bytes))
-        const slug = String(claims?.slug || "")
-            .trim()
-            .toLowerCase()
-        if (!slug && !(claims.rol === "consumidor" && claims.consumidorId)) return null
-        return {
-            token,
-            slug,
-            exp: Number(claims.exp || 0),
-            iat: Number(claims.iat || 0),
-            role: String(claims.rol || ""),
-        }
-    } catch {
-        return null
-    }
-}
-
-function sessionsGuardadas(): TokenSession[] {
-    const values: TokenSession[] = []
-    for (const key of TOKEN_KEYS) {
-        try {
-            const token = localStorage.getItem(key)
-            if (!token) continue
-            const parsed = decodeToken(token)
-            if (parsed) values.push(parsed)
-        } catch {}
-    }
-    // Si quedaron claves de sesiones anteriores, gana el JWT emitido más
-    // recientemente, en vez de asumir que access_token siempre es el actual.
-    return values.sort((a, b) => b.iat - a.iat)
-}
-
-function guardarSesionCanonica(session: TokenSession, slug: string) {
+function guardarSesionCanonica(session: StoredSession, slug: string) {
     // El panel también prioriza access_token. Dejamos una sola copia vigente
     // para que una clave vieja no vuelva a seleccionar otro usuario/rol.
     for (const key of TOKEN_KEYS) {
@@ -94,9 +47,9 @@ function limpiarSesion() {
 
 export function useAppSessionRedirect() {
     const navigate = useNavigate()
+    const verification = useRef<{ token: string; request: Promise<SessionVerification> } | null>(null)
     useEffect(() => {
         let cancelled = false
-        const controller = new AbortController()
         const enter = (path: string) => {
             if (cancelled) return
             prepareAppDestinationPreloader()
@@ -104,12 +57,10 @@ export function useAppSessionRedirect() {
         }
 
         const checkSession = async () => {
-            const now = Math.floor(Date.now() / 1000)
-            const session = sessionsGuardadas().find(
-                (item) => !item.exp || item.exp > now
-            )
+            const session = selectStoredSession()
 
             if (!session) {
+                clearStartupVerification()
                 limpiarSesion()
                 enter("/login")
                 return
@@ -117,24 +68,19 @@ export function useAppSessionRedirect() {
 
             try {
                 preloadSessionDestination(session.role)
-                const timeout = window.setTimeout(
-                    () => controller.abort(),
-                    8000
-                )
-                let response: Response
-                try {
-                    response = await fetch(`${API_BASE}/verify-session`, {
-                        method: "GET",
-                        headers: { Authorization: `Bearer ${session.token}` },
-                        cache: "no-store",
-                        signal: controller.signal,
-                    })
-                } finally {
-                    window.clearTimeout(timeout)
+                // Reuse only this mount's initial HTML request, including a
+                // StrictMode effect replay. Later visits always validate again.
+                if (verification.current?.token !== session.token) {
+                    verification.current = { token: session.token, request: takeStartupVerification(session, API_BASE) }
                 }
-
-                const data = await response.json().catch(() => null)
+                const response = await verification.current.request
+                const { data } = response
                 if (cancelled) return
+                if (selectStoredSession()?.token !== session.token) {
+                    verification.current = null
+                    void checkSession()
+                    return
+                }
                 if (response.status >= 500) {
                     throw new Error(`La API respondió ${response.status}`)
                 }
@@ -166,6 +112,11 @@ export function useAppSessionRedirect() {
                 // Si la API está temporalmente fuera de línea pero el JWT aún
                 // es válido, no borramos la sesión ni expulsamos al usuario.
                 if (cancelled) return
+                if (selectStoredSession()?.token !== session.token) {
+                    verification.current = null
+                    void checkSession()
+                    return
+                }
                 console.warn(
                     "Turnits: no se pudo validar la sesión en línea:",
                     error
@@ -181,7 +132,6 @@ export function useAppSessionRedirect() {
         void checkSession()
         return () => {
             cancelled = true
-            controller.abort()
         }
     }, [navigate])
 

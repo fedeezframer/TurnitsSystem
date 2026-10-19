@@ -1,11 +1,13 @@
 import { defineConfig, loadEnv } from "vite"
 import react from "@vitejs/plugin-react"
 import { startupPreloaderHtml } from "./src/shared/brand-preloader.ts"
+import { sessionStartupHtml, sessionPreloadHtml } from "./src/shared/session-startup.ts"
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_")
   const siteUrl = new URL(process.env.VITE_SITE_URL || env.VITE_SITE_URL || "https://turnits-web.onrender.com")
   const apiUrl = new URL(process.env.VITE_API_URL || env.VITE_API_URL || "https://negosocio.onrender.com", siteUrl)
+  const startupApiUrl = (process.env.VITE_API_URL || env.VITE_API_URL || (command === "serve" ? "/api" : "https://negosocio.onrender.com")).replace(/\/+$/, "")
   if (!["https:", "http:"].includes(siteUrl.protocol)) throw new Error("VITE_SITE_URL debe ser una URL HTTP o HTTPS")
   if (!["https:", "http:"].includes(apiUrl.protocol)) throw new Error("VITE_API_URL debe ser una URL HTTP o HTTPS")
 
@@ -14,7 +16,34 @@ export default defineConfig(({ mode }) => {
     name: "turnits-public-metadata",
     transformIndexHtml: {
       order: "pre",
-      handler: html => html.replaceAll("__TURNITS_PUBLIC_ORIGIN__", siteUrl.origin).replaceAll("__TURNITS_API_ORIGIN__", apiUrl.origin).replace("<!-- TURNITS_STARTUP_PRELOADER -->", startupPreloaderHtml()),
+      handler: html => html.replaceAll("__TURNITS_PUBLIC_ORIGIN__", siteUrl.origin).replaceAll("__TURNITS_API_ORIGIN__", apiUrl.origin).replace("<!-- TURNITS_SESSION_STARTUP -->", sessionStartupHtml(startupApiUrl)).replace("<!-- TURNITS_STARTUP_PRELOADER -->", startupPreloaderHtml()),
+    },
+  }, {
+    name: "turnits-session-module-preload",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        const assets = { panel: ["/src/migrated/panel/index.tsx"], browse: ["/src/pages/Browse.tsx"] }
+        if (ctx.bundle) {
+          const chunks = Object.values(ctx.bundle).filter(chunk => chunk.type === "chunk")
+          const collect = (suffix: string) => {
+            const root = chunks.find(chunk => chunk.facadeModuleId?.replaceAll("\\", "/").endsWith(suffix))
+            if (!root) throw new Error(`No se encontró la entrada para precargar ${suffix}`)
+            const files = new Set<string>()
+            const visit = (file: string) => {
+              if (files.has(file)) return
+              files.add(file)
+              const chunk = ctx.bundle![file]
+              if (chunk?.type === "chunk") chunk.imports.forEach(visit)
+            }
+            visit(root.fileName)
+            return [...files].map(file => "/" + file)
+          }
+          assets.panel = collect("/src/migrated/panel/index.tsx")
+          assets.browse = collect("/src/pages/Browse.tsx")
+        }
+        return html.replace("<!-- TURNITS_SESSION_PRELOAD -->", sessionPreloadHtml(assets))
+      },
     },
   }],
   server: {
