@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import * as React from "react"
@@ -3127,78 +3128,7 @@ function AgendaPanel_TurnoRow({
     )
 }
 
-function AgendaPanel_SkeletonAgenda({ accentColor, colsDias, isMobile }: any) {
-    return (
-        <div
-            style={{
-                display: "flex",
-                flexDirection: isMobile ? "column" : "row",
-                gap: isMobile ? 10 : 12,
-                height: "100%",
-            }}
-        >
-            <div
-                style={{
-                    width: isMobile ? "100%" : 180,
-                    flexShrink: 0,
-                    border: `1.5px solid ${accentColor}30`,
-                    borderRadius: 18,
-                    padding: isMobile ? "14px" : "20px 16px",
-                    maxHeight: isMobile ? 220 : "none",
-                }}
-            >
-                <AgendaPanel_Skel
-                    width={44}
-                    height={13}
-                    style={{ margin: "0 auto 12px" }}
-                />
-                {[80, 90, 75, 85, 70].map((w, i) => (
-                    <AgendaPanel_Skel
-                        key={i}
-                        width={`${w}%`}
-                        height={isMobile ? 32 : 26}
-                        style={{ marginBottom: 6, borderRadius: 8 }}
-                    />
-                ))}
-            </div>
-            <div
-                style={{
-                    flex: 1,
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${colsDias}, minmax(0, 1fr))`,
-                    gap: isMobile ? 8 : 10,
-                    alignContent: "start",
-                }}
-            >
-                {[4, 3, 2, 3].map((cant, i) => (
-                    <div
-                        key={i}
-                        style={{
-                            background: AgendaPanel_SURFACE,
-                            borderRadius: isMobile ? 14 : 16,
-                            border: `1px solid ${AgendaPanel_HAIRLINE}`,
-                            padding: isMobile ? "12px" : "16px",
-                        }}
-                    >
-                        <AgendaPanel_Skel
-                            width={54}
-                            height={isMobile ? 20 : 24}
-                            style={{ marginBottom: isMobile ? 8 : 12 }}
-                        />
-                        {Array.from({ length: cant }).map((_, j) => (
-                            <AgendaPanel_Skel
-                                key={j}
-                                width="88%"
-                                height={isMobile ? 30 : 24}
-                                style={{ marginBottom: 6, borderRadius: 8 }}
-                            />
-                        ))}
-                    </div>
-                ))}
-            </div>
-        </div>
-    )
-}
+function AgendaPanel_SkeletonAgenda({ accentColor, colsDias, isMobile }: any) { return <LoadingRunner card label="Cargando agenda…" /> }
 
 function AgendaPanel_Skel({ width, height, style = {} }: any) {
     return (

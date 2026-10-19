@@ -30,12 +30,21 @@ const frames: { left: number; right: number; center: number; clip?: string }[] =
 
 export default function LoadingRunner({
   label = "Cargando…",
+  size = "section",
+  card = false,
 }: {
   label?: string;
+  size?: "section" | "compact" | "inline";
+  card?: boolean;
 }) {
   const instanceId = React.useId().replace(/:/g, "");
   return (
-    <div className="turnits-runner-loading" role="status">
+    <div
+      className={["turnits-runner-loading", `is-${size}`, card ? "is-card" : ""]
+        .filter(Boolean)
+        .join(" ")}
+      role="status"
+    >
       <svg
         className="turnits-runner-animation"
         viewBox="0 0 300 300"

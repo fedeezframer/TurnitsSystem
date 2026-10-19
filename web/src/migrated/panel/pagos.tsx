@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -13,29 +14,7 @@ import { MercadoPagoConexion_cardBase, MercadoPagoConexion_globalCSS, Turnits_us
 import { TurnitsPlanRequirement } from "./shared"
 import { UploadPlaceholderIcon } from "./inicio"
 
-function MercadoPagoConexion_Skeleton() {
-    return (
-        <div style={MercadoPagoConexion_cardBase}>
-            <style>{MercadoPagoConexion_globalCSS}</style>
-            <div
-                className="pg-shimmer"
-                style={{ width: 140, height: 16, marginBottom: 6 }}
-            />
-            <div
-                className="pg-shimmer"
-                style={{ width: 200, height: 12, marginBottom: 24 }}
-            />
-            <div
-                className="pg-shimmer"
-                style={{ height: 88, borderRadius: 14, marginBottom: 16 }}
-            />
-            <div
-                className="pg-shimmer"
-                style={{ height: 72, borderRadius: 12 }}
-            />
-        </div>
-    )
-}
+function MercadoPagoConexion_Skeleton() { return <LoadingRunner card size="compact" label="Cargando medios de pago…" /> }
 
 function MercadoPagoConexion_Switch({
     on,
@@ -1030,28 +1009,7 @@ function MercadoPagoConexion_CanvasPreview({
     )
 }
 
-function ConfigPagos_Skeleton() {
-    return (
-        <div style={ConfigPagos_cardBase}>
-            <style>{ConfigPagos_shimmerCSS}</style>
-            <div
-                className="cp-shimmer"
-                style={{ width: 180, height: 18, marginBottom: 6 }}
-            />
-            <div
-                className="cp-shimmer"
-                style={{ width: 240, height: 13, marginBottom: 24 }}
-            />
-            {[110, 110, 110].map((h, i) => (
-                <div
-                    key={i}
-                    className="cp-shimmer"
-                    style={{ height: h, borderRadius: 14, marginBottom: 10 }}
-                />
-            ))}
-        </div>
-    )
-}
+function ConfigPagos_Skeleton() { return <LoadingRunner card size="compact" label="Cargando configuración de pagos…" /> }
 
 function ConfigPagos_PremiumBadge({label}: {label?: string} = {}) {
     return <TurnitsPlanRequirement premiumOnly />

@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import * as React from "react"
 import {
     useState,
@@ -949,7 +950,7 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
             {!oferta && <p style={{ margin: "9px 0 20px", color: "#64748b", fontSize: 13, lineHeight: 1.6 }}>Elegí las herramientas que necesita tu negocio.{cuenta && <> Tu plan actual: <strong>{catalogo.find(p => p.id === cuenta.plan)?.nombre || cuenta.plan}</strong>{cuenta.estado === "trial" ? " · en prueba" : ""}.</>}</p>}
             </>}
             {error && !isCheckout && <p role="alert" style={{ fontSize: 13, color: "#b91c1c", padding: 12, background: "#fef2f2", borderRadius: 10 }}>{error}</p>}
-            {loading ? <p role="status">Cargando planes…</p> : avisoPlan ? <>
+            {loading ? <LoadingRunner size="compact" label="Cargando planes…" /> : avisoPlan ? <>
                 <h2 id="tn-planes-title" className="tn-reduction-title">¡Aviso de reducción!</h2>
                 <p className="tn-reduction-description">Estás por pasar tu cuenta a un plan con menos funcionalidades,<br /> por lo que perderás acceso y configuraciones.</p>
                 <div className="tn-reduction-art"><img src={MenuCuentaReduccionImagen} alt="Calendario con una señal de advertencia" /></div>

@@ -1,4 +1,5 @@
 import * as React from "react"
+import LoadingRunner from "../../components/LoadingRunner"
 import {
     useState,
     useEffect,
@@ -75,9 +76,8 @@ function TurnitsPanel_SessionRouter(props: any) {
         return (
             <div
                 className="app-loading"
-                role="status"
             >
-                Cargando panel…
+                <LoadingRunner label="Cargando panel…" />
             </div>
         )
     if (sesion.rol === "empleado")

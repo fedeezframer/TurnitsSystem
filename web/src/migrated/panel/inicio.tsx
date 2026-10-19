@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -1507,16 +1508,7 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
             </div>
 
             {cargando && (
-                <div
-                    style={{
-                        padding: 24,
-                        textAlign: "center",
-                        color: "#999",
-                        fontSize: 13,
-                    }}
-                >
-                    Cargando...
-                </div>
+                <LoadingRunner size="compact" label="Cargando..." />
             )}
 
             {!cargando && error === "no_auth" && (
@@ -1900,36 +1892,7 @@ function TurnosHoy(props: any) {
     )
 }
 
-function TurnosHoy_LoadingSkeleton({ style }: any) {
-    const { isMobile } = TurnosHoy_useBreakpoint()
-    return (
-        <div style={{ ...TurnosHoy_makeCardBase(isMobile), ...style }}>
-            <TurnosHoy_SkeletonPulse width="45%" height={13} />
-            <TurnosHoy_SkeletonPulse
-                width="30%"
-                height={isMobile ? 40 : 48}
-                style={{ marginTop: 12 }}
-            />
-            <div
-                style={{ height: 1, background: "#f0f0f0", margin: "20px 0" }}
-            />
-            <TurnosHoy_SkeletonPulse
-                width="40%"
-                height={13}
-                style={{ marginBottom: 12 }}
-            />
-            {[80, 70, 75, 65].map((w, i) => (
-                <TurnosHoy_SkeletonPulse
-                    key={i}
-                    width={`${w}%`}
-                    height={isMobile ? 30 : 36}
-                    style={{ marginBottom: 8, borderRadius: 10 }}
-                />
-            ))}
-            <style>{TurnosHoy_shimmerCSS}</style>
-        </div>
-    )
-}
+function TurnosHoy_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
 
 function TurnosHoy_ErrorState({ error, style }: any) {
     const { isMobile } = TurnosHoy_useBreakpoint()
@@ -2609,41 +2572,7 @@ function RendimientoEquipo(props: any) {
     )
     const horasTrabajadas = `${Math.floor(minutosTrabajados / 60)}H ${String(minutosTrabajados % 60).padStart(2, "0")}M`
 
-    if (loading) {
-        return (
-            <div
-                style={{
-                    ...RendimientoEquipo_makeCardBase(isMobile),
-                    ...style,
-                }}
-            >
-                <div
-                    style={{
-                        width: "50%",
-                        height: 13,
-                        borderRadius: 6,
-                        background:
-                            "linear-gradient(90deg, #f1f5f9 25%, #e8edf3 50%, #f1f5f9 75%)",
-                        backgroundSize: "200% 100%",
-                        animation: "rendimientoEquipoShimmer 1.4s infinite",
-                        marginBottom: 16,
-                    }}
-                />
-                <div
-                    style={{
-                        width: "100%",
-                        height: 60,
-                        borderRadius: 12,
-                        background:
-                            "linear-gradient(90deg, #f1f5f9 25%, #e8edf3 50%, #f1f5f9 75%)",
-                        backgroundSize: "200% 100%",
-                        animation: "rendimientoEquipoShimmer 1.4s infinite",
-                    }}
-                />
-                <style>{RendimientoEquipo_shimmerCSS}</style>
-            </div>
-        )
-    }
+    if (loading) return <div style={{...RendimientoEquipo_makeCardBase(isMobile),...style}}><LoadingRunner size="compact" label="Cargando rendimiento…" /></div>
 
     if (error) {
         return (
@@ -2756,29 +2685,7 @@ function RendimientoEquipo(props: any) {
                 </div>
 
                 {cargandoResumen ? (
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 8,
-                        }}
-                    >
-                        {[1, 2, 3].map((i) => (
-                            <div
-                                key={i}
-                                style={{
-                                    height: 68,
-                                    borderRadius: 12,
-                                    background:
-                                        "linear-gradient(90deg,#f3f6f7 25%,#e9eef0 50%,#f3f6f7 75%)",
-                                    backgroundSize: "200% 100%",
-                                    animation:
-                                        "rendimientoEquipoShimmer 1.2s infinite",
-                                }}
-                            />
-                        ))}
-                        <style>{RendimientoEquipo_shimmerCSS}</style>
-                    </div>
+                    <LoadingRunner size="compact" label="Cargando resumen del equipo…" />
                 ) : errorResumen ? (
                     <div
                         style={{
@@ -3392,36 +3299,7 @@ function IngresosEstimados(props: any) {
     )
 }
 
-function IngresosEstimados_LoadingSkeleton({ style }: any) {
-    const { isMobile } = IngresosEstimados_useBreakpoint()
-    const skeletons: [string, number, number][] = [
-        ["50%", 13, 0],
-        ["38%", isMobile ? 32 : 40, 10],
-        ["60%", 11, 8],
-        ["100%", 1, 18],
-        ["100%", isMobile ? 40 : 52, 12],
-    ]
-    return (
-        <div style={{ ...IngresosEstimados_makeCardBase(isMobile), ...style }}>
-            {skeletons.map(([w, h, mt], i) => (
-                <div
-                    key={i}
-                    style={{
-                        width: w,
-                        height: h,
-                        borderRadius: 6,
-                        marginTop: mt,
-                        background:
-                            "linear-gradient(90deg,#f1f5f9 25%,#e8edf3 50%,#f1f5f9 75%)",
-                        backgroundSize: "200% 100%",
-                        animation: "shimmer 1.4s infinite",
-                    }}
-                />
-            ))}
-            <style>{IngresosEstimados_shimmerCSS}</style>
-        </div>
-    )
-}
+function IngresosEstimados_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
 
 function IngresosEstimados_ErrorState({ error, style }: any) {
     const { isMobile } = IngresosEstimados_useBreakpoint()
@@ -3893,51 +3771,7 @@ function TurnosMes(props: any) {
     )
 }
 
-function TurnosMes_LoadingSkeleton({ style }: any) {
-    const { isMobile } = TurnosMes_useBreakpoint()
-    return (
-        <div style={{ ...TurnosMes_makeCardBase(isMobile), ...style }}>
-            <div
-                style={{
-                    width: "45%",
-                    height: 13,
-                    borderRadius: 6,
-                    marginBottom: isMobile ? 14 : 20,
-                    background:
-                        "linear-gradient(90deg,#f1f5f9 25%,#e8edf3 50%,#f1f5f9 75%)",
-                    backgroundSize: "200% 100%",
-                    animation: "shimmer 1.4s infinite",
-                }}
-            />
-            <div
-                style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "flex-end",
-                    justifyContent: "space-between",
-                    gap: isMobile ? 10 : 16,
-                }}
-            >
-                {[60, 90, 45, 75].map((h, i) => (
-                    <div
-                        key={i}
-                        style={{
-                            flex: 1,
-                            maxWidth: isMobile ? 34 : 46,
-                            height: `${h}%`,
-                            borderRadius: isMobile ? 8 : 10,
-                            background:
-                                "linear-gradient(180deg,#f1f5f9 25%,#e8edf3 50%,#f1f5f9 75%)",
-                            backgroundSize: "100% 200%",
-                            animation: "shimmer 1.4s infinite",
-                        }}
-                    />
-                ))}
-            </div>
-            <style>{TurnosMes_shimmerCSS}</style>
-        </div>
-    )
-}
+function TurnosMes_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
 
 function TurnosMes_ErrorState({ error, style }: any) {
     const { isMobile } = TurnosMes_useBreakpoint()
@@ -4319,35 +4153,7 @@ function ClientesCard(props: any) {
     )
 }
 
-function ClientesCard_LoadingSkeleton({ style }: any) {
-    const { isMobile } = ClientesCard_useBreakpoint()
-    const skeletons: [string, number, number][] = [
-        ["45%", 13, 0],
-        ["30%", isMobile ? 34 : 44, 10],
-        ["100%", 8, 16],
-        ["100%", isMobile ? 40 : 52, 14],
-    ]
-    return (
-        <div style={{ ...ClientesCard_makeCardBase(isMobile), ...style }}>
-            {skeletons.map(([w, h, mt], i) => (
-                <div
-                    key={i}
-                    style={{
-                        width: w,
-                        height: h,
-                        borderRadius: 6,
-                        marginTop: mt,
-                        background:
-                            "linear-gradient(90deg,#f1f5f9 25%,#e8edf3 50%,#f1f5f9 75%)",
-                        backgroundSize: "200% 100%",
-                        animation: "shimmer 1.4s infinite",
-                    }}
-                />
-            ))}
-            <style>{ClientesCard_shimmerCSS}</style>
-        </div>
-    )
-}
+function ClientesCard_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
 
 function ClientesCard_ErrorState({ error, style }: any) {
     const { isMobile } = ClientesCard_useBreakpoint()
@@ -4720,37 +4526,7 @@ function MejoresDias(props: any) {
     )
 }
 
-function MejoresDias_LoadingSkeleton({ style }: any) {
-    const { isMobile } = MejoresDias_useBreakpoint()
-    const skeletons: [string, number, number][] = [
-        ["45%", 13, 0],
-        ["55%", 11, 10],
-        ["100%", 1, 14],
-        ["100%", isMobile ? 38 : 48, 10],
-        ["100%", isMobile ? 38 : 48, 8],
-        ["100%", isMobile ? 38 : 48, 8],
-    ]
-    return (
-        <div style={{ ...MejoresDias_makeCardBase(isMobile), ...style }}>
-            {skeletons.map(([w, h, mt], i) => (
-                <div
-                    key={i}
-                    style={{
-                        width: w,
-                        height: h,
-                        borderRadius: 8,
-                        marginTop: mt,
-                        background:
-                            "linear-gradient(90deg,#f1f5f9 25%,#e8edf3 50%,#f1f5f9 75%)",
-                        backgroundSize: "200% 100%",
-                        animation: "shimmer 1.4s infinite",
-                    }}
-                />
-            ))}
-            <style>{MejoresDias_shimmerCSS}</style>
-        </div>
-    )
-}
+function MejoresDias_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
 
 function MejoresDias_ErrorState({ error, style }: any) {
     const { isMobile } = MejoresDias_useBreakpoint()
@@ -5145,36 +4921,7 @@ function TopServicios(props: any) {
     return <TopServicios_ChartCard servicios={servicios} style={style} />
 }
 
-function TopServicios_LoadingSkeleton({ style }: any) {
-    const { isMobile } = TopServicios_useBreakpoint()
-    return (
-        <div style={{ ...TopServicios_makeCardBase(isMobile), ...style }}>
-            {(
-                [
-                    ["55%", 14, 0],
-                    ["35%", 11, 6],
-                    ["100%", isMobile ? 160 : 200, 16],
-                    ["100%", 80, 12],
-                ] as [string, number, number][]
-            ).map(([w, h, mt], i) => (
-                <div
-                    key={i}
-                    style={{
-                        width: w,
-                        height: h,
-                        borderRadius: 10,
-                        marginTop: mt,
-                        background:
-                            "linear-gradient(90deg,#f1f5f9 25%,#e8edf3 50%,#f1f5f9 75%)",
-                        backgroundSize: "200% 100%",
-                        animation: "shimmer 1.4s infinite",
-                    }}
-                />
-            ))}
-            <style>{TopServicios_shimmerCSS}</style>
-        </div>
-    )
-}
+function TopServicios_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
 
 function TopServicios_ErrorState({ error, style }: any) {
     const { isMobile } = TopServicios_useBreakpoint()
@@ -6050,37 +5797,7 @@ function HorasTrabajadas(props: any) {
     )
 }
 
-function HorasTrabajadas_LoadingSkeleton({ style }: any) {
-    const { isMobile } = HorasTrabajadas_useBreakpoint()
-    const skeletons: [string, number, number][] = [
-        ["45%", 12, 0],
-        ["55%", isMobile ? 28 : 36, 8],
-        ["100%", 1, 12],
-        ["100%", isMobile ? 22 : 28, 8],
-        ["100%", isMobile ? 22 : 28, 6],
-        ["100%", isMobile ? 40 : 52, 12],
-    ]
-    return (
-        <div style={{ ...HorasTrabajadas_makeCardBase(isMobile), ...style }}>
-            {skeletons.map(([w, h, mt], i) => (
-                <div
-                    key={i}
-                    style={{
-                        width: w,
-                        height: h,
-                        borderRadius: 6,
-                        marginTop: mt,
-                        background:
-                            "linear-gradient(90deg,#f1f5f9 25%,#e8edf3 50%,#f1f5f9 75%)",
-                        backgroundSize: "200% 100%",
-                        animation: "shimmer 1.4s infinite",
-                    }}
-                />
-            ))}
-            <style>{HorasTrabajadas_shimmerCSS}</style>
-        </div>
-    )
-}
+function HorasTrabajadas_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
 
 function HorasTrabajadas_ErrorState({ error, style }: any) {
     const { isMobile } = HorasTrabajadas_useBreakpoint()

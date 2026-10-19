@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
 import {
@@ -266,7 +267,7 @@ export function PerfilNegocio({
         isMobile={isMobile}
       />
       {loading ? (
-        <p className="negocio-muted">Cargando perfil…</p>
+        <LoadingRunner card label="Cargando perfil…" />
       ) : (
         <>
           {!habilitado && (
@@ -585,14 +586,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
     }
   }
   if (!data)
-    return (
-      <p
-        className={error ? "negocio-error" : "negocio-muted"}
-        role={error ? "alert" : "status"}
-      >
-        {error || "Cargando sucursales…"}
-      </p>
-    );
+    return error ? <p className="negocio-error" role="alert">{error}</p> : <LoadingRunner card label="Cargando sucursales…" />;
   const locked = !data.premium,
     disabled = locked || !data.habilitado;
   return (
@@ -667,7 +661,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               </label>
             </div>
             <React.Suspense
-              fallback={<p className="negocio-muted">Cargando mapa…</p>}
+              fallback={<LoadingRunner size="compact" label="Cargando mapa…" />}
             >
               <LocationPicker
                 latitud={form.latitud}
@@ -1040,7 +1034,7 @@ export function SucursalEmpleado({
         </p>
       )}
       {!data ? (
-        <p className="negocio-muted">Cargando sucursal…</p>
+        <LoadingRunner card label="Cargando sucursal…" />
       ) : !data.sucursal ? (
         <p className="negocio-muted">
           El dueño general todavía no te asignó la administración de una

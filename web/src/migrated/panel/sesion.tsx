@@ -1,4 +1,5 @@
 import * as React from "react"
+import LoadingRunner from "../../components/LoadingRunner"
 import {
     useState,
     useEffect,
@@ -39,7 +40,7 @@ function TurnitsPanel_GuardaSesion({
         setChequeado(true)
     }, [])
 
-    if (!chequeado) return <div className="app-loading" role="status">Verificando sesión…</div>
+    if (!chequeado) return <div className="app-loading"><LoadingRunner label="Verificando sesión…" /></div>
     if (sinStorage) {
         return (
             <div

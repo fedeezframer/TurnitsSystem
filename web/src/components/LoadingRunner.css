@@ -1,14 +1,30 @@
 .turnits-runner-loading {
+  --runner-size: 160px;
   display: grid;
   place-items: center;
   min-height: clamp(300px, 56dvh, 560px);
   width: 100%;
   position: relative;
+  box-sizing: border-box;
+}
+.turnits-runner-loading.is-compact {
+  --runner-size: 96px;
+  min-height: 160px;
+}
+.turnits-runner-loading.is-inline {
+  --runner-size: 56px;
+  min-height: 64px;
+}
+.turnits-runner-loading.is-card {
+  background: #fff;
+  border: 1px solid #e5eaf0;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.025);
 }
 .turnits-runner-animation {
   display: block;
-  width: 160px;
-  height: 160px;
+  width: var(--runner-size);
+  height: var(--runner-size);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -42,9 +58,8 @@
   border: 0;
 }
 @media (max-width: 600px) {
-  .turnits-runner-animation {
-    width: 144px;
-    height: 144px;
+  .turnits-runner-loading.is-section {
+    --runner-size: 144px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

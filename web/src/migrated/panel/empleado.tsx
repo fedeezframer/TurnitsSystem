@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
@@ -754,20 +755,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                         </div>
                     )}
                     {loading ? (
-                        <div
-                            role="status"
-                            style={{
-                                ...card,
-                                minHeight: "calc(100dvh - 180px)",
-                                display: "grid",
-                                placeItems: "center",
-                                color: "#94a3b8",
-                                textAlign: "center",
-                                padding: 40,
-                            }}
-                        >
-                            Cargando tu información…
-                        </div>
+                        <LoadingRunner card label="Cargando tu información…" />
                     ) : tab === "equipo" ? (
                         <SucursalEmpleado api={api} slug={slug} token={token}/>
                     ) : tab === "inicio" ? (
@@ -1646,14 +1634,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                                             Comprobante de transferencia
                                         </div>
                                         {comprobanteEmpleado.loading ? (
-                                            <div
-                                                style={{
-                                                    color: "#8491a3",
-                                                    fontSize: 12,
-                                                }}
-                                            >
-                                                Cargando comprobante…
-                                            </div>
+                                            <LoadingRunner size="compact" label="Cargando comprobante…" />
                                         ) : comprobanteEmpleado.error ? (
                                             <div
                                                 style={{

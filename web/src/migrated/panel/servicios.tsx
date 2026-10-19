@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import ServiceBrowseConfig from "./service-browse-config"
@@ -683,86 +684,7 @@ function ServiciosManager_ImageUploader({
     )
 }
 
-function ServiciosManager_SkeletonLista() {
-    return (
-        <div style={ServiciosManager_cardBase}>
-            <style>{ServiciosManager_shimmerCSS}</style>
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 20,
-                }}
-            >
-                <div
-                    className="svc-shimmer"
-                    style={{ width: 160, height: 20, borderRadius: 6 }}
-                />
-                <div
-                    className="svc-shimmer"
-                    style={{ width: 110, height: 34, borderRadius: 10 }}
-                />
-            </div>
-            {[0, 1, 2].map((i) => (
-                <div
-                    key={i}
-                    style={{ display: "flex", gap: 14, marginBottom: 12 }}
-                >
-                    <div
-                        className="svc-shimmer"
-                        style={{
-                            width: 56,
-                            height: 56,
-                            borderRadius: 12,
-                            flexShrink: 0,
-                        }}
-                    />
-                    <div
-                        style={{
-                            flex: 1,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 8,
-                        }}
-                    >
-                        <div
-                            className="svc-shimmer"
-                            style={{
-                                width: "60%",
-                                height: 14,
-                                borderRadius: 4,
-                            }}
-                        />
-                        <div
-                            className="svc-shimmer"
-                            style={{
-                                width: "40%",
-                                height: 12,
-                                borderRadius: 4,
-                            }}
-                        />
-                    </div>
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: 8,
-                            alignItems: "center",
-                        }}
-                    >
-                        <div
-                            className="svc-shimmer"
-                            style={{ width: 28, height: 28, borderRadius: 8 }}
-                        />
-                        <div
-                            className="svc-shimmer"
-                            style={{ width: 28, height: 28, borderRadius: 8 }}
-                        />
-                    </div>
-                </div>
-            ))}
-        </div>
-    )
-}
+function ServiciosManager_SkeletonLista() { return <LoadingRunner card label="Cargando servicios…" /> }
 
 function ServiciosManager_FormSection({
     label,
@@ -1144,19 +1066,7 @@ function ServiciosManager_ExtrasVinculados({
         })
     }
 
-    if (loading) {
-        return (
-            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                {[0, 1, 2].map((i) => (
-                    <div
-                        key={i}
-                        className="svc-shimmer"
-                        style={{ width: 92, height: 30, borderRadius: 9 }}
-                    />
-                ))}
-            </div>
-        )
-    }
+    if (loading) return <LoadingRunner size="inline" label="Cargando productos relacionados…" />
 
     if (error) {
         return <span style={{ fontSize: 12, color: "#ef4444" }}>{error}</span>
@@ -3674,7 +3584,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
             </fieldset>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button disabled={busy} type="submit" style={button}>{busy ? "Guardando…" : "Guardar promo"}</button><button disabled={busy} type="button" style={{...button,background:"#f1f5f9",color:"#475569"}} onClick={()=>{setMostrar(false);setError("")}}>Cancelar</button></div>
         </form>}
-        {loading ? <p>Cargando promociones…</p> : !lista.length && !mostrar ? <div style={{padding:30,textAlign:"center",border:"1px dashed #dbe2ea",borderRadius:16,marginTop:18,color:"#64748b"}}>Todavía no hay promos. Creá un combo o un descuento para empezar.</div> : <div style={{display:"grid",gridTemplateColumns:isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))",gap:12,marginTop:18}}>{lista.map(p=>{
+        {loading ? <LoadingRunner size="compact" label="Cargando promociones…" /> : !lista.length && !mostrar ? <div style={{padding:30,textAlign:"center",border:"1px dashed #dbe2ea",borderRadius:16,marginTop:18,color:"#64748b"}}>Todavía no hay promos. Creá un combo o un descuento para empezar.</div> : <div style={{display:"grid",gridTemplateColumns:isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))",gap:12,marginTop:18}}>{lista.map(p=>{
             const today=hoy()
             const status=today>p.fecha_fin ? "Vencida" : !p.activo ? "Pausada" : today<p.fecha_inicio ? "Programada" : "Vigente"
             const imagenes=p.items.map((item:any)=>{

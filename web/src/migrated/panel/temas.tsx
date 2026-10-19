@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import * as React from "react";
 import { appConfig } from "../../config";
 import {
@@ -122,9 +123,7 @@ function ThemeEditor({
 
   if (loading)
     return (
-      <div style={{ ...ThemeEditor_cardBase, ...style }} role="status">
-        Cargando apariencia…
-      </div>
+      <LoadingRunner card label="Cargando apariencia…" />
     );
   if (error && !enabled)
     return (

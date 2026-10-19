@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -534,83 +535,7 @@ function ClientesGrid_FrecBadge({ label, count, color, isMobile }: any) {
     )
 }
 
-function ClientesGrid_SkeletonGrid({ columnas, isMobile }: any) {
-    return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            <div
-                style={{
-                    display: "flex",
-                    flexDirection: isMobile ? "column" : "row",
-                    justifyContent: "space-between",
-                    marginBottom: isMobile ? 12 : 16,
-                    gap: isMobile ? 8 : 0,
-                }}
-            >
-                <ClientesGrid_Skel width={130} height={12} />
-                <div style={{ display: "flex", gap: 6 }}>
-                    <ClientesGrid_Skel
-                        width={isMobile ? 60 : 90}
-                        height={24}
-                        style={{ borderRadius: 20 }}
-                    />
-                    <ClientesGrid_Skel
-                        width={isMobile ? 54 : 80}
-                        height={24}
-                        style={{ borderRadius: 20 }}
-                    />
-                    <ClientesGrid_Skel
-                        width={isMobile ? 58 : 85}
-                        height={24}
-                        style={{ borderRadius: 20 }}
-                    />
-                </div>
-            </div>
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))`,
-                    border: "1px solid #f1f5f9",
-                    borderRadius: isMobile ? 12 : 16,
-                    overflow: "hidden",
-                }}
-            >
-                {Array.from({ length: columnas * 3 }).map((_, i) => (
-                    <div
-                        key={i}
-                        style={{
-                            padding: isMobile ? "12px 8px" : "16px 14px",
-                            borderLeft:
-                                i % columnas > 0 ? "1px solid #f1f5f9" : "none",
-                            borderTop:
-                                i >= columnas ? "1px solid #f1f5f9" : "none",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 6,
-                            minHeight: isMobile ? 80 : 110,
-                            justifyContent: "center",
-                        }}
-                    >
-                        <ClientesGrid_Skel
-                            width={isMobile ? 28 : 34}
-                            height={isMobile ? 28 : 34}
-                            style={{ borderRadius: "50%" }}
-                        />
-                        <ClientesGrid_Skel
-                            width="65%"
-                            height={isMobile ? 10 : 12}
-                        />
-                        {!isMobile && (
-                            <ClientesGrid_Skel width="85%" height={9} />
-                        )}
-                        <ClientesGrid_Skel width="50%" height={10} />
-                        <ClientesGrid_Skel width="45%" height={10} />
-                    </div>
-                ))}
-            </div>
-        </div>
-    )
-}
+function ClientesGrid_SkeletonGrid({ columnas, isMobile }: any) { return <LoadingRunner card label="Cargando clientes…" /> }
 
 function ClientesGrid_Skel({ width, height, style = {} }: any) {
     return (

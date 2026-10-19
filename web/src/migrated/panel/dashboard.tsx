@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import * as React from "react"
 import {
@@ -1786,9 +1787,7 @@ function TurnitsDashboard_ReferralCard({ accentColor, baseUrl, icono }: any) {
             </div>
 
             {loading && (
-                <div style={{ marginTop: 12, fontSize: 11, color: "#94a3b8" }}>
-                    Cargando...
-                </div>
+                <LoadingRunner size="compact" label="Cargando..." />
             )}
 
             {!loading && error && (
@@ -2560,50 +2559,7 @@ function TurnitsDashboard_Fetch({
     )
 }
 
-function TurnitsDashboard_Loading({ accentColor }: any) {
-    return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div
-                style={{
-                    height: 70,
-                    borderRadius: 16,
-                    background:
-                        "linear-gradient(90deg,#f3f6f7 25%,#e9eef0 50%,#f3f6f7 75%)",
-                    backgroundSize: "200% 100%",
-                    animation: "turnitsDashboardShimmer 1.2s infinite",
-                }}
-            />
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
-                    gap: 12,
-                }}
-            >
-                {[1, 2, 3, 4].map((i) => (
-                    <div
-                        key={i}
-                        style={{
-                            height: 112,
-                            borderRadius: 16,
-                            background: "#fff",
-                            border: "1px solid #edf1f3",
-                        }}
-                    />
-                ))}
-            </div>
-            <div
-                style={{
-                    height: 320,
-                    borderRadius: 16,
-                    background: "#fff",
-                    border: "1px solid #edf1f3",
-                }}
-            />
-            <style>{`@keyframes turnitsDashboardShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-        </div>
-    )
-}
+function TurnitsDashboard_Loading({ accentColor }: any) { return <LoadingRunner card label="Cargando inicio…" /> }
 
 function TurnitsDashboard_Error({ error }: any) {
     return (

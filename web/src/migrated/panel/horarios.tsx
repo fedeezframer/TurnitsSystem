@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -1281,77 +1282,7 @@ function HorariosConfig_BloqueHorario({
     )
 }
 
-function HorariosConfig_SkeletonHorarios() {
-    return (
-        <div style={{ display: "flex", gap: 16, flex: 1 }}>
-            <div
-                style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 4,
-                    width: 130,
-                }}
-            >
-                {HorariosConfig_DIAS_CONFIG.map(({ key }) => (
-                    <HorariosConfig_Skel
-                        key={key}
-                        width="100%"
-                        height={38}
-                        style={{ borderRadius: 10 }}
-                    />
-                ))}
-            </div>
-            <div
-                style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 12,
-                    paddingLeft: 16,
-                }}
-            >
-                <HorariosConfig_Skel
-                    width={100}
-                    height={28}
-                    style={{ borderRadius: 8 }}
-                />
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 16,
-                    }}
-                >
-                    {[0, 1].map((i) => (
-                        <div
-                            key={i}
-                            style={{
-                                background: "#fafafa",
-                                borderRadius: 14,
-                                padding: 16,
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 10,
-                            }}
-                        >
-                            <HorariosConfig_Skel width={70} height={14} />
-                            <HorariosConfig_Skel
-                                width="100%"
-                                height={38}
-                                style={{ borderRadius: 10 }}
-                            />
-                            <HorariosConfig_Skel
-                                width="100%"
-                                height={38}
-                                style={{ borderRadius: 10 }}
-                            />
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    )
-}
+function HorariosConfig_SkeletonHorarios() { return <LoadingRunner label="Cargando horarios…" /> }
 
 function HorariosConfig_Skel({ width, height, style = {} }: any) {
     return (
@@ -1370,57 +1301,7 @@ function HorariosConfig_Skel({ width, height, style = {} }: any) {
     )
 }
 
-function ExcepcionesConfig_SkeletonCalendar() {
-    return (
-        <div
-            style={{
-                width: "100%",
-                height: "100%",
-                padding: "22px",
-                borderRadius: 20,
-                background: "#fff",
-                boxShadow:
-                    "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)",
-                display: "flex",
-                flexDirection: "column",
-                fontFamily: "'Inter Display', -apple-system, sans-serif",
-                boxSizing: "border-box",
-                overflow: "hidden",
-            }}
-        >
-            <style>{ExcepcionesConfig_shimmerCSS}</style>
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    marginBottom: 20,
-                }}
-            >
-                <div
-                    className="exc-shimmer"
-                    style={{ width: 140, height: 18 }}
-                />
-            </div>
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-                    gap: 6,
-                }}
-            >
-                {Array(35)
-                    .fill(0)
-                    .map((_, i) => (
-                        <div
-                            key={i}
-                            className="exc-shimmer"
-                            style={{ aspectRatio: "1", borderRadius: 10 }}
-                        />
-                    ))}
-            </div>
-        </div>
-    )
-}
+function ExcepcionesConfig_SkeletonCalendar() { return <LoadingRunner card size="compact" label="Cargando excepciones…" /> }
 
 function ExcepcionesConfig_DayPanel({
     dayKey,

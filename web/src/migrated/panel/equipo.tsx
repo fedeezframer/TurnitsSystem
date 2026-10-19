@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import * as React from "react"
@@ -493,19 +494,7 @@ function TeamManager_ServiciosVinculados({
         })
     }
 
-    if (loading) {
-        return (
-            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                {[0, 1, 2].map((i) => (
-                    <div
-                        key={i}
-                        className="tm-shimmer"
-                        style={{ width: 100, height: 30, borderRadius: 9 }}
-                    />
-                ))}
-            </div>
-        )
-    }
+    if (loading) return <LoadingRunner size="inline" label="Cargando servicios del miembro…" />
 
     if (error) {
         return <span style={{ fontSize: 12, color: "#ef4444" }}>{error}</span>
@@ -665,19 +654,7 @@ function TeamManager_PromocionesVinculadas({
         })
     }
 
-    if (loading) {
-        return (
-            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                {[0, 1, 2].map((i) => (
-                    <div
-                        key={i}
-                        className="tm-shimmer"
-                        style={{ width: 100, height: 30, borderRadius: 9 }}
-                    />
-                ))}
-            </div>
-        )
-    }
+    if (loading) return <LoadingRunner size="inline" label="Cargando promociones del miembro…" />
 
     if (error && promociones.length === 0) return <span role="alert" style={{ fontSize: 12, color: "#ef4444" }}>{error}</span>
 
@@ -1691,88 +1668,7 @@ function TeamManager_MiembroCard({
     )
 }
 
-function TeamManager_SkeletonTeam() {
-    return (
-        <div style={TeamManager_cardBase}>
-            <style>{TeamManager_shimmerCSS}</style>
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 20,
-                }}
-            >
-                <div
-                    className="tm-shimmer"
-                    style={{ width: 140, height: 20, borderRadius: 6 }}
-                />
-                <div
-                    className="tm-shimmer"
-                    style={{ width: 120, height: 34, borderRadius: 10 }}
-                />
-            </div>
-            {[0, 1, 2].map((i) => (
-                <div
-                    key={i}
-                    style={{
-                        display: "flex",
-                        gap: 12,
-                        marginBottom: 12,
-                        alignItems: "center",
-                    }}
-                >
-                    <div
-                        className="tm-shimmer"
-                        style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: "50%",
-                            flexShrink: 0,
-                        }}
-                    />
-                    <div
-                        style={{
-                            flex: 1,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 8,
-                        }}
-                    >
-                        <div
-                            className="tm-shimmer"
-                            style={{
-                                width: "55%",
-                                height: 13,
-                                borderRadius: 4,
-                            }}
-                        />
-                        <div
-                            className="tm-shimmer"
-                            style={{
-                                width: "30%",
-                                height: 11,
-                                borderRadius: 4,
-                            }}
-                        />
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                        {[0, 1, 2].map((j) => (
-                            <div
-                                key={j}
-                                className="tm-shimmer"
-                                style={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: 8,
-                                }}
-                            />
-                        ))}
-                    </div>
-                </div>
-            ))}
-        </div>
-    )
-}
+function TeamManager_SkeletonTeam() { return <LoadingRunner card label="Cargando equipo…" /> }
 
 function TeamManager_CanvasPreview({
     accentColor,

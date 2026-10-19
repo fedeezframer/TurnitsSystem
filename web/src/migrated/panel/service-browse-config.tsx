@@ -1,3 +1,4 @@
+import LoadingRunner from "../../components/LoadingRunner"
 import * as React from "react";
 import { useBrowseBusiness } from "./browse-config";
 import "./service-browse-config.css";
@@ -37,9 +38,7 @@ export default function ServiceBrowseConfig({
     );
   if (!data)
     return (
-      <p className="service-browse-loading" role="status">
-        Cargando T-Coins y Offers…
-      </p>
+      <LoadingRunner size="inline" label="Cargando T-Coins y Offers…" />
     );
   const serviceRewards = draft.recompensas.filter(
     (r: any) => r.servicio_id === serviceId,
