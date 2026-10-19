@@ -6388,7 +6388,36 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
     const finMesAnteriorDate    = new Date(finMesAnteriorComparable + "T23:59:59");
     const finMesActualDate      = new Date(hoyISO + "T23:59:59");
 
-    const [{ data: turnosMes }, { data: serviciosNegocio }, { count: turnosMesAnteriorTotal }] = await Promise.all([
+    const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
+    const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
+    const resumenTurnosRango = async (desde, hasta) => {
+      const turnosRango = [];
+      for (let pagina = 0; pagina < 50; pagina++) {
+        const { data, error } = await branchPanel.from(req, "turnos")
+          .select("id, precio_cobrado, fecha, estado")
+          .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
+          .not("estado", "in", "(cancelado,pendiente)")
+          .order("id", { ascending: true })
+          .range(pagina * 1000, pagina * 1000 + 999);
+        if (error) throw error;
+        turnosRango.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return {
+        turnos: turnosRango.length,
+        ingresos: turnosRango.reduce((total, t) => total + Number(t.precio_cobrado || 0), 0),
+        diasConMasTurnos: calcularDiasConMasTurnos(turnosRango),
+      };
+    };
+    const rangosCmp = rangosComparativos(hoyISO);
+    // Estas lecturas usan el mismo alcance ya autorizado y no dependen unas
+    // de otras. Una sola tanda evita sumar un viaje a la base por cada widget.
+    const [
+      { data: turnosMes }, { data: serviciosNegocio }, { count: turnosMesAnteriorTotal },
+      { data: turnosPago }, { data: turnosSinPago, error: turnosSinPagoError },
+      { data: todosLosTurnos }, { data: referidosPropios },
+      mesActualResumen, mesAnteriorResumen, semActualResumen, semAnteriorResumen, mesCompletoResumen,
+    ] = await Promise.all([
       branchPanel.from(req, "turnos").select("*")
         // Contar también las reservas futuras ya agendadas en el mes actual.
         .eq("slug", slug).gte("fecha", inicioMes).lte("fecha", finMesActual).neq("estado", "cancelado")
@@ -6398,7 +6427,28 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       branchPanel.from(req, "turnos").select("id", { count: "exact", head: true })
         .eq("slug", slug).gte("fecha", inicioMesAnterior).lte("fecha", finMesAnteriorComparable)
         .not("estado", "in", "(cancelado,pendiente)"),
+      branchPanel.from(req, "turnos")
+        .select("monto_pagado, pago_estado, fecha_pago, fecha, email, telefono, created_at, precio_cobrado, estado")
+        .eq("slug", slug)
+        .gte("fecha", desde90.toISOString().split("T")[0])
+        .lte("fecha", hasta7.toISOString().split("T")[0])
+        .neq("pago_estado", "sin_pago"),
+      branchPanel.from(req, "turnos")
+        .select("precio_cobrado, fecha, email, telefono, estado")
+        .eq("slug", slug).eq("pago_estado", "sin_pago")
+        .gte("fecha", desde90.toISOString().split("T")[0])
+        .lte("fecha", hasta7.toISOString().split("T")[0])
+        .not("estado", "in", "(cancelado,pendiente)"),
+      branchPanel.from(req, "turnos")
+        .select("telefono, email, created_at, fecha, hora, estado, monto_pagado, pago_estado, precio_cobrado")
+        .eq("slug", slug).neq("estado", "cancelado"),
+      req.sucursalAdmin ? Promise.resolve({ data: [] }) : supabase.from("referidos")
+        .select("grupo_nro, premio_entregado_at").eq("referidor_slug", slug),
+      ...[rangosCmp.mes.actual, rangosCmp.mes.anterior, rangosCmp.semana.actual, rangosCmp.semana.anterior,
+        { desde: inicioMes, hasta: finMesActual }]
+        .map(({ desde, hasta }) => resumenTurnosRango(desde, hasta)),
     ]);
+    if (turnosSinPagoError) throw turnosSinPagoError;
 
     const turnosData          = turnosMes || [];
     const duracionPorServicio = Object.fromEntries(
@@ -6465,23 +6515,6 @@ const turnosHoyDetalle = turnosData
         tipo_cobro:     t.tipo_cobro || null,
     }));
 
-    const desde90 = new Date(ahoraArg); desde90.setDate(desde90.getDate() - 90);
-    const hasta7  = new Date(ahoraArg); hasta7.setDate(hasta7.getDate() + 7);
-    const { data: turnosPago } = await branchPanel.from(req, "turnos")
-      .select("monto_pagado, pago_estado, fecha_pago, fecha, email, telefono, created_at, precio_cobrado, estado")
-      .eq("slug", slug)
-      .gte("fecha", desde90.toISOString().split("T")[0])
-      .lte("fecha", hasta7.toISOString().split("T")[0])
-      .neq("pago_estado", "sin_pago");
-
-    const { data: turnosSinPago, error: turnosSinPagoError } = await branchPanel.from(req, "turnos")
-      .select("precio_cobrado, fecha, email, telefono, estado")
-      .eq("slug", slug)
-      .eq("pago_estado", "sin_pago")
-      .gte("fecha", desde90.toISOString().split("T")[0])
-      .lte("fecha", hasta7.toISOString().split("T")[0])
-      .not("estado", "in", "(cancelado,pendiente)");
-    if (turnosSinPagoError) throw turnosSinPagoError;
     // Las reservas sin pago también cuentan como actividad: el volumen refleja
     // el valor agendado, mientras que las comisiones siguen usando pagos reales.
     const turnosMetricasPago = [
@@ -6503,9 +6536,6 @@ const turnosHoyDetalle = turnosData
       fecha, ...(metricas.porDia[fecha] || { volumen: 0, cantidad: 0, aprobado: 0, pendiente: 0, rechazado: 0 }),
     }));
 
-    const { data: todosLosTurnos } = await branchPanel.from(req, "turnos")
-      .select("telefono, email, created_at, fecha, hora, estado, monto_pagado, pago_estado, precio_cobrado")
-      .eq("slug", slug).neq("estado", "cancelado");
     const inicioMesDate = new Date(inicioMes + "T00:00:00");
 
     // Métricas de clientes reales.
@@ -6579,8 +6609,6 @@ const turnosHoyDetalle = turnosData
     // evaluarGrupoReferidos); alcanza con mirar si algún grupo ya quedó
     // completo en su momento.
     let programaAfiliadosCompleto = false;
-    const { data: referidosPropios } = req.sucursalAdmin ? { data: [] } : await supabase.from("referidos")
-      .select("grupo_nro, premio_entregado_at").eq("referidor_slug", slug);
     if (referidosPropios && referidosPropios.length) {
       const gruposPorNro = {};
       referidosPropios.forEach((r) => {
@@ -6622,29 +6650,9 @@ const turnosHoyDetalle = turnosData
     //  · clientes_nuevos: su primer turno histórico cae dentro del tramo
     //    (fecha en horario de Argentina).
     const fechaArgDe = (d) => d.toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
-    const resumenTurnosRango = async (desde, hasta) => {
-      const turnosRango = [];
-      for (let pagina = 0; pagina < 50; pagina++) {
-        const { data, error } = await branchPanel.from(req, "turnos")
-          .select("id, precio_cobrado, fecha, estado")
-          .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
-          .not("estado", "in", "(cancelado,pendiente)")
-          .order("id", { ascending: true })
-          .range(pagina * 1000, pagina * 1000 + 999);
-        if (error) throw error;
-        turnosRango.push(...(data || []));
-        if (!data || data.length < 1000) break;
-      }
-      return {
-        turnos: turnosRango.length,
-        ingresos: turnosRango.reduce((total, t) => total + Number(t.precio_cobrado || 0), 0),
-        diasConMasTurnos: calcularDiasConMasTurnos(turnosRango),
-      };
-    };
     const nuevosRango = (desde, hasta) =>
       Object.values(primeraVezPorCliente).filter((f) => { const d = fechaArgDe(f); return d >= desde && d <= hasta; }).length;
-    const armarTramo = async ({ desde, hasta }) => {
-      const resumen = await resumenTurnosRango(desde, hasta);
+    const armarTramo = ({ desde, hasta }, resumen) => {
       return {
         desde, hasta,
         turnos: resumen.turnos,
@@ -6653,19 +6661,14 @@ const turnosHoyDetalle = turnosData
       };
     };
 
-    const rangosCmp = rangosComparativos(hoyISO);
-    const [mesActual_, mesAnterior_, semActual_, semAnterior_] = await Promise.all([
-      armarTramo(rangosCmp.mes.actual),    armarTramo(rangosCmp.mes.anterior),
-      armarTramo(rangosCmp.semana.actual), armarTramo(rangosCmp.semana.anterior),
-    ]);
     const comparativas = {
-      mes:    { actual: mesActual_, anterior: mesAnterior_ },
-      semana: { actual: semActual_, anterior: semAnterior_ },
+      mes:    { actual: armarTramo(rangosCmp.mes.actual, mesActualResumen), anterior: armarTramo(rangosCmp.mes.anterior, mesAnteriorResumen) },
+      semana: { actual: armarTramo(rangosCmp.semana.actual, semActualResumen), anterior: armarTramo(rangosCmp.semana.anterior, semAnteriorResumen) },
     };
 
     const serviciosMasPedidos = calcularServiciosMasPedidos(turnosParaMetricas);
     const diasRecurrentes     = calcularDiasRecurrentes(todosLosTurnos);
-    const diasConMasTurnos = (await resumenTurnosRango(inicioMes,finMesActual)).diasConMasTurnos;
+    const diasConMasTurnos = mesCompletoResumen.diasConMasTurnos;
 
     const finalData = {
       turnosHoy, turnosMes: turnosMesTotal, turnosMesAnterior: turnosMesAnteriorTotal || 0, turnosHoyDetalle,
