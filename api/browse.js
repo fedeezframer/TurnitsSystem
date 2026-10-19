@@ -975,8 +975,8 @@ export function createBrowse({
           (r.tipo === "servicio" && r.objeto_id !== r.servicio_id)
         )
           fail("Elegí elementos de tu propio catálogo.");
-        if (r.tipo === "servicio" && r.copago >= Number(s.precio))
-          fail("El importe adicional debe ser menor al precio del servicio.");
+        if (r.tipo === "servicio" && r.copago > Number(s.precio))
+          fail("El importe adicional no puede superar el precio normal del servicio.");
         cleanRewards.push({
           id: r.id,
           slug,

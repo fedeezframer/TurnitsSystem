@@ -351,6 +351,50 @@ async function call(method, url, { body = {}, auth, params = {} } = {}) {
     200,
   );
   assert.equal(calls.at(-1).args.p_slug, "prueba");
+  const reward = {
+    id: rewardId,
+    nombre: "Corte con T-Coins",
+    tipo: "servicio",
+    objeto_id: serviceId,
+    servicio_id: serviceId,
+    monedas: 2,
+    copago: 0,
+    stock: null,
+    activo: true,
+  };
+  for (const copago of [0, 10000, 15000]) {
+    assert.equal(
+      (
+        await call("PUT", "/admin/browse/:slug", {
+          auth: owner,
+          params: { slug: "prueba" },
+          body: { offers: [], recompensas: [{ ...reward, copago }] },
+        })
+      ).status,
+      200,
+      "tokens only or cash up to normal service price is allowed",
+    );
+    assert.equal(calls.at(-1).args.p_recompensas[0].copago, copago);
+  }
+  const beforeRejectedReward = calls.length;
+  for (const copago of [15000.01, 20000, -1]) {
+    assert.equal(
+      (
+        await call("PUT", "/admin/browse/:slug", {
+          auth: owner,
+          params: { slug: "prueba" },
+          body: { offers: [], recompensas: [{ ...reward, copago }] },
+        })
+      ).status,
+      400,
+      "cash above normal service price or below zero is rejected",
+    );
+  }
+  assert.equal(
+    calls.length,
+    beforeRejectedReward,
+    "invalid reward amounts never reach the save RPC",
+  );
   const reservation = {
     slug: "prueba",
     servicio_id: serviceId,
