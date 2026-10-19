@@ -1,4 +1,4 @@
-import LoadingRunner, { SectionLoadingBoundary } from "../../components/LoadingRunner"
+import LoadingRunner, { SectionLoadingBoundary, InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
@@ -1636,7 +1636,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                                             Comprobante de transferencia
                                         </div>
                                         {comprobanteEmpleado.loading ? (
-                                            <LoadingRunner size="compact" label="Cargando comprobante…" />
+                                            <InlineLoading label="Cargando comprobante…" />
                                         ) : comprobanteEmpleado.error ? (
                                             <div
                                                 style={{

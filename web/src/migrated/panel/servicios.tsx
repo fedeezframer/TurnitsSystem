@@ -1,4 +1,4 @@
-import LoadingRunner from "../../components/LoadingRunner"
+import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import ServiceBrowseConfig from "./service-browse-config"
@@ -1066,7 +1066,7 @@ function ServiciosManager_ExtrasVinculados({
         })
     }
 
-    if (loading) return <LoadingRunner size="inline" label="Cargando productos relacionados…" />
+    if (loading) return <InlineLoading label="Cargando productos relacionados…" />
 
     if (error) {
         return <span style={{ fontSize: 12, color: "#ef4444" }}>{error}</span>
@@ -3584,7 +3584,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
             </fieldset>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button disabled={busy} type="submit" style={button}>{busy ? "Guardando…" : "Guardar promo"}</button><button disabled={busy} type="button" style={{...button,background:"#f1f5f9",color:"#475569"}} onClick={()=>{setMostrar(false);setError("")}}>Cancelar</button></div>
         </form>}
-        {loading ? <LoadingRunner size="compact" label="Cargando promociones…" /> : !lista.length && !mostrar ? <div style={{padding:30,textAlign:"center",border:"1px dashed #dbe2ea",borderRadius:16,marginTop:18,color:"#64748b"}}>Todavía no hay promos. Creá un combo o un descuento para empezar.</div> : <div style={{display:"grid",gridTemplateColumns:isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))",gap:12,marginTop:18}}>{lista.map(p=>{
+        {loading ? <InlineLoading label="Cargando promociones…" /> : !lista.length && !mostrar ? <div style={{padding:30,textAlign:"center",border:"1px dashed #dbe2ea",borderRadius:16,marginTop:18,color:"#64748b"}}>Todavía no hay promos. Creá un combo o un descuento para empezar.</div> : <div style={{display:"grid",gridTemplateColumns:isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))",gap:12,marginTop:18}}>{lista.map(p=>{
             const today=hoy()
             const status=today>p.fecha_fin ? "Vencida" : !p.activo ? "Pausada" : today<p.fecha_inicio ? "Programada" : "Vigente"
             const imagenes=p.items.map((item:any)=>{

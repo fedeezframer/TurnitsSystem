@@ -1,4 +1,4 @@
-import LoadingRunner from "../../components/LoadingRunner"
+import { InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -1508,7 +1508,7 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
             </div>
 
             {cargando && (
-                <LoadingRunner size="compact" label="Cargando..." />
+                <InlineLoading label="Cargando..." />
             )}
 
             {!cargando && error === "no_auth" && (
@@ -1892,7 +1892,7 @@ function TurnosHoy(props: any) {
     )
 }
 
-function TurnosHoy_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
+function TurnosHoy_LoadingSkeleton({ style }: any) { return <div style={style}><InlineLoading label="Cargando información…" /></div> }
 
 function TurnosHoy_ErrorState({ error, style }: any) {
     const { isMobile } = TurnosHoy_useBreakpoint()
@@ -2572,7 +2572,7 @@ function RendimientoEquipo(props: any) {
     )
     const horasTrabajadas = `${Math.floor(minutosTrabajados / 60)}H ${String(minutosTrabajados % 60).padStart(2, "0")}M`
 
-    if (loading) return <div style={{...RendimientoEquipo_makeCardBase(isMobile),...style}}><LoadingRunner size="compact" label="Cargando rendimiento…" /></div>
+    if (loading) return <div style={{...RendimientoEquipo_makeCardBase(isMobile),...style}}><InlineLoading label="Cargando rendimiento…" /></div>
 
     if (error) {
         return (
@@ -2685,7 +2685,7 @@ function RendimientoEquipo(props: any) {
                 </div>
 
                 {cargandoResumen ? (
-                    <LoadingRunner size="compact" label="Cargando resumen del equipo…" />
+                    <InlineLoading label="Cargando resumen del equipo…" />
                 ) : errorResumen ? (
                     <div
                         style={{
@@ -3299,7 +3299,7 @@ function IngresosEstimados(props: any) {
     )
 }
 
-function IngresosEstimados_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
+function IngresosEstimados_LoadingSkeleton({ style }: any) { return <div style={style}><InlineLoading label="Cargando información…" /></div> }
 
 function IngresosEstimados_ErrorState({ error, style }: any) {
     const { isMobile } = IngresosEstimados_useBreakpoint()
@@ -3771,7 +3771,7 @@ function TurnosMes(props: any) {
     )
 }
 
-function TurnosMes_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
+function TurnosMes_LoadingSkeleton({ style }: any) { return <div style={style}><InlineLoading label="Cargando información…" /></div> }
 
 function TurnosMes_ErrorState({ error, style }: any) {
     const { isMobile } = TurnosMes_useBreakpoint()
@@ -4153,7 +4153,7 @@ function ClientesCard(props: any) {
     )
 }
 
-function ClientesCard_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
+function ClientesCard_LoadingSkeleton({ style }: any) { return <div style={style}><InlineLoading label="Cargando información…" /></div> }
 
 function ClientesCard_ErrorState({ error, style }: any) {
     const { isMobile } = ClientesCard_useBreakpoint()
@@ -4526,7 +4526,7 @@ function MejoresDias(props: any) {
     )
 }
 
-function MejoresDias_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
+function MejoresDias_LoadingSkeleton({ style }: any) { return <div style={style}><InlineLoading label="Cargando información…" /></div> }
 
 function MejoresDias_ErrorState({ error, style }: any) {
     const { isMobile } = MejoresDias_useBreakpoint()
@@ -4921,7 +4921,7 @@ function TopServicios(props: any) {
     return <TopServicios_ChartCard servicios={servicios} style={style} />
 }
 
-function TopServicios_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
+function TopServicios_LoadingSkeleton({ style }: any) { return <div style={style}><InlineLoading label="Cargando información…" /></div> }
 
 function TopServicios_ErrorState({ error, style }: any) {
     const { isMobile } = TopServicios_useBreakpoint()
@@ -5797,7 +5797,7 @@ function HorasTrabajadas(props: any) {
     )
 }
 
-function HorasTrabajadas_LoadingSkeleton({ style }: any) { return <div style={style}><LoadingRunner card size="compact" label="Cargando información…" /></div> }
+function HorasTrabajadas_LoadingSkeleton({ style }: any) { return <div style={style}><InlineLoading label="Cargando información…" /></div> }
 
 function HorasTrabajadas_ErrorState({ error, style }: any) {
     const { isMobile } = HorasTrabajadas_useBreakpoint()

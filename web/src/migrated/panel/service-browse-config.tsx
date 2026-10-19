@@ -1,4 +1,4 @@
-import LoadingRunner from "../../components/LoadingRunner"
+import { InlineLoading } from "../../components/LoadingRunner"
 import * as React from "react";
 import { useBrowseBusiness } from "./browse-config";
 import "./service-browse-config.css";
@@ -38,7 +38,7 @@ export default function ServiceBrowseConfig({
     );
   if (!data)
     return (
-      <LoadingRunner size="inline" label="Cargando T-Coins y Offers…" />
+      <InlineLoading label="Cargando T-Coins y Offers…" />
     );
   const serviceRewards = draft.recompensas.filter(
     (r: any) => r.servicio_id === serviceId,

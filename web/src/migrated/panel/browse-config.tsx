@@ -1,4 +1,4 @@
-import LoadingRunner from "../../components/LoadingRunner"
+import { InlineLoading } from "../../components/LoadingRunner"
 import * as React from "react";
 import {
   TurnitsGlobalSaveManager_get,
@@ -99,7 +99,7 @@ export default function BrowseBusiness({
         <button onClick={retry}>Reintentar</button>
       </div>
     );
-  if (!data) return <LoadingRunner size="inline" label="Cargando configuración…" />;
+  if (!data) return <InlineLoading label="Cargando configuración…" />;
   const services = data.servicios.filter(
       (s: any) => s.activo === true || s.activo === "true",
     ),

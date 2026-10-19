@@ -1,9 +1,18 @@
 import * as React from "react";
 import "./LoadingRunner.css";
 
-const SectionLoadingContext = React.createContext<
-  ((id: string) => () => void) | null
->(null);
+const SectionLoadingContext = React.createContext<{
+  register: (id: string) => () => void;
+  initialComplete: boolean;
+} | null>(null);
+
+export function InlineLoading({ label = "Cargando…" }: { label?: string }) {
+  return (
+    <div className="turnits-inline-loading" role="status">
+      {label}
+    </div>
+  );
+}
 
 // Keep requests mounted while a section loads. Multiple pending blocks share
 // one loader, which stays visible until the last block has finished.
@@ -14,6 +23,7 @@ export function SectionLoadingBoundary({
 }) {
   const pending = React.useRef(new Set<string>());
   const [count, setCount] = React.useState(0);
+  const [initialComplete, setInitialComplete] = React.useState(false);
   const register = React.useCallback((id: string) => {
     pending.current.add(id);
     setCount(pending.current.size);
@@ -22,7 +32,15 @@ export function SectionLoadingBoundary({
       setCount(pending.current.size);
     };
   }, []);
-  const loading = count > 0;
+  React.useLayoutEffect(() => {
+    // Later edits and refreshes keep their existing content on screen.
+    if (pending.current.size === 0) setInitialComplete(true);
+  }, [count]);
+  const context = React.useMemo(
+    () => ({ register, initialComplete }),
+    [register, initialComplete],
+  );
+  const loading = !initialComplete && count > 0;
   return (
     <div className="turnits-section-loading" aria-busy={loading}>
       {loading && (
@@ -34,7 +52,7 @@ export function SectionLoadingBoundary({
         className="turnits-section-content"
         aria-hidden={loading || undefined}
       >
-        <SectionLoadingContext.Provider value={register}>
+        <SectionLoadingContext.Provider value={context}>
           {children}
         </SectionLoadingContext.Provider>
       </div>
@@ -78,9 +96,11 @@ export default function LoadingRunner({
   card?: boolean;
 }) {
   const instanceId = React.useId().replace(/:/g, "");
-  const register = React.useContext(SectionLoadingContext);
+  const section = React.useContext(SectionLoadingContext);
+  const register = section?.initialComplete ? undefined : section?.register;
   React.useLayoutEffect(() => register?.(instanceId), [register, instanceId]);
-  if (register) return null;
+  if (section)
+    return section.initialComplete ? <InlineLoading label={label} /> : null;
   return (
     <div
       className={["turnits-runner-loading", card ? "is-card" : ""]

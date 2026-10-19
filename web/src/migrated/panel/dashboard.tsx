@@ -1,4 +1,4 @@
-import LoadingRunner from "../../components/LoadingRunner"
+import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import * as React from "react"
 import {
@@ -1787,7 +1787,7 @@ function TurnitsDashboard_ReferralCard({ accentColor, baseUrl, icono }: any) {
             </div>
 
             {loading && (
-                <LoadingRunner size="compact" label="Cargando..." />
+                <InlineLoading label="Cargando..." />
             )}
 
             {!loading && error && (

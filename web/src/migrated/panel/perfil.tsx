@@ -1,4 +1,4 @@
-import LoadingRunner, { SectionLoadingBoundary } from "../../components/LoadingRunner"
+import LoadingRunner, { SectionLoadingBoundary, InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
 import {
@@ -663,7 +663,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               </label>
             </div>
             <React.Suspense
-              fallback={<LoadingRunner size="compact" label="Cargando mapa…" />}
+              fallback={<InlineLoading label="Cargando mapa…" />}
             >
               <LocationPicker
                 latitud={form.latitud}

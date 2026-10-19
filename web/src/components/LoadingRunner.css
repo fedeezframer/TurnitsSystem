@@ -20,6 +20,12 @@
   gap: 20px;
   min-width: 0;
 }
+.turnits-inline-loading {
+  padding: 10px 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 20px;
+}
 .turnits-section-loading[aria-busy="true"] > .turnits-section-content {
   position: absolute;
   top: 0;

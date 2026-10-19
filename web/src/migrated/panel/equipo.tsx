@@ -1,4 +1,4 @@
-import LoadingRunner from "../../components/LoadingRunner"
+import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import * as React from "react"
@@ -494,7 +494,7 @@ function TeamManager_ServiciosVinculados({
         })
     }
 
-    if (loading) return <LoadingRunner size="inline" label="Cargando servicios del miembro…" />
+    if (loading) return <InlineLoading label="Cargando servicios del miembro…" />
 
     if (error) {
         return <span style={{ fontSize: 12, color: "#ef4444" }}>{error}</span>
@@ -654,7 +654,7 @@ function TeamManager_PromocionesVinculadas({
         })
     }
 
-    if (loading) return <LoadingRunner size="inline" label="Cargando promociones del miembro…" />
+    if (loading) return <InlineLoading label="Cargando promociones del miembro…" />
 
     if (error && promociones.length === 0) return <span role="alert" style={{ fontSize: 12, color: "#ef4444" }}>{error}</span>
 
