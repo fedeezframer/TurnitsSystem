@@ -1,4 +1,5 @@
 import { appConfig } from "../config"
+import { useStartupLoading } from "../components/BrandPreloader"
 import { consumerHeaders } from "../shared/consumer-session"
 import * as React from "react"
 import { cardRadius, iconRadius, type BusinessAppearance } from "../shared/appearance.js"
@@ -823,6 +824,7 @@ export default function BookingFlow(props: any) {
     const [sucursales,setSucursales]=React.useState<MapBranch[]>([])
     const [sucursalId,setSucursalId]=React.useState('')
     const [loadingProf, setLoadingProf] = React.useState(true)
+    useStartupLoading(loadingNegocio || loadingProf)
     const [errorSedes,setErrorSedes]=React.useState("")
     const [equipoId, setEquipoId] = React.useState<string | null>(null)
     const [equipoIdReservado, setEquipoIdReservado] = React.useState<

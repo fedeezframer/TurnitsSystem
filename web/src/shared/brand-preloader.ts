@@ -52,14 +52,16 @@ const strokes = [
   },
 ];
 
-export const BRAND_WRITING_DURATION = 2800;
+export const BRAND_WRITING_DURATION = 2200;
 export const BRAND_IMAGE = "/assets/loading/turnits-script-original.png";
 
 // Used by the initial HTML and React, including when the image is not cached.
 export function prepareBrandArtwork(container: HTMLElement) {
+  if (container.dataset.artworkPrepared) return () => {};
+  container.dataset.artworkPrepared = "true";
   const artwork = new Image();
   const ready = () => {
-    container.dataset.startedAt = String(performance.now());
+    if (container.classList.contains("is-art-ready")) return;
     container.classList.add("is-art-ready");
     container.dispatchEvent(new Event("turnits-brand-ready"));
   };

@@ -2,7 +2,6 @@ import * as React from "react";
 import {
   BRAND_WRITING_DURATION,
   brandWritingSvg,
-  prepareBrandArtwork,
 } from "../shared/brand-preloader";
 
 // Keep the HTML loader mounted through JS download, lazy routes and session
@@ -11,63 +10,79 @@ const startup = document.getElementById("turnits-startup-preloader");
 let pending = 0;
 let routeReady = false;
 let finished = !startup;
-let finishTimer: ReturnType<typeof setTimeout> | undefined;
+let writingStarted = false;
+let startFrame = 0;
 
 function finishStartup() {
-  clearTimeout(finishTimer);
-  if (
-    finished ||
-    !routeReady ||
-    pending ||
-    !startup?.classList.contains("is-art-ready")
-  )
-    return;
+  if (finished || !startup) return;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const remaining =
-    reduced || startup.classList.contains("is-art-error")
-      ? 0
-      : BRAND_WRITING_DURATION +
-        180 -
-        (performance.now() - Number(startup.dataset.startedAt || 0));
-  if (remaining > 0) {
-    finishTimer = setTimeout(finishStartup, remaining);
-    return;
-  }
   finished = true;
   startup.classList.add("is-leaving");
   setTimeout(() => startup.remove(), reduced ? 0 : 230);
 }
-startup?.addEventListener("turnits-brand-ready", finishStartup);
+
+function readyToWrite() {
+  return (
+    !finished &&
+    !writingStarted &&
+    routeReady &&
+    pending === 0 &&
+    startup?.classList.contains("is-art-ready")
+  );
+}
+
+function startWhenReady() {
+  if (!readyToWrite() || startFrame) return;
+  // Let the last ready state commit and paint before starting the one timeline.
+  startFrame = requestAnimationFrame(() => {
+    startFrame = requestAnimationFrame(() => {
+      startFrame = 0;
+      if (!readyToWrite() || !startup) return;
+      writingStarted = true;
+      startup.dataset.startedAt = String(performance.now());
+      startup.classList.add("is-writing");
+      const reduced = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      setTimeout(
+        finishStartup,
+        reduced || startup.classList.contains("is-art-error")
+          ? 0
+          : BRAND_WRITING_DURATION + 100,
+      );
+    });
+  });
+}
+startup?.addEventListener("turnits-brand-ready", startWhenReady);
+
+export function useStartupLoading(loading: boolean) {
+  React.useLayoutEffect(() => {
+    if (!loading || finished || writingStarted) return;
+    pending++;
+    cancelAnimationFrame(startFrame);
+    startFrame = 0;
+    return () => {
+      pending--;
+      startWhenReady();
+    };
+  }, [loading]);
+}
 
 export function StartupRouteReady() {
   React.useEffect(() => {
     routeReady = true;
-    finishStartup();
+    startWhenReady();
   }, []);
   return null;
 }
 
 export default function BrandPreloader() {
   const id = React.useId().replace(/:/g, "");
-  const container = React.useRef<HTMLDivElement>(null);
-  const sharesStartup = !finished;
-  React.useLayoutEffect(() => {
-    if (!sharesStartup) return;
-    pending++;
-    clearTimeout(finishTimer);
-    return () => {
-      pending--;
-      finishStartup();
-    };
-  }, [sharesStartup]);
-  React.useLayoutEffect(() => {
-    if (container.current) return prepareBrandArtwork(container.current);
-  }, [sharesStartup]);
-  if (sharesStartup) return null;
+  useStartupLoading(true);
+  if (!finished) return null;
   return (
     <div
-      ref={container}
-      className="turnits-brand-preloader"
+      className="turnits-brand-preloader is-complete"
       role="status"
       aria-label="Cargando Turnits"
       dangerouslySetInnerHTML={{

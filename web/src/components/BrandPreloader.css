@@ -1,4 +1,5 @@
 .turnits-brand-preloader {
+  --writing-speed: 0.78;
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -23,18 +24,28 @@
   opacity: 0;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: turnits-write var(--stroke-duration) cubic-bezier(0.4, 0, 0.25, 1)
-    var(--stroke-start) both;
+  animation: turnits-write calc(var(--stroke-duration) * var(--writing-speed))
+    cubic-bezier(0.4, 0, 0.25, 1)
+    calc(var(--stroke-start) * var(--writing-speed)) both;
   animation-play-state: paused;
 }
 .turnits-writing-finished {
   opacity: 0;
-  animation: turnits-writing-finish 0.14s ease 2.68s forwards;
+  animation: turnits-writing-finish calc(0.14s * var(--writing-speed)) ease
+    calc(2.68s * var(--writing-speed)) forwards;
   animation-play-state: paused;
 }
-.is-art-ready .turnits-writing-stroke,
-.is-art-ready .turnits-writing-finished {
+.is-writing .turnits-writing-stroke,
+.is-writing .turnits-writing-finished {
   animation-play-state: running;
+}
+.is-complete .turnits-writing-stroke {
+  animation: none;
+  opacity: 0;
+}
+.is-complete .turnits-writing-finished {
+  animation: none;
+  opacity: 1;
 }
 .turnits-brand-preloader.is-art-error::after {
   content: "Turnits";

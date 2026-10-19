@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useStartupLoading } from "./BrandPreloader";
 import "./LoadingRunner.css";
 
 const SectionLoadingContext = React.createContext<{
@@ -24,6 +25,7 @@ export function SectionLoadingBoundary({
   const pending = React.useRef(new Set<string>());
   const [count, setCount] = React.useState(0);
   const [initialComplete, setInitialComplete] = React.useState(false);
+  useStartupLoading(!initialComplete);
   const register = React.useCallback((id: string) => {
     pending.current.add(id);
     setCount(pending.current.size);

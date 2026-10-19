@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { appConfig } from "../config";
+import { useStartupLoading } from "../components/BrandPreloader";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import { consumerHeaders } from "../shared/consumer-session";
 import BrowseCalendar from "./BrowseCalendar";
@@ -374,6 +375,7 @@ export default function Browse() {
     [slotLoading, setSlotLoading] = React.useState(false),
     [form, setForm] = React.useState<any>({}),
     [revision, setRevision] = React.useState(0);
+  useStartupLoading(loading);
   const searchInput = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => {
     const update = () => setCurrentDay(today());

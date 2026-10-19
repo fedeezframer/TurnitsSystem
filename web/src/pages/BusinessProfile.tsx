@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useParams, Link } from "react-router";
 import { appConfig } from "../config";
+import { useStartupLoading } from "../components/BrandPreloader";
 import {
   PerfilContenido,
   PerfilPublicaciones,
@@ -13,6 +14,7 @@ export default function BusinessProfile({
   const { slug } = useParams(),
     [perfil, setPerfil] = React.useState<any>(null),
     [error, setError] = React.useState("");
+  useStartupLoading(!perfil && !error);
   React.useEffect(() => {
     let alive = true;
     setPerfil(null);
