@@ -1,9 +1,6 @@
 {
   "panel": {
     "accentColor": "rgb(27, 107, 26)",
-    "actualizacionAuto": true,
-    "actualizacionMinutos": 5,
-    "actualizacionModo": "automatico",
     "iconoAgendaSinPagos": "/assets/framer/SEUmPLoVhLPaJfNgibO3Zo34eU8.svg",
     "iconoPagosActivos": "/assets/framer/1iqFCmjakKMFMTw0M2UK9L5wE.svg",
     "iconos": {

@@ -49,22 +49,95 @@
   overflow: hidden;
   flex-shrink: 0;
 }
-.turnits-runner-frame {
-  opacity: 0;
-  animation: turnits-runner-pose 3s linear infinite;
-  animation-delay: calc(var(--runner-frame) * 0.5s - 3s);
+.calendar-body {
+  transform-origin: 120px 150px;
+  animation: calendar-bounce 0.4s ease-in-out infinite;
 }
-@keyframes turnits-runner-pose {
+.calendar-leg,
+.calendar-shin,
+.calendar-arm {
+  transform-origin: 0 0;
+  animation: calendar-stride 0.8s ease-in-out infinite;
+}
+.calendar-shin {
+  animation-name: calendar-knee;
+}
+.calendar-arm {
+  animation-name: calendar-swing;
+}
+.calendar-leg-back,
+.calendar-shin-back,
+.calendar-arm-back {
+  animation-delay: -0.4s;
+}
+.calendar-ribbon {
+  transform-origin: 77px 81px;
+  animation: calendar-ribbon 0.4s ease-in-out infinite;
+}
+.calendar-shadow {
+  transform-origin: 122px 215px;
+  animation: calendar-shadow 0.4s ease-in-out infinite;
+}
+@keyframes calendar-bounce {
   0%,
-  13.333333% {
-    opacity: 1;
-  }
-  16.666667%,
-  96.666667% {
-    opacity: 0;
-  }
   100% {
-    opacity: 1;
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(1deg);
+  }
+}
+@keyframes calendar-stride {
+  0%,
+  100% {
+    transform: rotate(-38deg);
+  }
+  50% {
+    transform: rotate(40deg);
+  }
+}
+@keyframes calendar-knee {
+  0%,
+  100% {
+    transform: rotate(-12deg);
+  }
+  25% {
+    transform: rotate(24deg);
+  }
+  50% {
+    transform: rotate(82deg);
+  }
+  75% {
+    transform: rotate(38deg);
+  }
+}
+@keyframes calendar-swing {
+  0%,
+  100% {
+    transform: rotate(-28deg);
+  }
+  50% {
+    transform: rotate(34deg);
+  }
+}
+@keyframes calendar-ribbon {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+@keyframes calendar-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.12;
+  }
+  50% {
+    transform: scaleX(0.86);
+    opacity: 0.08;
   }
 }
 .turnits-runner-description {
@@ -74,11 +147,7 @@
   line-height: 22px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .turnits-runner-frame {
+  .turnits-runner-animation * {
     animation: none;
-    opacity: 0;
-  }
-  .turnits-runner-frame:first-child {
-    opacity: 1;
   }
 }

@@ -8,7 +8,6 @@ import {
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
-import { AutoUpdate_ejecutar } from "./common"
 
 function TurnitsPlanIcon({ plan, size = 20 }: { plan: "basico" | "premium"; size?: number }) {
     return plan === "basico" ? (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
@@ -82,7 +81,7 @@ class PanelErrorBoundary extends React.Component<
                         a soporte.
                     </div>
                     <button
-                        onClick={() => AutoUpdate_ejecutar(null)}
+                        onClick={() => window.location.reload()}
                         style={{
                             marginTop: 8,
                             padding: "10px 20px",
@@ -104,94 +103,4 @@ class PanelErrorBoundary extends React.Component<
     }
 }
 
-function PanelUpdateBanner({
-    visible,
-    accentColor,
-    onUpdate,
-    onDismiss,
-}: {
-    visible: boolean
-    accentColor: string
-    onUpdate: () => void
-    onDismiss: () => void
-}) {
-    return (
-        <AnimatePresence>
-            {visible && (
-                <div
-                    style={{
-                        position: "fixed",
-                        left: 0,
-                        right: 0,
-                        bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
-                        display: "flex",
-                        justifyContent: "center",
-                        padding: "0 12px",
-                        pointerEvents: "none",
-                        zIndex: 99999,
-                    }}
-                >
-                    <motion.div
-                        role="status"
-                        aria-live="polite"
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 24 }}
-                        transition={{ duration: 0.25 }}
-                        style={{
-                            pointerEvents: "auto",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            maxWidth: 420,
-                            padding: "10px 10px 10px 16px",
-                            borderRadius: 14,
-                            background: "#0f172a",
-                            color: "#fff",
-                            boxShadow: "0 8px 30px rgba(15,23,42,0.28)",
-                            fontFamily:
-                                "'Inter Display', -apple-system, sans-serif",
-                            fontSize: 14,
-                            fontWeight: 500,
-                        }}
-                    >
-                        <span style={{ flex: 1 }}>
-                            Hay una nueva versión del panel
-                        </span>
-                        <button
-                            onClick={onDismiss}
-                            style={{
-                                border: "none",
-                                background: "transparent",
-                                color: "#94a3b8",
-                                fontSize: 13,
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                padding: "6px 4px",
-                            }}
-                        >
-                            Después
-                        </button>
-                        <button
-                            onClick={onUpdate}
-                            style={{
-                                border: "none",
-                                background: accentColor,
-                                color: "#fff",
-                                fontSize: 13,
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                padding: "8px 14px",
-                                borderRadius: 10,
-                            }}
-                        >
-                            Actualizar
-                        </button>
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
-    )
-}
-
-export { TurnitsPlanIcon, TurnitsPlanRequirement, PanelErrorBoundary, PanelUpdateBanner }
+export { TurnitsPlanIcon, TurnitsPlanRequirement, PanelErrorBoundary }

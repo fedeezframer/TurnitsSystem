@@ -12,9 +12,8 @@ import {
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
-import { SeccionId, Turnits_useElementWidth, TurnitsGlobalSaveManager_get, MenuFooter_getSlug, MenuFooter_getToken, usePanelAutoUpdate, NAV_ITEMS, SeccionHeader } from "./common"
+import { SeccionId, Turnits_useElementWidth, TurnitsGlobalSaveManager_get, MenuFooter_getSlug, MenuFooter_getToken, NAV_ITEMS, SeccionHeader } from "./common"
 import { TurnitsBetaInstallPrompt, QrFlotante, TurnitsGlobalSaveBar } from "./interfaz"
-import { PanelUpdateBanner } from "./shared"
 import { OnboardingNube } from "./onboarding"
 import { AmbientOrbs, BrandMark, NavButton, TeamManager, BottomNavIcon, BottomNavMore } from "./equipo"
 import { MenuFooter as OwnerMenuFooter, MenuCuentaPagoRetorno, NotificacionesFlotantes } from "./cuenta"
@@ -66,9 +65,6 @@ function TurnitsPanel_Inner(props: any) {
         mpClientId = "",
         logoutUrl = "/login",
         soporteUrl = "https://api.whatsapp.com/send/?phone=5493513087324&text&type=phone_number&app_absent=0",
-        actualizacionAuto = true,
-        actualizacionModo = "automatico",
-        actualizacionMinutos = 5,
         style,
     } = props
 
@@ -126,14 +122,6 @@ function TurnitsPanel_Inner(props: any) {
         }
         tryLoad()
     }, [baseUrl])
-
-    // ─── Auto-actualización: detecta versión nueva publicada y recarga ─────
-    const autoUpdate = usePanelAutoUpdate({
-        baseUrl,
-        activo: !!actualizacionAuto,
-        modo: actualizacionModo === "aviso" ? "aviso" : "automatico",
-        minutos: Number(actualizacionMinutos) || 5,
-    })
 
     const irA = (id: SeccionId) => {
         if (branchAdmin && !["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(id)) return
@@ -210,13 +198,6 @@ function TurnitsPanel_Inner(props: any) {
                 accentColor={accentColor}
                 logoImage={logoImage}
                 logoText={logoText}
-            />
-
-            <PanelUpdateBanner
-                visible={!!autoUpdate.pendiente}
-                accentColor={accentColor}
-                onUpdate={autoUpdate.aplicar}
-                onDismiss={autoUpdate.descartar}
             />
 
             {true && (

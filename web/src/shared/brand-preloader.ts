@@ -59,23 +59,6 @@ export const BRAND_IMAGE = "/assets/loading/turnits-script-original.png";
 export function prepareBrandArtwork(container: HTMLElement) {
   if (container.dataset.artworkPrepared) return () => {};
   container.dataset.artworkPrepared = "true";
-  // Carry the completed logo through our own version-refresh navigation.
-  // Manual visits/reloads still get their normal single writing cycle.
-  try {
-    const reload = JSON.parse(
-      sessionStorage.getItem("turnits-writing-reload-once") || "null",
-    );
-    if (
-      reload &&
-      reload.path === location.pathname &&
-      new URLSearchParams(location.search).has("_r") &&
-      Date.now() - reload.at >= 0 &&
-      Date.now() - reload.at < 30000
-    ) {
-      container.dataset.skipWriting = "true";
-      container.classList.add("is-complete");
-    }
-  } catch {}
   const artwork = new Image();
   const ready = () => {
     if (container.classList.contains("is-art-ready")) return;
