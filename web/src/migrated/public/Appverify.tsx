@@ -1,5 +1,8 @@
 import { appConfig } from "../../config"
 import { useEffect } from "react"
+import { useNavigate } from "react-router"
+import { prepareAppDestinationPreloader } from "../../components/BrandPreloader"
+import { preloadSessionDestination } from "../../shared/session-routes"
 
 
 const API_BASE = appConfig.apiUrl
@@ -89,14 +92,16 @@ function limpiarSesion() {
     }
 }
 
-function irAlPanel(slug: string) {
-    // Esta ruta es la que reescribe el Worker a /panel?u=<slug>.
-    window.location.replace(`/panel/${encodeURIComponent(slug)}`)
-}
-
 export function useAppSessionRedirect() {
+    const navigate = useNavigate()
     useEffect(() => {
         let cancelled = false
+        const controller = new AbortController()
+        const enter = (path: string) => {
+            if (cancelled) return
+            prepareAppDestinationPreloader()
+            void navigate(path, { replace: true })
+        }
 
         const checkSession = async () => {
             const now = Math.floor(Date.now() / 1000)
@@ -106,12 +111,12 @@ export function useAppSessionRedirect() {
 
             if (!session) {
                 limpiarSesion()
-                if (!cancelled) window.location.replace("/login")
+                enter("/login")
                 return
             }
 
             try {
-                const controller = new AbortController()
+                preloadSessionDestination(session.role)
                 const timeout = window.setTimeout(
                     () => controller.abort(),
                     8000
@@ -129,19 +134,20 @@ export function useAppSessionRedirect() {
                 }
 
                 const data = await response.json().catch(() => null)
+                if (cancelled) return
                 if (response.status >= 500) {
                     throw new Error(`La API respondió ${response.status}`)
                 }
                 if (!response.ok || data?.active !== true) {
                     limpiarSesion()
-                    if (!cancelled) window.location.replace("/login")
+                    enter("/login")
                     return
                 }
 
                 // El servidor valida el tipo de cuenta antes de elegir el destino.
                 if (data.rol === "consumidor") {
                     guardarSesionCanonica(session, "")
-                    if (!cancelled) window.location.replace("/browse")
+                    enter("/browse")
                     return
                 }
                 // El slug del servidor es la referencia canónica para negocios.
@@ -150,23 +156,24 @@ export function useAppSessionRedirect() {
                     .toLowerCase()
                 if (!slug) {
                     limpiarSesion()
-                    if (!cancelled) window.location.replace("/login")
+                    enter("/login")
                     return
                 }
 
                 guardarSesionCanonica(session, slug)
-                if (!cancelled) irAlPanel(slug)
+                enter(`/panel/${encodeURIComponent(slug)}`)
             } catch (error) {
                 // Si la API está temporalmente fuera de línea pero el JWT aún
                 // es válido, no borramos la sesión ni expulsamos al usuario.
+                if (cancelled) return
                 console.warn(
                     "Turnits: no se pudo validar la sesión en línea:",
                     error
                 )
                 if (!cancelled) {
                     guardarSesionCanonica(session, session.slug)
-                    if (session.role === "consumidor") window.location.replace("/browse")
-                    else irAlPanel(session.slug)
+                    if (session.role === "consumidor") enter("/browse")
+                    else enter(`/panel/${encodeURIComponent(session.slug)}`)
                 }
             }
         }
@@ -174,8 +181,9 @@ export function useAppSessionRedirect() {
         void checkSession()
         return () => {
             cancelled = true
+            controller.abort()
         }
-    }, [])
+    }, [navigate])
 
     return {}
 }

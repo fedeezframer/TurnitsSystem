@@ -4,17 +4,18 @@ import { appConfig } from "./config"
 import Receipt from "./pages/Receipt"
 import ResetPassword from "./pages/ResetPassword"
 import BrandPreloader, { StartupRouteReady } from "./components/BrandPreloader"
+import AppGateway from "./pages/AppGateway"
+import { loadBrowse, loadPanel } from "./shared/session-routes"
 
 const Login = lazy(() => import("./migrated/Login"))
 const Register = lazy(() => import("./migrated/Register"))
-const Browse = lazy(() => import("./pages/Browse"))
+const Browse = lazy(loadBrowse)
 const Booking = lazy(() => import("./migrated/Booking"))
-const Panel = lazy(() => import("./migrated/panel"))
+const Panel = lazy(loadPanel)
 const Home = lazy(() => import("./pages/Home"))
 const Legal = lazy(() => import("./pages/Legal"))
 const PublicPlans = lazy(() => import("./pages/PublicPlans"))
 const Store = lazy(() => import("./pages/Store"))
-const AppGateway = lazy(() => import("./pages/AppGateway"))
 const Internal = lazy(() => import("./migrated/public/AdminStats"))
 const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))

@@ -1,13 +1,16 @@
 import * as React from "react";
+import { useLocation } from "react-router";
 import {
   BRAND_WRITING_DURATION,
   brandWritingSvg,
   isAppGateway,
+  prepareBrandArtwork,
 } from "../shared/brand-preloader";
 
 // Keep the HTML loader mounted through JS download, lazy routes and session
 // checks, so the handwriting never restarts between those startup stages.
-const startup = document.getElementById("turnits-startup-preloader");
+let startup = document.getElementById("turnits-startup-preloader");
+let appDestinationPending = isAppGateway(window.location.pathname);
 let pending = 0;
 let routeReady = false;
 let finished = !startup;
@@ -66,6 +69,24 @@ function startWhenReady() {
 }
 startup?.addEventListener("turnits-brand-ready", startWhenReady);
 
+// /app has no artwork. Its first destination gets the same single writing
+// cycle without downloading a second document or restarting the application.
+export function prepareAppDestinationPreloader() {
+  if (!appDestinationPending) return;
+  appDestinationPending = false;
+  routeReady = false;
+  finished = false;
+  startup = document.createElement("div");
+  startup.id = "turnits-startup-preloader";
+  startup.className = "turnits-brand-preloader";
+  startup.setAttribute("role", "status");
+  startup.setAttribute("aria-label", "Cargando Turnits");
+  startup.innerHTML = brandWritingSvg("turnits-startup-writing");
+  startup.addEventListener("turnits-brand-ready", startWhenReady);
+  document.body.appendChild(startup);
+  prepareBrandArtwork(startup);
+}
+
 export function useStartupLoading(loading: boolean) {
   React.useLayoutEffect(() => {
     if (!loading || finished || writingStarted) return;
@@ -80,10 +101,14 @@ export function useStartupLoading(loading: boolean) {
 }
 
 export function StartupRouteReady() {
+  const { pathname } = useLocation();
   React.useEffect(() => {
-    routeReady = true;
+    routeReady = !isAppGateway(pathname);
     startWhenReady();
-  }, []);
+    return () => {
+      routeReady = false;
+    };
+  }, [pathname]);
   return null;
 }
 
