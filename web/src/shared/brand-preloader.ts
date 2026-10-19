@@ -53,7 +53,7 @@ const strokes = [
 ];
 
 export const BRAND_WRITING_DURATION = 2200;
-export const BRAND_IMAGE = "/assets/loading/turnits-script-original.png";
+export const BRAND_IMAGE = "/assets/loading/turnits-script-original.webp";
 
 // The installed app uses this route only to validate the session and redirect.
 export function isAppGateway(pathname: string) {
@@ -75,7 +75,7 @@ export function prepareBrandArtwork(container: HTMLElement) {
     container.classList.add("is-art-error");
     ready();
   };
-  artwork.src = "/assets/loading/turnits-script-original.png";
+  artwork.src = "/assets/loading/turnits-script-original.webp";
   return () => {
     artwork.onload = artwork.onerror = null;
   };

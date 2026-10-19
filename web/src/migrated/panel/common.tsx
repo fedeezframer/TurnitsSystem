@@ -1,3 +1,4 @@
+import { fetchPanelRead } from "../../shared/panel-requests"
 import { appConfig } from "../../config"
 import { DEFAULT_APPEARANCE, CARD_SHAPES, ICON_SHAPES } from "../../shared/appearance.js"
 import type { BusinessAppearance } from "../../shared/appearance.js"
@@ -16,7 +17,7 @@ import { createPortal } from "react-dom"
 
 
 async function TurnitsResolveAccountPlan(api: string, slug: string, token: string, data: any, employeeMode = false): Promise<string> {
-    const response = await fetch(api.replace(/\/$/, "") + (employeeMode ? "/empleado/" + encodeURIComponent(slug) + "/config" : "/settings/" + encodeURIComponent(slug)), {
+    const response = await fetchPanelRead(api.replace(/\/$/, "") + (employeeMode ? "/empleado/" + encodeURIComponent(slug) + "/config" : "/settings/" + encodeURIComponent(slug)), {
         headers: { Authorization: "Bearer " + token }, cache: "no-store",
     })
     if (response.status === 401) throw new Error("Sesión expirada. Volvé a iniciar sesión.")

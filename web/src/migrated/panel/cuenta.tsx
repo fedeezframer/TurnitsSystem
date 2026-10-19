@@ -1,3 +1,4 @@
+import { fetchPanelRead } from "../../shared/panel-requests"
 import { InlineLoading } from "../../components/LoadingRunner"
 import * as React from "react"
 import {
@@ -1092,7 +1093,7 @@ function MenuCuenta({
             const slug = MenuFooter_getSlug()
             const token = MenuFooter_getToken()
             if (!slug || !token) return
-            const res = await fetch(`${api}/settings/${slug}`, {
+            const res = await fetchPanelRead(`${api}/settings/${slug}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 cache: "no-cache",
             })

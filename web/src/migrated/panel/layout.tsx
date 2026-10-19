@@ -1,3 +1,4 @@
+import { fetchPanelRead } from "../../shared/panel-requests"
 import { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
@@ -108,7 +109,7 @@ function TurnitsPanel_Inner(props: any) {
                 if (++retries < 10) setTimeout(tryLoad, 300)
                 return
             }
-            fetch(`${api}/settings/${slug}`, {
+            fetchPanelRead(`${api}/settings/${slug}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 cache: "no-cache",
             })

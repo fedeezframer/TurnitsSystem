@@ -1,3 +1,4 @@
+import { fetchPanelRead } from "../../shared/panel-requests"
 import { appConfig } from "../../config"
 import * as React from "react"
 import {
@@ -237,7 +238,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
 
             try {
                 const [settingsRes, serviciosRes] = await Promise.all([
-                    fetch(`${api}/settings/${slug}`, {
+                    fetchPanelRead(`${api}/settings/${slug}`, {
                         headers: {
                             Authorization: `Bearer ${token}`,
                         },

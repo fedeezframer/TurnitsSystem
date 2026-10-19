@@ -1,3 +1,4 @@
+import { fetchPanelRead } from "../../shared/panel-requests"
 import { InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import * as React from "react"
@@ -376,7 +377,7 @@ function UserGreeting(props) {
             if (!token || !slug) return
 
             try {
-                const res = await fetch(
+                const res = await fetchPanelRead(
                     `${baseUrl.replace(/\/+$/, "")}/settings/${slug}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 )
@@ -2403,7 +2404,7 @@ function RendimientoEquipo(props: any) {
             try {
                 const headers = { Authorization: `Bearer ${token}` }
                 const [settingsRes, equipoRes] = await Promise.all([
-                    fetch(`${api}/settings/${slug}`, {
+                    fetchPanelRead(`${api}/settings/${slug}`, {
                         headers,
                         cache: "no-cache",
                     }),
