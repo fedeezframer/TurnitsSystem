@@ -1,4 +1,5 @@
 import * as React from "react"
+import LoadingRunner from "../../components/LoadingRunner"
 import {
     useState,
     useEffect,
@@ -485,7 +486,7 @@ function FinanzasPanel({
                 </div>
             )}
             {cargando || (data && data.periodo !== mes && !error) ? (
-                <div style={card}>Cargando finanzas…</div>
+                <div style={{...card, padding: 0}}><LoadingRunner label="Cargando finanzas…" /></div>
             ) : (
                 <>
                     <div
