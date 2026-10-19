@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   BRAND_WRITING_DURATION,
   brandWritingSvg,
+  isAppGateway,
 } from "../shared/brand-preloader";
 
 // Keep the HTML loader mounted through JS download, lazy routes and session
@@ -89,7 +90,7 @@ export function StartupRouteReady() {
 export default function BrandPreloader() {
   const id = React.useId().replace(/:/g, "");
   useStartupLoading(true);
-  if (!finished) return null;
+  if (isAppGateway(window.location.pathname) || !finished) return null;
   return (
     <div
       className="turnits-brand-preloader is-complete"
