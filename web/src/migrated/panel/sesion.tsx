@@ -1,5 +1,5 @@
 import * as React from "react"
-import LoadingRunner from "../../components/LoadingRunner"
+import BrandPreloader from "../../components/BrandPreloader"
 import {
     useState,
     useEffect,
@@ -40,7 +40,7 @@ function TurnitsPanel_GuardaSesion({
         setChequeado(true)
     }, [])
 
-    if (!chequeado) return <div className="app-loading"><LoadingRunner label="Verificando sesión…" /></div>
+    if (!chequeado) return <BrandPreloader />
     if (sinStorage) {
         return (
             <div

@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useParams } from "react-router"
 import { appConfig } from "./config"
 import Receipt from "./pages/Receipt"
 import ResetPassword from "./pages/ResetPassword"
+import BrandPreloader, { StartupRouteReady } from "./components/BrandPreloader"
 
 const Login = lazy(() => import("./migrated/Login"))
 const Register = lazy(() => import("./migrated/Register"))
@@ -37,7 +38,7 @@ function MissingPage() {
   return <div className="app-page"><section className="app-card"><img className="app-brand" src={appConfig.logoUrl} alt="Turnits" /><h1>Página no encontrada</h1><p>Revisá el enlace o volvé a iniciar sesión.</p><Link className="app-button" to="/login">Ir al login</Link></section></div>
 }
 export default function App() {
-  return <Suspense fallback={<div className="app-loading" role="status">Cargando Turnits…</div>}><Routes>
+  return <Suspense fallback={<BrandPreloader />}><Routes>
     <Route path="/" element={<Home />} />
     <Route path="/login" element={<Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
     <Route path="/registro" element={<Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" />} />
@@ -71,5 +72,5 @@ export default function App() {
     <Route path="/cambiar-contraseña" element={<ResetPassword />} />
     <Route path="/cambiar-contrasena" element={<ResetPassword />} />
     <Route path="*" element={<MissingPage />} />
-  </Routes></Suspense>
+  </Routes><StartupRouteReady /></Suspense>
 }

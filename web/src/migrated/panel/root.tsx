@@ -1,5 +1,5 @@
 import * as React from "react"
-import LoadingRunner from "../../components/LoadingRunner"
+import BrandPreloader from "../../components/BrandPreloader"
 import {
     useState,
     useEffect,
@@ -72,14 +72,7 @@ function TurnitsPanel_SessionRouter(props: any) {
     if (error) return <div className="app-page"><section className="app-card"><p role="alert">{error}</p><a className="app-button" href="/login">Volver a iniciar sesión</a></section></div>
     if (false)
         return <TurnitsPanel_Inner {...props} />
-    if (!sesion)
-        return (
-            <div
-                className="app-loading"
-            >
-                <LoadingRunner label="Cargando panel…" />
-            </div>
-        )
+    if (!sesion) return <BrandPreloader />
     if (sesion.rol === "empleado")
         return <TurnitsEmpleadoPanel props={props} slug={sesion.slug} />
     return (

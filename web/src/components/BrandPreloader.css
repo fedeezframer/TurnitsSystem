@@ -1,0 +1,80 @@
+.turnits-brand-preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #fff;
+  opacity: 1;
+  transition: opacity 0.22s ease;
+}
+.turnits-brand-preloader.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+.turnits-writing {
+  display: block;
+  width: min(82vw, 700px);
+  max-height: 70dvh;
+  overflow: visible;
+}
+.turnits-writing-stroke {
+  opacity: 0;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: turnits-write var(--stroke-duration) cubic-bezier(0.4, 0, 0.25, 1)
+    var(--stroke-start) both;
+  animation-play-state: paused;
+}
+.turnits-writing-finished {
+  opacity: 0;
+  animation: turnits-writing-finish 0.14s ease 2.68s forwards;
+  animation-play-state: paused;
+}
+.is-art-ready .turnits-writing-stroke,
+.is-art-ready .turnits-writing-finished {
+  animation-play-state: running;
+}
+.turnits-brand-preloader.is-art-error::after {
+  content: "Turnits";
+  color: #086621;
+  font:
+    700 48px system-ui,
+    sans-serif;
+}
+.turnits-brand-preloader.is-art-error .turnits-writing {
+  display: none;
+}
+@keyframes turnits-write {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+  1% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+@keyframes turnits-writing-finish {
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turnits-brand-preloader {
+    transition: none;
+  }
+  .turnits-writing-stroke {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  .turnits-writing-finished {
+    animation: none;
+    opacity: 1;
+  }
+}

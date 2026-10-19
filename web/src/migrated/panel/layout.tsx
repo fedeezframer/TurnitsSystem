@@ -13,7 +13,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
 import { SeccionId, Turnits_useElementWidth, TurnitsGlobalSaveManager_get, MenuFooter_getSlug, MenuFooter_getToken, usePanelAutoUpdate, NAV_ITEMS, SeccionHeader } from "./common"
-import { TurnitsBetaInstallPrompt, TurnitsPanel_Splash, QrFlotante, TurnitsGlobalSaveBar } from "./interfaz"
+import { TurnitsBetaInstallPrompt, QrFlotante, TurnitsGlobalSaveBar } from "./interfaz"
 import { PanelUpdateBanner } from "./shared"
 import { OnboardingNube } from "./onboarding"
 import { AmbientOrbs, BrandMark, NavButton, TeamManager, BottomNavIcon, BottomNavMore } from "./equipo"
@@ -76,7 +76,6 @@ function TurnitsPanel_Inner(props: any) {
     // servicio + horarios + método de cobro, no se muestra el panel.
     const [onboardingListo, setOnboardingListo] = React.useState(false)
     // ─── Preloader de arranque (logo → "Hola, Nombre" → se difumina) ──
-    const [splashListo, setSplashListo] = React.useState(false)
 
     // ─── Estado de navegación (reemplaza las variantes de Framer) ─────────
     const [seccionActiva, setSeccionActiva] =
@@ -228,21 +227,6 @@ function TurnitsPanel_Inner(props: any) {
                     onFinish={() => setOnboardingListo(true)}
                 /></OwnerOnly>
             )}
-
-            {/* Preloader: tapa el "trabón" del primer render mientras los
-                widgets hacen sus fetches iniciales en paralelo, abajo. */}
-            <AnimatePresence>
-                {true &&
-                    !splashListo && (
-                        <TurnitsPanel_Splash
-                            baseUrl={baseUrl}
-                            accentColor={accentColor}
-                            logoImage={logoImage}
-                            logoText={logoText}
-                            onDone={() => setSplashListo(true)}
-                        />
-                    )}
-            </AnimatePresence>
 
             {/* ─────────────── SIDEBAR (desktop) ─────────────── */}
             {!isMobile && (

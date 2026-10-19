@@ -6,6 +6,8 @@
     <meta name="theme-color" content="#1b6b1a" />
     <meta name="application-name" content="Turnits" />
     <meta name="apple-mobile-web-app-title" content="Turnits" />
+    <link rel="preload" as="image" href="/assets/loading/turnits-script-original.png" />
+    <link rel="stylesheet" href="/src/components/BrandPreloader.css" />
     <meta name="description" content="Organizá tu agenda, gestioná tus servicios y recibí reservas online con Turnits." />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="200x200" href="/favicon-light.png" />
@@ -32,7 +34,8 @@
     <title>Turnits | Agenda online</title>
   </head>
   <body style="margin:0">
-    <div id="root"><div role="status" style="min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px;box-sizing:border-box;text-align:center;color:#64748b;font-family:system-ui,sans-serif">Cargando Turnits…</div></div>
+    <!-- TURNITS_STARTUP_PRELOADER -->
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
