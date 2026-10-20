@@ -93,6 +93,7 @@ class Query {
     this.filters.push((r) => read(r, k) === v);
     return this;
   }
+  gt(k,v){this.filters.push(r=>read(r,k)>v);return this;}
   in(k, v) {
     this.filters.push((r) => v.includes(read(r, k)));
     return this;
@@ -177,10 +178,10 @@ const supabase = {
   from: (t) => new Query(t),
   rpc: async (name, args) => {
     calls.push({ name, args });
-    if (name === "browse_reservar")
-      return {
-        data: { id: id(), slug: args.p_slug, precio_cobrado: args.p_precio },
-      };
+    if (name === "browse_reservar"){
+      const t={id:id(),slug:args.p_slug,precio_cobrado:args.p_precio,...(args.p_offer?{consumidor_id:args.p_consumidor,browse_tipo:'offer',browse_referencia:args.p_offer,browse_cierre:args.p_cierre,fecha:args.p_fecha,hora:args.p_hora,servicio_id:args.p_servicio,equipo_id:args.p_equipo,estado:'pendiente',pago_estado:'pendiente'}:{})};
+      if(args.p_offer)tables.turnos.push(t);return {data:t};
+    }
     if (name === "browse_cambiar_email") {
       const p = tables.browse_cambios_email.find(
         (r) => r.consumidor_id === args.p_consumidor,
@@ -190,10 +191,11 @@ const supabase = {
     return { data: null };
   },
 };
-async function call(method, url, { body = {}, auth, params = {} } = {}) {
+async function call(method, url, { body = {}, auth, params = {}, query = {} } = {}) {
   const req = {
     headers: auth ? { authorization: "Bearer " + auth } : {},
     params,
+    query,
     body,
   };
   let status = 200,
@@ -259,7 +261,7 @@ async function call(method, url, { body = {}, auth, params = {} } = {}) {
     },
     configForMember: (u) => u,
     validateMember: async () => {},
-    intervals: () => [],
+    intervals: () => [[0,1440]],
     available: async () => {},
     checkCommissions: async () => false,
     createCheckout: async () => ({
@@ -494,6 +496,27 @@ async function call(method, url, { body = {}, auth, params = {} } = {}) {
   assert.equal(offerPrice(15000, 10000, 15), 10000);
   assert.equal(offerPrice(15000, 10000, 0), null);
   assert.equal(offerPrice(15000, 15000, 30), null);
+
+  // Offer discovery is read-only. A price accepted in /agenda is revalidated
+  // before the database hold and checkout, and retries reuse that same hold.
+  tables.turnits_offers.push({id:offerId,slug:'prueba',servicio_id:serviceId,equipo_id:memberId,precio_minimo:10000,activo:true});
+  const start=new Date(Math.ceil((Date.now()+45*60000)/(30*60000))*30*60000);
+  const fecha=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(start);
+  const hora=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Argentina/Buenos_Aires',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(start);
+  const input={slug:'prueba',servicio_id:serviceId,equipo_id:memberId,fecha,hora,browse_offer_price:1};
+  const beforeQuote=calls.length;
+  const quote=await call('GET','/browse/ofertas/:id/cotizacion',{params:{id:offerId},query:input});assert.equal(quote.status,200);assert(quote.body.oferta.precio>=10000);assert.equal(calls.length,beforeQuote,'opening Offer creates no hold or payment');assert(!JSON.stringify(quote.body).includes('fixture-only'));
+  assert.equal((await call('GET','/browse/ofertas/:id/cotizacion',{params:{id:offerId},query:{...input,equipo_id:otherId}})).status,409);
+  assert.equal((await call('POST','/browse/reservar',{auth:token,body:{...input,oferta_id:offerId,precio:quote.body.oferta.precio}})).status,409,'legacy Offer action cannot create unpaid agenda entries');
+  assert.equal((await call('POST','/browse/ofertas/:id/checkout',{params:{id:offerId},body:input})).status,401);
+  const changed=await call('POST','/browse/ofertas/:id/checkout',{auth:token,params:{id:offerId},body:{...input,precio:1}});assert.equal(changed.status,409);assert(changed.body.oferta.precio>1);assert.equal(calls.length,beforeQuote);
+  const checkout=await call('POST','/browse/ofertas/:id/checkout',{auth:token,params:{id:offerId},body:{...input,precio:quote.body.oferta.precio}});assert.equal(checkout.status,200);assert(checkout.body.payment_url);assert.equal(calls.length,beforeQuote+1);
+  const held=tables.turnos.at(-1);assert.equal(held.consumidor_id,consumerId);assert.equal(held.precio_cobrado,quote.body.oferta.precio);
+  const pendingMe=await call('GET','/browse/me',{auth:token});assert(!pendingMe.body.turnos.some(t=>t.id===held.id),'unpaid Offers are excluded from user agenda');
+  assert.equal((await call('GET','/browse/turnos/:id',{auth:token,params:{id:held.id}})).status,404);
+  assert.equal((await call('POST','/browse/ofertas/:id/checkout',{auth:token,params:{id:offerId},body:{...input,precio:quote.body.oferta.precio}})).status,200,'payment retry retains original trusted amount');assert.equal(calls.length,beforeQuote+1,'retry does not reserve twice');
+  held.estado='confirmado';held.pago_estado='aprobado';assert((await call('GET','/browse/me',{auth:token})).body.turnos.some(t=>t.id===held.id),'approved Offer appears in agenda');
+  assert.equal(offerPrice(15000,10000,NaN),null);
   console.log(
     "PASS Browse API: consumer/owner isolation, private field filtering, booking identity bound to session, own catalog validation, price steps, authenticated profile updates and email verification. No external writes.",
   );

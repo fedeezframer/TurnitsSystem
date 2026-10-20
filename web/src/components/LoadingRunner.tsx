@@ -10,9 +10,7 @@ const SectionLoadingContext = React.createContext<{
 
 export function InlineLoading({ label = "Cargando…" }: { label?: string }) {
   return (
-    <div className="turnits-inline-loading" role="status">
-      {label}
-    </div>
+    <div className="turnits-inline-loading" role="status" aria-label={label}><span aria-hidden="true" /></div>
   );
 }
 
@@ -66,10 +64,12 @@ export function SectionLoadingBoundary({
 export default function LoadingRunner({
   label = "Cargando…",
   card = false,
+  variant = "running",
 }: {
   label?: string;
   size?: "section" | "compact" | "inline";
   card?: boolean;
+  variant?: "running" | "waiting";
 }) {
   const instanceId = React.useId().replace(/:/g, "");
   const section = React.useContext(SectionLoadingContext);
@@ -85,8 +85,8 @@ export default function LoadingRunner({
       role="status"
       aria-label={label}
     >
-      <RunningCalendar />
-      <span className="turnits-runner-description">Cargando</span>
+      <RunningCalendar variant={variant} />
+
     </div>
   );
 }

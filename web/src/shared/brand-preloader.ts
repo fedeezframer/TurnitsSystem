@@ -60,6 +60,8 @@ export function isAppGateway(pathname: string) {
   return /^\/app\/?$/i.test(pathname);
 }
 
+export function isBrandPreloaderPath(pathname: string) { return /^\/(?:panel|browse)(?:\/|$)/i.test(pathname); }
+
 // Used by the initial HTML and React, including when the image is not cached.
 export function prepareBrandArtwork(container: HTMLElement) {
   if (container.dataset.artworkPrepared) return () => {};
@@ -94,5 +96,5 @@ export function brandWritingSvg(id: string) {
 export function startupPreloaderHtml() {
   const markup = `<div id="turnits-startup-preloader" class="turnits-brand-preloader" role="status" aria-label="Cargando Turnits">${brandWritingSvg("turnits-startup-writing")}</div>`;
   // Check the URL before inserting any artwork, including while JS downloads.
-  return `<script>if(!(${isAppGateway.toString()})(location.pathname)){document.currentScript.insertAdjacentHTML('beforebegin',${JSON.stringify(markup)});(${prepareBrandArtwork.toString()})(document.getElementById('turnits-startup-preloader'))}</script>`;
+  return `<script>if((${isBrandPreloaderPath.toString()})(location.pathname)){document.currentScript.insertAdjacentHTML('beforebegin',${JSON.stringify(markup)});(${prepareBrandArtwork.toString()})(document.getElementById('turnits-startup-preloader'))}</script>`;
 }

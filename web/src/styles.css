@@ -9,3 +9,6 @@
 .app-card h1{margin:0 0 12px;font-size:28px}.app-card p{color:#64748b;line-height:1.6}.app-card a{color:#196b1f}
 .app-button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border:0;border-radius:10px;background:#196b1f;color:white!important;text-decoration:none;cursor:pointer}
 .legal-page{max-width:920px;margin:auto;padding:40px 24px;background:white;min-height:100dvh}.legal-page pre{white-space:pre-wrap;font:14px/1.8 Inter,sans-serif;color:#334155}
+
+.route-blur-loading{position:fixed;inset:0;z-index:999;background:linear-gradient(135deg,#f3f7f1bb,#e9f0e8aa);backdrop-filter:blur(18px);animation:route-blur-in .2s ease both}.route-blur-loading span{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%,#fff8,transparent 68%)}@keyframes route-blur-in{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(18px)}}
+.route-blur-loading>span{animation:route-soft-breathe 1.8s ease-in-out infinite alternate}@keyframes route-soft-breathe{from{opacity:.35;transform:scale(.96)}to{opacity:.85;transform:scale(1.06)}}@media(prefers-reduced-motion:reduce){.route-blur-loading>span{animation:none}}

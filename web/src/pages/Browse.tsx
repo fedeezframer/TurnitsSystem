@@ -6,6 +6,7 @@ import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import { consumerHeaders } from "../shared/consumer-session";
 import BrowseCalendar from "./BrowseCalendar";
 import BrowseFlame from "./BrowseFlame";
+import LoadingRunner from "../components/LoadingRunner";
 import "./Browse.css";
 
 type View = "inicio" | "ofertas" | "agenda" | "buscar" | "coins" | "perfil";
@@ -76,6 +77,7 @@ export function BrowseIcon({
       />
     );
   const paths: Record<string, React.ReactNode> = {
+    lupa: <><circle cx="10.7" cy="10.7" r="6.8"/><path d="m16 16 5 5"/></>,
     pin: (
       <>
         <path d="M19 10c0 5-7 12-7 12S5 15 5 10a7 7 0 0 1 14 0Z" />
@@ -92,8 +94,8 @@ export function BrowseIcon({
     ),
     candado: (
       <>
-        <rect x="4" y="10" width="16" height="12" rx="1" />
-        <path d="M7 10V7a5 5 0 0 1 10 0v3M12 15v3" />
+        <rect x="4" y="10" width="16" height="12" rx="1.2" strokeWidth="2.4" />
+        <path d="M7 10V7a5 5 0 0 1 10 0v3" strokeWidth="2.4"/><path d="M12 15v3" strokeWidth="3.1"/><circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none"/>
       </>
     ),
     correo: (
@@ -204,7 +206,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
       </div>
       <div className="browse-card-content">
         <div className="browse-card-business">
-          <span>{n?.nombre || s.slug}</span>
+          <span>{n?.nombre || s.slug}{n?.sucursal_nombre && <small className="browse-card-branch"> · {n.sucursal_nombre}</small>}</span>
           <Distance item={{ negocio: n }} location={location} />
         </div>
         <div className="browse-card-name">
@@ -241,7 +243,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
             {kind === "servicio" ? (
               <Link
                 className="browse-pill"
-                to={`/agenda/${encodeURIComponent(s.slug)}?servicio_id=${encodeURIComponent(s.id)}`}
+                to={`/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({servicio_id:s.id,...(s.sucursal_id?{sucursal_id:s.sucursal_id}:{})})}`}
               >
                 Reservar
               </Link>
@@ -378,6 +380,13 @@ export default function Browse() {
     [form, setForm] = React.useState<any>({}),
     [revision, setRevision] = React.useState(0);
   useStartupLoading(loading);
+  React.useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("turnits_browse_location")||"null");
+      if(saved&&Number.isFinite(saved.lat)&&Math.abs(saved.lat)<=90&&Number.isFinite(saved.lon)&&Math.abs(saved.lon)<=180)setLocation(saved);
+      navigator.permissions?.query({name:"geolocation"}).then(permission=>{if(permission.state==='denied'){setLocation(null);localStorage.removeItem("turnits_browse_location")}}).catch(()=>{});
+    } catch {}
+  }, []);
   const searchInput = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => {
     const update = () => setCurrentDay(today());
@@ -546,7 +555,15 @@ export default function Browse() {
     ].forEach((k) => localStorage.removeItem(k));
     navigate("/login?tipo=usuario", { replace: true });
   };
-  const eligible = catalog.servicios.filter(
+  const locateService = (service:any, fixedBranch?:string) => {
+    const branches=(service.negocio?.sucursales||[]).filter((branch:any)=>service.equipo?.some((member:any)=>member.sucursal_id===branch.id));
+    const distance=(branch:any)=>{if(!location||branch.latitud==null||branch.longitud==null)return Infinity;const rad=(v:number)=>v*Math.PI/180;const a=Math.sin(rad(Number(branch.latitud)-location.lat)/2)**2+Math.cos(rad(location.lat))*Math.cos(rad(Number(branch.latitud)))*Math.sin(rad(Number(branch.longitud)-location.lon)/2)**2;return 6371*2*Math.atan2(Math.sqrt(a),Math.sqrt(Math.max(0,1-a)))};
+    const branch=fixedBranch?branches.find((b:any)=>b.id===fixedBranch):branches.length===1?branches[0]:location?branches.filter((b:any)=>Number.isFinite(distance(b))).sort((a:any,b:any)=>distance(a)-distance(b))[0]:null;
+    if(!branch)return service;
+    const options=service.equipo.filter((m:any)=>m.sucursal_id===branch.id);
+    return {...service,sucursal_id:branch.id,precio:Math.min(...options.map((m:any)=>Number(m.precio))),negocio:{...service.negocio,latitud:branch.latitud,longitud:branch.longitud,sucursal_nombre:branches.length>1?branch.nombre:null}};
+  };
+  const eligible = catalog.servicios.map((s:any)=>locateService(s)).filter(
     (s: any) =>
       !category ||
       s.negocio?.rubro === category ||
@@ -556,6 +573,14 @@ export default function Browse() {
         ),
       ),
   );
+  const distanceKm = (item: any) => {
+    const business = item?.negocio || item?.servicio?.negocio;
+    if (!location || business?.latitud == null || business?.longitud == null) return Number.POSITIVE_INFINITY;
+    const rad = (value: number) => value * Math.PI / 180;
+    const lat = Number(business.latitud), lon = Number(business.longitud);
+    const a = Math.sin(rad(lat - location.lat) / 2) ** 2 + Math.cos(rad(location.lat)) * Math.cos(rad(lat)) * Math.sin(rad(lon - location.lon) / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
   const matches = eligible.filter(
     (s: any) =>
       !query ||
@@ -567,12 +592,17 @@ export default function Browse() {
           s.negocio?.categoria,
         ].join(" "),
       ).includes(clean(query)),
-  );
+  ).sort((a: any, b: any) => distanceKm(a) - distanceKm(b));
   const recommended = [...eligible].sort(
     (a: any, b: any) =>
+      distanceKm(a) - distanceKm(b) ||
       Number(me?.perfil?.intereses?.includes(b.negocio.rubro)) -
       Number(me?.perfil?.intereses?.includes(a.negocio.rubro)),
   );
+  const nearbyOffers = [...offers].sort((a, b) => {
+    const serviceFor = (offer: any) => {const s=catalog.servicios.find((service:any)=>service.id===offer.servicio_id);const branch=offer.sucursal_id||s?.equipo?.find((m:any)=>m.id===offer.equipo_id)?.sucursal_id;return s?locateService(s,branch):s};
+    return distanceKm(serviceFor(a)) - distanceKm(serviceFor(b));
+  });
   const suggestions = [...new Set(catalog.servicios.map((s: any) => s.nombre))]
     .filter((s: any) => !query || clean(s).includes(clean(query)))
     .slice(0, 8) as string[];
@@ -585,7 +615,7 @@ export default function Browse() {
     );
   const searchBox = (
     <label className="browse-search">
-      <BrowseIcon name="buscar" width="21" height="21" />
+      <BrowseIcon name="lupa" width="21" height="21" />
       <input
         ref={searchInput}
         type="search"
@@ -600,9 +630,7 @@ export default function Browse() {
     </label>
   );
   const status = loading ? (
-    <p className="browse-empty" role="status">
-      Cargando tu espacio…
-    </p>
+    <LoadingRunner variant="waiting" label="Cargando tu espacio" />
   ) : error ? (
     <div className="browse-empty" role="alert">
       {error}
@@ -617,18 +645,9 @@ export default function Browse() {
       </button>
     </div>
   ) : null;
-  const reserveOffer = async (item: any) => {
-    const d = await post("/browse/reservar", {
-      slug: item.slug,
-      servicio_id: item.servicio_id,
-      equipo_id: item.equipo_id,
-      fecha: item.fecha,
-      hora: item.hora,
-      oferta_id: item.id,
-      precio: Number(item.precio),
-    });
-    setModal({ type: "pay", turno: d.turno });
-    setRevision((v) => v + 1);
+  const reserveOffer = (item: any) => {
+    const params = new URLSearchParams({ servicio_id: item.servicio_id, equipo_id: item.equipo_id, fecha: item.fecha, hora: item.hora, browse_offer_id: item.id,...(item.sucursal_id?{sucursal_id:item.sucursal_id}:{}) });
+    navigate(`/agenda/${encodeURIComponent(item.slug)}?${params}`);
   };
   return (
     <div className="browse">
@@ -683,7 +702,7 @@ export default function Browse() {
           </button>
         </div>
       </header>
-      <main className={`browse-main browse-view-${view}`}>
+      <main key={view} className={`browse-main browse-view-${view}`}>
         {status}
         {!status && (
           <>
@@ -871,10 +890,11 @@ export default function Browse() {
                     </button>
                   ))}
                 </div>
-                <button
+                {!location && <button
                   className="browse-location"
                   onClick={() => {
                     setGeoError("");
+                    if (location) return;
                     if (!navigator.geolocation) {
                       setGeoError(
                         "Tu navegador no permite consultar la ubicación.",
@@ -882,11 +902,8 @@ export default function Browse() {
                       return;
                     }
                     navigator.geolocation.getCurrentPosition(
-                      (p) =>
-                        setLocation({
-                          lat: p.coords.latitude,
-                          lon: p.coords.longitude,
-                        }),
+                      (p) => { const current = { lat: p.coords.latitude, lon: p.coords.longitude }; setLocation(current); try { localStorage.setItem("turnits_browse_location", JSON.stringify(current)); } catch {} setNotice("Ubicación lista: ahora ves los servicios cercanos primero.");
+                        window.setTimeout(() => setNotice((value) => value.startsWith("Ubicación lista:") ? "" : value), 3200); },
                       () =>
                         setGeoError(
                           "No pudimos obtener tu ubicación. Podés seguir buscando por nombre o ciudad.",
@@ -896,11 +913,9 @@ export default function Browse() {
                   }}
                 >
                   <BrowseIcon name="pin" width="16" height="16" />
-                  {location
-                    ? "Ubicación activada"
-                    : "Mostrar distancias con mi ubicación"}
-                </button>
-                {geoError && <p role="status">{geoError}</p>}
+                  Mostrar distancias con mi ubicación
+                </button>}
+                {geoError && <p role="status" className="browse-location-notice">{geoError}</p>}
                 {!query && !category && (
                   <section className="browse-suggestions">
                     <h2>Podría interesarte</h2>
@@ -930,9 +945,9 @@ export default function Browse() {
                   ¡Aprovechalos antes de que alguien más los reserve!
                 </p>
                 {offerError && <p role="alert">{offerError}</p>}
-                {offerLoading && !offers.length && <p className="browse-offers-loading" role="status">Cargando ofertas…</p>}
+                {offerLoading && !offers.length && <LoadingRunner variant="waiting" label="Cargando ofertas" />}
                 <div className="browse-card-grid">
-                  {offers.map((o: any) => {
+                  {nearbyOffers.map((o: any) => {
                     const s = catalog.servicios.find(
                       (s: any) => s.id === o.servicio_id,
                     );
@@ -944,13 +959,11 @@ export default function Browse() {
                           item={{
                             ...s,
                             ...o,
-                            negocio: s.negocio,
+                            negocio: locateService(s,o.sucursal_id||s.equipo?.find((m:any)=>m.id===o.equipo_id)?.sucursal_id).negocio,
                             imagen: o.imagen || s.imagen,
                           }}
                           location={location}
-                          onReserve={(item: any) =>
-                            open({ type: "offer", item })
-                          }
+                          onReserve={reserveOffer}
                         />
                       )
                     );
@@ -1176,7 +1189,7 @@ export default function Browse() {
               </>
             )}
             {notice && (
-              <p role="status" className="browse-notice">
+              <p role="status" className={notice.startsWith("Ubicación lista:") ? "browse-notice browse-location-notice" : "browse-notice"}>
                 {notice}
               </p>
             )}
@@ -1213,13 +1226,13 @@ export default function Browse() {
               </p>
               <strong>{money(modal.item.precio)}</strong>
               <p>
-                El precio se confirma al reservar. El horario queda apartado
-                mientras completás el pago, hasta el cierre de reservas.
+                Seguí en la agenda para confirmar tus datos y pagar. El turno se
+                crea únicamente al completar el pago.
               </p>
               <button
                 className="browse-pill"
                 disabled={busy}
-                onClick={() => act(() => reserveOffer(modal.item))}
+                onClick={() => reserveOffer(modal.item)}
               >
                 Continuar
               </button>

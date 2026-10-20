@@ -34,7 +34,7 @@ async function mapLimited(items, limit, fn) {
 export function offerPrice(price, minimum, remaining) {
   if (
     !Number.isFinite(price) ||
-    !Number.isFinite(minimum) ||
+    !Number.isFinite(minimum) || !Number.isFinite(remaining) ||
     minimum <= 0 ||
     minimum >= price ||
     remaining <= 0 ||
@@ -258,7 +258,7 @@ export function createBrowse({
         .eq("activo", true),
       supabase
         .from("sucursales")
-        .select("id,slug,latitud,longitud,es_principal")
+        .select("id,slug,nombre,latitud,longitud,es_principal")
         .in("slug", slugs)
         .eq("activo", true),
     ]);
@@ -295,6 +295,10 @@ export function createBrowse({
           rubro: n.rubro || "",
           latitud: b?.latitud ?? null,
           longitud: b?.longitud ?? null,
+          sucursales: [
+            ...branches.filter((branch) => branch.slug === p.slug && (branch.es_principal || n.plan === "premium")).map(branch=>({...branch,id:branch.es_principal?"principal":branch.id})),
+            ...(!branches.some(branch=>branch.slug===p.slug && branch.es_principal) && members.some(member=>member.slug===p.slug && !member.sucursal_id) ? [{id:"principal",nombre:"Sede principal",latitud:null,longitud:null}] : []),
+          ],
         };
       });
     const items = [];
@@ -330,6 +334,7 @@ export function createBrowse({
         equipo: options.map((v) => ({
           id: v.equipo_id,
           nombre: members.find((m) => m.id === v.equipo_id)?.nombre,
+          sucursal_id: members.find((m) => m.id === v.equipo_id)?.sucursal_id || "principal",
           precio: Number(v.precio_override ?? s.precio),
         })),
       });
@@ -382,7 +387,7 @@ export function createBrowse({
           .order("created_at", { ascending: false })
           .limit(50),
       ]);
-      const turnos = result(tr) || [],
+      const turnos = (result(tr) || []).filter((t) => t.browse_tipo !== "offer" || ["aprobado", "reembolsado"].includes(t.pago_estado)),
         wallet = result(wr);
       res.json({
         success: true,
@@ -711,6 +716,7 @@ export function createBrowse({
                   slug: o.slug,
                   servicio_id: o.servicio_id,
                   equipo_id: o.equipo_id,
+                  sucursal_id: ctx.member.sucursal_id || "principal",
                   nombre: ctx.service.nombre,
                   precio: price,
                   precio_original: ctx.service.precio,
@@ -734,6 +740,63 @@ export function createBrowse({
       });
     }),
   );
+  // Opening an Offer is read-only. The server supplies the price and validates
+  // the exact service, professional and provider's booking deadline.
+  async function quoteOffer(id, input) {
+    if (!UUID.test(id || "") || !/^\d{4}-\d{2}-\d{2}$/.test(input.fecha || "") || !/^\d{2}:\d{2}$/.test(input.hora || ""))
+      fail("Revisá la oferta y el horario.");
+    const offer = result(await supabase.from("turnits_offers").select("*").eq("id", id).eq("activo", true).maybeSingle());
+    if (!offer || offer.slug !== input.slug || offer.servicio_id !== input.servicio_id || offer.equipo_id !== input.equipo_id)
+      fail("Esta oferta ya no está disponible.", 409);
+    const ctx = await context(offer.slug, offer.servicio_id, offer.equipo_id);
+    if (!ctx.config.mp_access_token || await checkCommissions(offer.slug, ctx.user.plan)) fail("La oferta no admite pagos en este momento.", 409);
+    const lead = Number.isInteger(Number(ctx.config.anticipacion_minutos)) && Number(ctx.config.anticipacion_minutos) >= 1 ? Math.min(43200, Number(ctx.config.anticipacion_minutos)) : 30;
+    const start = new Date(`${input.fecha}T${input.hora}:00-03:00`);
+    const close = new Date(start.getTime() - lead * 60000);
+    const price = offerPrice(ctx.service.precio, Number(offer.precio_minimo), (close.getTime() - Date.now()) / 60000);
+    if (!Number.isFinite(start.getTime()) || argentinaDate(start) !== input.fecha || price === null) fail("Esta oferta finalizó. Elegí otro horario.", 409);
+    const minute = Number(input.hora.slice(0, 2)) * 60 + Number(input.hora.slice(3));
+    const duration = Number(ctx.service.duracion || 30);
+    if (!(intervals(ctx.config.horarios, ctx.config.excepciones, input.fecha) || []).some(([start, end]) => minute >= start && minute + duration <= end && (minute - start) % duration === 0)) fail("Este horario ya no está disponible.", 409);
+    return { ctx, quote: { id: offer.id, slug: offer.slug, servicio_id: offer.servicio_id, equipo_id: offer.equipo_id, sucursal_id: ctx.member.sucursal_id || "principal", fecha: input.fecha, hora: input.hora, precio: price, precio_original: ctx.service.precio, cierre: close.toISOString() } };
+  }
+  app.get("/browse/ofertas/:id/cotizacion", limiterRead, (req,res,next)=>req.headers.authorization?auth(req,res,next):next(), route(async (req, res) => {
+    const { quote } = await quoteOffer(req.params.id, req.query);
+    if(req.consumer){
+      const held=result(await supabase.from("turnos").select("precio_cobrado").eq("consumidor_id",req.consumer.id).eq("browse_referencia",quote.id).eq("fecha",quote.fecha).eq("hora",quote.hora).eq("estado","pendiente").gt("browse_cierre",new Date().toISOString()).limit(1).maybeSingle());
+      if(held)quote.precio=Number(held.precio_cobrado);
+    }
+    res.set?.("Cache-Control", "no-store");
+    res.json({ success: true, oferta: quote });
+  }));
+  app.post("/browse/ofertas/:id/checkout", limiterBooking, auth, route(async (req, res) => {
+    const { ctx, quote } = await quoteOffer(req.params.id, req.body || {});
+    const contact = {
+      nombre: String(req.body.nombre ?? req.consumer.nombre_persona).trim(),
+      apellido: String(req.body.apellido ?? req.consumer.apellido ?? "").trim(),
+      telefono: String(req.body.telefono ?? req.consumer.telefono).replace(/\D/g, ""),
+      email: String(req.body.email ?? req.consumer.email).trim().toLowerCase(),
+    };
+    if(contact.nombre.length < 2 || contact.nombre.length > 100 || contact.apellido.length > 100 || !/^\d{5,18}$/.test(contact.telefono) || contact.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) fail("Revisá tus datos de contacto.");
+    // Reuse a payment already in progress. A retry must never claim a second
+    // slot, nor block its own slot when availability is checked again.
+    const pending = result(await supabase.from("turnos").select("*").eq("consumidor_id", req.consumer.id).eq("browse_tipo", "offer").eq("estado", "pendiente").gt("browse_cierre", new Date().toISOString()).order("browse_cierre").limit(1).maybeSingle());
+    let turno = pending;
+    if (pending && (pending.browse_referencia !== quote.id || pending.fecha !== quote.fecha || String(pending.hora).slice(0, 5) !== quote.hora)) {
+      const params = new URLSearchParams({ servicio_id: pending.servicio_id, equipo_id: pending.equipo_id, fecha: pending.fecha, hora: String(pending.hora).slice(0, 5), browse_offer_id: pending.browse_referencia });
+      return res.status(409).json({ success: false, error: "Tenés un pago de otra oferta en curso. Podés retomarlo antes de elegir otra.", agenda_url: `/agenda/${encodeURIComponent(pending.slug)}?${params}` });
+    }
+    if(pending && Number(req.body.precio)!==Number(pending.precio_cobrado))return res.status(409).json({success:false,error:"Ya iniciaste un pago para este horario. Revisá el importe para retomarlo.",oferta:{...quote,precio:Number(pending.precio_cobrado)}});
+    if (!turno) {
+      // The accepted amount is checked again in the database. URL prices are
+      // never used, and the existing booking guard claims the slot atomically.
+      if (Number(req.body.precio) !== quote.precio) return res.status(409).json({ success: false, error: "El descuento se actualizó. Revisá el nuevo importe antes de pagar.", oferta: quote });
+      await available(quote.slug, quote.fecha, quote.hora, { duracion: Number(ctx.service.duracion || 30), capacidad: 1 }, ctx.config, ctx.member, quote.servicio_id);
+      turno = result(await supabase.rpc("browse_reservar", { p_consumidor: req.consumer.id, p_slug: quote.slug, p_servicio: quote.servicio_id, p_equipo: quote.equipo_id, p_fecha: quote.fecha, p_hora: quote.hora, p_recompensa: null, p_offer: quote.id, p_precio: quote.precio, p_cierre: quote.cierre }));
+    }
+    result(await supabase.from("turnos").update(contact).eq("id", turno.id).eq("consumidor_id", req.consumer.id).eq("estado", "pendiente"));
+    res.json(await createCheckout({...turno,...contact}, ctx, false));
+  }));
   app.post(
     "/browse/reservar",
     limiterBooking,
@@ -749,6 +812,7 @@ export function createBrowse({
         oferta_id,
         precio,
       } = req.body || {};
+      if (oferta_id) fail("Continuá desde la agenda para pagar esta oferta.", 409);
       if (
         typeof slug !== "string" ||
         !UUID.test(servicio_id || "") ||
@@ -853,7 +917,7 @@ export function createBrowse({
           .eq("consumidor_id", req.consumer.id)
           .maybeSingle(),
       );
-      if (!t) fail("Turno no encontrado.", 404);
+      if (!t || (t.browse_tipo === "offer" && !["aprobado", "reembolsado"].includes(t.pago_estado))) fail("Turno no encontrado.", 404);
       res.json({ success: true, turno: t });
     }),
   );

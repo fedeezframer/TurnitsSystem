@@ -1,8 +1,9 @@
 // Articulated SVG: every limb follows one continuous stride, without sprites.
-export default function RunningCalendar() {
+export default function RunningCalendar({variant="running"}:{variant?:"running"|"waiting"}) {
+  const waiting=variant==="waiting";
   return (
     <svg
-      className="turnits-runner-animation"
+      className={"turnits-runner-animation"+(waiting?" is-waiting":"")}
       viewBox="0 0 240 240"
       aria-hidden="true"
       focusable="false"
@@ -22,6 +23,7 @@ export default function RunningCalendar() {
         stroke="none"
         opacity=".12"
       />
+      {!waiting && <g className="calendar-sweat" stroke="none" fill="#6cb1c7"><path d="M58 51q-15-11-17-2t17 2"/><path d="M55 61q-17 1-11 9t11-9"/></g>}
       <g className="calendar-body">
         <g transform="translate(114 154)">
           <g className="calendar-leg calendar-leg-back">
@@ -54,7 +56,8 @@ export default function RunningCalendar() {
           </g>
         </g>
         <g transform="translate(165 110)">
-          <g className="calendar-arm calendar-arm-back">
+          <g className={waiting?"calendar-scratch":"calendar-arm calendar-arm-back"}>
+            {waiting ? <><path d="M0-5 Q22-21 21-34 L12-42 L6-35 L11-29 Q9-16-1 4" fill="#fff"/><path d="m9-31 10 5 4-10-10-5Z" fill="#288c40"/><path d="M13-40 Q5-42 5-50 Q5-57 11-54 Q14-64 19-58 Q25-63 28-56 Q31-48 25-43 L22-35Z" fill="#fff"/><path d="m15-50 3 5m4-8 1 6" strokeWidth="2"/></> : <>
             <path
               d="M0-5 Q17-8 23 5 L27 16 L18 21 L14 10 Q9 3 0 5"
               fill="#f5f7f2"
@@ -64,7 +67,7 @@ export default function RunningCalendar() {
               d="M22 25 Q18 32 22 36 Q28 40 31 34 Q37 37 39 31 Q43 24 37 20 Q32 16 28 23"
               fill="#fff"
             />
-            <path d="M30 24 L32 28" strokeWidth="2.5" />
+            <path d="M30 24 L32 28" strokeWidth="2.5" /></>}
           </g>
         </g>
         <path
@@ -112,7 +115,7 @@ export default function RunningCalendar() {
           <path d="M81 68 H167 L169 91 H79Z" fill="#fff" />
           <path d="M81 75 H168 L169 84 H80Z" fill="#218439" strokeWidth="2.5" />
           <path d="M91 65 C84 48 92 44 96 51 Q100 58 97 65 M111 65 C104 48 112 44 116 51 Q120 58 117 65 M131 65 C124 48 132 44 136 51 Q140 58 137 65 M151 65 C144 48 152 44 156 51 Q160 58 157 65" />
-          <ellipse
+          <g className="calendar-eyes"><ellipse
             cx="109"
             cy="108"
             rx="3.5"
@@ -128,7 +131,7 @@ export default function RunningCalendar() {
             fill="#17251c"
             stroke="none"
           />
-          <path d="M120 112 Q127 122 135 112" strokeWidth="3" />
+          </g><path d={waiting?"M122 116 Q127 112 132 116":"M120 112 Q127 122 135 112"} strokeWidth="3" />
           <path d="M92 130 H160 L162 153 H90Z" fill="#fff" strokeWidth="2.5" />
           <path d="M107 141 H124 V153 H106Z" fill="#2d9846" stroke="none" />
           <path
@@ -137,7 +140,8 @@ export default function RunningCalendar() {
           />
         </g>
         <g transform="translate(79 111)">
-          <g className="calendar-arm calendar-arm-front">
+          <g className={waiting?"calendar-watch-arm":"calendar-arm calendar-arm-front"}>
+            {waiting ? <><path d="M0-5 Q-24-1-26 17 Q-25 32-9 30 L7 20 L1 12 L-11 20 Q-17 22-15 14 Q-12 7 1 5" fill="#fff"/><path d="m-9 14 10-6 6 12-10 6Z" fill="#288c40"/><circle cx="-1" cy="17" r="6" fill="#fff" strokeWidth="2"/><path className="calendar-watch-hand" d="M-1 13v4l3 1" strokeWidth="1.6"/><path d="M5 12 Q9 6 14 9 Q17 9 17 14 Q23 16 20 21 Q16 25 10 22L5 20Z" fill="#fff"/></> : <>
             <path
               d="M0-5 Q-19-7-25 7 L-28 17 L-19 21 L-15 11 Q-10 4 0 5"
               fill="#fff"
@@ -147,7 +151,7 @@ export default function RunningCalendar() {
               d="M-32 24 Q-40 24-41 32 Q-44 42-36 44 Q-31 45-30 38 Q-23 43-21 36 Q-17 29-25 27"
               fill="#fff"
             />
-            <path d="M-31 30 L-33 34" strokeWidth="2.5" />
+            <path d="M-31 30 L-33 34" strokeWidth="2.5" /></>}
           </g>
         </g>
       </g>

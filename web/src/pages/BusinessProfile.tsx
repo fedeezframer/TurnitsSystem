@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useParams, Link } from "react-router";
 import { appConfig } from "../config";
-import { useStartupLoading } from "../components/BrandPreloader";
+import { SoftRouteLoading, useStartupLoading } from "../components/BrandPreloader";
 import {
   PerfilContenido,
   PerfilPublicaciones,
@@ -41,7 +41,7 @@ export default function BusinessProfile({
   const profileUrl = `/perfil/${encodeURIComponent(slug || "")}`;
   const bookingUrl = `/agenda/${encodeURIComponent(slug || "")}`;
   if (!perfil && !error) {
-    return <main className="app-loading" role="status">Cargando perfil…</main>;
+    return <SoftRouteLoading />;
   }
   return (
     <main

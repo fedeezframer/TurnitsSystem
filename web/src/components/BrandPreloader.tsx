@@ -1,9 +1,11 @@
 import * as React from "react";
 import { useLocation } from "react-router";
+import "./LoadingRunner.css";
 import {
   BRAND_WRITING_DURATION,
   brandWritingSvg,
   isAppGateway,
+  isBrandPreloaderPath,
   prepareBrandArtwork,
 } from "../shared/brand-preloader";
 
@@ -71,8 +73,9 @@ startup?.addEventListener("turnits-brand-ready", startWhenReady);
 
 // /app has no artwork. Its first destination gets the same single writing
 // cycle without downloading a second document or restarting the application.
-export function prepareAppDestinationPreloader() {
+export function prepareAppDestinationPreloader(path: string) {
   if (!appDestinationPending) return;
+  if (!isBrandPreloaderPath(path)) { appDestinationPending=false;return; }
   appDestinationPending = false;
   routeReady = false;
   finished = false;
@@ -89,7 +92,7 @@ export function prepareAppDestinationPreloader() {
 
 export function useStartupLoading(loading: boolean) {
   React.useLayoutEffect(() => {
-    if (!loading || finished || writingStarted) return;
+    if (!isBrandPreloaderPath(window.location.pathname) || !loading || finished || writingStarted) return;
     pending++;
     cancelAnimationFrame(startFrame);
     startFrame = 0;
@@ -103,6 +106,11 @@ export function useStartupLoading(loading: boolean) {
 export function StartupRouteReady() {
   const { pathname } = useLocation();
   React.useEffect(() => {
+    if(!isBrandPreloaderPath(pathname) && !isAppGateway(pathname)){
+      cancelAnimationFrame(startFrame);startFrame=0;
+      startup?.remove();finished=true;routeReady=false;
+      return;
+    }
     routeReady = !isAppGateway(pathname);
     startWhenReady();
     return () => {
@@ -112,18 +120,9 @@ export function StartupRouteReady() {
   return null;
 }
 
+export function SoftRouteLoading(){return <div className="route-blur-loading" role="status" aria-label="Cargando"><span /></div>}
 export default function BrandPreloader() {
-  const id = React.useId().replace(/:/g, "");
   useStartupLoading(true);
-  if (isAppGateway(window.location.pathname) || !finished) return null;
-  return (
-    <div
-      className="turnits-brand-preloader is-complete"
-      role="status"
-      aria-label="Cargando Turnits"
-      dangerouslySetInnerHTML={{
-        __html: brandWritingSvg(`turnits-writing-${id}`),
-      }}
-    />
-  );
+  if (!finished) return null;
+  return <SoftRouteLoading />;
 }

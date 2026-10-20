@@ -1,4 +1,5 @@
 .turnits-runner-loading {
+  background: radial-gradient(ellipse at center, #f1f7ed 0%, #ffffff 68%);
   --runner-size: 160px;
   display: grid;
   place-items: center;
@@ -151,3 +152,19 @@
     animation: none;
   }
 }
+
+.turnits-panel-preloader{position:fixed;inset:0;z-index:999;background:radial-gradient(ellipse at 50% 44%,#f4f8f1,#fff 72%);width:100vw;height:100dvh;min-height:100dvh;padding:0;pointer-events:none}
+.turnits-panel-preloader .turnits-runner-animation{--runner-size:190px}
+
+.turnits-inline-loading{position:relative;height:28px;max-width:200px;padding:0;overflow:hidden;filter:blur(4px);border-radius:10px;background:linear-gradient(100deg,#eef3e9,#f8faf6,#e4eedd);background-size:220% 100%;animation:loading-soft-drift 1.8s ease-in-out infinite alternate}
+@keyframes loading-soft-drift{to{background-position:100% 0;opacity:.55}}
+.turnits-runner-animation.is-waiting .calendar-body{animation:calendar-wait-breathe 2.8s ease-in-out infinite;transform-origin:120px 160px}
+.is-waiting .calendar-leg-front{animation:none;transform:translateX(20px) rotate(-8deg)}.is-waiting .calendar-leg-back{animation:none;transform:translateX(-17px) rotate(8deg)}.is-waiting .calendar-shin{animation:none;transform:rotate(0)}.is-waiting .calendar-ribbon{animation:calendar-ribbon 2.8s ease-in-out infinite}.is-waiting .calendar-shadow{animation:calendar-shadow 2.8s ease-in-out infinite}
+.calendar-scratch{transform-origin:0 0;animation:calendar-scratch 3.4s ease-in-out infinite}.is-waiting .calendar-eyes{animation:calendar-watch-look 3.4s ease-in-out infinite}.calendar-watch-arm{transform-origin:0 0;animation:calendar-watch-lift 3.4s ease-in-out infinite}.calendar-watch-hand{transform-origin:-1px 17px;animation:calendar-watch-tick 3.4s linear infinite}.calendar-sweat{animation:calendar-sweat .8s ease-in-out infinite}
+@keyframes calendar-wait-breathe{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-2px) rotate(1deg)}}
+@keyframes calendar-scratch{0%,28%,65%,100%{transform:rotate(0)}38%,54%{transform:rotate(-8deg)}46%,60%{transform:rotate(2deg)}}
+@keyframes calendar-watch-look{0%,25%,100%{transform:translate(0,0)}36%,70%{transform:translate(-3px,4px)}}
+@keyframes calendar-watch-lift{0%,25%,100%{transform:rotate(0)}40%,70%{transform:rotate(8deg)}}
+@keyframes calendar-watch-tick{to{transform:rotate(360deg)}}
+@keyframes calendar-sweat{0%,100%{opacity:.4;transform:translate(0,0)}50%{opacity:.9;transform:translate(-3px,2px)}}
+@media(prefers-reduced-motion:reduce){.turnits-runner-animation *,.turnits-inline-loading{animation:none!important}}

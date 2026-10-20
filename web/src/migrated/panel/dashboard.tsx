@@ -2732,6 +2732,8 @@ function TurnitsDashboard_Content({
                 flexDirection: "column",
                 gap: 16,
                 maxWidth: 1480,
+                width: "100%",
+                minWidth: 0,
                 margin: "0 auto",
             }}
         >

@@ -1,3 +1,4 @@
+import { SoftRouteLoading } from "../../components/BrandPreloader"
 import * as React from "react"
 
 import { motion, AnimatePresence } from "framer-motion"
@@ -296,7 +297,7 @@ export default function ReprogramarTurno(props: any) {
     }
 
     // ── Render por estado ───────────────────────────────────────
-    if (estado === "cargando") return <StatusCard text="Cargando tu turno..." />
+    if (estado === "cargando") return <SoftRouteLoading />
     if (estado === "error") return <StatusCard text={errorMsg} />
     if (estado === "no_disponible") return <StatusCard text={errorMsg} />
     if (estado === "cancelado")

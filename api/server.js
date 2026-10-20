@@ -2477,18 +2477,23 @@ app.get("/equipo/:slug", async (req, res) => {
     const { data: user } = await supabase.from("usuarios").select("activo").eq("slug", slug).maybeSingle();
     if (!user || !isActivo(user.activo)) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
-    const { data, error } = await supabase.from("equipo")
-      .select("id, nombre, apellido, color, foto_url, servicio_equipo!inner(servicios!inner(activo, slug))")
+    const servicioId = req.query.servicio_id;
+    if(servicioId && !UUID_REGEX.test(servicioId)) return res.status(400).json({success:false,error:"Servicio inválido."});
+    let query = supabase.from("equipo")
+      .select("id, nombre, apellido, color, foto_url, servicio_equipo!inner(servicio_id, servicios!inner(activo, slug, owner_equipo_id))")
       .eq("slug", slug).eq("activo", true)
       .eq("servicio_equipo.servicios.activo", "true")
       .eq("servicio_equipo.servicios.slug", slug)
       .order("created_at", { ascending: true });
+    if(servicioId)query=query.eq("servicio_equipo.servicio_id",servicioId);
+    const { data, error } = await query;
     if (error) throw error;
 
     // Sacamos el campo embebido servicio_equipo: solo lo usamos para
     // filtrar, el frontend no lo necesita.
     const vistos = new Set();
     const equipo = (data || [])
+      .filter(p=>!servicioId || p.servicio_equipo?.some(v=>v.servicio_id===servicioId && (!v.servicios?.owner_equipo_id || v.servicios.owner_equipo_id===p.id)))
       .filter((p) => (vistos.has(p.id) ? false : (vistos.add(p.id), true)))
       .map(({ servicio_equipo, ...p }) => p);
 
@@ -3499,6 +3504,7 @@ app.get("/cron/limpiar-lista-espera", requireAdminKey, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 app.post("/turnos/reservar", limiterBooking, async (req, res) => {
   try {
+    if (req.body?.browse_offer_id) return res.status(409).json({ success: false, error: "Las Turnits Offers se confirman con pago completo desde la agenda." });
     const { name, phone, email, fecha, hora, slug, servicio_id, apellido, extra_ids, equipo_id } = req.body;
     const slugClean = cleanSlug(slug || "");
 
@@ -3690,6 +3696,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
+    if (req.body?.browse_offer_id) return res.status(409).json({ success: false, error: "Las Turnits Offers se confirman con pago completo desde la agenda." });
     const { name, apellido, phone, email, fecha, hora, slug, servicio_id, metodo_pago, equipo_id } = req.body;
     let extraIds = [];
     try { extraIds = JSON.parse(req.body.extra_ids || "[]"); } catch { extraIds = []; }
@@ -7505,6 +7512,11 @@ async function crearCheckoutOffer(t,ctx,cardCheckout) {
   const token=usaCuentaMpPersonal(member)?await obtenerTokenMpVigenteEquipo(t.slug,member.id,member):await obtenerTokenMpVigente(t.slug,user);
   if(!token)throw new Error('Mercado Pago no conectado.');
   let {data:pending,error:pe}=await supabase.from('pagos_pendientes').select('*').eq('browse_turno_id',t.id).maybeSingle();if(pe)throw pe;
+  if(pending && ['nombre','apellido','telefono','email'].some(key=>pending[key]!==t[key])){
+   const contact={nombre:t.nombre,apellido:t.apellido,telefono:t.telefono,email:t.email};
+   const {error}=await supabase.from('pagos_pendientes').update(contact).eq('id',pending.id);if(error)throw error;
+   pending={...pending,...contact};
+  }
   if(pending?.browse_payment_url)return {success:true,payment_url:pending.browse_payment_url,monto:Number(t.precio_cobrado)};
   if(!pending){const inserted=await supabase.from('pagos_pendientes').insert({slug:t.slug,nombre:t.nombre,apellido:t.apellido,telefono:t.telefono,email:t.email,fecha:t.fecha,hora:t.hora,servicio_id:t.servicio_id,servicio_nombre:t.servicio_nombre,equipo_id:t.equipo_id,equipo_nombre:t.equipo_nombre,precio_servicio:Number(t.precio_cobrado),metodo_pago:'total',monto:Number(t.precio_cobrado),extras:[],monto_extras:0,estado:'pendiente',consumidor_id:t.consumidor_id,browse_turno_id:t.id,duracion_reservada:t.duracion_reservada}).select('*').single();if(inserted.error)throw inserted.error;pending=inserted.data;}
   const fee=planCobraComision(user.plan,user.estado_suscripcion)?calcularComisionTurnits(Number(t.precio_cobrado),user.plan,user.estado_suscripcion):0;
@@ -7610,6 +7622,7 @@ app.post("/api/card-payment/status",limiterBooking,async(req,res)=>{
 });
 
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
+  if(req.body?.browse_offer_id)return res.status(409).json({success:false,error:"Continuá desde el pago de la oferta en la agenda."});
   console.log("📥 create-preference:", JSON.stringify({
     slug: req.body?.slug,
     fecha: req.body?.fecha,

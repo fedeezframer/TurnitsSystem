@@ -52,7 +52,7 @@ export function useAppSessionRedirect() {
         let cancelled = false
         const enter = (path: string) => {
             if (cancelled) return
-            prepareAppDestinationPreloader()
+            prepareAppDestinationPreloader(path)
             void navigate(path, { replace: true })
         }
 

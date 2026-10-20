@@ -151,11 +151,12 @@ function TurnitsPanel_Inner(props: any) {
                 fontFamily: "'Inter Display', -apple-system, sans-serif",
                 boxSizing: "border-box",
                 overflow: isMobile ? "visible" : "hidden",
+                overflowX: isMobile ? "clip" : "hidden",
                 ...style,
                 // El ancho lo manda el panel, no el frame de Framer.
                 width: "100%",
                 minWidth: 0,
-                maxWidth: "none",
+                maxWidth: "100%",
                 // El estilo del frame anfitrión no debe volver a fijar la altura
                 // ni crear un viewport de scroll interno en celular.
                 ...(isMobile
@@ -177,7 +178,11 @@ function TurnitsPanel_Inner(props: any) {
                 - text-size-adjust evita que el navegador agrande textos
                   al girar el celular. */}
             <style>{`
-.turnits-root{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.turnits-root{-webkit-text-size-adjust:100%;text-size-adjust:100%;max-width:100%;min-width:0}
+@keyframes panel-section-in{from{opacity:0}to{opacity:1}}
+.turnits-root *{min-width:0}
+@media(max-width:860px){.turnits-root{width:100%;max-width:100%;overflow-x:clip!important}.turnits-root img,.turnits-root video,.turnits-root canvas{max-width:100%}.turnits-root input,.turnits-root textarea,.turnits-root select{max-width:100%;box-sizing:border-box}}
+@media(prefers-reduced-motion:reduce){.turnits-panel-content{animation:none!important}}
 .turnits-image-action{padding:8px 13px!important;border:1px solid #dce7df!important;border-radius:10px!important;background:#f5fbf5!important;color:#1B6B1A!important;font-size:12px!important;font-weight:700!important;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:background .15s,border-color .15s,transform .15s}
 .turnits-image-action:hover{background:#edf7ed!important;border-color:#a8c9a8!important}
 .turnits-root button,.turnits-root a,.turnits-root [role="button"],.turnits-root input,.turnits-root select,.turnits-root textarea{touch-action:manipulation}
@@ -470,7 +475,8 @@ function TurnitsPanel_Inner(props: any) {
 
             {/* ─────────────── CONTENIDO ─────────────── */}
             <div
-                key={discardRevision}
+                key={`${discardRevision}-${seccionActiva}`}
+                className="turnits-panel-content"
                 // Le avisa a librerías de smooth-scroll (Lenis y similares, muy
                 // comunes en sitios de Framer) que este contenedor scrollea solo.
                 data-lenis-prevent={isMobile ? undefined : "true"}
@@ -482,6 +488,7 @@ function TurnitsPanel_Inner(props: any) {
                 style={
                     {
                         flex: isMobile ? "0 0 auto" : 1,
+                        animation: "panel-section-in .2s ease both",
                         minWidth: 0,
                         minHeight: isMobile ? "auto" : 0,
                         padding: isMobile
