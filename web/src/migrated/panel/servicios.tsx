@@ -1485,7 +1485,7 @@ function ServiciosManager_ServicioForm({
                 )}
 
                 {!employeeVariant && !employeeMode && !branch && modoEdicion && servicioId && (
-                    <ServiceBrowseConfig api={apiUrl.replace(/\/+$/, "")} serviceId={servicioId} name={form.nombre} price={Number(form.precio)} />
+                    <ServiceBrowseConfig key={servicioId} api={apiUrl.replace(/\/+$/, "")} serviceId={servicioId} name={form.nombre} price={Number(form.precio)} />
                 )}
 
                 {error && (

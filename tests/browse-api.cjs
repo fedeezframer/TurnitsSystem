@@ -351,6 +351,14 @@ async function call(method, url, { body = {}, auth, params = {} } = {}) {
     200,
   );
   assert.equal(calls.at(-1).args.p_slug, "prueba");
+  const { activo: _active, ...newOffer } = offer;
+  assert.equal((await call("PUT", "/admin/browse/:slug", {
+    auth: owner, params: { slug: "prueba" }, body: { offers: [newOffer], recompensas: [] },
+  })).status, 200);
+  assert.equal(calls.at(-1).args.p_offers[0].activo, false, "new Offers require explicit opt-in");
+  assert.equal((await call("PUT", "/admin/browse/:slug", {
+    auth: owner, params: { slug: "prueba" }, body: { offers: [{ ...offer, activo: "true" }], recompensas: [] },
+  })).status, 400, "activation must be an explicit boolean");
   const reward = {
     id: rewardId,
     nombre: "Corte con T-Coins",

@@ -983,6 +983,49 @@
 }
 
 /* Shared brand assets, navigation and deliberate desktop compositions. */
+.browse-flame {
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+.browse-flame-inner {
+  opacity: 0;
+  transform: scale(0.65, 0.45);
+  transform-origin: 16px 29px;
+  transition: opacity 0.24s ease-out, transform 0.3s ease-out;
+}
+.browse-flame-outer {
+  transform-origin: 16px 29px;
+}
+.browse-flame.is-lit .browse-flame-inner,
+.browse-dock button:is(:hover, :focus-visible) .browse-flame-inner {
+  opacity: 1;
+  transform: scale(1);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .browse-flame.is-lit .browse-flame-outer,
+  .browse-dock button:is(:hover, :focus-visible) .browse-flame-outer {
+    animation: browse-fire-sway 1.7s ease-in-out infinite;
+  }
+  .browse-flame.is-lit .browse-flame-inner,
+  .browse-dock button:is(:hover, :focus-visible) .browse-flame-inner {
+    animation: browse-fire-kindle 1.15s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .browse-flame-inner { transition: none; }
+}
+@keyframes browse-fire-sway {
+  0%, 100% { transform: skewX(-1deg) scale(0.99, 1); }
+  40% { transform: skewX(1.4deg) scale(1.015, 1.035); }
+  70% { transform: skewX(-0.6deg) scale(1, 0.985); }
+}
+@keyframes browse-fire-kindle {
+  0%, 100% { opacity: 0.72; transform: scale(0.92, 0.82) skewX(-2deg); }
+  45% { opacity: 1; transform: scale(1.025, 1.035) skewX(1.5deg); }
+  75% { opacity: 0.88; transform: scale(0.97, 0.94); }
+}
+.browse-offers-loading { color: var(--browse-muted); }
 .browse-glyph {
   display: inline-block;
   flex: none;
@@ -1006,7 +1049,8 @@
   width: 28px !important;
   height: 28px !important;
 }
-.browse-dock .browse-glyph {
+.browse-dock .browse-glyph,
+.browse-dock .browse-flame {
   width: 25px !important;
   height: 25px !important;
 }
@@ -1731,7 +1775,8 @@
     color: #171c17;
     background: none !important;
   }
-  .browse-dock .browse-glyph {
+  .browse-dock .browse-glyph,
+  .browse-dock .browse-flame {
     width: 32px !important;
     height: 32px !important;
   }

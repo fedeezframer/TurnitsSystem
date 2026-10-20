@@ -5,6 +5,7 @@ import { useStartupLoading } from "../components/BrandPreloader";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import { consumerHeaders } from "../shared/consumer-session";
 import BrowseCalendar from "./BrowseCalendar";
+import BrowseFlame from "./BrowseFlame";
 import "./Browse.css";
 
 type View = "inicio" | "ofertas" | "agenda" | "buscar" | "coins" | "perfil";
@@ -361,6 +362,7 @@ export default function Browse() {
     [loading, setLoading] = React.useState(true),
     [error, setError] = React.useState(""),
     [offerError, setOfferError] = React.useState(""),
+    [offerLoading, setOfferLoading] = React.useState(true),
     [query, setQuery] = React.useState(""),
     [category, setCategory] = React.useState(""),
     [more, setMore] = React.useState(false),
@@ -457,8 +459,11 @@ export default function Browse() {
   React.useEffect(() => {
     if (view !== "ofertas") return;
     let active = true;
+    let pending = false;
     const controller = new AbortController();
-    const load = () =>
+    const load = () => {
+      if (pending) return;
+      pending = true;
       api("/browse/ofertas", { signal: controller.signal })
         .then((d) => {
           if (active) {
@@ -468,7 +473,13 @@ export default function Browse() {
         })
         .catch((e) => {
           if (active && !controller.signal.aborted) setOfferError(e.message);
+        })
+        .finally(() => {
+          pending = false;
+          if (active && !controller.signal.aborted) setOfferLoading(false);
         });
+    };
+    setOfferLoading(true);
     load();
     const timer = setInterval(load, 30000);
     return () => {
@@ -648,9 +659,7 @@ export default function Browse() {
               aria-current={view === v ? "page" : undefined}
               onClick={() => changeView(v)}
             >
-              <BrowseIcon
-                name={v === "ofertas" && view === v ? "ofertas-active" : v}
-              />
+              {v === "ofertas" ? <BrowseFlame active={view === v} /> : <BrowseIcon name={v} />}
               <span className="browse-nav-label">{NAV_LABELS[v]}</span>
             </button>
           ))}
@@ -921,6 +930,7 @@ export default function Browse() {
                   ¡Aprovechalos antes de que alguien más los reserve!
                 </p>
                 {offerError && <p role="alert">{offerError}</p>}
+                {offerLoading && !offers.length && <p className="browse-offers-loading" role="status">Cargando ofertas…</p>}
                 <div className="browse-card-grid">
                   {offers.map((o: any) => {
                     const s = catalog.servicios.find(
@@ -946,7 +956,7 @@ export default function Browse() {
                     );
                   })}
                 </div>
-                {!offerError && !offers.length && (
+                {!offerLoading && !offerError && !offers.length && (
                   <Empty>
                     No hay ofertas activas ahora. Los descuentos aparecen en la
                     última hora antes del cierre de reservas de cada horario.

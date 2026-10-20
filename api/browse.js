@@ -8,6 +8,29 @@ const result = (r) => {
 const fail = (text, status = 400) => {
   throw Object.assign(new Error(text), { publicMessage: text, status });
 };
+const freshRead = (_key, load) => load();
+// Share promises only inside one listing request. Booking/checkout calls use
+// fresh reads and the database still claims each appointment atomically.
+function requestReads() {
+  const pending = new Map();
+  return (key, load) => {
+    const id = JSON.stringify(key);
+    if (!pending.has(id)) pending.set(id, Promise.resolve().then(load));
+    return pending.get(id);
+  };
+}
+async function mapLimited(items, limit, fn) {
+  const output = new Array(items.length);
+  let next = 0, failed = false;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (!failed && next < items.length) {
+      const index = next++;
+      try { output[index] = await fn(items[index]); }
+      catch (error) { failed = true; throw error; }
+    }
+  }));
+  return output;
+}
 export function offerPrice(price, minimum, remaining) {
   if (
     !Number.isFinite(price) ||
@@ -134,27 +157,27 @@ export function createBrowse({
       fail("El negocio no está disponible.", 404);
     return u;
   };
-  const context = async (slug, serviceId, memberId) => {
-    const user = await visibleBusiness(slug);
+  const context = async (slug, serviceId, memberId, read = freshRead) => {
+    const user = await read(["business", slug], () => visibleBusiness(slug));
     const [s, e, v] = await Promise.all([
-      supabase
+      read(["service", slug, serviceId], () => supabase
         .from("servicios")
         .select("*")
         .eq("slug", slug)
         .eq("id", serviceId)
-        .maybeSingle(),
-      supabase
+        .maybeSingle()),
+      read(["member", slug, memberId], () => supabase
         .from("equipo")
         .select("*")
         .eq("slug", slug)
         .eq("id", memberId)
-        .maybeSingle(),
-      supabase
+        .maybeSingle()),
+      read(["variant", serviceId, memberId], () => supabase
         .from("servicio_equipo")
         .select("*")
         .eq("servicio_id", serviceId)
         .eq("equipo_id", memberId)
-        .maybeSingle(),
+        .maybeSingle()),
     ]);
     const service = result(s),
       member = result(e),
@@ -169,7 +192,7 @@ export function createBrowse({
     )
       fail("El servicio no está disponible para ese profesional.");
     try {
-      await validateMember(slug, memberId);
+      await read(["branch-valid", slug, memberId], () => validateMember(slug, memberId));
     } catch {
       fail("El profesional no está disponible en esa sucursal.");
     }
@@ -629,16 +652,17 @@ export function createBrowse({
               .select("*")
               .eq("activo", true)
               .limit(150),
-          ) || [],
-        offers = [];
-      for (const o of configs) {
+          ) || [];
+      const read = requestReads();
+      const batches = await mapLimited(configs, 6, async (o) => {
+        const offers = [];
         try {
-          const ctx = await context(o.slug, o.servicio_id, o.equipo_id);
+          const ctx = await context(o.slug, o.servicio_id, o.equipo_id, read);
           if (
             !ctx.config.mp_access_token ||
-            (await checkCommissions(o.slug, ctx.user.plan))
+            (await read(["commissions", o.slug, ctx.user.plan], () => checkCommissions(o.slug, ctx.user.plan)))
           )
-            continue;
+            return offers;
           const duration = Number(ctx.service.duracion || 30),
             lead =
               Number.isInteger(Number(ctx.config.anticipacion_minutos)) &&
@@ -676,6 +700,7 @@ export function createBrowse({
                     ctx.config,
                     ctx.member,
                     ctx.service.id,
+                    read,
                   );
                 } catch (e) {
                   if (e.promoValidacion) continue;
@@ -700,10 +725,11 @@ export function createBrowse({
         } catch (e) {
           if (!e.publicMessage && !e.promoValidacion) throw e;
         }
-      }
+        return offers;
+      });
       res.json({
         success: true,
-        ofertas: offers,
+        ofertas: batches.flat(),
         server_time: new Date().toISOString(),
       });
     }),
@@ -884,7 +910,7 @@ export function createBrowse({
           !UUID.test(o.id || "") ||
           !UUID.test(o.servicio_id || "") ||
           !UUID.test(o.equipo_id || "") ||
-          typeof o.activo !== "boolean" ||
+          (o.activo !== undefined && typeof o.activo !== "boolean") ||
           !Number.isFinite(o.precio_minimo) ||
           o.precio_minimo <= 0
         )
@@ -931,7 +957,7 @@ export function createBrowse({
           servicio_id: o.servicio_id,
           equipo_id: o.equipo_id,
           precio_minimo: o.precio_minimo,
-          activo: o.activo,
+          activo: o.activo === true,
           updated_at: new Date().toISOString(),
         });
       }

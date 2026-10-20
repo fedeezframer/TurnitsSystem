@@ -2544,7 +2544,7 @@ async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
   const montoExtras=Math.round(extras.reduce((sum,i)=>sum+i.precio,0)*100)/100;
   return {id:p.id,nombre:p.nombre,tipo:p.tipo,items:p.items,imagenes,fecha_inicio:p.fecha_inicio,fecha_fin:p.fecha_fin,dias_semana:p.dias_semana ?? null,precio_original:Number(p.precio_original),precio_final:total,servicio_id:servicios[0].id,duracion,capacidad,extras,montoExtras,precioServicio:Math.round((total-montoExtras)*100)/100};
 }
-async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servicioId) {
+async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servicioId,read=(_key,load)=>load()) {
   if(!promo){
     const {data:srv,error}=servicioId ? await supabase.from('servicios').select('duracion,capacidad').eq('slug',slug).eq('id',servicioId).maybeSingle() : {data:null,error:null};if(error)throw error;
     promo={duracion:Number(srv?.duracion || config.duracion_turno || 30),capacidad:Number(srv?.capacidad || config.capacidad_por_turno || 1)};
@@ -2554,8 +2554,11 @@ async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servici
   if(!intervalos.some(([a,b])=>inicio>=a && fin<=b))throw promoError('No hay tiempo suficiente para el combo en ese horario.');
   let query=supabase.from('turnos').select('hora,servicio_id,duracion_reservada').eq('slug',slug).eq('fecha',fecha).in('estado',['confirmado','pendiente']);
   if(empleado?.es_dueño)query=query.or(`equipo_id.eq.${empleado.id},equipo_id.is.null`);else query=empleado ? query.eq('equipo_id',empleado.id) : query.is('equipo_id',null);
-  const {data:turnos,error}=await query;if(error)throw error;
-  const {data:servicios,error:se}=await supabase.from('servicios').select('id,duracion').eq('slug',slug);if(se)throw se;
+  const [{data:turnos,error},{data:servicios,error:se}]=await Promise.all([
+    read(['occupancy',slug,fecha,empleado?.id || null,!!empleado?.es_dueño],()=>query),
+    read(['service-durations',slug],()=>supabase.from('servicios').select('id,duracion').eq('slug',slug)),
+  ]);
+  if(error)throw error;if(se)throw se;
   const durations=new Map((servicios || []).map(s=>[s.id,s.duracion]));
   const overlap=(turnos || []).filter(t=>{const a=minutes(t.hora);return inicio<a+Number(t.duracion_reservada || durations.get(t.servicio_id) || config.duracion_turno || 30)&&fin>a}).length;
   if(overlap>=promo.capacidad)throw promoError('Ese horario ya no tiene lugar para el combo. Elegí otro.');

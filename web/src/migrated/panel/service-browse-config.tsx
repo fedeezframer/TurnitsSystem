@@ -54,7 +54,7 @@ export default function ServiceBrowseConfig({
     (members.length === 1 ? members[0].id : "");
   const offer = offers.find((o: any) => o.equipo_id === selectedMember);
   const enableCoins = coinsEnabled ?? serviceRewards.some((r: any) => r.activo);
-  const enableOffer = offerEnabled ?? !!offer?.activo;
+  const enableOffer = offerEnabled ?? offer?.activo === true;
   const normalPrice = Math.max(
     0,
     Math.min(
