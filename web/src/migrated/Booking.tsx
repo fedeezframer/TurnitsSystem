@@ -1,6 +1,7 @@
 import { appConfig } from "../config"
 import { useStartupLoading } from "../components/BrandPreloader"
 import { consumerHeaders } from "../shared/consumer-session"
+import { bookingSteps, resolveBookingStep } from "../shared/booking-flow"
 import * as React from "react"
 import { cardRadius, iconRadius, type BusinessAppearance } from "../shared/appearance.js"
 import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
@@ -884,22 +885,26 @@ export default function BookingFlow(props: any) {
     const [paisDropdownOpen, setPaisDropdownOpen] = React.useState(false)
     const [emailError, setEmailError] = React.useState("")
     const [telError, setTelError] = React.useState("")
+    const [loadingCuenta, setLoadingCuenta] = React.useState(()=>!!consumerHeaders().Authorization)
+    const [cuentaConDatosCompletos, setCuentaConDatosCompletos] = React.useState(false)
     React.useEffect(()=>{
-        const headers=consumerHeaders();if(!headers.Authorization)return;
+        const headers=consumerHeaders();if(!headers.Authorization){setLoadingCuenta(false);return;}
         const controller=new AbortController();
-        fetch(`${api}/browse/identidad`,{headers,signal:controller.signal}).then(r=>r.json()).then(d=>{
-            if(!d.success||controller.signal.aborted)return;const c=d.perfil;
+        fetch(`${api}/browse/identidad`,{headers,signal:controller.signal}).then(r=>r.ok?r.json():null).then(d=>{
+            if(!d?.success||!d.perfil||controller.signal.aborted)return;const c=d.perfil;
             setNombre(v=>v||c.nombre_persona||"");setApellido(v=>v||c.apellido||"");setEmail(v=>v||c.email||"");
             const digits=String(c.telefono||"").replace(/\D/g,"");const country=[...PAISES].sort((a,b)=>b.dial.length-a.dial.length).find(p=>digits.startsWith(p.dial.slice(1)));
             if(country){setPais(country);setTelefono(v=>v||digits.slice(country.dial.length-1))}
-        }).catch(()=>{});return ()=>controller.abort();
+            else if(digits){setPais({code:"OTHER",flag:"🌐",dial:"+",name:"Internacional"});setTelefono(v=>v||digits)}
+            const localDigits=country?digits.slice(country.dial.length-1):digits;
+            setCuentaConDatosCompletos(String(c.nombre_persona||"").trim().length>=2 && EMAIL_REGEX.test(String(c.email||"").trim()) && localDigits.length>=MIN_DIGITOS_TEL);
+        }).catch(()=>{}).finally(()=>{if(!controller.signal.aborted)setLoadingCuenta(false)});return ()=>controller.abort();
     },[api]);
     const browsePreselect=React.useRef(false)
     React.useEffect(()=>{
         if (browsePreselect.current || !servicios.length || !bookingServiceId) return
         if(servicios.some(s=>s.id===bookingServiceId)){
             setServicioId(bookingServiceId);browsePreselect.current=true
-            setStepId(current=>current==='servicio' ? 'fecha' : current)
         }
     },[servicios,bookingServiceId])
     React.useEffect(()=>{
@@ -988,7 +993,7 @@ export default function BookingFlow(props: any) {
     // Al elegir un profesional se carga su configuración individual. En modo
     // "cualquiera" se usa la unión de sus días laborales para armar el calendario.
     React.useEffect(() => {
-        if (isCanvas || !slug || !equipoId) return
+        if (isCanvas || !slug || !equipoId || loadingNegocio) return
         let alive = true
         fetch(
             `${api}/negocio/${slug}?equipo_id=${encodeURIComponent(equipoId)}`,
@@ -1006,7 +1011,7 @@ export default function BookingFlow(props: any) {
         return () => {
             alive = false
         }
-    }, [api, slug, equipoId, isCanvas])
+    }, [api, slug, equipoId, isCanvas, loadingNegocio])
 
     React.useEffect(() => {
         if (isCanvas) return
@@ -1051,17 +1056,21 @@ export default function BookingFlow(props: any) {
                 if (!alive) return
                 const lista = data?.success ? data.equipo || [] : []
                 const availableBranches=(sedes.sucursales || []).filter((s:MapBranch)=>!bookingServiceId || !lista.length || s.equipo_ids?.some(id=>lista.some((p:Profesional)=>p.id===id)))
-                setSucursales(availableBranches.map((s:MapBranch)=>({...s,sin_equipo:s.id==='principal' && lista.length===0})))
-                setSucursalId(availableBranches.length === 1 ? availableBranches[0].id : '')
+                const branches=availableBranches.map((s:MapBranch)=>({...s,sin_equipo:s.id==='principal' && lista.length===0}))
+                const requestedBranch=branches.find((s:MapBranch)=>s.id===bookingQuery.get("sucursal_id") && (s.equipo_ids?.length||s.sin_equipo))
+                const requestedMember=!browseOfferId && lista.find((p:Profesional)=>p.id===bookingQuery.get("equipo_id") && (!requestedBranch || requestedBranch.equipo_ids?.includes(p.id)))
+                const branch=requestedBranch || (requestedMember && branches.find((s:MapBranch)=>s.equipo_ids?.includes(requestedMember.id))) || (branches.length===1?branches[0]:null)
+                setSucursales(branches)
+                setSucursalId(branch?.id || '')
                 setProfesionales(lista)
-                if (lista.length === 1 && !sedes.sucursales?.length) setEquipoId(lista[0].id)
+                if(requestedMember)setEquipoId(requestedMember.id)
             })
             .catch(() => {if(alive){setProfesionales([]);setErrorSedes('No pudimos cargar las sedes y profesionales. Volvé a intentarlo.')}})
             .finally(() => alive && setLoadingProf(false))
         return () => {
             alive = false
         }
-    }, [api, slug, isCanvas, bookingServiceId])
+    }, [api, slug, isCanvas, bookingServiceId, bookingQuery, browseOfferId])
 
     const branchPreselected=React.useRef(false)
     React.useEffect(()=>{
@@ -1071,12 +1080,15 @@ export default function BookingFlow(props: any) {
         const branch=memberId ? sucursales.find(b=>b.equipo_ids?.includes(memberId)) : sucursales.find(b=>b.id===requested && (b.equipo_ids?.length||b.sin_equipo))
         if(branch){setSucursalId(branch.id);branchPreselected.current=true}
     },[loadingProf,sucursales,bookingQuery,offerQuote])
-    const pinnedBranch = sucursales.some(b=>b.id===bookingQuery.get("sucursal_id") && b.id===sucursalId && (b.equipo_ids?.length||b.sin_equipo))
     const profesionalesVisibles=sucursales.length?profesionales.filter(p=>sucursales.find(s=>s.id===sucursalId)?.equipo_ids?.includes(p.id)):profesionales
-    const requiereSucursal = sucursales.length > 1
-    const requiereProfesional = profesionales.length > 1 || (sucursales.length>0 && profesionales.length>0)
+    const pinnedProfessional = !browseOfferId && equipoId===bookingQuery.get("equipo_id") && profesionalesVisibles.some(p=>p.id===equipoId)
+    const pinnedBranch = pinnedProfessional || sucursales.some(b=>b.id===bookingQuery.get("sucursal_id") && b.id===sucursalId && (b.equipo_ids?.length||b.sin_equipo))
+    const requiereProfesional = profesionalesVisibles.length > 1
     const listoParaServicios =
-        !loadingProf && !errorSedes && (!requiereProfesional || !!equipoId) && (!sucursales.length || !!sucursalId)
+        !loadingProf && !errorSedes && (!profesionalesVisibles.length || !!equipoId) && (!sucursales.length || !!sucursalId)
+    React.useEffect(()=>{
+        if(!loadingProf && !browseOfferId && profesionalesVisibles.length===1 && equipoId!==profesionalesVisibles[0].id)setEquipoId(profesionalesVisibles[0].id)
+    },[loadingProf,browseOfferId,profesionalesVisibles,equipoId])
 
     React.useEffect(()=>{
         if(isCanvas || !slug)return
@@ -1142,6 +1154,12 @@ export default function BookingFlow(props: any) {
             alive = false
         }
     }, [api, slug, listoParaServicios, equipoId, requiereProfesional, isCanvas])
+
+    const tieneCombos = promociones.some(p=>p.tipo==="combo" && servicios.some(s=>s.id===p.servicio_id))
+    React.useEffect(()=>{
+        if(!listoParaServicios || loadingServicios || loadingPromos || servicioId || browseOfferId || tieneCombos)return
+        if(servicios.length===1)setServicioId(servicios[0].id)
+    },[listoParaServicios,loadingServicios,loadingPromos,servicioId,browseOfferId,tieneCombos,servicios])
 
     React.useEffect(() => {
         if (isCanvas || browseOfferId || !habilitarExtras || !servicioId) {
@@ -1529,7 +1547,7 @@ export default function BookingFlow(props: any) {
     }, [metodoPagoRequerido, metodo, comprobante])
 
     const puedeConfirmar =
-        !!fecha && !!hora && datosPersonalesOkParaBoton && metodoPagoValido
+        !!fecha && !!hora && !loadingCuenta && datosPersonalesOkParaBoton && metodoPagoValido
 
     const STEP_LABELS: Record<string, string> = {
         sucursal: "Sucursal",
@@ -1540,18 +1558,12 @@ export default function BookingFlow(props: any) {
         checkout: "Confirmar",
     }
 
-    const steps = React.useMemo(() => {
-        if (offerQuote) return ["checkout"]
-        const s: string[] = []
-        if (requiereSucursal && !pinnedBranch) s.push("sucursal")
-        if (requiereProfesional) s.push("profesional")
-        if (!(bookingServiceId && servicioId===bookingServiceId && servicios.some(service=>service.id===bookingServiceId))) s.push("servicio")
-        return [...s,"fecha","hora","checkout"]
-    },[offerQuote,requiereSucursal,pinnedBranch,requiereProfesional,bookingServiceId,servicioId,servicios])
+    const servicioResuelto = !!servicioId && servicios.some(s=>s.id===servicioId) && (servicioId===bookingServiceId || (servicios.length===1 && !tieneCombos))
+    const steps = bookingSteps({offer:!!offerQuote,branchCount:sucursales.length,branchPinned:!!pinnedBranch,professionalCount:profesionalesVisibles.length,professionalPinned:!!pinnedProfessional,serviceResolved:servicioResuelto})
     const [stepId, setStepId] = React.useState("")
     React.useEffect(()=>{
         if(loadingProf || (browseOfferId && offerLoading))return
-        if(!steps.includes(stepId))setStepId(steps[0])
+        if(!steps.includes(stepId))setStepId(resolveBookingStep(stepId,steps))
     },[steps,stepId,loadingProf,browseOfferId,offerLoading])
     const stepIndex = Math.max(0, steps.indexOf(stepId))
     const enCheckoutStep = stepId === "checkout"
@@ -1607,7 +1619,7 @@ export default function BookingFlow(props: any) {
         if (id!==sucursalId) {
             setSucursalId(id);setEquipoId(null);setEquipoIdReservado(null);setServicioId(null);setPromocionId(null);setExtrasSeleccionados([]);setFecha('');setHora('');setServicios([]);browsePreselect.current=false
         }
-        if (avanzar && stepId==='sucursal') irSiguientePaso()
+        if (avanzar && stepId==='sucursal') setStepId(profesionales.filter(p=>sede.equipo_ids?.includes(p.id)).length>1 ? "profesional" : "servicio")
     }
     function elegirProfesional(p: Profesional) {
         setEquipoId(p.id)
@@ -1617,7 +1629,7 @@ export default function BookingFlow(props: any) {
         setFecha("")
         setHora("")
         setExtrasSeleccionados([])
-        if(bookingServiceId)setStepId("fecha");else irSiguientePaso()
+        irSiguientePaso()
     }
     async function elegirCualquierProfesional() {
         if (!profesionalesVisibles.length) return
@@ -1801,7 +1813,7 @@ export default function BookingFlow(props: any) {
     }
 
     async function confirmarReserva(sinPagoRevalidado = false) {
-        if (submitEstado === "loading") return
+        if (submitEstado === "loading" || loadingCuenta) return
         const sinPago = sinPagoRevalidado || negocio?.agenda_sin_pagos === true
         setSubmitError("")
 
@@ -2409,7 +2421,7 @@ export default function BookingFlow(props: any) {
 
                                 {stepId === "fecha" && (
                                     <div>
-                                        <BackLink onClick={volverPaso} />
+                                        {stepIndex>0 && <BackLink onClick={volverPaso} />}
                                         <StepTitle title="Elegí el día" />
                                         {promoElegida?.dias_semana != null && <p style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)",margin:"0 0 12px"}}>Esta promo se aplica los {promoDaysLabel(promoElegida.dias_semana)} dentro de su vigencia.</p>}
                                         {promoElegida?.tipo === "descuento" && <p style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)",margin:"-4px 0 14px"}}>Los días OFF tienen descuento. Las demás fechas se reservan al precio normal.</p>}
@@ -2480,7 +2492,7 @@ export default function BookingFlow(props: any) {
                                     >
                                         {stepIndex > 0 && <BackLink onClick={volverPaso} />}
 
-                                        <div style={{ minWidth: 0 }}>
+                                        {loadingCuenta ? <Skeleton/> : cuentaConDatosCompletos ? <div aria-label="Datos de tu cuenta" style={{fontSize:14,color:"var(--bf-text-muted)"}}>Reservás como <strong style={{color:"var(--bf-text)"}}>{nombre} {apellido}</strong></div> : <div style={{ minWidth: 0 }}>
                                             <SectionLabel
                                                 text="Tus datos"
                                                 accent={accent}
@@ -2540,7 +2552,7 @@ export default function BookingFlow(props: any) {
                                                     error={telError}
                                                 />
                                             </div>
-                                        </div>
+                                        </div>}
 
                                         <div
                                             onClick={() => {
