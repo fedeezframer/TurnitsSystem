@@ -648,6 +648,9 @@ function configNegocioParaEquipo(user, miembro) {
   configPersonal.forEach((key) => {
     if (miembro[key] !== null && miembro[key] !== undefined) config[key] = miembro[key];
   });
+  // The owner's switch pauses collection for the whole agenda. A saved
+  // personal setting must not turn payments back on for one professional.
+  if(mediosOfflinePermitidos(user) && user.agenda_sin_pagos === true)config.agenda_sin_pagos=true;
   // Mercado Pago es opcional por integrante: sin conexión individual usa
   // la cuenta central del negocio; con conexión, cobra en la cuenta propia.
   const usaCuentaPersonal = usaCuentaMpPersonal(miembro);
@@ -2335,13 +2338,13 @@ const { data: user, error } = await supabase.from("usuarios")
       if (miembroError) throw miembroError;
       if (miembro) configEquipo = miembro;
     }
-    const valorConfig = (key) => configEquipo?.[key] !== null && configEquipo?.[key] !== undefined ? configEquipo[key] : user[key];
+    const configEquipoEfectiva = configNegocioParaEquipo(user, configEquipo);
+    const valorConfig = (key) => configEquipoEfectiva[key];
     const horariosPublicos = equipoCualquiera ? horariosEquipoUnion : valorConfig("horarios");
     const excepcionesPublicas = equipoCualquiera ? excepcionesEquipoUnion : valorConfig("excepciones");
     const metodoPublico = valorConfig("metodo_pago");
     const porcentajeSenaPublico = valorConfig("porcentaje_sena");
     const agendaSinPagosEquipo = mediosOfflinePermitidos(user) && valorConfig("agenda_sin_pagos") === true;
-    const configEquipoEfectiva = configEquipo ? configNegocioParaEquipo(user, configEquipo) : user;
     const mpDisponibleToken = configEquipoEfectiva.mp_access_token;
     const aceptaTransferenciaPublico = valorConfig("acepta_transferencia");
     const aceptaEfectivoPublico = valorConfig("acepta_efectivo");
@@ -2350,7 +2353,7 @@ const { data: user, error } = await supabase.from("usuarios")
     const esPremium               = user.plan === "basico";
     const esTrialPremium          = esPremium && user.estado_suscripcion === "trial";
     const agendaSinPagos          = agendaSinPagosEquipo;
-    const metodoPagoEfectivo      = !mediosOfflinePermitidos(user) && (!metodoPublico || metodoPublico === "none") ? "total" : metodoPublico;
+    const metodoPagoEfectivo      = agendaSinPagos ? "none" : !mediosOfflinePermitidos(user) && (!metodoPublico || metodoPublico === "none") ? "total" : metodoPublico;
     const mpDisponible            = !agendaSinPagos && !!mpDisponibleToken && ["sena", "total"].includes(metodoPagoEfectivo);
     const transferenciaDisponible = !agendaSinPagos && mediosOfflinePermitidos(user) && !!aceptaTransferenciaPublico;
     const efectivoDisponible      = !agendaSinPagos && mediosOfflinePermitidos(user) && !!aceptaEfectivoPublico;
@@ -3747,6 +3750,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     if (!mediosOfflinePermitidos(user)) {
       return res.status(403).json({ success: false, error: "Este negocio no ofrece este método de pago." });
     }
+    if(configReserva.agenda_sin_pagos)return res.json({isFree:true,agenda_sin_pagos:true});
     if (metodo_pago === "transferencia" && !configReserva.acepta_transferencia) {
       return res.status(403).json({ success: false, error: "Este negocio no acepta pagos por transferencia." });
     }
@@ -7504,6 +7508,7 @@ function verifyCardSession(value) {
 }
 const browseCheckoutLocks=new Set();
 async function crearCheckoutOffer(t,ctx,cardCheckout) {
+ if(ctx.config.agenda_sin_pagos)throw Object.assign(new Error('Los cobros están desactivados.'),{publicMessage:'El negocio desactivó los cobros. Esta oferta ya no está disponible.',status:409});
  if(cardCheckout)throw Object.assign(new Error('Usá Mercado Pago para completar el pago de esta oferta.'),{publicMessage:'Pagá esta oferta desde Mercado Pago, donde también podés usar tu tarjeta.',status:400});
  if(browseCheckoutLocks.has(t.id))throw Object.assign(new Error('Pago en preparación.'),{publicMessage:'Estamos preparando tu pago. Esperá unos segundos.',status:409});
  browseCheckoutLocks.add(t.id);
@@ -7578,6 +7583,7 @@ app.post("/api/card-payment",limiterBooking,async(req,res)=>{
     const ctx=await cardContext(session);
     const existing=await findCardPayment(ctx);
     if(existing){attempted=true;return await finishCardPayment(ctx,existing,res);}
+    if(ctx.config.agenda_sin_pagos)return res.status(409).json({status:"not_charged",error:"El negocio desactivó los cobros. Volvé a la agenda para reservar sin pago."});
     const card=req.body.card || {};
     if(typeof card.token!=="string" || card.token.length>300 || !/^[a-zA-Z0-9_-]+$/.test(card.token) || typeof card.payment_method_id!=="string" || !Number.isInteger(Number(card.installments)) || Number(card.installments)<1 || Number(card.installments)>48 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(card.payer?.email || ""))
       return res.status(400).json({status:"not_charged",error:"Revisá los datos de la tarjeta y el email."});
@@ -7693,8 +7699,8 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
 
     const esTrialPremium = user.plan === "basico" && user.estado_suscripcion === "trial";
     const metodo    = configReserva.metodo_pago || "none";
-    const debePagar = metodo === "sena" || metodo === "total";
-    if (!debePagar || (precioServicio <= 0 && montoExtras <= 0)) return res.json({ isFree: true });
+    const debePagar = !configReserva.agenda_sin_pagos && (metodo === "sena" || metodo === "total");
+    if (!debePagar || (precioServicio <= 0 && montoExtras <= 0)) return res.json({ isFree: true, agenda_sin_pagos: configReserva.agenda_sin_pagos === true });
 
     // 👇 FIX: la seña se calcula sobre (servicio + extras), no solo sobre el servicio
     const baseCalculo = precioServicio + montoExtras;

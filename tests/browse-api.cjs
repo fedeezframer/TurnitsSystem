@@ -517,6 +517,12 @@ async function call(method, url, { body = {}, auth, params = {}, query = {} } = 
   assert.equal((await call('POST','/browse/ofertas/:id/checkout',{auth:token,params:{id:offerId},body:{...input,precio:quote.body.oferta.precio}})).status,200,'payment retry retains original trusted amount');assert.equal(calls.length,beforeQuote+1,'retry does not reserve twice');
   held.estado='confirmado';held.pago_estado='aprobado';assert((await call('GET','/browse/me',{auth:token})).body.turnos.some(t=>t.id===held.id),'approved Offer appears in agenda');
   assert.equal(offerPrice(15000,10000,NaN),null);
+  tables.usuarios[0].agenda_sin_pagos=true;
+  const beforeDisabled=calls.length;
+  assert.equal((await call('GET','/browse/ofertas/:id/cotizacion',{params:{id:offerId},query:input})).status,409,'no-pay agenda cannot quote a paid Offer');
+  assert.equal((await call('POST','/browse/ofertas/:id/checkout',{auth:token,params:{id:offerId},body:{...input,precio:quote.body.oferta.precio}})).status,409,'no-pay agenda rejects new Offer checkout');
+  assert.equal(calls.length,beforeDisabled,'disabled collection creates no hold');
+
   console.log(
     "PASS Browse API: consumer/owner isolation, private field filtering, booking identity bound to session, own catalog validation, price steps, authenticated profile updates and email verification. No external writes.",
   );

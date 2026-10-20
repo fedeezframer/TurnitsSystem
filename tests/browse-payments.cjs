@@ -132,6 +132,8 @@ for (const name of ["crearCheckoutOffer", "procesarPagoConfirmado"]) {
 }
 (async () => {
   const ctx = { user: { plan: "gratis" }, member: {}, config: {} };
+  await assert.rejects(context.crearCheckoutOffer({...turn},{...ctx,config:{agenda_sin_pagos:true}},false),error=>error.status===409);
+  assert.equal(preferences.length,0,'no new payment for a no-pay agenda');
   const p = await context.crearCheckoutOffer({ ...turn }, ctx, false);
   assert.equal(p.payment_url, "https://example.test/pay");
   assert.equal(preferences.length, 1);

@@ -69,7 +69,9 @@ async function call(){
   failTable='servicios';assert.equal((await call()).status,503,'database errors are not reported as an empty list');failTable='';
   data.equipo[0].activo=true;data.turnos.pop();data.usuarios[0].mp_access_token='';
   assert.equal((await call()).body.ofertas.length,0,'payment connection is still required');
-  data.usuarios[0].mp_access_token='PRIVATE';data.usuarios[0].estado_suscripcion='suspendido';
+  data.usuarios[0].mp_access_token='PRIVATE';data.usuarios[0].agenda_sin_pagos=true;
+  assert.equal((await call()).body.ofertas.length,0,'no-pay agenda hides paid Offers');
+  data.usuarios[0].agenda_sin_pagos=false;data.usuarios[0].estado_suscripcion='suspendido';
   assert.equal((await call()).body.ofertas.length,0,'suspended businesses never publish offers');
   if(process.env.OFFERS_SNAPSHOT)fs.writeFileSync(process.env.OFFERS_SNAPSHOT,JSON.stringify(before));
   if(process.env.OFFERS_BASELINE)assert.deepEqual(before,JSON.parse(fs.readFileSync(process.env.OFFERS_BASELINE,'utf8')),'listing matches previous implementation field for field');

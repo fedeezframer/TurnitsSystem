@@ -664,7 +664,7 @@ export function createBrowse({
         try {
           const ctx = await context(o.slug, o.servicio_id, o.equipo_id, read);
           if (
-            !ctx.config.mp_access_token ||
+            ctx.config.agenda_sin_pagos || !ctx.config.mp_access_token ||
             (await read(["commissions", o.slug, ctx.user.plan], () => checkCommissions(o.slug, ctx.user.plan)))
           )
             return offers;
@@ -749,7 +749,7 @@ export function createBrowse({
     if (!offer || offer.slug !== input.slug || offer.servicio_id !== input.servicio_id || offer.equipo_id !== input.equipo_id)
       fail("Esta oferta ya no está disponible.", 409);
     const ctx = await context(offer.slug, offer.servicio_id, offer.equipo_id);
-    if (!ctx.config.mp_access_token || await checkCommissions(offer.slug, ctx.user.plan)) fail("La oferta no admite pagos en este momento.", 409);
+    if (ctx.config.agenda_sin_pagos || !ctx.config.mp_access_token || await checkCommissions(offer.slug, ctx.user.plan)) fail("El negocio desactivó los cobros o la oferta no admite pagos en este momento.", 409);
     const lead = Number.isInteger(Number(ctx.config.anticipacion_minutos)) && Number(ctx.config.anticipacion_minutos) >= 1 ? Math.min(43200, Number(ctx.config.anticipacion_minutos)) : 30;
     const start = new Date(`${input.fecha}T${input.hora}:00-03:00`);
     const close = new Date(start.getTime() - lead * 60000);

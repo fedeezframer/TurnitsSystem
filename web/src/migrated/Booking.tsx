@@ -1033,7 +1033,9 @@ export default function BookingFlow(props: any) {
                 .catch(() => {})
         }
         window.addEventListener("focus", onFocus)
-        return () => window.removeEventListener("focus", onFocus)
+        const onVisible=()=>{if(document.visibilityState==="visible")onFocus()}
+        document.addEventListener("visibilitychange",onVisible)
+        return () => {window.removeEventListener("focus", onFocus);document.removeEventListener("visibilitychange",onVisible)}
     }, [api, slug, isCanvas, equipoId, equipoIdReservado])
 
     React.useEffect(() => {
@@ -1453,6 +1455,7 @@ export default function BookingFlow(props: any) {
     }, [negocio,browseOfferId])
 
     const metodosDisponibles = React.useMemo(() => {
+        if (negocio?.agenda_sin_pagos) return []
         if (browseOfferId) return [{key:"mercadopago" as MetodoKey,emoji:"💳",label:"Mercado Pago",detalle:"Dinero en cuenta y tarjetas aceptadas por Mercado Pago"}]
         if (!negocio) return []
         const disp = negocio.metodos_pago_disponibles || []
@@ -1797,8 +1800,9 @@ export default function BookingFlow(props: any) {
         setComprobante(file)
     }
 
-    async function confirmarReserva() {
+    async function confirmarReserva(sinPagoRevalidado = false) {
         if (submitEstado === "loading") return
+        const sinPago = sinPagoRevalidado || negocio?.agenda_sin_pagos === true
         setSubmitError("")
 
         if (!fecha) return setSubmitError("Seleccioná una fecha.")
@@ -1811,9 +1815,9 @@ export default function BookingFlow(props: any) {
             )
         if (email && !EMAIL_REGEX.test(email.trim()))
             return setSubmitError("El email ingresado no es válido.")
-        if (metodoPagoRequerido && !metodo)
+        if (metodoPagoRequerido && !sinPago && !metodo)
             return setSubmitError("Elegí un método de pago para continuar.")
-        if (metodo === "transferencia" && !comprobante)
+        if (!sinPago && metodo === "transferencia" && !comprobante)
             return setSubmitError("Adjuntá el comprobante de la transferencia.")
         if (!slug)
             return setSubmitError(
@@ -1843,7 +1847,7 @@ export default function BookingFlow(props: any) {
                 if(data.payment_url){window.location.assign(data.payment_url);return}
                 throw new Error("No recibimos el enlace de pago. Volvé a intentar.")
             }
-            if (!metodo) {
+            if (!metodo || sinPago) {
                 if (negocio?.suspendido) {
                     throw new Error(
                         "Este servicio está pausado temporalmente. Contactá al negocio."
@@ -1931,7 +1935,9 @@ export default function BookingFlow(props: any) {
                 }
                 if (data.isFree) {
                     setMetodo("")
-                    await confirmarReserva()
+                    setComprobante(null)
+                    if(data.agenda_sin_pagos)setNegocio(current=>current?{...current,agenda_sin_pagos:true,metodo_pago:"none",metodos_pago_disponibles:[]}:current)
+                    await confirmarReserva(true)
                     return
                 }
                 throw new Error("No se recibió el enlace de pago.")
@@ -1967,6 +1973,7 @@ export default function BookingFlow(props: any) {
                 body: form,
             })
             const data = await res.json().catch(() => ({}))
+            if(res.ok && data.isFree){setMetodo("");setComprobante(null);if(data.agenda_sin_pagos)setNegocio(current=>current?{...current,agenda_sin_pagos:true,metodo_pago:"none",metodos_pago_disponibles:[]}:current);await confirmarReserva(true);return}
             if (!res.ok || !data.success)
                 throw new Error(
                     data.error ||
@@ -1990,7 +1997,7 @@ export default function BookingFlow(props: any) {
     }
 
     const esSena =
-        !browseOfferId && negocio?.metodo_pago === "sena" &&
+        !browseOfferId && !negocio?.agenda_sin_pagos && negocio?.metodo_pago === "sena" &&
         !!servicioElegido &&
         metodo !== "efectivo"
     const totalServicioYExtras =
@@ -2041,10 +2048,10 @@ export default function BookingFlow(props: any) {
         )
     }
 
-    if (loadingNegocio || (browseOfferId && (offerLoading || (!offerError && !errorServicios && (loadingProf || loadingServicios || !servicioBase))))) {
+    if (loadingNegocio || (browseOfferId && (offerLoading || (!offerError && !negocio?.agenda_sin_pagos && !errorServicios && (loadingProf || loadingServicios || !servicioBase))))) {
         return <div className="route-blur-loading" role="status" aria-label="Cargando agenda"><span /></div>
     }
-    if(browseOfferId && (offerError || errorServicios))return <div style={{...wrapperStyle,...temaVars,minHeight:"65dvh",justifyContent:"center",alignItems:"center",textAlign:"center"}}><p role="alert">{offerError || errorServicios}</p><a href={"/agenda/"+encodeURIComponent(slug)} style={{color:accent}}>Ver otros horarios</a></div>
+    if(browseOfferId && (offerError || errorServicios || negocio?.agenda_sin_pagos))return <div style={{...wrapperStyle,...temaVars,minHeight:"65dvh",justifyContent:"center",alignItems:"center",textAlign:"center"}}><p role="alert">{offerError || errorServicios || "El negocio desactivó los cobros. Esta oferta ya no está disponible."}</p><a href={"/agenda/"+encodeURIComponent(slug)} style={{color:accent}}>Ver otros horarios</a></div>
     if (errorNegocio || !negocio) {
         return (
             <div style={statusStyle}>
@@ -2811,7 +2818,7 @@ export default function BookingFlow(props: any) {
                         )}
 
                         <FillButton
-                            onClick={confirmarReserva}
+                            onClick={() => confirmarReserva()}
                             disabled={
                                 !puedeConfirmar || submitEstado === "loading"
                             }
