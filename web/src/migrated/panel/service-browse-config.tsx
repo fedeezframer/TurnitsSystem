@@ -53,7 +53,6 @@ export default function ServiceBrowseConfig({
   const assignments = service?.servicio_equipo || [];
   const members = data.equipo.filter((m: any) =>
     (m.activo === true || m.activo === "true") &&
-    assignments.some((assignment: any) => assignment.equipo_id === m.id) &&
     (!service?.owner_equipo_id || service.owner_equipo_id === m.id),
   );
   const minimum = offers[0]?.precio_minimo ?? "";
@@ -180,12 +179,12 @@ export default function ServiceBrowseConfig({
                 disabled={!offers.length} onChange={e => setMinimum(e.target.value)} />
             </div>
           </label>
-          {members.length > 1 && <fieldset className="service-browse-members">
+          {members.length > 0 && <fieldset className="service-browse-members">
             <legend>Profesionales que ofrecen el beneficio</legend>
             {members.map((member: any) => <label key={member.id}>
               <input type="checkbox" checked={offers.some((o: any) => o.equipo_id === member.id)}
                 onChange={e => toggleMember(member, e.target.checked)} />
-              <span>{member.nombre} {member.apellido}</span>
+              <span>{member.nombre} {member.apellido}{!assignments.some((a: any) => a.equipo_id === member.id) && <small>Se asignará a este servicio al guardar.</small>}</span>
             </label>)}
           </fieldset>}
           {enableOffer && (!offers.length || Number(minimum) <= 0 || Number(minimum) >= maximumMinimum) &&

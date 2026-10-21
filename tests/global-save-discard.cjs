@@ -36,6 +36,8 @@ const ctx = {
   safeLocalStorage: (key) => (key === "access_token" ? "fixture-token" : ""),
   GuardaSesion_leerJwt: () => ({ rol: "owner" }),
   getPanelScope: () => null,
+  ServiciosManager_PRECIO_MINIMO: 100,
+  ServiciosManager_buildDesc: (image, description) => description,
   CustomEvent,
   URLSearchParams,
   console,
@@ -82,6 +84,25 @@ const manager = vm.runInNewContext(
   assert.equal(manager.hasDirty(), false);
   assert.equal(writes, 1);
   assert.equal(resetEvents, 2);
+  const requests = [];
+  ctx.fetch = async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    return { ok: true, json: async () => ({ success: true, offers: [], recompensas: [] }) };
+  };
+  manager.markDirty("servicios", { "test-service": { nombre: "Corte", precio: "2000", duracion: "30", capacidad: "1", descripcion: "", imagen: "", orden: "0" } });
+  manager.markDirty("browse", { offers: [], recompensas: [] });
+  await manager.saveAll();
+  assert(requests[0].url.includes("/admin/servicios/test-service"));
+  assert.equal(requests[0].body.precio, 2000);
+  assert(requests[1].url.includes("/admin/browse/"), "service price is saved before validating Offers");
+  assert.equal(manager.hasDirty(), false);
+  requests.length = 0;
+  manager.markDirty("servicios", { "test-service": { nombre: "Corte", precio: "0" } });
+  manager.markDirty("browse", { offers: [{ id: "pending-offer" }], recompensas: [] });
+  await manager.saveAll();
+  assert.equal(requests.length, 0, "invalid service does not submit dependent Offers");
+  assert(manager.isDirty("browse"));
+  manager.discardAll();
   console.log(
     "PASS discard: clears all pending sections and scoped storage, preserves baseline/other users, emits reset without requests, blocked during uploads and in-flight save. Real manager; no external writes.",
   );

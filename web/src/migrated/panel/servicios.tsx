@@ -2,6 +2,7 @@ import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import ServiceBrowseConfig from "./service-browse-config"
+import { TurnitsGlobalSaveManager_get } from "./common"
 import * as React from "react"
 import {
     useState,
@@ -1133,8 +1134,19 @@ function ServiciosManager_ServicioForm({
     employeeMode = false,
 }: ServiciosManager_FormProps) {
     const branch = useBranchAdmin()
-    const [form, setForm] = React.useState<ServiciosManager_FormData>(initial)
+    const globalEdit = !!(modoEdicion && servicioId && !employeeVariant && !employeeMode && !branch)
+    const [form, setForm] = React.useState<ServiciosManager_FormData>(() => globalEdit ? TurnitsGlobalSaveManager_get()?.getPending("servicios")?.[servicioId!] || initial : initial)
     const [precioError, setPrecioError] = React.useState("")
+    React.useEffect(() => {
+        if (!globalEdit || !servicioId) return
+        const manager = TurnitsGlobalSaveManager_get()
+        manager?.configure(apiUrl)
+        const pending = { ...manager?.getPending("servicios") }
+        if (JSON.stringify(form) === JSON.stringify(initial)) delete pending[servicioId]
+        else pending[servicioId] = form
+        if (Object.keys(pending).length) manager?.markDirty("servicios", pending)
+        else manager?.clear("servicios")
+    }, [form, globalEdit, servicioId, apiUrl])
 
     const set = (key: keyof ServiciosManager_FormData) => (val: string) =>
         setForm((p) => ({ ...p, [key]: val }))
@@ -1509,8 +1521,7 @@ function ServiciosManager_ServicioForm({
                     </div>
                 )}
 
-                {/* Botones */}
-                <div
+                {!globalEdit && <div
                     style={{
                         display: "flex",
                         gap: 8,
@@ -1573,7 +1584,7 @@ function ServiciosManager_ServicioForm({
                               ? "Guardar cambios"
                               : "Guardar servicio"}
                     </motion.button>
-                </div>
+                </div>}
             </div>
         </motion.div>
     )
@@ -2574,6 +2585,20 @@ function ServiciosManager(props: any) {
     const [error, setError] = React.useState("")
     const [formError, setFormError] = React.useState("")
     const [guardando, setGuardando] = React.useState(false)
+    const [catalogRevision, setCatalogRevision] = React.useState(0)
+    React.useEffect(() => {
+        const reload = (event: any) => {
+            if (event.type === "turnits_global_saved" && event.detail?.section !== "servicios" && event.detail?.section !== "browse") return
+            setCatalogRevision(value => value + 1)
+            setEditando(null)
+        }
+        window.addEventListener("turnits_global_saved", reload)
+        window.addEventListener("turnits_global_discarded", reload)
+        return () => {
+            window.removeEventListener("turnits_global_saved", reload)
+            window.removeEventListener("turnits_global_discarded", reload)
+        }
+    }, [])
     const [mostrarForm, setMostrarForm] = React.useState(false)
     const [editando, setEditando] =
         React.useState<ServiciosManager_Servicio | null>(null)
@@ -2660,7 +2685,7 @@ function ServiciosManager(props: any) {
             }
         }
         tryLoad()
-    }, [api, employeeMode])
+    }, [api, employeeMode, catalogRevision])
 
     // ── Carga inicial: productos extra ──
     React.useEffect(() => {

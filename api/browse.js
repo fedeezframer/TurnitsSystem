@@ -984,7 +984,7 @@ export function createBrowse({
         const s = result(
             await supabase
               .from("servicios")
-              .select("precio,owner_equipo_id")
+              .select("nombre,precio,owner_equipo_id")
               .eq("id", o.servicio_id)
               .eq("slug", slug)
               .maybeSingle(),
@@ -992,7 +992,7 @@ export function createBrowse({
           e = result(
             await supabase
               .from("equipo")
-              .select("id")
+              .select("id,nombre,activo")
               .eq("id", o.equipo_id)
               .eq("slug", slug)
               .maybeSingle(),
@@ -1008,12 +1008,12 @@ export function createBrowse({
         if (
           !s ||
           !e ||
-          !v ||
+          (o.activo === true && !active(e.activo)) ||
           (s.owner_equipo_id && s.owner_equipo_id !== e.id) ||
-          o.precio_minimo >= Number(v.precio_override ?? s.precio)
+          (o.activo === true && o.precio_minimo >= Number(v?.precio_override ?? s.precio))
         )
           fail(
-            "La tarifa mínima debe ser menor al precio del servicio que ofrece ese profesional.",
+            `Revisá la Offer de ${s?.nombre || "este servicio"} para ${e?.nombre || "el profesional"}: la tarifa mínima debe ser menor a $${Number(v?.precio_override ?? s?.precio ?? 0).toLocaleString("es-AR")}.`,
           );
         cleanOffers.push({
           id: o.id,

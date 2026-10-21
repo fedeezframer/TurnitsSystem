@@ -29,7 +29,7 @@ all(tree, node => node.props["aria-label"] === "Tarifa mínima")[0].props.onChan
 tree = render();
 let group = all(tree, node => node.props.className === "service-browse-members")[0];
 let checkboxes = all(group, node => node.type === "input");
-assert.equal(checkboxes.length, 2, "only assigned active professionals are selectable");
+assert.equal(checkboxes.length, 3, "active team members can opt in even before service assignment");
 checkboxes[1].props.onChange({ target: { checked: true } });
 assert.equal(draft.offers.length, 2);
 assert(draft.offers.every(offer => offer.precio_minimo === 8000 && offer.activo));

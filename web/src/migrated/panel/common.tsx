@@ -90,7 +90,7 @@ function Turnits_useElementWidth(
     return width
 }
 
-type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse"
+type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios"
 
 type TurnitsGlobalPending = Record<string, any>
 
@@ -522,7 +522,26 @@ function TurnitsGlobalSaveManager_get() {
                     })())
                 }
 
-                if (current.browse !== undefined) {
+                if (current.servicios !== undefined) {
+                    try {
+                        for (const [serviceId, draft] of Object.entries(current.servicios) as [string, any][]) {
+                            if (!draft.nombre?.trim() || Number(draft.precio) < ServiciosManager_PRECIO_MINIMO)
+                                throw new Error("Revisá el nombre y el precio del servicio.")
+                            const res = await fetch(`${api()}/admin/servicios/${encodeURIComponent(serviceId)}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ slug, nombre: draft.nombre.trim(), descripcion: ServiciosManager_buildDesc(draft.imagen?.trim() || "", draft.descripcion?.trim() || ""), duracion: Number(draft.duracion) || 30, precio: Number(draft.precio), capacidad: Number(draft.capacidad) || 1, orden: Number(draft.orden) || 0 }),
+                            })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok || !data.success) throw new Error(data.error || "No se pudo guardar el servicio.")
+                        }
+                        results.servicios = true
+                    } catch (e: any) {
+                        results.servicios = false
+                        errors.servicios = e.message || "No se pudieron guardar los servicios."
+                    }
+                }
+                if (current.browse !== undefined && results.servicios !== false) {
                     tasks.push((async () => {
                         try {
                             const res = await fetch(`${api()}/admin/browse/${slug}`, {
@@ -539,6 +558,10 @@ function TurnitsGlobalSaveManager_get() {
                             errors.browse=e.message || "No se pudo guardar Offers y T-Coins."
                         }
                     })())
+                }
+                if (current.browse !== undefined && results.servicios === false) {
+                    results.browse = false
+                    errors.browse = "Guardá primero un precio válido para el servicio."
                 }
                 await Promise.all(tasks)
                 inFlight = {}
