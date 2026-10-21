@@ -16,8 +16,13 @@ const catalog = await api("/browse/catalogo", clientToken);
 assert(catalog.servicios.some(service => service.id === credentials.quote_service && service.negocio.modo_agenda === "presupuesto"));
 const request = await api("/browse/consultas", clientToken, { servicio_id: credentials.quote_service });
 await api(`/browse/consultas/${request.id}/mensajes`, clientToken, { texto: "Consulta de prueba: diseño pequeño en blanco y negro." });
+const reference = new FormData();
+reference.append("referencia", new Blob([Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j7b0AAAAASUVORK5CYII=", "base64")], { type: "image/png" }), "referencia-demo.png");
+const uploaded = await fetch(credentials.site + `/browse/consultas/${request.id}/referencias`, { method: "POST", headers: { Authorization: "Bearer " + clientToken }, body: reference });
+assert.equal(uploaded.status, 200);
 await api(`/admin/consultas/${request.id}/mensajes`, ownerToken, { texto: "Respuesta de prueba del estudio. Coordinamos el diseño y el horario." });
 let conversation = await api(`/browse/consultas/${request.id}`, clientToken);
+assert(conversation.mensajes.some(message => message.referencia_url && new URL(message.referencia_url).hostname === "glqflwmrxnavkdegjcdm.supabase.co"), "references use only private test storage");
 let quote = conversation.presupuestos.find(item => item.estado === "reservado");
 if (!quote) {
   const day = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);

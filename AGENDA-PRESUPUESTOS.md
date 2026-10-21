@@ -2,7 +2,7 @@
 
 ## Estado
 
-Primera etapa implementada y probada de forma aislada. No publicada ni habilitada en producción. La migración de esta funcionalidad NO se aplicó a Supabase de producción. No activar las banderas hasta resolver la lista de salida de este documento.
+Primera etapa implementada y publicada SOLO en el entorno de pruebas descrito en STAGING.md. No publicada ni habilitada en producción. La migración de esta funcionalidad NO se aplicó a Supabase de producción. No activar las banderas en producción hasta resolver la lista de salida de este documento.
 
 El rubro sigue describiendo la actividad (se agregó Tatuajes y piercing). El modo de agenda es independiente: `normal` o `presupuesto`. Todas las cuentas existentes conservan `normal`.
 

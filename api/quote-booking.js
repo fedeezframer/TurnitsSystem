@@ -59,8 +59,14 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
     await requireMode(service.slug);
     const profile = read(await supabase.from("negocio_perfiles").select("slug").eq("slug", service.slug).eq("publicado", true).maybeSingle());
     if (!profile) fail("Negocio no disponible.", 404);
-    read(await supabase.from("consultas").upsert({ consumidor_id: req.consumer.id, slug: service.slug, servicio_id: service.id, titulo: service.nombre.slice(0, 120) }, { onConflict: "consumidor_id,servicio_id", ignoreDuplicates: true }));
-    const saved = read(await supabase.from("consultas").select("id").eq("consumidor_id", req.consumer.id).eq("servicio_id", service.id).single());
+    const findOpen = () => supabase.from("consultas").select("id").eq("consumidor_id", req.consumer.id).eq("servicio_id", service.id).eq("estado", "abierta").maybeSingle();
+    let saved = read(await findOpen());
+    if (!saved) {
+      const inserted = await supabase.from("consultas").insert({ consumidor_id: req.consumer.id, slug: service.slug, servicio_id: service.id, titulo: service.nombre.slice(0, 120) }).select("id").single();
+      if (inserted.error?.code === "23505") saved = read(await findOpen());
+      else saved = read(inserted);
+    }
+    if (!saved) fail("No pudimos abrir la consulta. Reintentá.", 409);
     res.json({ success: true, id: saved.id });
   }));
   for (const business of [false, true]) {
