@@ -1,4 +1,5 @@
 import * as React from "react"
+import { appConfig } from "../../config"
 import {
     useState,
     useEffect,
@@ -317,7 +318,7 @@ function QrFlotante({
         return () => window.removeEventListener("keydown", onKey)
     }, [abierto])
 
-    const url = slug ? `https://turnits.com/agenda/${slug}` : ""
+    const url = slug ? `${appConfig.siteUrl}/agenda/${slug}` : ""
     const matriz = React.useMemo(() => {
         if (!url) return null
         try {

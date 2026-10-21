@@ -1,4 +1,5 @@
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
+import { appConfig } from "../../config"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import * as React from "react"
 import {
@@ -2593,7 +2594,7 @@ function TurnitsDashboard_CopyAgendaLink({ accentColor }: any) {
         if (copiado) return
         const slug = QrPanel_slug()
         if (!slug) return
-        const url = `https://turnits.com/agenda/${slug}`
+        const url = `${appConfig.siteUrl}/agenda/${slug}`
         try {
             await navigator.clipboard.writeText(url)
         } catch {

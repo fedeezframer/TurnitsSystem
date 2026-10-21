@@ -4,6 +4,7 @@ export const ACCOUNT_CATEGORIES = [
   { id: "vehiculos", label: "Vehículos", icon: "wheel" },
   { id: "peluqueria", label: "Peluquería", icon: "scissors" },
   { id: "consultoria", label: "Consultoría", icon: "tie" },
+  { id: "tatuajes", label: "Tatuajes y piercing", icon: "ink" },
   { id: "otro", label: "Otro", icon: "plus" },
 ];
 export function validCategories(value, multiple = true) {

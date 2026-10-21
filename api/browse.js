@@ -227,7 +227,7 @@ export function createBrowse({
       supabase
         .from("usuarios")
         .select(
-          "slug,business_name,rubro,activo,plan,estado_suscripcion,fecha_vencimiento",
+          "slug,business_name,rubro,activo,plan,estado_suscripcion,fecha_vencimiento" + (process.env.QUOTE_BOOKING_ENABLED === "true" ? ",modo_agenda" : ""),
         )
         .in("slug", slugs),
       supabase
@@ -293,6 +293,7 @@ export function createBrowse({
           ...p,
           nombre: p.nombre || n.business_name,
           rubro: n.rubro || "",
+          modo_agenda: process.env.QUOTE_BOOKING_ENABLED === "true" ? n.modo_agenda || "normal" : "normal",
           latitud: b?.latitud ?? null,
           longitud: b?.longitud ?? null,
           sucursales: [

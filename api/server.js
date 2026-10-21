@@ -17,11 +17,25 @@ import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appeara
 import { createConsumerAccounts, consumerIdentity } from "./consumer-accounts.js";
 import { validCategories } from "../web/src/shared/categories.js";
 import { createBrowse } from "./browse.js";
+import { createQuoteBooking } from "./quote-booking.js";
+import { validateEnvironment, stagingMiddleware } from "./environment.js";
+import path from "node:path";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
 // ══════════════════════════════════════════════════════════════
 const app = express();
+validateEnvironment();
+app.use(stagingMiddleware());
+if (process.env.APP_ENV === "staging") {
+  const webRoot = path.resolve("web/dist");
+  app.get("/robots.txt", (_req,res)=>res.type("text/plain").send("User-agent: *\nDisallow: /\n"));
+  app.use((req,res,next)=>{
+    if(req.method === "GET" && req.headers.accept?.includes("text/html") && /^\/(?:$|login(?:\/|$)|registro(?:\/|$)|register(?:\/|$)|browse(?:\/|$)|consultas(?:\/|$)|panel(?:\/|$)|agenda(?:\/|$)|perfil(?:\/|$)|planes(?:\/|$)|success(?:\/|$)|sucess(?:\/|$)|pendiente(?:\/|$)|error(?:\/|$)|alert(?:\/|$)|reprogramar(?:\/|$)|terminos(?:\/|$)|privacidad(?:\/|$)|cambiar-)/.test(req.path))return res.sendFile(path.join(webRoot,"index.html"));
+    next();
+  });
+  app.use(express.static(webRoot,{index:false}));
+}
 app.set("trust proxy", 1);
 // FIX-CACHE: la API nunca devuelve ETag/304. Junto con el "no-store" de más
 // abajo, evita que el navegador o una PWA reutilicen respuestas viejas.
@@ -88,7 +102,8 @@ const MP_TOKEN_ENC_KEY   = process.env.MP_TOKEN_ENC_KEY           || "";
 if (!MP_TOKEN_ENC_KEY) {
   console.warn("⚠️  MP_TOKEN_ENC_KEY no configurada. Los tokens de Mercado Pago de los negocios NO se pueden cifrar/descifrar (falta la clave).");
 }
-const PANEL_URL          = process.env.PANEL_URL                  || "https://turnits.com/panel";
+const WEB_URL            = process.env.WEB_URL                    || "https://turnits.com";
+const PANEL_URL          = process.env.PANEL_URL                  || `${WEB_URL}/panel`;
 const SUCCESS_URL        = process.env.SUCCESS_URL                || "https://turnits.com/success";
 const PENDIENTE_URL      = process.env.PENDING_URL                || "https://turnits.com/pendiente";
 const ERROR_URL          = process.env.ERROR_URL                  || "https://turnits.com/error";
@@ -1037,6 +1052,8 @@ const browse=createBrowse({app,supabase,jwt,bcrypt,requireAuth,consumerAccounts,
  mail:async body=>{if(!APPS_SCRIPT_URL)throw new Error('Mail unavailable');const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error('Mail unavailable')}
 });
 
+createQuoteBooking({app,supabase,consumerAuth:browse.auth,requireAuth,limiter:rateLimit({windowMs:60000,max:120,standardHeaders:true,legacyHeaders:false}),context:browse.context,available:promoDisponibilidad,multer});
+
 // Sólo se asocian reservas a una cuenta verificada mediante su JWT, nunca por email del formulario.
 async function consumidorReserva(req) {
  const raw=req.headers.authorization?.split(' ')[1];if(!raw)return null;
@@ -1464,6 +1481,8 @@ app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prue
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
   try {
     const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan, ref } = req.body;
+    const modoAgenda = req.body.modo_agenda || "normal";
+    if (!["normal", "presupuesto"].includes(modoAgenda) || (modoAgenda === "presupuesto" && process.env.QUOTE_BOOKING_ENABLED !== "true")) return res.status(400).json({success:false,error:"Este tipo de agenda todavía no está habilitado."});
     const rubros = req.body.rubros === undefined ? null : validCategories(req.body.rubros, false);
     if (req.body.rubros !== undefined && !rubros)
       return res.status(400).json({success:false,error:"Elegí un solo rubro para tu negocio."});
@@ -1534,6 +1553,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       codigo_expiry,
       rubro: rubros?.[0] || null,
       slug_solicitado: requestedSlug,
+      ...(process.env.QUOTE_BOOKING_ENABLED === "true" ? {modo_agenda:modoAgenda} : {}),
     }], { onConflict: "email" });
 
     if (error) throw error;
@@ -1607,6 +1627,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       telefono:           pendiente.telefono           || null,
       business_name:      pendiente.business_name,
       ...(pendiente.rubro ? {rubro:pendiente.rubro} : {}),
+      ...(process.env.QUOTE_BOOKING_ENABLED === "true" ? {modo_agenda:pendiente.modo_agenda || "normal"} : {}),
       slug,
       password:           pendiente.password_hash,
       plan:               planFinal,
@@ -5284,7 +5305,7 @@ app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, suc
 
     if (error) throw error;
     if (loginEmail && APPS_SCRIPT_URL) {
-      const resetUrl = `https://turnits.com/cambiar-contraseña?token=${loginResetToken}`;
+      const resetUrl = `${WEB_URL}/cambiar-contraseña?token=${loginResetToken}`;
       const { data: negocio } = await supabase.from("usuarios")
         .select("business_name").eq("slug", slugClean).maybeSingle();
       fetch(APPS_SCRIPT_URL, {
@@ -7327,7 +7348,7 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
         login_reset_token: token,
         login_reset_token_expiry: expiry.toISOString(),
       }).eq("id", miembro.id);
-      const resetUrl = `https://turnits.com/cambiar-contraseña?token=${token}`;
+      const resetUrl = `${WEB_URL}/cambiar-contraseña?token=${token}`;
       if (APPS_SCRIPT_URL) fetch(APPS_SCRIPT_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
@@ -7349,7 +7370,7 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
       reset_token_expiry: expiry.toISOString(),
     }).eq("id", user.id);
 
-    const resetUrl = `https://turnits.com/cambiar-contraseña?token=${token}`;
+    const resetUrl = `${WEB_URL}/cambiar-contraseña?token=${token}`;
 
     fetch(APPS_SCRIPT_URL, {
       method: "POST",

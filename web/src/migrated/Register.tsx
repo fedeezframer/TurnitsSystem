@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import "./Register.css";
+import { appConfig } from "../config";
 
 type AccountType = "usuario" | "negocio";
 type Fields = {
@@ -125,6 +126,7 @@ export default function Register({
   const [fields, setFields] = useState<Fields>(empty);
   const [phoneCountry, setPhoneCountry] = useState("AR");
   const [categories, setCategories] = useState<string[]>([]);
+  const [agendaMode, setAgendaMode] = useState("normal");
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [registrationId, setRegistrationId] = useState("");
   const [error, setError] = useState("");
@@ -247,6 +249,7 @@ export default function Register({
               usuario: fields.usuario,
               business_name: fields.usuario,
               rubros: selected,
+              ...(appConfig.quoteBookingEnabled ? { modo_agenda: agendaMode } : {}),
               plan,
               ref: referral,
             },
@@ -610,6 +613,7 @@ export default function Register({
         )}
         {step === 3 && (
           <>
+            {type === "negocio" && appConfig.quoteBookingEnabled && <fieldset className="registration-agenda-mode"><legend>¿Cómo coordinás tus turnos?</legend><label><input type="radio" name="agenda-mode" checked={agendaMode === "normal"} onChange={() => setAgendaMode("normal")} /> Agenda normal: servicios con precio y horario</label><label><input type="radio" name="agenda-mode" checked={agendaMode === "presupuesto"} onChange={() => setAgendaMode("presupuesto")} /> Mediante presupuesto: consulta y referencias antes de reservar</label><p>El rubro describe tu actividad; el tipo de agenda define cómo reservan tus clientes.</p></fieldset>}
             <div
               className="registration-categories"
               role="group"

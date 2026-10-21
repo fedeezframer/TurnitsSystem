@@ -219,7 +219,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
         </div>
         <div className="browse-card-footer">
           <div className="browse-card-price">
-            {kind === "reward" ? (
+            {appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? "A presupuestar" : kind === "reward" ? (
               <>
                 {item.tipo === "producto"
                   ? money(s.precio) + " + "
@@ -240,8 +240,8 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
           </div>
           <div className="browse-card-actions">
             {kind !== "offer" && (
-              <Link to={`/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({ servicio_id: s.id })}`}>
-                Ver Agenda
+              <Link to={appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? `/consultas?servicio_id=${encodeURIComponent(s.id)}` : `/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({ servicio_id: s.id })}`}>
+                {appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? "Consultar" : "Ver Agenda"}
               </Link>
             )}
             {kind === "servicio" ? (
@@ -713,6 +713,7 @@ function BrowseContent() {
                   <h1>¡Hola, {me?.perfil?.nombre_persona || "bienvenido"}!</h1>
                   <p>Explorá los servicios y ofertas de hoy</p>
                 </section>
+                {appConfig.quoteBookingEnabled && <Link to="/consultas">Mis consultas y presupuestos</Link>}
                 <div className="browse-home-layout">
                   {recent && recentService ? (
                     <article className="browse-last-visit">
