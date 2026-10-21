@@ -29,6 +29,14 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
     catch (error) { res.status(error.status || (error.code === "P0001" || error.code === "23505" ? 409 : 503)).json({ success: false, error: error.publicMessage || (error.code === "P0001" ? error.message : "No pudimos completar la consulta. Volvé a intentar.") }); }
   };
   const feature = (_req, res, next) => enabled ? next() : res.status(404).json({ success: false, error: "Esta modalidad todavía no está habilitada." });
+  if (enabled) app.post(["/turnos/reservar", "/turnos/reservar-manual", "/api/create-preference"], (req,res,next) => route(async () => {
+    const slug = req.body?.slug;
+    if (typeof slug === "string" && /^[a-z0-9_-]{1,100}$/.test(slug)) {
+      const business = read(await supabase.from("usuarios").select("modo_agenda").eq("slug",slug).maybeSingle());
+      if (business?.modo_agenda === "presupuesto") fail("Este servicio se coordina desde una consulta con presupuesto.",409);
+    }
+    next();
+  })(req,res));
   const owner = (req, res, next) => {
     if (!req.auth?.slug || req.empleado || req.sucursalAdmin || ["empleado", "consumidor"].includes(req.auth.rol)) return res.status(403).json({ success: false, error: "Solo el titular puede gestionar estas consultas." });
     next();
