@@ -808,6 +808,16 @@
 .browse-dialog form > .browse-pill {
   width: 100%;
 }
+.browse-dialog .browse-pill.browse-reschedule {
+  background: #eef2eb;
+  color: #34562b;
+  border: 1px solid #c6d4bf;
+  border-radius: 12px;
+}
+.browse-dialog .browse-pill.browse-reschedule:hover {
+  background: #e0e9da;
+  border-color: #96b287;
+}
 .browse-dialog .browse-pill.danger {
   background: #d52b2b;
   color: white !important;

@@ -1379,10 +1379,10 @@ export default function Browse() {
               {modal.item.gestion_token &&
                 modal.item.estado !== "cancelado" && (
                   <Link
-                    className="browse-pill"
+                    className="browse-pill browse-reschedule"
                     to={`/reprogramar?turno_id=${modal.item.id}&slug=${encodeURIComponent(modal.item.slug)}&token=${encodeURIComponent(modal.item.gestion_token)}`}
                   >
-                    Gestionar turno
+                    Reprogramar turno
                   </Link>
                 )}
             </>
