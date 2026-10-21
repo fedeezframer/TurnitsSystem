@@ -1,4 +1,5 @@
 import LoadingRunner from "../../components/LoadingRunner"
+import BookingReceipt from "../../components/BookingReceipt"
 import { appConfig } from "../../config"
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import * as React from "react"
@@ -1426,129 +1427,7 @@ function AgendaPanel(props: any) {
                                         </div>
                                     )}
 
-                                    {/* Info de pago y de compra — método, total,
-                                estado y, si el cliente compró algún extra
-                                (turno.extras), también se muestra acá. Este
-                                bloque aparece si hay un método de pago
-                                manual asociado O si hay extras comprados
-                                (por si pagó con Mercado Pago). */}
-                                    {(modal.turno.metodo_pago !== "none" ||
-                                        AgendaPanel_tieneExtras(
-                                            modal.turno.extras
-                                        )) && (
-                                        <div
-                                            style={{
-                                                background: AgendaPanel_GHOST,
-                                                borderRadius: 12,
-                                                padding: "12px 14px",
-                                                marginBottom: 14,
-                                                display: "flex",
-                                                flexDirection: "column",
-                                                gap: 6,
-                                            }}
-                                        >
-                                            {AgendaPanel_tieneExtras(
-                                                modal.turno.extras
-                                            ) && (
-                                                <AgendaPanel_InfoRow
-                                                    label="Extras"
-                                                    value={AgendaPanel_extrasLabel(
-                                                        modal.turno.extras
-                                                    )}
-                                                />
-                                            )}
-                                            {modal.turno.metodo_pago !==
-                                                "none" && (
-                                                <AgendaPanel_InfoRow
-                                                    label="Método"
-                                                    value={AgendaPanel_metodoPagoLabel(
-                                                        modal.turno.metodo_pago
-                                                    )}
-                                                />
-                                            )}
-                                            {modal.turno.precio_cobrado > 0 && (
-                                                <>
-                                                    <AgendaPanel_InfoRow
-                                                        label="Total del servicio"
-                                                        value={AgendaPanel_formatMonto(
-                                                            modal.turno
-                                                                .precio_cobrado
-                                                        )}
-                                                    />
-                                                    {modal.turno.metodo_pago !==
-                                                        "none" &&
-                                                        (() => {
-                                                            const total =
-                                                                Number(
-                                                                    modal.turno
-                                                                        .precio_cobrado ||
-                                                                        0
-                                                                )
-                                                            const pagado =
-                                                                Math.min(
-                                                                    Math.max(
-                                                                        Number(
-                                                                            modal
-                                                                                .turno
-                                                                                .monto_pagado ||
-                                                                                0
-                                                                        ),
-                                                                        0
-                                                                    ),
-                                                                    total
-                                                                )
-                                                            const pendiente =
-                                                                Math.max(
-                                                                    total -
-                                                                        pagado,
-                                                                    0
-                                                                )
-                                                            return (
-                                                                <>
-                                                                    <AgendaPanel_InfoRow
-                                                                        label="Abonado"
-                                                                        value={AgendaPanel_formatMonto(
-                                                                            pagado
-                                                                        )}
-                                                                    />
-                                                                    <AgendaPanel_InfoRow
-                                                                        label="Saldo pendiente"
-                                                                        value={AgendaPanel_formatMonto(
-                                                                            pendiente
-                                                                        )}
-                                                                        highlight={
-                                                                            pendiente >
-                                                                            0
-                                                                        }
-                                                                        color={
-                                                                            pendiente >
-                                                                            0
-                                                                                ? colorPendiente
-                                                                                : undefined
-                                                                        }
-                                                                    />
-                                                                </>
-                                                            )
-                                                        })()}
-                                                </>
-                                            )}
-                                            {modal.turno.metodo_pago !==
-                                                "none" && (
-                                                <AgendaPanel_InfoRow
-                                                    label="Estado de pago"
-                                                    value={AgendaPanel_estadoPagoLabel(
-                                                        modal.turno.pago_estado
-                                                    )}
-                                                    highlight={
-                                                        modal.turno
-                                                            .pago_estado ===
-                                                        "pendiente"
-                                                    }
-                                                    color={colorPendiente}
-                                                />
-                                            )}
-                                        </div>
-                                    )}
+                                    <BookingReceipt turno={{ ...modal.turno, fecha: modal.fecha, slug: AgendaPanel_getSlug(), servicio_nombre: modal.turno.servicio }} />
 
                                     {/* Comprobante de transferencia — signed URL
                                 de corta duración, nunca URL pública. */}

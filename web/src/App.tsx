@@ -63,6 +63,7 @@ export default function App() {
     <Route path="/agenda-test" element={<BookingRoute />} />
     <Route path="/test" element={<AnimationTest />} />
     <Route path="/success" element={<Receipt />} />
+    <Route path="/sucess" element={<Receipt />} />
     <Route path="/pendiente" element={<Receipt />} />
     <Route path="/error" element={<Receipt failed />} />
     <Route path="/alert" element={<Receipt failed />} />

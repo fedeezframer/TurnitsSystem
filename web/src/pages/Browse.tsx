@@ -5,6 +5,7 @@ import { useStartupLoading } from "../components/BrandPreloader";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import { consumerHeaders } from "../shared/consumer-session";
 import BrowseCalendar from "./BrowseCalendar";
+import BookingReceipt from "../components/BookingReceipt";
 import BrowseFlame from "./BrowseFlame";
 import LoadingRunner from "../components/LoadingRunner";
 import "./Browse.css";
@@ -876,6 +877,7 @@ export default function Browse() {
                 <div className="browse-filters">
                   <button
                     className={!category ? "selected" : ""}
+                    aria-pressed={!category}
                     onClick={() => setCategory("")}
                   >
                     Todos
@@ -884,6 +886,7 @@ export default function Browse() {
                     <button
                       key={c.id}
                       className={category === c.id ? "selected" : ""}
+                      aria-pressed={category === c.id}
                       onClick={() => setCategory(category === c.id ? "" : c.id)}
                     >
                       {c.label}
@@ -1362,22 +1365,7 @@ export default function Browse() {
           )}
           {modal.type === "appointment" && (
             <>
-              <h3>{modal.item.servicio_nombre}</h3>
-              <p>
-                {dateLabel(modal.item.fecha)} ·{" "}
-                {String(modal.item.hora).slice(0, 5)}hs
-              </p>
-              <p>{modal.item.equipo_nombre}</p>
-              <p>
-                Estado: {modal.item.estado} · Pago: {modal.item.pago_estado}
-              </p>
-              {modal.item.tc_gastados > 0 && (
-                <p>T-Coins canjeados: {modal.item.tc_gastados}</p>
-              )}
-              <p>
-                Total: {money(Number(modal.item.precio_cobrado))} · Abonado:{" "}
-                {money(Number(modal.item.monto_pagado))}
-              </p>
+              <BookingReceipt turno={modal.item} />
               {modal.item.browse_tipo === "offer" &&
                 modal.item.estado === "pendiente" &&
                 Date.parse(modal.item.browse_cierre) > Date.now() && (

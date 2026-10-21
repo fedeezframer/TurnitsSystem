@@ -242,11 +242,19 @@
 }
 .browse-category-options button,
 .browse-filters button {
+  appearance: none;
   padding: 7px 11px;
-  border: 1px solid #ddd;
-  background: #fff;
+  border: 1px solid var(--browse-border);
+  background: #f0f3ed;
+  color: #405139;
   border-radius: 20px;
   font-size: 13px;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.browse-category-options button:hover,
+.browse-filters button:hover {
+  background: #e4eddd;
+  border-color: #b7cdab;
 }
 .browse-filters {
   display: flex;
@@ -1210,9 +1218,9 @@
   outline: none;
 }
 .browse-filters button.selected {
-  background: #edf5e8;
-  border-color: #b7cdab;
-  color: var(--browse-green);
+  background: var(--browse-green);
+  border-color: var(--browse-green);
+  color: #fff;
 }
 .browse-suggestions {
   margin: 28px 0;

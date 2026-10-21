@@ -1,6 +1,7 @@
 import { ServiciosManager, HorariosConfig, ExcepcionesConfig, MercadoPagoConexion, ConfigPagos, SucursalEmpleado } from "./section-components"
 import LoadingRunner, { SectionLoadingBoundary, InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
+import BookingReceipt from "../../components/BookingReceipt"
 import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
 import {
@@ -1511,6 +1512,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                                     </div>
                                 ))}
                             </div>
+                            <BookingReceipt turno={{ ...turnoDetalle, slug }} />
                             {turnoDetalle.telefono &&
                                 turnoDetalle.tipo_cobro === "sena" && (
                                     <div

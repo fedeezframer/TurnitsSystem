@@ -3930,7 +3930,7 @@ app.get("/turnos/publico/:id", async (req, res) => {
     if (!id || !slug) return res.status(400).json({ success: false, error: "Faltan parámetros." });
 
     const { data: turno, error } = await supabase.from("turnos")
-      .select("id, nombre, apellido, email, telefono, fecha, hora, servicio_nombre, precio_cobrado, monto_pagado, porcentaje_sena, tipo_cobro, metodo_pago, pago_estado, estado, extras, monto_extras")
+      .select("id, slug, nombre, apellido, email, telefono, fecha, hora, servicio_nombre, equipo_nombre, precio_cobrado, monto_pagado, porcentaje_sena, tipo_cobro, metodo_pago, pago_estado, estado, extras, monto_extras, tc_gastados")
       .eq("id", id).eq("slug", slug).maybeSingle();
 
     if (error) throw error;
@@ -3977,7 +3977,7 @@ app.get("/turnos/by-payment", async (req, res) => {
     if (!payment_id || !slug) return res.status(400).json({ success: false, error: "Faltan parámetros." });
 
     const { data: turno, error } = await supabase.from("turnos")
-      .select("id, nombre, apellido, email, telefono, fecha, hora, servicio_nombre, precio_cobrado, monto_pagado, porcentaje_sena, tipo_cobro, metodo_pago, pago_estado, estado, fecha_pago, extras, monto_extras")
+      .select("id, slug, nombre, apellido, email, telefono, fecha, hora, servicio_nombre, equipo_nombre, precio_cobrado, monto_pagado, porcentaje_sena, tipo_cobro, metodo_pago, pago_estado, estado, fecha_pago, extras, monto_extras, tc_gastados")
       .eq("payment_id", String(payment_id)).eq("slug", cleanSlug(slug)).maybeSingle();
 
     if (error) throw error;
@@ -4530,6 +4530,7 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
         notas:          t.notas || null,
         extras:         t.extras       || [],
         monto_extras:   t.monto_extras || 0,
+        tc_gastados:    t.tc_gastados || 0,
         reprogramacion_pendiente: reprogPorTurno[t.id]
           ? {
               id:               reprogPorTurno[t.id].id,
@@ -5585,7 +5586,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
     const [anioEmpleado, mesEmpleado] = hoyEmpleado.slice(0, 7).split("-");
     const inicioMesEmpleado = `${anioEmpleado}-${mesEmpleado}-01`;
     const finMesEmpleado = new Date(Date.UTC(Number(anioEmpleado), Number(mesEmpleado), 0)).toISOString().slice(0, 10);
-    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas, precio_cobrado, monto_pagado, metodo_pago, pago_estado, tipo_cobro, porcentaje_sena, extras, equipo_nombre, comprobante_path";
+    const columnasTurnoEmpleado = "id, fecha, hora, nombre, apellido, telefono, email, servicio_nombre, estado, notas, precio_cobrado, monto_pagado, metodo_pago, pago_estado, tipo_cobro, porcentaje_sena, extras, equipo_nombre, comprobante_path, tc_gastados";
     const [turnosFuturosRes, turnosPasadosRes, vinculosRes, turnosMesRes] = await Promise.all([
       supabase.from("turnos").select(columnasTurnoEmpleado)
         .eq("slug", slug).eq("equipo_id", miembro.id).neq("estado", "cancelado")
@@ -5698,6 +5699,7 @@ app.get("/empleado/:slug/resumen", requireAuth, async (req, res) => {
         extras: turno.extras || [],
         equipo_nombre: turno.equipo_nombre || null,
         tiene_comprobante: !!turno.comprobante_path,
+        tc_gastados: Number(turno.tc_gastados || 0),
       })),
       servicios: await catalogoConProfesionales(slug,servicios,"servicio"),
       clientes: [...clientesPorClave.values()].sort((a, b) => b.ultimoTurno.localeCompare(a.ultimoTurno)),

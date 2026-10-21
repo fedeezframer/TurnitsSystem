@@ -911,7 +911,7 @@ export function createBrowse({
         await supabase
           .from("turnos")
           .select(
-            "id,slug,fecha,hora,servicio_nombre,equipo_nombre,estado,pago_estado,precio_cobrado,monto_pagado,gestion_token,browse_tipo,browse_cierre,tc_gastados",
+            "id,slug,nombre,apellido,email,telefono,fecha,hora,servicio_nombre,equipo_nombre,estado,pago_estado,precio_cobrado,monto_pagado,metodo_pago,tipo_cobro,extras,monto_extras,gestion_token,browse_tipo,browse_cierre,tc_gastados",
           )
           .eq("id", req.params.id)
           .eq("consumidor_id", req.consumer.id)
