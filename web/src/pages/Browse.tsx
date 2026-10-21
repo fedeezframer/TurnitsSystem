@@ -6,6 +6,8 @@ import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import { consumerHeaders } from "../shared/consumer-session";
 import BrowseCalendar from "./BrowseCalendar";
 import BookingReceipt from "../components/BookingReceipt";
+import { BusinessFavoritesProvider, FavoriteButton, useBusinessFavorites } from "../components/BusinessFavorites";
+import { recommendServices } from "../shared/recommendations.js";
 import BrowseFlame from "./BrowseFlame";
 import LoadingRunner from "../components/LoadingRunner";
 import "./Browse.css";
@@ -182,6 +184,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
       className={`browse-card ${kind === "offer" ? "browse-card-offer" : ""}`}
     >
       <div className="browse-card-photo">
+        <FavoriteButton slug={s.slug || n?.slug} name={n?.nombre || "este negocio"} compact />
         {s.imagen ? (
           <img
             src={s.imagen}
@@ -341,7 +344,8 @@ function Modal({ title, children, onClose, busy = false }: any) {
   );
 }
 
-export default function Browse() {
+function BrowseContent() {
+  const favorites = useBusinessFavorites();
   const navigate = useNavigate(),
     [params, setParams] = useSearchParams(),
     rawView = params.get("vista") || "inicio",
@@ -594,12 +598,7 @@ export default function Browse() {
         ].join(" "),
       ).includes(clean(query)),
   ).sort((a: any, b: any) => distanceKm(a) - distanceKm(b));
-  const recommended = [...eligible].sort(
-    (a: any, b: any) =>
-      distanceKm(a) - distanceKm(b) ||
-      Number(me?.perfil?.intereses?.includes(b.negocio.rubro)) -
-      Number(me?.perfil?.intereses?.includes(a.negocio.rubro)),
-  );
+  const recommended = recommendServices(eligible, { favorites: favorites.favorites, interests: me?.perfil?.intereses || [], appointments: me?.turnos || [], distance: distanceKm });
   const nearbyOffers = [...offers].sort((a, b) => {
     const serviceFor = (offer: any) => {const s=catalog.servicios.find((service:any)=>service.id===offer.servicio_id);const branch=offer.sucursal_id||s?.equipo?.find((m:any)=>m.id===offer.equipo_id)?.sucursal_id;return s?locateService(s,branch):s};
     return distanceKm(serviceFor(a)) - distanceKm(serviceFor(b));
@@ -853,9 +852,21 @@ export default function Browse() {
                     )}
                   </section>
                 </div>
+                <section className="browse-favorites" aria-labelledby="browse-favorites-title">
+                  <h2 id="browse-favorites-title">Tus negocios favoritos</h2>
+                  <p>Solo vos podés ver tu lista.</p>
+                  {favorites.loading ? <p role="status">Cargando favoritos…</p> : favorites.error ? <p role="alert">{favorites.error} <button type="button" onClick={favorites.retry}>Reintentar</button></p> : (
+                    <div className="browse-favorite-businesses">{favorites.favorites.map((slug: string) => {
+                      const business = catalog.negocios.find((item: any) => item.slug === slug);
+                      const name = business?.nombre || slug;
+                      return <article key={slug}><Avatar name={name} src={business?.foto_perfil_url} /><Link to={`/perfil/${encodeURIComponent(slug)}`}>{name}</Link><FavoriteButton slug={slug} name={name} /></article>;
+                    })}</div>
+                  )}
+                  {!favorites.loading && !favorites.error && !favorites.favorites.length && <p>Guardá los negocios que te gustan tocando el corazón.</p>}
+                </section>
                 <section className="browse-discovery">
                   <h2>Servicios que pueden interesarte</h2>
-                  <p>Según los rubros que elegiste</p>
+                  <p>Según tus intereses, favoritos y reservas anteriores</p>
                   <div className="browse-card-grid">
                     {recommended.slice(0, 18).map((s: any) => (
                       <Card key={s.id} item={s} location={location} />
@@ -1201,6 +1212,7 @@ export default function Browse() {
                 {actionError}
               </p>
             )}
+            {favorites.error && view !== "inicio" && <p role="alert" className="browse-error">{favorites.error} <button type="button" onClick={favorites.retry}>Reintentar favoritos</button></p>}
           </>
         )}
       </main>
@@ -1555,4 +1567,7 @@ export default function Browse() {
       )}
     </div>
   );
+}
+export default function Browse() {
+  return <BusinessFavoritesProvider><BrowseContent /></BusinessFavoritesProvider>;
 }

@@ -76,6 +76,7 @@ const tables = {
     { id: id(), consumidor_id: otherId, slug: "prueba" },
   ],
   extras: [],
+  consumidor_favoritos: [{ consumidor_id: otherId, slug: "prueba" }],
 };
 const read = (r, k) => k.split(".").reduce((v, p) => v?.[p], r);
 class Query {
@@ -141,7 +142,7 @@ class Query {
           );
         if (this.op === "upsert") {
           let r = tables[this.t].find(
-            (r) => r[this.conflict] === this.value[this.conflict],
+            (r) => this.conflict.split(",").every(key => r[key] === this.value[key]),
           );
           if (r) Object.assign(r, this.value);
           else tables[this.t].push(this.value);
@@ -169,7 +170,7 @@ const calls = [],
   notifications = [],
   routes = new Map(),
   app = {};
-for (const method of ["get", "post", "put"])
+for (const method of ["get", "post", "put", "delete"])
   app[method] = (url, ...fns) =>
     routes.set(method.toUpperCase() + " " + url, fns);
 const pass = (_q, _s, next) => next(),
@@ -278,6 +279,17 @@ async function call(method, url, { body = {}, auth, params = {}, query = {} } = 
     owner = jwt.sign({ rol: "dueño", slug: "prueba" }, secret);
   assert.equal((await call("GET", "/browse/me")).status, 401);
   assert.equal((await call("GET", "/browse/me", { auth: owner })).status, 403);
+  assert.equal((await call("GET", "/browse/favoritos")).status, 401);
+  assert.equal((await call("PUT", "/browse/favoritos/:slug", { auth: owner, params: { slug: "prueba" } })).status, 403);
+  assert.deepEqual((await call("GET", "/browse/favoritos", { auth: token })).body.favoritos, []);
+  assert.equal((await call("PUT", "/browse/favoritos/:slug", { auth: token, params: { slug: "prueba" }, body: { consumidor_id: otherId } })).status, 200);
+  assert.equal((await call("PUT", "/browse/favoritos/:slug", { auth: token, params: { slug: "prueba" } })).status, 200);
+  assert.equal(tables.consumidor_favoritos.filter(row => row.consumidor_id === consumerId).length, 1, "favorites are idempotent and bound to session");
+  assert.deepEqual((await call("GET", "/browse/favoritos", { auth: token })).body.favoritos, ["prueba"]);
+  assert.equal((await call("PUT", "/browse/favoritos/:slug", { auth: token, params: { slug: "inexistente" } })).status, 404);
+  assert.equal((await call("DELETE", "/browse/favoritos/:slug", { auth: token, params: { slug: "prueba" }, body: { consumidor_id: otherId } })).status, 200);
+  assert.equal(tables.consumidor_favoritos.length, 1);
+  assert.equal(tables.consumidor_favoritos[0].consumidor_id, otherId, "removal cannot affect another user's favorite");
   const me = await call("GET", "/browse/me", { auth: token });
   assert.equal(me.status, 200);
   assert.equal(me.body.turnos.length, 1);

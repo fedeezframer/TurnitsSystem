@@ -269,6 +269,14 @@
 .browse-discovery {
   margin-top: 40px;
 }
+.browse-favorites{margin-top:32px}
+.browse-favorites h2{margin:0 0 6px;font-size:20px}
+.browse-favorites>p{font-size:13px;color:#687562}
+.browse-favorite-businesses{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin-top:16px}
+.browse-favorite-businesses>article{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--browse-border);border-radius:16px;background:#fff;flex-wrap:wrap}
+.browse-favorite-businesses>article>a{flex:1;min-width:100px;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.browse-favorite-businesses .business-favorite{width:100%}
+.browse-favorite-businesses .business-favorite-button{width:100%}
 .browse-discovery > p {
   margin-bottom: 14px;
 }

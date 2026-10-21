@@ -8,6 +8,7 @@ import { SocialIcon } from "../../components/SocialIcon";
 import { ProfileMapDialog } from "../../components/ProfileMapDialog";
 import { ProfilePhotoDialog } from "../../components/ProfilePhotoDialog";
 import { BusinessAvatar } from "../../components/BusinessAvatar";
+import { FavoriteButton } from "../../components/BusinessFavorites";
 import { cardRadius } from "../../shared/appearance.js";
 import "./perfil.css";
 import "./perfil-publico.css";
@@ -50,13 +51,13 @@ export function PerfilContenido({
   logo,
   bookingUrl,
   slug,
-  publicationsUrl,
+  initialExpanded = false,
 }: {
   perfil: any;
   logo?: string;
   bookingUrl?: string;
   slug?: string;
-  publicationsUrl?: string;
+  initialExpanded?: boolean;
 }) {
   const [locations, setLocations] = React.useState<MapBranch[]>([]),
     [mapError, setMapError] = React.useState(false),
@@ -66,6 +67,9 @@ export function PerfilContenido({
   const [photo, setPhoto] = React.useState<{ src: string; alt: string } | null>(
     null,
   );
+  const [expanded, setExpanded] = React.useState(initialExpanded);
+  const photos = (Array.isArray(perfil.fotos) ? perfil.fotos : []).filter((url: any) => typeof url === "string" && url);
+  React.useEffect(() => setExpanded(initialExpanded), [slug, initialExpanded]);
   const cover = perfil.banner_url;
   React.useEffect(() => setCoverFailed(false), [cover]);
   React.useEffect(() => {
@@ -152,11 +156,6 @@ export function PerfilContenido({
               />
             </button>
           )}
-          {publicationsUrl && (
-            <Link className="perfil-publications-link" to={publicationsUrl}>
-              Ver Publicaciones <PublicationsIcon />
-            </Link>
-          )}
         </div>
         <div className="perfil-overview">
           <div className="perfil-identity">
@@ -174,6 +173,7 @@ export function PerfilContenido({
             <p className="perfil-category">{perfil.categoria || "Negocio"}</p>
             <h1>{name}</h1>
             {city && <p className="perfil-city">{city}</p>}
+            <FavoriteButton slug={slug} name={name} />
             {bookingUrl ? (
               <a className="perfil-booking-link" href={bookingUrl}>
                 Ver Agenda
@@ -284,14 +284,6 @@ export function PerfilContenido({
           onClose={() => setMapOpen(false)}
         />
       )}
-      <section
-        className="perfil-reviews"
-        aria-labelledby="perfil-reviews-title"
-      >
-        <h2 id="perfil-reviews-title">Reseñas</h2>
-        <p>Todavía no hay reseñas.</p>
-        <span>Próximamente vas a poder compartir tu experiencia.</span>
-      </section>
       {hasDetails && (
         <section className="perfil-details">
           <h2>Sobre el negocio</h2>
@@ -354,6 +346,16 @@ export function PerfilContenido({
           </div>
         </section>
       )}
+      {photos.length > 0 && <section className="perfil-inline-publications" aria-labelledby="perfil-inline-publications-title">
+        <div className="perfil-inline-section-heading"><h2 id="perfil-inline-publications-title">Publicaciones</h2><span>{photos.length}</span></div>
+        <div className="perfil-publications-grid" id="perfil-inline-gallery">
+          {photos.slice(0, expanded ? photos.length : 6).map((url: string, index: number) => <PublicationPhoto key={`${url}-${index}`} src={url} name={name} index={index} onOpen={() => setPhoto({ src: url, alt: `Publicación ${index + 1} de ${name}` })} />)}
+        </div>
+        {photos.length > 6 && <button type="button" className="perfil-publications-more" aria-expanded={expanded} aria-controls="perfil-inline-gallery" onClick={() => setExpanded(value => !value)}>{expanded ? "Ver menos" : "Ver más publicaciones"}</button>}
+      </section>}
+      <section className="perfil-reviews" aria-labelledby="perfil-reviews-title">
+        <h2 id="perfil-reviews-title">Reseñas</h2><p>Todavía no hay reseñas.</p><span>Próximamente vas a poder compartir tu experiencia.</span>
+      </section>
     </div>
   );
 }

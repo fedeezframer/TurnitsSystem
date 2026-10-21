@@ -1,12 +1,10 @@
 import * as React from "react";
 import { useParams, Link } from "react-router";
 import { appConfig } from "../config";
+import { BusinessFavoritesProvider } from "../components/BusinessFavorites";
 import { SoftRouteLoading, useStartupLoading } from "../components/BrandPreloader";
-import {
-  PerfilContenido,
-  PerfilPublicaciones,
-} from "../migrated/panel/perfil-publico";
-export default function BusinessProfile({
+import { PerfilContenido } from "../migrated/panel/perfil-publico";
+function BusinessProfileContent({
   publications = false,
 }: {
   publications?: boolean;
@@ -33,19 +31,18 @@ export default function BusinessProfile({
   }, [slug]);
   React.useEffect(() => {
     const previousTitle = document.title;
-    document.title = `${perfil?.nombre || "Negocio"} | ${publications ? "Publicaciones" : "Perfil"} | Turnits`;
+    document.title = `${perfil?.nombre || "Negocio"} | Perfil | Turnits`;
     return () => {
       document.title = previousTitle;
     };
   }, [perfil?.nombre, publications]);
-  const profileUrl = `/perfil/${encodeURIComponent(slug || "")}`;
   const bookingUrl = `/agenda/${encodeURIComponent(slug || "")}`;
   if (!perfil && !error) {
     return <SoftRouteLoading />;
   }
   return (
     <main
-      className={`perfil-page${publications ? " perfil-page-publications" : ""}`}
+      className="perfil-page"
     >
       <div className="perfil-page-inner">
         <Link
@@ -59,22 +56,19 @@ export default function BusinessProfile({
           <p role="alert" className="perfil-page-status">
             {error}
           </p>
-        ) : publications ? (
-          <PerfilPublicaciones
-            perfil={perfil}
-            bookingUrl={bookingUrl}
-            profileUrl={profileUrl}
-          />
         ) : (
           <PerfilContenido
             perfil={perfil}
             logo={perfil.logo_url}
             bookingUrl={bookingUrl}
             slug={slug}
-            publicationsUrl={`${profileUrl}/publicaciones`}
+            initialExpanded={publications}
           />
         )}
       </div>
     </main>
   );
+}
+export default function BusinessProfile(props: { publications?: boolean }) {
+  return <BusinessFavoritesProvider><BusinessProfileContent {...props} /></BusinessFavoritesProvider>;
 }

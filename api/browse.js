@@ -360,6 +360,23 @@ export function createBrowse({
       res.json({ success: true, ...(await catalog()) });
     }),
   );
+  app.get("/browse/favoritos", auth, route(async (req, res) => {
+    const rows = result(await supabase.from("consumidor_favoritos").select("slug").eq("consumidor_id", req.consumer.id).order("created_at", { ascending: false }));
+    res.json({ success: true, favoritos: (rows || []).map(row => row.slug) });
+  }));
+  app.put("/browse/favoritos/:slug", auth, limiterRead, route(async (req, res) => {
+    const slug = req.params.slug;
+    if (!/^[a-z0-9_-]{1,100}$/.test(slug || "")) fail("Negocio inválido.");
+    await visibleBusiness(slug);
+    result(await supabase.from("consumidor_favoritos").upsert({ consumidor_id: req.consumer.id, slug }, { onConflict: "consumidor_id,slug", ignoreDuplicates: true }));
+    res.json({ success: true });
+  }));
+  app.delete("/browse/favoritos/:slug", auth, limiterRead, route(async (req, res) => {
+    const slug = req.params.slug;
+    if (!/^[a-z0-9_-]{1,100}$/.test(slug || "")) fail("Negocio inválido.");
+    result(await supabase.from("consumidor_favoritos").delete().eq("consumidor_id", req.consumer.id).eq("slug", slug));
+    res.json({ success: true });
+  }));
   app.get(
     "/browse/me",
     auth,

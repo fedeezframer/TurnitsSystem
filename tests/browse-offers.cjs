@@ -28,7 +28,7 @@ class Query{
  })).then(resolve,reject);}
 }
 const supabase={from:table=>new Query(table)},routes=new Map(),pass=(_q,_s,next)=>next();
-const app=Object.fromEntries(['get','post','put'].map(method=>[method,(url,...handlers)=>routes.set(method+' '+url,handlers)]));
+const app=Object.fromEntries(['get','post','put','delete'].map(method=>[method,(url,...handlers)=>routes.set(method+' '+url,handlers)]));
 const availableSource=fs.readFileSync('api/server.js','utf8');
 const start=availableSource.indexOf('async function promoDisponibilidad(');
 const ctx={supabase,obtenerIntervalosDia:()=>[[690,840]],promoError:message=>Object.assign(new Error(message),{promoValidacion:true})};
