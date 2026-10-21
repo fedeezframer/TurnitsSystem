@@ -156,6 +156,7 @@ export function PerfilContenido({
               />
             </button>
           )}
+          <FavoriteButton slug={slug} name={name} compact />
         </div>
         <div className="perfil-overview">
           <div className="perfil-identity">
@@ -173,7 +174,6 @@ export function PerfilContenido({
             <p className="perfil-category">{perfil.categoria || "Negocio"}</p>
             <h1>{name}</h1>
             {city && <p className="perfil-city">{city}</p>}
-            <FavoriteButton slug={slug} name={name} />
             {bookingUrl ? (
               <a className="perfil-booking-link" href={bookingUrl}>
                 Ver Agenda

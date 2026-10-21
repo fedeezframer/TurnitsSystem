@@ -362,7 +362,19 @@ export function createBrowse({
   );
   app.get("/browse/favoritos", auth, route(async (req, res) => {
     const rows = result(await supabase.from("consumidor_favoritos").select("slug").eq("consumidor_id", req.consumer.id).order("created_at", { ascending: false }));
-    res.json({ success: true, favoritos: (rows || []).map(row => row.slug) });
+    const services = result(await supabase.from("consumidor_servicios_favoritos").select("servicio_id").eq("consumidor_id", req.consumer.id).order("created_at", { ascending: false }));
+    res.json({ success: true, favoritos: (rows || []).map(row => row.slug), servicios: (services || []).map(row => row.servicio_id) });
+  }));
+  app.put("/browse/servicios-favoritos/:id", auth, limiterRead, route(async (req, res) => {
+    const service = (await catalog()).servicios.find(item => item.id === req.params.id);
+    if (!service) fail("Servicio no disponible.", 404);
+    result(await supabase.from("consumidor_servicios_favoritos").upsert({ consumidor_id: req.consumer.id, servicio_id: service.id }, { onConflict: "consumidor_id,servicio_id", ignoreDuplicates: true }));
+    res.json({ success: true });
+  }));
+  app.delete("/browse/servicios-favoritos/:id", auth, limiterRead, route(async (req, res) => {
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id || "")) fail("Servicio inválido.");
+    result(await supabase.from("consumidor_servicios_favoritos").delete().eq("consumidor_id", req.consumer.id).eq("servicio_id", req.params.id));
+    res.json({ success: true });
   }));
   app.put("/browse/favoritos/:slug", auth, limiterRead, route(async (req, res) => {
     const slug = req.params.slug;

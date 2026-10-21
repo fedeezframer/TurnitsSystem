@@ -77,6 +77,7 @@ const tables = {
   ],
   extras: [],
   consumidor_favoritos: [{ consumidor_id: otherId, slug: "prueba" }],
+  consumidor_servicios_favoritos: [{ consumidor_id: otherId, servicio_id: serviceId }],
 };
 const read = (r, k) => k.split(".").reduce((v, p) => v?.[p], r);
 class Query {
@@ -290,6 +291,17 @@ async function call(method, url, { body = {}, auth, params = {}, query = {} } = 
   assert.equal((await call("DELETE", "/browse/favoritos/:slug", { auth: token, params: { slug: "prueba" }, body: { consumidor_id: otherId } })).status, 200);
   assert.equal(tables.consumidor_favoritos.length, 1);
   assert.equal(tables.consumidor_favoritos[0].consumidor_id, otherId, "removal cannot affect another user's favorite");
+  assert.equal((await call("PUT", "/browse/servicios-favoritos/:id", { params: { id: serviceId } })).status, 401);
+  assert.equal((await call("PUT", "/browse/servicios-favoritos/:id", { auth: owner, params: { id: serviceId } })).status, 403);
+  assert.equal((await call("PUT", "/browse/servicios-favoritos/:id", { auth: token, params: { id: serviceId }, body: { consumidor_id: otherId } })).status, 200);
+  assert.equal((await call("PUT", "/browse/servicios-favoritos/:id", { auth: token, params: { id: serviceId } })).status, 200);
+  const savedServices = (await call("GET", "/browse/favoritos", { auth: token })).body;
+  assert.deepEqual(savedServices.servicios, [serviceId]);
+  assert.deepEqual(savedServices.favoritos, [], "saving a service does not save its entire business");
+  assert.equal(tables.consumidor_servicios_favoritos.length, 2, "service favorites are idempotent");
+  assert.equal((await call("PUT", "/browse/servicios-favoritos/:id", { auth: token, params: { id: otherId } })).status, 404);
+  assert.equal((await call("DELETE", "/browse/servicios-favoritos/:id", { auth: token, params: { id: serviceId }, body: { consumidor_id: otherId } })).status, 200);
+  assert.deepEqual(tables.consumidor_servicios_favoritos, [{ consumidor_id: otherId, servicio_id: serviceId }], "removal only touches the current consumer");
   const me = await call("GET", "/browse/me", { auth: token });
   assert.equal(me.status, 200);
   assert.equal(me.body.turnos.length, 1);

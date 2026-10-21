@@ -456,7 +456,7 @@ export function PerfilNegocio({
                   </label>
                 </div>
                 <p className="negocio-muted">
-                  Estas fotos se muestran en «Ver Publicaciones» de tu perfil.
+                  Estas fotos se muestran en las publicaciones de tu perfil.
                   Sin límite de cantidad. Podés seleccionar varias a la vez.
                   JPG, PNG o WebP, hasta 3 MB por imagen.
                 </p>

@@ -9,6 +9,7 @@ const assert = require("node:assert/strict");
     { id: "c1", slug: "c", negocio: { rubro: "consultoria" } },
   ];
   assert.equal(recommendServices(services, { favorites: ["b"] })[0].slug, "b");
+  assert.equal(recommendServices(services, { serviceFavorites: ["a2"] })[0].id, "a2", "saving one service does not boost all its siblings");
   assert.equal(recommendServices(services, { interests: ["consultoria"] })[0].slug, "c");
   assert.equal(recommendServices(services, { appointments: [{ slug: "b", estado: "completado", fecha: "2026-01-01" }] })[0].slug, "b");
   assert.equal(recommendServices(services, { appointments: [{ slug: "b", estado: "cancelado", fecha: "2026-01-01" }] })[0].slug, "a");

@@ -6,3 +6,4 @@
 .business-favorite-compact{position:absolute;bottom:12px;right:12px;z-index:2}
 .business-favorite-compact .business-favorite-button{width:40px;height:40px;min-height:40px;padding:8px;border-radius:50%;box-shadow:0 2px 8px #0001}
 .perfil-identity>.business-favorite{margin-top:12px}
+.perfil-cover>.business-favorite-compact{bottom:16px;right:16px}

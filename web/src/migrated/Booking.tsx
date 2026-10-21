@@ -905,8 +905,10 @@ export default function BookingFlow(props: any) {
         if (browsePreselect.current || !servicios.length || !bookingServiceId) return
         if(servicios.some(s=>s.id===bookingServiceId)){
             setServicioId(bookingServiceId);browsePreselect.current=true
+            const requestedDate=bookingQuery.get("fecha") || ""
+            if(!browseOfferId && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate>=getHoyBAISO() && Number.isFinite(Date.parse(requestedDate+"T12:00:00")))setFecha(requestedDate)
         }
-    },[servicios,bookingServiceId])
+    },[servicios,bookingServiceId,bookingQuery,browseOfferId])
     React.useEffect(()=>{
         if(!browseOfferId)return
         const controller=new AbortController()

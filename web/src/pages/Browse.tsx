@@ -10,6 +10,7 @@ import { BusinessFavoritesProvider, FavoriteButton, useBusinessFavorites } from 
 import { recommendServices } from "../shared/recommendations.js";
 import BrowseFlame from "./BrowseFlame";
 import LoadingRunner from "../components/LoadingRunner";
+import IntentDiscovery from "../components/IntentDiscovery";
 import "./Browse.css";
 
 type View = "inicio" | "ofertas" | "agenda" | "buscar" | "coins" | "perfil";
@@ -184,7 +185,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
       className={`browse-card ${kind === "offer" ? "browse-card-offer" : ""}`}
     >
       <div className="browse-card-photo">
-        <FavoriteButton slug={s.slug || n?.slug} name={n?.nombre || "este negocio"} compact />
+        <FavoriteButton serviceId={s.id} name={s.nombre || "este servicio"} compact />
         {s.imagen ? (
           <img
             src={s.imagen}
@@ -240,7 +241,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
           </div>
           <div className="browse-card-actions">
             {kind !== "offer" && (
-              <Link to={`/agenda/${encodeURIComponent(s.slug)}`}>
+              <Link to={`/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({ servicio_id: s.id, ...(s.discovery ? { equipo_id: s.discovery.equipo_id, fecha: s.discovery.fecha } : {}) })}`}>
                 Ver Agenda
               </Link>
             )}
@@ -598,7 +599,7 @@ function BrowseContent() {
         ].join(" "),
       ).includes(clean(query)),
   ).sort((a: any, b: any) => distanceKm(a) - distanceKm(b));
-  const recommended = recommendServices(eligible, { favorites: favorites.favorites, interests: me?.perfil?.intereses || [], appointments: me?.turnos || [], distance: distanceKm });
+  const recommended = recommendServices(eligible, { favorites: favorites.favorites, serviceFavorites: favorites.services, interests: me?.perfil?.intereses || [], appointments: me?.turnos || [], distance: distanceKm });
   const nearbyOffers = [...offers].sort((a, b) => {
     const serviceFor = (offer: any) => {const s=catalog.servicios.find((service:any)=>service.id===offer.servicio_id);const branch=offer.sucursal_id||s?.equipo?.find((m:any)=>m.id===offer.equipo_id)?.sucursal_id;return s?locateService(s,branch):s};
     return distanceKm(serviceFor(a)) - distanceKm(serviceFor(b));
@@ -711,8 +712,9 @@ function BrowseContent() {
                 {searchBox}
                 <section className="browse-home-intro">
                   <h1>¡Hola, {me?.perfil?.nombre_persona || "bienvenido"}!</h1>
-                  <p>Explorá los servicios y ofertas de hoy</p>
+                  <p>Contanos qué necesitás y encontremos algo que encaje con tu día.</p>
                 </section>
+                <IntentDiscovery services={catalog.servicios} renderService={(service: any) => <Card key={service.id} item={service} location={location} />} />
                 <div className="browse-home-layout">
                   {recent && recentService ? (
                     <article className="browse-last-visit">
@@ -865,6 +867,7 @@ function BrowseContent() {
                   {!favorites.loading && !favorites.error && !favorites.favorites.length && <p>Guardá los negocios que te gustan tocando el corazón.</p>}
                 </section>
                 <section className="browse-discovery">
+                  {!!favorites.services.length && <><h2>Tus servicios favoritos</h2><div className="browse-card-grid">{catalog.servicios.filter((service: any) => favorites.services.includes(service.id)).map((service: any) => <Card key={service.id} item={locateService(service)} location={location} />)}</div></>}
                   <h2>Servicios que pueden interesarte</h2>
                   <p>Según tus intereses, favoritos y reservas anteriores</p>
                   <div className="browse-card-grid">

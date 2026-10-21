@@ -1,4 +1,4 @@
-export function recommendServices(services, { favorites = [], interests = [], appointments = [], distance = () => Infinity, limit = 18 } = {}) {
+export function recommendServices(services, { favorites = [], serviceFavorites = [], interests = [], appointments = [], distance = () => Infinity, limit = 18 } = {}) {
   const saved = new Set(favorites), preferred = new Set(interests);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date());
   const completed = appointments.filter(item => item.estado === "completado" || (item.estado === "confirmado" && item.fecha < today));
@@ -6,7 +6,7 @@ export function recommendServices(services, { favorites = [], interests = [], ap
   const categories = new Set(services.filter(service => visited.has(service.slug)).map(service => service.negocio?.rubro));
   const score = service => {
     const km = distance(service);
-    return (saved.has(service.slug) ? 6 : 0) + (preferred.has(service.negocio?.rubro) ? 4 : 0) + (visited.has(service.slug) ? 3 : 0) + (categories.has(service.negocio?.rubro) ? 1 : 0) + (Number.isFinite(km) ? Math.max(0, 3 - km / 5) : 0);
+    return (serviceFavorites.includes(service.id) ? 7 : 0) + (saved.has(service.slug) ? 6 : 0) + (preferred.has(service.negocio?.rubro) ? 4 : 0) + (visited.has(service.slug) ? 3 : 0) + (categories.has(service.negocio?.rubro) ? 1 : 0) + (Number.isFinite(km) ? Math.max(0, 3 - km / 5) : 0);
   };
   const sorted = services.map((service, index) => ({ service, index, score: score(service) })).sort((a, b) => b.score - a.score || a.index - b.index);
   const selected = [], remaining = [], counts = new Map();
