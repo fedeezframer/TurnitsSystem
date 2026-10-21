@@ -932,7 +932,7 @@ export function createBrowse({
         supabase.from("turnits_recompensas").select("*").eq("slug", slug),
         supabase
           .from("servicios")
-          .select("id,nombre,precio,owner_equipo_id,activo")
+          .select("id,nombre,precio,owner_equipo_id,activo,servicio_equipo(equipo_id,precio_override)")
           .eq("slug", slug),
         supabase
           .from("equipo")

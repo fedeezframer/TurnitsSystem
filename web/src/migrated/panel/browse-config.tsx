@@ -48,6 +48,7 @@ export function useBrowseBusiness(api: string) {
   }, [api, slug, reload]);
   React.useEffect(() => {
     const state = (e: any) => setBusy(!!e.detail?.saving);
+    const discarded = () => setReload(v => v + 1);
     const saved = (e: any) => {
       if (e.detail?.section !== "browse") return;
       const next = {
@@ -60,9 +61,11 @@ export function useBrowseBusiness(api: string) {
     };
     window.addEventListener("turnits_global_save_state", state);
     window.addEventListener("turnits_global_saved", saved);
+    window.addEventListener("turnits_global_discarded", discarded);
     return () => {
       window.removeEventListener("turnits_global_save_state", state);
       window.removeEventListener("turnits_global_saved", saved);
+      window.removeEventListener("turnits_global_discarded", discarded);
     };
   }, []);
   const patch = (key: string, index: number, values: any) =>

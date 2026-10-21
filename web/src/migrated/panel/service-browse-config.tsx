@@ -24,9 +24,13 @@ export default function ServiceBrowseConfig({
   price: number;
 }) {
   const { data, draft, error, busy, update, retry } = useBrowseBusiness(api);
-  const [memberId, setMemberId] = React.useState("");
   const [coinsEnabled, setCoinsEnabled] = React.useState<boolean | null>(null);
   const [offerEnabled, setOfferEnabled] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    const reset = () => { setOfferEnabled(null); setCoinsEnabled(null); };
+    window.addEventListener("turnits_global_discarded", reset);
+    return () => window.removeEventListener("turnits_global_discarded", reset);
+  }, []);
   if (error)
     return (
       <div className="service-browse-config">
@@ -45,16 +49,19 @@ export default function ServiceBrowseConfig({
   );
   const rewards = serviceRewards.filter((r: any) => r.tipo === "servicio");
   const offers = draft.offers.filter((o: any) => o.servicio_id === serviceId);
-  const members = data.equipo.filter(
-    (m: any) => m.activo === true || m.activo === "true",
+  const service = data.servicios.find((s: any) => s.id === serviceId);
+  const assignments = service?.servicio_equipo || [];
+  const members = data.equipo.filter((m: any) =>
+    (m.activo === true || m.activo === "true") &&
+    assignments.some((assignment: any) => assignment.equipo_id === m.id) &&
+    (!service?.owner_equipo_id || service.owner_equipo_id === m.id),
   );
-  const selectedMember =
-    memberId ||
-    offers[0]?.equipo_id ||
-    (members.length === 1 ? members[0].id : "");
-  const offer = offers.find((o: any) => o.equipo_id === selectedMember);
+  const minimum = offers[0]?.precio_minimo ?? "";
   const enableCoins = coinsEnabled ?? serviceRewards.some((r: any) => r.activo);
-  const enableOffer = offerEnabled ?? offer?.activo === true;
+  const enableOffer = offerEnabled ?? offers.some((o: any) => o.activo === true);
+  const memberPrice = (member: any) => Number(assignments.find((a: any) => a.equipo_id === member.id)?.precio_override ?? price);
+  const selectedMembers = members.filter((member: any) => offers.some((o: any) => o.equipo_id === member.id));
+  const maximumMinimum = Math.min(...(selectedMembers.length ? selectedMembers : members).map(memberPrice));
   const normalPrice = Math.max(
     0,
     Math.min(
@@ -87,36 +94,12 @@ export default function ServiceBrowseConfig({
     }));
   };
   const setMinimum = (value: string) => {
-    if (!selectedMember) return;
-    update((d) => {
-      const existing = d.offers.find(
-        (o: any) =>
-          o.servicio_id === serviceId && o.equipo_id === selectedMember,
-      );
-      if (value === "")
-        return {
-          ...d,
-          offers: d.offers.filter((o: any) => o.id !== existing?.id),
-        };
-      const values = { precio_minimo: Number(value) };
-      return {
-        ...d,
-        offers: existing
-          ? d.offers.map((o: any) =>
-              o.id === existing.id ? { ...o, ...values } : o,
-            )
-          : [
-              ...d.offers,
-              {
-                id: crypto.randomUUID(),
-                servicio_id: serviceId,
-                equipo_id: selectedMember,
-                ...values,
-                activo: enableOffer,
-              },
-            ],
-      };
-    });
+    update(d => ({ ...d, offers: d.offers.map((o: any) => o.servicio_id === serviceId ? { ...o, precio_minimo: Number(value) } : o) }));
+  };
+  const toggleMember = (member: any, selected: boolean) => {
+    update(d => ({ ...d, offers: selected
+      ? [...d.offers, { id: crypto.randomUUID(), servicio_id: serviceId, equipo_id: member.id, precio_minimo: Number(minimum), activo: enableOffer }]
+      : d.offers.filter((o: any) => !(o.servicio_id === serviceId && o.equipo_id === member.id)) }));
   };
   return (
     <div className="service-browse-config">
@@ -168,93 +151,53 @@ export default function ServiceBrowseConfig({
       </fieldset>
       <fieldset disabled={busy} aria-label="Turnits Offers de este servicio">
         <div className="service-browse-heading">
-          <div>
-            <h4>
-              <Icon />
-              Turnits Offers
-            </h4>
-            <p>Establece un descuento para horas donde no hay reservas.</p>
-          </div>
+          <div><h4><Icon />Turnits Offers</h4><p>Definí la tarifa mínima y quiénes ofrecen este beneficio.</p></div>
           <label className="service-browse-toggle">
             <span>Habilitar</span>
-            <input
-              type="checkbox"
-              role="switch"
-              aria-label="Habilitar Turnits Offers"
-              checked={enableOffer}
-              onChange={(e) => {
+            <input type="checkbox" role="switch" aria-label="Habilitar Turnits Offers"
+              checked={enableOffer} disabled={!members.length}
+              onChange={e => {
                 const enabled = e.target.checked;
                 setOfferEnabled(enabled);
-                if (offer)
-                  update((d) => ({
-                    ...d,
-                    offers: d.offers.map((o: any) =>
-                      o.id === offer.id ? { ...o, activo: enabled } : o,
-                    ),
-                  }));
-              }}
-            />
+                update(d => ({
+                  ...d,
+                  offers: !offers.length && enabled && members.length
+                    ? [...d.offers, { id: crypto.randomUUID(), servicio_id: serviceId, equipo_id: members[0].id, precio_minimo: 0, activo: true }]
+                    : d.offers.filter((o: any) => enabled || o.servicio_id !== serviceId || o.precio_minimo > 0)
+                        .map((o: any) => o.servicio_id === serviceId ? { ...o, activo: enabled } : o),
+                }));
+              }} />
           </label>
         </div>
-        {members.length > 1 && (
-          <select
-            className="service-browse-professional"
-            aria-label="Profesional de la Offer"
-            value={selectedMember}
-            onChange={(e) => {
-              setMemberId(e.target.value);
-              setOfferEnabled(null);
-            }}
-          >
-            <option value="">Elegí un profesional</option>
-            {members.map((m: any) => (
-              <option key={m.id} value={m.id}>
-                {m.nombre} {m.apellido}
-              </option>
-            ))}
-          </select>
-        )}
         <fieldset className="service-browse-controls" disabled={!enableOffer}>
-          <div className="service-browse-minimum-row">
+          <label className="service-browse-minimum-label">
+            Tarifa mínima
             <div className="service-browse-money">
               <span aria-hidden="true">$</span>
-              <input
-                className="svc-input"
-                type="number"
-                min="0.01"
-                step="0.01"
-                max={price > 0 ? price - 0.01 : undefined}
-                aria-label="Tarifa mínima"
-                placeholder="Tarifa Mínima"
-                value={offer?.precio_minimo ?? ""}
-                disabled={!selectedMember}
-                onChange={(e) => setMinimum(e.target.value)}
-              />
+              <input className="svc-input" type="number" inputMode="decimal" min="0.01" step="0.01"
+                max={Number.isFinite(maximumMinimum) ? maximumMinimum - 0.01 : undefined}
+                aria-label="Tarifa mínima" placeholder="Ej. 5.000" value={minimum || ""}
+                disabled={!offers.length} onChange={e => setMinimum(e.target.value)} />
             </div>
-            <span>
-              La tarifa mínima es el valor al que aceptas rebajarte para el
-              descuento
-            </span>
-          </div>
-          {offer &&
-            (offer.precio_minimo <= 0 || offer.precio_minimo >= price) && (
-              <p className="service-browse-error" role="alert">
-                La tarifa mínima debe ser mayor a $0 y menor al precio del
-                profesional.
-              </p>
-            )}
-          {!members.length && (
-            <p className="service-browse-hint">
-              Asigná el servicio a un profesional para configurar Offers.
-            </p>
-          )}
+          </label>
+          {members.length > 1 && <fieldset className="service-browse-members">
+            <legend>Profesionales que ofrecen el beneficio</legend>
+            {members.map((member: any) => <label key={member.id}>
+              <input type="checkbox" checked={offers.some((o: any) => o.equipo_id === member.id)}
+                onChange={e => toggleMember(member, e.target.checked)} />
+              <span>{member.nombre} {member.apellido}</span>
+            </label>)}
+          </fieldset>}
+          {enableOffer && (!offers.length || Number(minimum) <= 0 || Number(minimum) >= maximumMinimum) &&
+            <p className="service-browse-error" role="alert">
+              Elegí al menos un profesional y una tarifa mayor a $0, menor al precio de todos los seleccionados.
+            </p>}
           <p className="service-browse-explanation">
-            Turnits rebajará el precio normal hasta llegar a la tarifa mínima
-            para los horarios en los que queda poca antelación y no son
-            reservados. Estas rebajas se realizan automáticamente a medida que
-            sea más probable que no se reserve.
+            Es el precio más bajo que aceptás por este servicio. El descuento aumenta automáticamente al acercarse el horario, sin bajar de esta tarifa. Solo participan los profesionales marcados.
           </p>
+          <p className="service-browse-hint">Se aplica con Guardar cambios del panel.</p>
         </fieldset>
+        {!members.length && <p className="service-browse-hint">Asigná este servicio a un profesional activo para configurar Offers.</p>}
       </fieldset>
     </div>
   );
