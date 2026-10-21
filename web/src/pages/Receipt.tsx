@@ -60,17 +60,13 @@ export default function Receipt({ failed = false }: { failed?: boolean }) {
     else if (paymentId) params.set("payment_id", paymentId);
     navigate(`${destination}?${params}`, { replace: true });
   }, [state, turno?.id, slug, paymentId, location.pathname, navigate]);
-  const title = state === "confirmed" ? "Tu reserva, en un solo lugar" : state === "pending" ? "Estamos esperando la confirmación" : state === "cancelled" ? "La reserva fue cancelada" : state === "rejected" ? "El pago fue rechazado" : loading ? "Consultando tu reserva…" : failed ? "No pudimos verificar la reserva" : "Comprobante no disponible";
   return <div className="receipt-page">
     <header className="receipt-header"><Link to={home} aria-label="Turnits, volver al inicio">turnits</Link></header>
     <main className="receipt-main"><section className="receipt-content" aria-labelledby="receipt-title">
-      <p className="receipt-eyebrow">TU COMPROBANTE TURNITS</p>
-      <h1 id="receipt-title">{title}</h1>
-      <p className="receipt-intro">Guardá el detalle de tu turno y consultá cuánto abonaste y si queda un saldo pendiente.</p>
+      <h1 id="receipt-title">Tu Comprobante</h1>
       {loading && <p role="status" className="receipt-loading">Estamos consultando la información de tu reserva.</p>}
       {error && <p role="alert" className="receipt-error">{error}</p>}
       {turno && <BookingReceipt turno={{ ...turno, slug: turno.slug || slug }} />}
-      <Link className="receipt-back" to={home}>{home === "/browse" ? "Volver a Browse" : home === "/app" ? "Volver a mi panel" : "Volver al inicio"}<span aria-hidden="true"> →</span></Link>
     </section></main>
   </div>;
 }

@@ -3,12 +3,8 @@
 .receipt-header a{color:#1b6b1a;text-decoration:none;font-size:34px;line-height:1;font-weight:800;letter-spacing:-1.6px}
 .receipt-main{display:flex;justify-content:center;padding:24px 20px 68px}
 .receipt-content{width:470px;max-width:100%;text-align:center}
-.receipt-eyebrow{font-size:10px;letter-spacing:2px;font-weight:700;color:#64815b;margin:0 0 10px}
-.receipt-content>h1{font-size:28px;line-height:1.2;font-weight:650;letter-spacing:-1px;margin:0 0 12px}
-.receipt-intro{font-size:13px;line-height:1.6;color:#677560;max-width:360px;margin:0 auto 24px}
+.receipt-content>h1{font-size:28px;line-height:1.2;font-weight:650;letter-spacing:-1px;margin:0 0 24px}
 .receipt-loading,.receipt-error{font-size:14px;line-height:1.5;margin:16px 0}
 .receipt-loading{color:#52624c}.receipt-error{color:#a52920;overflow-wrap:anywhere}
-.receipt-back{display:inline-flex;align-items:center;justify-content:center;gap:14px;min-height:44px;max-width:100%;margin-top:22px;padding:10px 20px;color:#34562b;text-decoration:none;font-size:14px;font-weight:600}
-.receipt-back:hover{text-decoration:underline}
-.receipt-back:focus-visible,.receipt-header a:focus-visible{outline:2px solid #1b6b1a;outline-offset:4px}
+.receipt-header a:focus-visible{outline:2px solid #1b6b1a;outline-offset:4px}
 @media(max-width:480px){.receipt-header{height:68px}.receipt-main{padding:16px 16px 40px}.receipt-content>h1{font-size:25px}}
