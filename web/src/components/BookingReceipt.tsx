@@ -10,16 +10,19 @@ export default function BookingReceipt({ turno }: { turno: any }) {
     setDownloading(true); setError("");
     try {
       const { createReceiptPdf } = await import("../shared/receipt-pdf.js");
-      const doc = await createReceiptPdf(turno);
+      const logoResponse = await fetch("/assets/browse/LogoTurnitsCompletoB.png");
+      if (!logoResponse.ok) throw new Error("Logo no disponible");
+      const logo = new Uint8Array(await logoResponse.arrayBuffer());
+      const doc = await createReceiptPdf(turno, logo);
       doc.save(`Turnits-comprobante-${receipt.id.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 64) || "reserva"}.pdf`);
     } catch { setError("No se pudo descargar el PDF. Volvé a intentarlo."); }
     finally { setDownloading(false); }
   };
   return <article className="booking-receipt" aria-label="Comprobante de reserva">
-    <div className="booking-receipt-heading"><span>turnits</span><span>Comprobante de reserva</span></div>
+    <div className="booking-receipt-heading"><img src="/assets/browse/LogoTurnitsCompletoB.png" alt="Turnits" /><span>Comprobante de reserva</span></div>
     <div className="booking-receipt-summary">
-      <span className={`booking-receipt-state booking-receipt-state-${turno.estado}`}>{receipt.state}</span>
-      <h2>{receiptMoney(receipt.total)}</h2><p>Total de la reserva · ARS</p>
+      {turno.estado !== "confirmado" && <span className={`booking-receipt-state booking-receipt-state-${turno.estado}`}>{receipt.state}</span>}
+      <h2>{receiptMoney(receipt.total)}</h2><p>Total de la reserva</p>
     </div>
     <dl className="booking-receipt-details">{receipt.rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     <div className="booking-receipt-tear" />

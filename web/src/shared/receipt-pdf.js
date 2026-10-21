@@ -1,6 +1,6 @@
 import { bookingReceipt, receiptMoney } from "./booking-receipt.js";
 
-export async function createReceiptPdf(turno) {
+export async function createReceiptPdf(turno, logo = null) {
   const { jsPDF } = await import("jspdf");
   const receipt = bookingReceipt(turno);
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -9,7 +9,9 @@ export async function createReceiptPdf(turno) {
   const clean = value => String(value).replace(/[\u0000-\u001f\u007f]/g, " ");
   const heading = () => {
     doc.setTextColor(27, 107, 26); doc.setFont("helvetica", "bold"); doc.setFontSize(26);
-    doc.text("turnits", 22, cursor); cursor += 10;
+    if (logo) doc.addImage(logo, "PNG", 19, cursor - 15, 49, 19.2);
+    else doc.text("turnits", 22, cursor);
+    cursor += 10;
     doc.setTextColor(25, 39, 25); doc.setFontSize(13);
     doc.text("Comprobante de reserva", 22, cursor); cursor += 12;
   };
@@ -38,8 +40,8 @@ export async function createReceiptPdf(turno) {
     cursor += 3;
   };
   heading();
-  paragraph(receipt.state);
-  paragraph(receiptMoney(receipt.total) + " ARS", 24);
+  if (turno.estado !== "confirmado") paragraph(receipt.state);
+  paragraph(receiptMoney(receipt.total), 24);
   cursor += 4;
   for (const [label, value] of receipt.rows) row(label, value);
   space(18); cursor += 4;

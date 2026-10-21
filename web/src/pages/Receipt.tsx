@@ -61,7 +61,7 @@ export default function Receipt({ failed = false }: { failed?: boolean }) {
     navigate(`${destination}?${params}`, { replace: true });
   }, [state, turno?.id, slug, paymentId, location.pathname, navigate]);
   return <div className="receipt-page">
-    <header className="receipt-header"><Link to={home} aria-label="Turnits, volver al inicio">turnits</Link></header>
+    <header className="receipt-header"><Link to={home} aria-label="Turnits, volver al inicio"><img src="/assets/browse/LogoTurnitsCompletoB.png" alt="Turnits" /></Link></header>
     <main className="receipt-main"><section className="receipt-content" aria-labelledby="receipt-title">
       <h1 id="receipt-title">Tu Comprobante</h1>
       {loading && <p role="status" className="receipt-loading">Estamos consultando la información de tu reserva.</p>}

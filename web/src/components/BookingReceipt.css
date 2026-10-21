@@ -1,7 +1,7 @@
 .booking-receipt{width:100%;min-width:0;background:#fff;border:1px solid #dfe7dc;border-radius:20px;padding:24px;color:#192719;font:14px/1.5 Inter,Arial,sans-serif;box-sizing:border-box;text-align:left}
 .booking-receipt *{box-sizing:border-box}
 .booking-receipt-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;color:#64715f;font-size:11px}
-.booking-receipt-heading>span:first-child{font-size:25px;font-weight:800;letter-spacing:-1.5px;color:#1b6b1a}
+.booking-receipt-heading>img{display:block;width:120px;max-width:42%;height:auto}
 .booking-receipt-summary{text-align:center;padding:24px 0;border-bottom:1px solid #edf0e9;margin-bottom:20px}
 .booking-receipt-state{display:inline-block;border-radius:20px;padding:5px 12px;background:#fff4d8;color:#71510d;font-size:12px;font-weight:600}
 .booking-receipt-state-confirmado,.booking-receipt-state-completado{background:#eaf4e5;color:#236522}

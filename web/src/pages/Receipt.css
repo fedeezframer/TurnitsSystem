@@ -1,6 +1,7 @@
 .receipt-page{min-height:100dvh;width:100%;background:#f4f7f1;color:#192719;font-family:'Inter Display',Inter,Arial,sans-serif}
 .receipt-header{height:76px;display:flex;align-items:center;justify-content:center;padding:20px}
 .receipt-header a{color:#1b6b1a;text-decoration:none;font-size:34px;line-height:1;font-weight:800;letter-spacing:-1.6px}
+.receipt-header img{display:block;width:170px;height:auto}
 .receipt-main{display:flex;justify-content:center;padding:24px 20px 68px}
 .receipt-content{width:470px;max-width:100%;text-align:center}
 .receipt-content>h1{font-size:28px;line-height:1.2;font-weight:650;letter-spacing:-1px;margin:0 0 24px}
