@@ -10,7 +10,6 @@ import { BusinessFavoritesProvider, FavoriteButton, useBusinessFavorites } from 
 import { recommendServices } from "../shared/recommendations.js";
 import BrowseFlame from "./BrowseFlame";
 import LoadingRunner from "../components/LoadingRunner";
-import IntentDiscovery from "../components/IntentDiscovery";
 import "./Browse.css";
 
 type View = "inicio" | "ofertas" | "agenda" | "buscar" | "coins" | "perfil";
@@ -241,7 +240,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
           </div>
           <div className="browse-card-actions">
             {kind !== "offer" && (
-              <Link to={`/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({ servicio_id: s.id, ...(s.discovery ? { equipo_id: s.discovery.equipo_id, fecha: s.discovery.fecha } : {}) })}`}>
+              <Link to={`/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({ servicio_id: s.id })}`}>
                 Ver Agenda
               </Link>
             )}
@@ -712,9 +711,8 @@ function BrowseContent() {
                 {searchBox}
                 <section className="browse-home-intro">
                   <h1>¡Hola, {me?.perfil?.nombre_persona || "bienvenido"}!</h1>
-                  <p>Contanos qué necesitás y encontremos algo que encaje con tu día.</p>
+                  <p>Explorá los servicios y ofertas de hoy</p>
                 </section>
-                <IntentDiscovery services={catalog.servicios} renderService={(service: any) => <Card key={service.id} item={service} location={location} />} />
                 <div className="browse-home-layout">
                   {recent && recentService ? (
                     <article className="browse-last-visit">
