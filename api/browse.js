@@ -936,7 +936,7 @@ export function createBrowse({
           .eq("slug", slug),
         supabase
           .from("equipo")
-          .select("id,nombre,apellido,activo")
+          .select("id,nombre,apellido,foto_url,color,activo")
           .eq("slug", slug),
         supabase
           .from("extras")

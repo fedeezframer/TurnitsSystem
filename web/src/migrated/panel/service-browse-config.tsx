@@ -12,6 +12,14 @@ function Icon({ coin = false }: { coin?: boolean }) {
   );
 }
 
+function MemberAvatar({ member }: { member: any }) {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [member.foto_url]);
+  if (member.foto_url && !failed) return <img className="service-offer-avatar service-offer-photo" src={member.foto_url} alt="" onError={() => setFailed(true)} />;
+  const color = /^#[0-9a-f]{3,8}$/i.test(member.color || "") ? member.color : "#64748b";
+  return <span className="service-offer-avatar service-offer-initial" style={{ "--member-color": color } as React.CSSProperties} aria-hidden="true">{String(member.nombre || "?").trim().slice(0, 1).toLocaleUpperCase("es-AR")}</span>;
+}
+
 export default function ServiceBrowseConfig({
   api,
   serviceId,
@@ -181,10 +189,11 @@ export default function ServiceBrowseConfig({
           </label>
           {members.length > 0 && <fieldset className="service-browse-members">
             <legend>Profesionales que ofrecen el beneficio</legend>
-            {members.map((member: any) => <label key={member.id}>
+            {members.map((member: any) => <label key={member.id} className={`service-offer-member${offers.some((o: any) => o.equipo_id === member.id) ? " is-selected" : ""}`}>
               <input type="checkbox" checked={offers.some((o: any) => o.equipo_id === member.id)}
                 onChange={e => toggleMember(member, e.target.checked)} />
-              <span>{member.nombre} {member.apellido}{!assignments.some((a: any) => a.equipo_id === member.id) && <small>Se asignará a este servicio al guardar.</small>}</span>
+              <MemberAvatar member={member} />
+              <span className="service-offer-member-copy"><strong>{member.nombre} {member.apellido}</strong>{!offers.some((o: any) => o.equipo_id === member.id) && !assignments.some((a: any) => a.equipo_id === member.id) && <small>Si lo seleccionás, este perfil ofrecerá el servicio.</small>}</span>
             </label>)}
           </fieldset>}
           {enableOffer && (!offers.length || Number(minimum) <= 0 || Number(minimum) >= maximumMinimum) &&

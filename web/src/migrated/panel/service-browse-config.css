@@ -256,9 +256,18 @@
 .service-browse-minimum-label{display:grid;gap:8px;font-size:12px;font-weight:600}
 .service-browse-config .service-browse-members{display:grid;gap:10px;margin-top:18px}
 .service-browse-members legend{font-size:11px;font-weight:600;margin-bottom:10px}
-.service-browse-members label{display:flex;align-items:center;gap:9px;font-size:12px;overflow-wrap:anywhere}
-.service-browse-members input{width:16px;height:16px;flex-shrink:0;accent-color:var(--accent,#196b1f)}
-.service-browse-members small{display:block;color:#64748b;font-size:10px;line-height:1.4;margin-top:3px}
+.service-browse-members .service-offer-member{position:relative;display:flex;align-items:center;gap:16px;min-height:76px;padding:9px 12px;border:1px solid #edf0eb;border-radius:18px;background:#fff;color:#111;cursor:pointer;transition:background-color .2s,border-color .2s,color .2s}
+.service-browse-members .service-offer-member.is-selected{background:#1b6b1a;border-color:#1b6b1a;color:#fff}
+.service-offer-member>input{position:absolute;width:1px;height:1px;padding:0;margin:0;opacity:0;overflow:hidden;clip-path:inset(50%)}
+.service-offer-member:focus-within{outline:2px solid #1b6b1a;outline-offset:3px}
+.service-offer-avatar{display:grid;place-items:center;width:56px;height:56px;flex:0 0 56px;border-radius:50%;object-fit:cover}
+.service-offer-initial{background:var(--member-color,#64748b);color:#fff;font-size:30px;font-weight:600;transition:background-color .2s,color .2s}
+.service-offer-member.is-selected .service-offer-initial{background:#fff;color:#111}
+.service-offer-member-copy{min-width:0;overflow-wrap:anywhere}
+.service-offer-member-copy strong{display:block;font-size:16px;line-height:1.3;font-weight:600}
+.service-offer-member-copy small{display:block;font-size:11px;line-height:1.3;margin-top:2px;color:#586151}
+.service-offer-member.is-selected small{color:#e1efdc}
+@media(prefers-reduced-motion:reduce){.service-browse-members .service-offer-member,.service-offer-initial{transition:none}}
 @media(max-width:480px){.service-browse-config .service-browse-money{width:156px}.service-browse-config .service-browse-money input{font-size:16px}.service-browse-config .service-browse-money input::placeholder{font-size:12px;font-weight:400}}
 .service-browse-config input:disabled {
   opacity: 0.5;
