@@ -176,7 +176,7 @@ function TurnitsPanel_Inner(props: any) {
 
     const navItemsVisibles = NAV_ITEMS.filter(
         (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && (item.id !== "consultas" || (appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin))
-    ).map(item => item.id === "consultas" ? { ...item, label: "Mensajes" } : item.id === "servicios" && quoteMode ? { ...item, label: "Servicios para cotizar" } : item)
+    ).map(item => item.id === "consultas" ? { ...item, label: "Mensajes" } : item)
 
     // Igual que irA: si el banner de referidos del menú se toca desde la
     // hoja inferior mobile, cerramos esa hoja para que no quede "detrás"
@@ -611,8 +611,8 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title="Mis Servicios"
-                            subtitle="Los servicios que ofrecés a tus clientes"
+                            title={quoteMode ? "Servicios" : "Mis Servicios"}
+                            subtitle={quoteMode ? "Mantené tu perfil publicado para aparecer en Browse; el precio y la fecha se coordinan por chat." : "Los servicios que ofrecés a tus clientes"}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>

@@ -156,7 +156,7 @@ export default function ServiceBrowseConfig({
           ))}
         </fieldset>
       </fieldset>
-      <fieldset disabled={busy} aria-label="Turnits Offers de este servicio">
+      {normalPrice > 0 ? <fieldset disabled={busy} aria-label="Turnits Offers de este servicio">
         <div className="service-browse-heading">
           <div><h4><Icon />Turnits Offers</h4><p>Definí la tarifa mínima y quiénes ofrecen este beneficio.</p></div>
           <label className="service-browse-toggle">
@@ -206,7 +206,7 @@ export default function ServiceBrowseConfig({
           <p className="service-browse-hint">Se aplica con Guardar cambios del panel.</p>
         </fieldset>
         {!members.length && <p className="service-browse-hint">Asigná este servicio a un profesional activo para configurar Offers.</p>}
-      </fieldset>
+      </fieldset> : <p className="service-browse-hint">Turnits Offers requiere un precio y horarios fijos; en las consultas, el precio y la fecha se acuerdan por chat.</p>}
     </div>
   );
 }

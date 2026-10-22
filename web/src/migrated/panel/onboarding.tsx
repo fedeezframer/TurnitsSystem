@@ -325,7 +325,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                     return
                 }
 
-                setPaso(!yaServicios ? 0 : !yaHorarios ? 1 : 2)
+                setPaso(isQuoteMode ? 0 : !yaServicios ? 0 : !yaHorarios ? 1 : 2)
 
                 setFase("paso")
             } catch (err) {
@@ -347,10 +347,13 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
         if (fase === "oculto") onFinish?.()
     }, [fase])
 
+    const totalPasos = quoteMode ? 2 : 3
+    const pasoPago = quoteMode ? 1 : 2
+
     const avanzar = () => {
         setErrorMsg("")
 
-        if (paso < 2) {
+        if (paso < totalPasos - 1) {
             setPaso((p) => p + 1)
         } else {
             OnboardingNube_marcarVisto()
@@ -598,35 +601,11 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
 .tn-onb-time-row>label{width:100%;max-width:100%;min-width:0}
 .tn-onb-time-row input[type=time]{display:block;width:calc(100% - 6px) !important;max-width:calc(100% - 6px) !important;min-width:0 !important;box-sizing:border-box;font-size:16px !important;padding:7px 4px !important;justify-self:start}
 @media (max-width:640px){
-.tn-onb-root{padding:60px 14px 24px !important}
+.tn-onb-root{padding:20px 14px !important}
 .tn-onb-glass{padding:26px 20px !important}
 }
 `}</style>
             <OnboardingNube_Fondo />
-
-            {fase !== "listo" && fase !== "cargando" && (
-                <button
-                    onClick={omitirTodo}
-                    style={{
-                        position: "absolute",
-                        top: 20,
-                        right: 20,
-                        zIndex: 2,
-                        background: "transparent",
-                        border: "none",
-                        padding: "7px 4px",
-                        fontSize: 12.5,
-                        fontWeight: 700,
-                        color: OnboardingNube_MUTED,
-                        textDecoration: "underline",
-                        textUnderlineOffset: "3px",
-                        cursor: "pointer",
-                        fontFamily: OnboardingNube_FONT_BODY,
-                    }}
-                >
-                    Saltear por ahora
-                </button>
-            )}
 
             <AnimatePresence mode="wait">
                 {fase === "cargando" && (
@@ -676,18 +655,41 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                             duration: 0.28,
                             ease: "easeOut",
                         }}
+                        style={{
+                            width: "min(100%, 460px)",
+                            boxSizing: "border-box",
+                            margin: "0 auto",
+                        }}
                     >
                         <OnboardingNube_Glass>
+                            <button
+                                onClick={omitirTodo}
+                                style={{
+                                    display: "block",
+                                    margin: "-10px 0 14px auto",
+                                    background: "transparent",
+                                    border: "none",
+                                    padding: "4px 0",
+                                    fontSize: 12.5,
+                                    fontWeight: 700,
+                                    color: OnboardingNube_MUTED,
+                                    textDecoration: "underline",
+                                    textUnderlineOffset: "3px",
+                                    cursor: "pointer",
+                                    fontFamily: OnboardingNube_FONT_BODY,
+                                }}
+                            >
+                                Saltear por ahora
+                            </button>
                             <div
                                 style={{
-                                    textAlign: "left" as const,
+                                    textAlign: "center" as const,
                                     marginBottom: 22,
                                 }}
                             >
-                                <OnboardingNube_Folio
-                                    total={3}
-                                    current={paso}
-                                />
+                                <div style={{ display: "flex", justifyContent: "center" }}>
+                                    <OnboardingNube_Folio total={totalPasos} current={paso} />
+                                </div>
 
                                 <div
                                     style={{
@@ -702,9 +704,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 >
                                     {paso === 0 && (quoteMode ? "Mostrá qué trabajos realizás" : "Creá tu primer servicio")}
 
-                                    {paso === 1 && (quoteMode ? "Definí cuándo solés atender" : "Elegí tu disponibilidad")}
+                                    {paso === 1 && !quoteMode && "Elegí tu disponibilidad"}
 
-                                    {paso === 2 && (quoteMode ? "¿Cómo querés cobrar después?" : "¿Cómo te van a pagar?")}
+                                    {paso === pasoPago && (quoteMode ? "¿Cómo querés cobrar después?" : "¿Cómo te van a pagar?")}
                                 </div>
 
                                 <div
@@ -716,15 +718,12 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 >
                                     {paso === 0 &&
                                         (quoteMode
-                                            ? "Creá una opción para que te encuentren en Browse. El precio, el tiempo y el alcance se acuerdan en cada consulta."
+                                            ? "Creá una opción para que te encuentren en Browse. Cuando publiques tu perfil, van a poder consultarte por chat. El precio, el tiempo y el alcance se acuerdan en cada consulta."
                                             : "Lo básico para que tus clientes puedan reservar. Después podés sumar más y editarlo.")}
 
-                                    {paso === 1 &&
-                                        (quoteMode
-                                            ? "Indicá tus días y horarios habituales como referencia. No se reserva un turno: la fecha y la hora se coordinan por chat."
-                                            : "Marcá los días que atendés y un horario — lo podés afinar más adelante.")}
+                                    {paso === 1 && !quoteMode && "Marcá los días que atendés y un horario — lo podés afinar más adelante."}
 
-                                    {paso === 2 &&
+                                    {paso === pasoPago &&
                                         (quoteMode
                                             ? "Configurá Mercado Pago para ofrecer una seña o el pago acordado una vez que definan el trabajo."
                                             : esPremium
@@ -826,7 +825,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 </div>
                             )}
 
-                            {paso === 1 && (
+                            {paso === 1 && !quoteMode && (
                                 <div
                                     style={{
                                         display: "flex",
@@ -985,7 +984,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 </div>
                             )}
 
-                            {paso === 2 && (
+                            {paso === pasoPago && (
                                 <div
                                     style={{
                                         display: "flex",
@@ -1089,6 +1088,11 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                         transition={{
                             duration: 0.3,
                             ease: "easeOut",
+                        }}
+                        style={{
+                            width: "min(100%, 460px)",
+                            boxSizing: "border-box",
+                            margin: "0 auto",
                         }}
                     >
                         <OnboardingNube_Glass>

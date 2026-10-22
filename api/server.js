@@ -2981,6 +2981,22 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
     }
 
+    let equipoConsulta = [];
+    if (quoteMode) {
+      const { data: equipo, error: equipoError } = await supabase.from("equipo")
+        .select("id")
+        .eq("slug", slugClean)
+        .eq("activo", true);
+      if (equipoError) throw equipoError;
+      equipoConsulta = (equipo || []).map(({ id }) => ({ equipo_id: id }));
+      if (!equipoConsulta.length) {
+        return res.status(409).json({
+          success: false,
+          error: "Agregá primero al menos un profesional activo en Equipo para ofrecer servicios por consulta.",
+        });
+      }
+    }
+
     const dur = parseInt(duracion);
     const cap = parseInt(capacidad);
 
@@ -2996,6 +3012,18 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
     }]).select().single();
 
     if (error) throw error;
+    if (equipoConsulta.length) {
+      const { error: asignacionError } = await supabase.from("servicio_equipo").insert(
+        equipoConsulta.map(({ equipo_id }) => ({ servicio_id: data.id, equipo_id })),
+      );
+      if (asignacionError) {
+        const { error: limpiezaError } = await supabase.from("servicios").delete()
+          .eq("id", data.id)
+          .eq("slug", slugClean);
+        if (limpiezaError) console.error("Error limpiando servicio sin asignación:", limpiezaError.message);
+        throw asignacionError;
+      }
+    }
     invalidateCache(slugClean);
     res.status(201).json({ success: true, servicio: { ...data, activo: isActivo(data.activo) } });
   } catch (e) {
