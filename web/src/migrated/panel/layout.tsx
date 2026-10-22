@@ -175,8 +175,8 @@ function TurnitsPanel_Inner(props: any) {
     }, [baseUrl, setSearchParams])
 
     const navItemsVisibles = NAV_ITEMS.filter(
-        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && (item.id !== "consultas" || (appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin)) && !(quoteMode && item.id === "servicios")
-    ).map(item => item.id === "consultas" ? { ...item, label: "Mensajes" } : item)
+        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && (item.id !== "consultas" || (appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin))
+    ).map(item => item.id === "consultas" ? { ...item, label: "Mensajes" } : item.id === "servicios" && quoteMode ? { ...item, label: "Servicios para cotizar" } : item)
 
     // Igual que irA: si el banner de referidos del menú se toca desde la
     // hoja inferior mobile, cerramos esa hoja para que no quede "detrás"

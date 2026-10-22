@@ -1,5 +1,6 @@
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { appConfig } from "../../config"
+import { loadQuoteMode } from "../../shared/agenda-mode"
 import * as React from "react"
 import {
     useState,
@@ -112,6 +113,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
     const [tieneServicios, setTieneServicios] = React.useState(false)
     const [tieneHorarios, setTieneHorarios] = React.useState(false)
     const [metodoListo, setMetodoListo] = React.useState(false)
+    const [quoteMode, setQuoteMode] = React.useState(false)
 
     const [plan, setPlan] = React.useState<"gratis" | "basico">("gratis")
 
@@ -237,7 +239,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
             }
 
             try {
-                const [settingsRes, serviciosRes] = await Promise.all([
+                const [settingsRes, serviciosRes, isQuoteMode] = await Promise.all([
                     fetchPanelRead(`${api}/settings/${slug}`, {
                         headers: {
                             Authorization: `Bearer ${token}`,
@@ -250,6 +252,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                         },
                         cache: "no-cache",
                     }),
+                    loadQuoteMode(api, slug),
                 ])
                 if (cancelado) return
 
@@ -299,6 +302,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                 setTieneServicios(yaServicios)
                 setTieneHorarios(yaHorarios)
                 setMetodoListo(yaMetodo)
+                setQuoteMode(isQuoteMode)
                 setPlan(
                     ["basico", "premium"].includes(s.plan) ? "basico" : "gratis"
                 )
@@ -401,8 +405,8 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                     slug,
                     nombre: svcNombre.trim(),
                     descripcion: "",
-                    duracion: svcDuracion,
-                    precio: Number(svcPrecio) || 0,
+                    duracion: quoteMode ? 30 : svcDuracion,
+                    precio: quoteMode ? 0 : Number(svcPrecio) || 0,
                     capacidad: 1,
                     orden: 0,
                 }),
@@ -696,11 +700,11 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                         marginBottom: 6,
                                     }}
                                 >
-                                    {paso === 0 && "Creá tu primer servicio"}
+                                    {paso === 0 && (quoteMode ? "Mostrá qué trabajos realizás" : "Creá tu primer servicio")}
 
-                                    {paso === 1 && "Elegí tu disponibilidad"}
+                                    {paso === 1 && (quoteMode ? "Definí cuándo solés atender" : "Elegí tu disponibilidad")}
 
-                                    {paso === 2 && "¿Cómo te van a pagar?"}
+                                    {paso === 2 && (quoteMode ? "¿Cómo querés cobrar después?" : "¿Cómo te van a pagar?")}
                                 </div>
 
                                 <div
@@ -711,15 +715,21 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     }}
                                 >
                                     {paso === 0 &&
-                                        "Lo básico para que tus clientes puedan reservar. Después podés sumar más y editarlo."}
+                                        (quoteMode
+                                            ? "Creá una opción para que te encuentren en Browse. El precio, el tiempo y el alcance se acuerdan en cada consulta."
+                                            : "Lo básico para que tus clientes puedan reservar. Después podés sumar más y editarlo.")}
 
                                     {paso === 1 &&
-                                        "Marcá los días que atendés y un horario — lo podés afinar más adelante."}
+                                        (quoteMode
+                                            ? "Indicá tus días y horarios habituales como referencia. No se reserva un turno: la fecha y la hora se coordinan por chat."
+                                            : "Marcá los días que atendés y un horario — lo podés afinar más adelante.")}
 
                                     {paso === 2 &&
-                                        (esPremium
-                                            ? "Conectá Mercado Pago o arrancá cobrando en efectivo, lo que prefieras ahora."
-                                            : "Conectá Mercado Pago para poder cobrarle a tus clientes al reservar.")}
+                                        (quoteMode
+                                            ? "Configurá Mercado Pago para ofrecer una seña o el pago acordado una vez que definan el trabajo."
+                                            : esPremium
+                                                ? "Conectá Mercado Pago o arrancá cobrando en efectivo, lo que prefieras ahora."
+                                                : "Conectá Mercado Pago para poder cobrarle a tus clientes al reservar.")}
                                 </div>
                             </div>
 
@@ -732,24 +742,28 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     }}
                                 >
                                     <OnboardingNube_Input
-                                        label="Nombre del servicio"
-                                        placeholder="Nombre del servicio"
+                                        label={quoteMode ? "Tipo de trabajo o servicio" : "Nombre del servicio"}
+                                        placeholder={quoteMode ? "Ej.: Tatuaje personalizado" : "Nombre del servicio"}
                                         value={svcNombre}
                                         onChange={(e: any) =>
                                             setSvcNombre(e.target.value)
                                         }
                                     />
 
-                                    <OnboardingNube_Input
-                                        label="Precio"
-                                        type="number"
-                                        prefix="$"
-                                        placeholder="0"
-                                        value={svcPrecio}
-                                        onChange={(e: any) =>
-                                            setSvcPrecio(e.target.value)
-                                        }
-                                    />
+                                    {quoteMode ? (
+                                        <div style={{ fontSize: 12.5, color: OnboardingNube_MUTED, lineHeight: 1.5, padding: "11px 13px", borderRadius: 10, background: "rgba(27,107,26,0.07)" }}>
+                                            No hace falta definir un precio ni una duración fijos. Vas a acordarlos con cada cliente por chat.
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <OnboardingNube_Input
+                                                label="Precio"
+                                                type="number"
+                                                prefix="$"
+                                                placeholder="0"
+                                                value={svcPrecio}
+                                                onChange={(e: any) => setSvcPrecio(e.target.value)}
+                                            />
 
                                     <div>
                                         <span
@@ -787,7 +801,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                                 )
                                             )}
                                         </div>
-                                    </div>
+                                            </div>
+                                        </>
+                                    )}
 
                                     {errorMsg && (
                                         <div
@@ -1119,7 +1135,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                         marginBottom: 4,
                                     }}
                                 >
-                                    ¡Tu agenda ya está lista!
+                                    {quoteMode ? "¡Ya podés recibir consultas!" : "¡Tu agenda ya está lista!"}
                                 </div>
 
                                 <div
@@ -1128,7 +1144,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                         color: OnboardingNube_MUTED,
                                     }}
                                 >
-                                    Ya podés empezar a recibir turnos.
+                                    {quoteMode
+                                        ? "Tus clientes podrán contarte qué necesitan. Acordá el alcance, el precio, el tiempo y la fecha por chat."
+                                        : "Ya podés empezar a recibir turnos."}
                                 </div>
                             </div>
                         </OnboardingNube_Glass>

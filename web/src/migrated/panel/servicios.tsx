@@ -1208,7 +1208,9 @@ function ServiciosManager_ServicioForm({
                             lineHeight: 1.25,
                         }}
                     >
-                        {modoEdicion ? "Editar servicio" : "Crear un servicio"}
+                        {quoteMode
+                            ? modoEdicion ? "Editar servicio para cotizar" : "Crear servicio para cotizar"
+                            : modoEdicion ? "Editar servicio" : "Crear un servicio"}
                     </div>
                     <div
                         style={{
@@ -1219,9 +1221,11 @@ function ServiciosManager_ServicioForm({
                             maxWidth: 460,
                         }}
                     >
-                        {modoEdicion
-                            ? "Los cambios se reflejan al instante en tu link de reservas."
-                            : "Agregá los detalles de tu servicio para que tus clientes puedan reservarlo fácilmente."}
+                        {quoteMode
+                            ? "Mostralo en Browse. El alcance, el precio y el tiempo se definen con cada cliente por chat."
+                            : modoEdicion
+                                ? "Los cambios se reflejan al instante en tu link de reservas."
+                                : "Agregá los detalles de tu servicio para que tus clientes puedan reservarlo fácilmente."}
                     </div>
                 </div>
                 <button
@@ -1273,13 +1277,13 @@ function ServiciosManager_ServicioForm({
                         }}
                     >
                         <ServiciosManager_Field
-                            label="Nombre del servicio"
+                            label={quoteMode ? "Tipo de trabajo o servicio" : "Nombre del servicio"}
                             icon="tag"
                         >
                             <ServiciosManager_Input
                                 value={form.nombre}
                                 onChange={set("nombre")}
-                                placeholder="Ej: Corte de pelo"
+                                placeholder={quoteMode ? "Ej.: Tatuaje personalizado" : "Ej: Corte de pelo"}
                             />
                         </ServiciosManager_Field>
 
@@ -1290,9 +1294,15 @@ function ServiciosManager_ServicioForm({
                             <ServiciosManager_AutoTextarea
                                 value={form.descripcion}
                                 onChange={set("descripcion")}
-                                placeholder="Contá brevemente qué incluye el servicio…"
+                                placeholder={quoteMode ? "Contá qué trabajos realizás o qué debería saber el cliente…" : "Contá brevemente qué incluye el servicio…"}
                             />
                         </ServiciosManager_Field>
+                    </div>
+                )}
+
+                {quoteMode && (
+                    <div style={{ padding: "12px 14px", borderRadius: 10, background: "#f0f7ef", color: "#315b34", fontSize: 12.5, lineHeight: 1.5 }}>
+                        No cargues un precio ni una duración estándar: varían según cada pedido y se acuerdan en la consulta.
                     </div>
                 )}
 
@@ -1302,8 +1312,8 @@ function ServiciosManager_ServicioForm({
                     style={{
                         display: "grid",
                         gridTemplateColumns: isMobile
-                            ? "1fr 1fr"
-                            : "1fr 1fr 1fr",
+                            ? quoteMode ? "1fr" : "1fr 1fr"
+                            : quoteMode ? "1fr" : "1fr 1fr 1fr",
                         gap: isMobile ? 14 : 20,
                     }}
                 >
@@ -1343,7 +1353,7 @@ function ServiciosManager_ServicioForm({
                             )}
                         </ServiciosManager_Field>
                     </div>
-                    {!employeeVariant && (
+                    {!employeeVariant && !quoteMode && (
                         <ServiciosManager_Field
                             label="Capacidad"
                             icon="users"
@@ -1372,7 +1382,7 @@ function ServiciosManager_ServicioForm({
                 </div>
 
                 {/* Duración */}
-                {!employeeVariant && (
+                {!employeeVariant && !quoteMode && (
                     <ServiciosManager_Field
                         label="Duración"
                         icon="clock"
@@ -2026,9 +2036,9 @@ function ServiciosManager_ServicioCard({
                     </span>
                     <span style={{ fontSize: 11, color: "#cbd5e1" }}>·</span>
                     <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                        {ServiciosManager_formatDuracion(svc.duracion)}
+                        {quoteMode ? "Tiempo a coordinar" : ServiciosManager_formatDuracion(svc.duracion)}
                     </span>
-                    {svc.capacidad > 1 && !isMobile && (
+                    {svc.capacidad > 1 && !isMobile && !quoteMode && (
                         <>
                             <span style={{ fontSize: 11, color: "#cbd5e1" }}>
                                 ·

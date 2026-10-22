@@ -253,7 +253,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
                 className="browse-pill"
                 to={appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? `/browse?${new URLSearchParams({ vista: "mensajes", servicio_id: s.id })}` : `/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({servicio_id:s.id,...(s.sucursal_id?{sucursal_id:s.sucursal_id}:{})})}`}
               >
-                {appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? "Consultar" : "Reservar"}
+                Reservar
               </Link>
             ) : (
               <button
