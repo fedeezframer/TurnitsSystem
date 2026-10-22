@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { appConfig } from "../config";
 import { consumerHeaders } from "../shared/consumer-session";
 import { availabilityInquiry, defaultQuoteExpiry, mergeMessages, messagePreview, quotePresentation } from "../shared/consultations.js";
-import { ChatAvatar, ChatBottomNav, ChatHeader, ChatIcon } from "../components/ChatChrome";
+import { ChatAvatar, ChatHeader, ChatIcon } from "../components/ChatChrome";
 import BookingReceipt from "../components/BookingReceipt";
 import "./Consultations.css";
 
@@ -18,7 +18,7 @@ export default function Consultations() {
 }
 function ConsultationsContent() {
   const [params, setParams] = useSearchParams();
-  const business = localStorage.getItem("account_type") !== "usuario";
+  const business = localStorage.getItem("account_type") === "negocio";
   const prefix = business ? "/admin/consultas" : "/browse/consultas";
   const token = localStorage.getItem("access_token") || localStorage.getItem("auth_token") || "";
   const current = params.get("id") || "", requestedService = params.get("servicio_id");
@@ -146,14 +146,14 @@ function ConsultationsContent() {
     if (url.protocol !== "https:" || !/(^|\.)mercadopago\.(com|com\.ar)$/.test(url.hostname)) throw Error("No pudimos abrir un enlace de pago seguro.");
     window.location.assign(url.href);
   });
-  return <main className={`consultations ${current ? "consultations-thread" : "consultations-inbox"}`}><ChatHeader business={business} />
+  return <main className={`consultations ${current ? "consultations-thread" : "consultations-inbox"}`}><ChatHeader business={business} messagesOnly />
     {!token ? <div className="chat-empty"><p>Iniciá sesión para ver tus mensajes.</p><Link to={`/login?${new URLSearchParams({ tipo: "usuario", volver: `/consultas${window.location.search}` })}`}>Iniciar sesión</Link></div> : !current ? <>
       <section className="chat-inbox" aria-labelledby="chat-inbox-title"><h1 id="chat-inbox-title">Mensajes</h1>
         {error && <div className="chat-error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>Reintentar</button></div>}
         {loading && !inbox.length && <p className="chat-empty" role="status">Cargando mensajes…</p>}
         {!loading && !inbox.length && !error && <p className="chat-empty">Todavía no tenés mensajes. Tus consultas van a aparecer acá.</p>}
         <div className="chat-inbox-list">{inbox.map(item => <button className={`chat-inbox-item${Number(item.no_leidos) > 0 ? " unread" : ""}`} key={item.id} onClick={() => setParams({ id: item.id })} aria-label={`${item.interlocutor_nombre || item.slug}: ${messagePreview(item, business)}${Number(item.no_leidos) > 0 ? ", mensajes sin leer" : ""}`}><ChatAvatar name={item.interlocutor_nombre || item.slug} src={item.foto_url} /><span className="chat-inbox-copy"><strong>{item.interlocutor_nombre || item.slug}</strong><span>{messagePreview(item, business)}</span></span>{Number(item.no_leidos) > 0 && <span className="chat-unread-dot" aria-hidden="true" />}</button>)}</div>
-      </section><ChatBottomNav business={business} />
+      </section>
     </> : <section className="chat-thread" aria-label="Conversación">
       <header className="chat-person"><ChatAvatar name={participant.nombre || "?"} src={participant.foto_url} /><h1>{participant.nombre || "Cargando…"}</h1><div className="chat-person-actions">{business && conversation && <button className={`chat-tool${screen === "edit" ? " selected" : ""}`} type="button" disabled={busy} aria-label={screen === "edit" ? "Cerrar editor de presupuesto" : canEdit ? "Armar presupuesto" : "Ver presupuesto"} aria-pressed={screen === "edit"} onClick={() => screen === "edit" ? setScreen("chat") : enterEditor()}><ChatIcon name="tool" /></button>}<button className="chat-back" type="button" disabled={busy} aria-label={screen === "chat" ? "Volver a mensajes" : "Volver al chat"} onClick={() => { if (screen === "chat") setParams({}); else { setScreen("chat"); setError(""); } }}><ChatIcon name="back" /></button></div></header>
       {error && <div className="chat-error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>Reintentar</button></div>}

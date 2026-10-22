@@ -120,6 +120,7 @@ export function BrowseIcon({
         <path d="M10 3H3v18h7m5-5 5-4-5-4m-8 4h13" />
       </>
     ),
+    mensajes: <><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.5A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 10h8M8 13.5h5"/></>,
   };
   return (
     <svg
@@ -682,6 +683,7 @@ function BrowseContent() {
               <span className="browse-nav-label">{NAV_LABELS[v]}</span>
             </button>
           ))}
+          {appConfig.quoteBookingEnabled && <button type="button" aria-label="Mensajes" onClick={() => navigate("/consultas")}><BrowseIcon name="mensajes" /><span className="browse-nav-label">Mensajes</span></button>}
         </nav>
         <div className="browse-header-actions">
           <button
@@ -713,7 +715,6 @@ function BrowseContent() {
                   <h1>¡Hola, {me?.perfil?.nombre_persona || "bienvenido"}!</h1>
                   <p>Explorá los servicios y ofertas de hoy</p>
                 </section>
-                {appConfig.quoteBookingEnabled && <Link to="/consultas">Mis consultas y presupuestos</Link>}
                 <div className="browse-home-layout">
                   {recent && recentService ? (
                     <article className="browse-last-visit">
