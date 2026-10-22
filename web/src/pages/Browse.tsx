@@ -10,6 +10,7 @@ import Consultations from "./Consultations";
 import { BusinessFavoritesProvider, FavoriteButton, useBusinessFavorites } from "../components/BusinessFavorites";
 import { recommendServices } from "../shared/recommendations.js";
 import BrowseFlame from "./BrowseFlame";
+import { ChatIcon } from "../components/ChatChrome";
 import LoadingRunner from "../components/LoadingRunner";
 import "./Browse.css";
 
@@ -685,7 +686,7 @@ function BrowseContent() {
           />
         </Link>
         <nav className="browse-dock" aria-label="Navegación de Browse">
-          {(["inicio", "ofertas", "agenda", "buscar", ...(appConfig.quoteBookingEnabled ? ["mensajes" as const] : [])] as const).map((v) => (
+          {(["inicio", "ofertas", "agenda", "buscar"] as const).map((v) => (
             <button
               key={v}
               className={view === v ? "selected" : ""}
@@ -699,6 +700,15 @@ function BrowseContent() {
           ))}
         </nav>
         <div className="browse-header-actions">
+          {appConfig.quoteBookingEnabled && <button
+            aria-label="Mensajes"
+            aria-current={view === "mensajes" ? "page" : undefined}
+            className={view === "mensajes" ? "selected" : ""}
+            onClick={() => changeView("mensajes")}
+          >
+            <ChatIcon name="chat" />
+            <span className="browse-header-label">Mensajes</span>
+          </button>}
           <button
             aria-label="T-Coins"
             className={view === "coins" ? "selected" : ""}

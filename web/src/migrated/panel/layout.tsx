@@ -2,7 +2,7 @@ import { fetchPanelRead } from "../../shared/panel-requests"
 import { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
-import { useQuoteMode } from "../../shared/agenda-mode"
+import { loadQuoteMode, useQuoteMode } from "../../shared/agenda-mode"
 import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
 import {
@@ -77,6 +77,7 @@ function TurnitsPanel_Inner(props: any) {
     const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() =>
         searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
     )
+    const [agendaConsultaPermitida, setAgendaConsultaPermitida] = React.useState(false)
     const [mostrarNotificaciones, setMostrarNotificaciones] =
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
@@ -126,6 +127,7 @@ function TurnitsPanel_Inner(props: any) {
 
     const irA = (id: SeccionId) => {
         if (branchAdmin && !["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(id)) return
+        if (id === "consultas" && (!appConfig.quoteBookingEnabled || !quoteMode || !agendaConsultaPermitida)) return
         setSeccionActiva(id)
         setSearchParams(previous => {
             const next = new URLSearchParams(previous)
@@ -140,9 +142,41 @@ function TurnitsPanel_Inner(props: any) {
         setMenuMobileAbierto(false)
     }
 
+    React.useEffect(() => {
+        let active = true
+        loadQuoteMode(baseUrl, MenuFooter_getSlug()).then((enabled) => {
+            if (!active) return
+            setAgendaConsultaPermitida(enabled)
+            if (!enabled) {
+                setSeccionActiva((current) => current === "consultas" ? "inicio" : current)
+                setSearchParams((previous) => {
+                    if (previous.get("seccion") !== "consultas") return previous
+                    const next = new URLSearchParams(previous)
+                    next.delete("seccion")
+                    next.delete("id")
+                    next.delete("servicio_id")
+                    return next
+                }, { replace: true })
+            }
+        }).catch(() => {
+            if (!active) return
+            setAgendaConsultaPermitida(false)
+            setSeccionActiva((current) => current === "consultas" ? "inicio" : current)
+            setSearchParams((previous) => {
+                if (previous.get("seccion") !== "consultas") return previous
+                const next = new URLSearchParams(previous)
+                next.delete("seccion")
+                next.delete("id")
+                next.delete("servicio_id")
+                return next
+            }, { replace: true })
+        })
+        return () => { active = false }
+    }, [baseUrl, setSearchParams])
+
     const navItemsVisibles = NAV_ITEMS.filter(
-        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && (item.id !== "consultas" || appConfig.quoteBookingEnabled) && !(quoteMode && item.id === "servicios") && !(quoteMode && item.id === "consultas" && branchAdmin)
-    ).map(item => item.id === "consultas" ? { ...item, label: quoteMode ? "Chat" : "Mensajes" } : item)
+        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && (item.id !== "consultas" || (appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin)) && !(quoteMode && item.id === "servicios")
+    ).map(item => item.id === "consultas" ? { ...item, label: "Mensajes" } : item)
 
     // Igual que irA: si el banner de referidos del menú se toca desde la
     // hoja inferior mobile, cerramos esa hoja para que no quede "detrás"
@@ -536,7 +570,7 @@ function TurnitsPanel_Inner(props: any) {
                 </div>}
 
                 {branchAdmin && seccionActiva !== "consultas" && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
-                {seccionActiva === "consultas" && <Consultations embedded="panel" />}
+                {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <Consultations embedded="panel" />}
                 {seccionActiva === "inicio" && (
                     <SectionLoadingBoundary>
                     <SeccionInicio
