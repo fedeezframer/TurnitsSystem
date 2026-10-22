@@ -14,7 +14,7 @@ type Draft = { servicio: string; detalle: string; total: string; sena: string; d
 const emptyDraft = (): Draft => ({ servicio: "", detalle: "", total: "", sena: "0", duracion: "60", equipo_id: "", fecha: "", hora: "", vence_at: "" });
 const money = (value: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 }).format(value);
 
-export default function Consultations({ embedded }: { embedded?: EmbeddedSurface } = {}) {
+export default function Consultations({ embedded, onInboxChange }: { embedded?: EmbeddedSurface; onInboxChange?: (items: any[]) => void } = {}) {
   if (!appConfig.quoteBookingEnabled) return <main className="consultations-unavailable"><h1>Mensajes</h1><p>Esta modalidad todavía no está habilitada.</p><Link to="/browse">Volver</Link></main>;
   const business = isBusinessSession();
   const wrongSurface = (embedded === "browse" && business) || (embedded === "panel" && !business);
@@ -31,9 +31,9 @@ export default function Consultations({ embedded }: { embedded?: EmbeddedSurface
     destination.set("vista", "mensajes");
     return <Navigate to={`/browse?${destination}`} replace />;
   }
-  return <ConsultationsContent embedded={embedded} />;
+  return <ConsultationsContent embedded={embedded} onInboxChange={onInboxChange} />;
 }
-function ConsultationsContent({ embedded }: { embedded?: EmbeddedSurface }) {
+function ConsultationsContent({ embedded, onInboxChange }: { embedded?: EmbeddedSurface; onInboxChange?: (items: any[]) => void }) {
   const [params, setParams] = useSearchParams();
   const business = isBusinessSession();
   const prefix = business ? "/admin/consultas" : "/browse/consultas";
@@ -70,8 +70,13 @@ function ConsultationsContent({ embedded }: { embedded?: EmbeddedSurface }) {
   const post = (path: string, body: any) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const setThread = (id?: string) => setParams({ ...embeddedParam, ...(id ? { id } : {}) });
   const refreshInbox = React.useCallback(async (signal?: AbortSignal) => {
-    const data = await api(prefix, { signal }); if (!signal?.aborted) setInbox(data.consultas || []);
-  }, [api, prefix]);
+    const data = await api(prefix, { signal });
+    if (!signal?.aborted) {
+      const items = data.consultas || [];
+      setInbox(items);
+      onInboxChange?.(items);
+    }
+  }, [api, onInboxChange, prefix]);
   const refreshThread = React.useCallback(async (signal?: AbortSignal) => {
     if (!current) return;
     const data = await api(`${prefix}/${encodeURIComponent(current)}`, { signal });
@@ -187,7 +192,7 @@ function ConsultationsContent({ embedded }: { embedded?: EmbeddedSurface }) {
             {message.texto && <p>{message.texto}</p>}{message.referencia_url && <button className="chat-reference" type="button" aria-label="Ampliar foto de referencia" onClick={() => setReference(message.referencia_url)}><img src={message.referencia_url} alt="Foto de referencia compartida" loading="lazy" onLoad={() => { if (stickBottom.current && scrollArea.current) scrollArea.current.scrollTop = scrollArea.current.scrollHeight; }} /></button>}
           </article>)}
         </div>
-        {conversation.consulta.estado !== "cerrada" ? <div className="chat-compose-area">{attachmentsOpen && <div className="chat-attachment-menu"><button type="button" disabled={busy} onClick={() => fileInput.current?.click()}><ChatIcon name="photo" />Agregar foto de referencia</button><small>JPG, PNG o WebP · Hasta 2 MB</small></div>}<form className="chat-composer" onSubmit={send}><button className="chat-attach" type="button" aria-label="Adjuntar referencia" aria-expanded={attachmentsOpen} disabled={busy || conversation.consulta.estado !== "abierta"} onClick={() => setAttachmentsOpen(value => !value)}><ChatIcon name="plus" size={25} /></button><textarea ref={composer} rows={1} aria-label="Escribí un mensaje" placeholder={business ? "Escribile al cliente…" : "Contale al profesional qué estás buscando…"} maxLength={3000} value={text} onChange={event => setText(event.target.value)} disabled={busy} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia("(pointer: coarse)").matches) { event.preventDefault(); send(event); } }} /><button className="chat-send" type="submit" aria-label="Enviar mensaje" disabled={busy || !text.trim()}><ChatIcon name="send" size={28} /></button><input className="chat-file-input" ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" tabIndex={-1} aria-label="Elegir foto de referencia" onChange={upload} /></form></div> : <p className="chat-closed">Esta consulta está cerrada.</p>}
+        {conversation.consulta.estado !== "cerrada" ? <div className="chat-compose-area">{attachmentsOpen && <div className="chat-attachment-menu"><button type="button" disabled={busy} onClick={() => fileInput.current?.click()}><ChatIcon name="photo" />Agregar foto de referencia</button><small>JPG, PNG o WebP · Hasta 2 MB</small></div>}<form className="chat-composer" onSubmit={send}><button className="chat-attach" type="button" aria-label="Adjuntar referencia" aria-expanded={attachmentsOpen} disabled={busy || conversation.consulta.estado !== "abierta"} onClick={() => setAttachmentsOpen(value => !value)}><ChatIcon name="plus" size={25} /></button><textarea ref={composer} rows={1} aria-label="Escribe aqui..." placeholder="Escribe aqui..." maxLength={3000} value={text} onChange={event => setText(event.target.value)} disabled={busy} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia("(pointer: coarse)").matches) { event.preventDefault(); send(event); } }} /><button className="chat-send" type="submit" aria-label="Enviar mensaje" disabled={busy || !text.trim()}><ChatIcon name="send" size={28} /></button><input className="chat-file-input" ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" tabIndex={-1} aria-label="Elegir foto de referencia" onChange={upload} /></form></div> : <p className="chat-closed">Esta consulta está cerrada.</p>}
       </>}
       {conversation && screen === "edit" && <div className="chat-quote-scroll"><form className="chat-quote-form" onSubmit={submitQuote}>
         <label className="chat-quote-field">Servicio<input required minLength={2} maxLength={120} autoComplete="off" {...field("servicio")} /></label>

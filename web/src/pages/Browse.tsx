@@ -9,6 +9,7 @@ import BookingReceipt from "../components/BookingReceipt";
 import Consultations from "./Consultations";
 import { BusinessFavoritesProvider, FavoriteButton, useBusinessFavorites } from "../components/BusinessFavorites";
 import { recommendServices } from "../shared/recommendations.js";
+import { messagePreview } from "../shared/consultations.js";
 import BrowseFlame from "./BrowseFlame";
 import { ChatIcon } from "../components/ChatChrome";
 import LoadingRunner from "../components/LoadingRunner";
@@ -388,7 +389,10 @@ function BrowseContent() {
     [slots, setSlots] = React.useState<any[]>([]),
     [slotLoading, setSlotLoading] = React.useState(false),
     [form, setForm] = React.useState<any>({}),
-    [revision, setRevision] = React.useState(0);
+    [revision, setRevision] = React.useState(0),
+    [unreadMessages, setUnreadMessages] = React.useState(0),
+    [messageNotice, setMessageNotice] = React.useState<any>(null);
+  const previousUnread = React.useRef<Record<string, number> | null>(null);
   useStartupLoading(loading);
   React.useEffect(() => {
     try {
@@ -446,6 +450,40 @@ function BrowseContent() {
     },
     [navigate],
   );
+  const handleInboxChange = React.useCallback((items: any[]) => {
+    const next: Record<string, number> = Object.fromEntries(items.map(item => [item.id, Number(item.no_leidos) || 0]));
+    const previous = previousUnread.current;
+    const total = Object.values(next).reduce((sum, count) => sum + count, 0);
+    if (previous && view !== "mensajes") {
+      const incoming = items.find(item => Number(item.no_leidos) > (previous[item.id] || 0));
+      if (incoming) setMessageNotice({ id: incoming.id, name: incoming.interlocutor_nombre || incoming.slug, preview: messagePreview(incoming, false) });
+    }
+    previousUnread.current = next;
+    setUnreadMessages(total);
+  }, [view]);
+  React.useEffect(() => {
+    if (!appConfig.quoteBookingEnabled || view === "mensajes" || !consumerHeaders().Authorization) return;
+    const controller = new AbortController();
+    let active = true, pending = false;
+    const refresh = () => {
+      if (pending || document.hidden) return;
+      pending = true;
+      api("/browse/consultas", { signal: controller.signal })
+        .then(data => { if (active) handleInboxChange(data.consultas || []); })
+        .catch(() => {})
+        .finally(() => { pending = false; });
+    };
+    const visible = () => { if (!document.hidden) refresh(); };
+    void refresh();
+    const timer = window.setInterval(refresh, 12000);
+    document.addEventListener("visibilitychange", visible);
+    return () => { active = false; controller.abort(); window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
+  }, [api, handleInboxChange, view]);
+  React.useEffect(() => {
+    if (!messageNotice) return;
+    const timer = window.setTimeout(() => setMessageNotice(null), 5500);
+    return () => window.clearTimeout(timer);
+  }, [messageNotice]);
   React.useEffect(() => {
     document.title = "Turnits | Browse";
     return () => {
@@ -666,7 +704,7 @@ function BrowseContent() {
     navigate(`/agenda/${encodeURIComponent(item.slug)}?${params}`);
   };
   return (
-    <div className="browse">
+    <div className={`browse${view === "mensajes" && params.get("id") ? " browse-chat-active" : ""}`}>
       <header className="browse-header">
         <Link
           to="/browse"
@@ -700,15 +738,6 @@ function BrowseContent() {
           ))}
         </nav>
         <div className="browse-header-actions">
-          {appConfig.quoteBookingEnabled && <button
-            aria-label="Mensajes"
-            aria-current={view === "mensajes" ? "page" : undefined}
-            className={view === "mensajes" ? "selected" : ""}
-            onClick={() => changeView("mensajes")}
-          >
-            <ChatIcon name="chat" />
-            <span className="browse-header-label">Mensajes</span>
-          </button>}
           <button
             aria-label="T-Coins"
             className={view === "coins" ? "selected" : ""}
@@ -728,7 +757,7 @@ function BrowseContent() {
         </div>
       </header>
       <main key={view} className={`browse-main browse-view-${view}`}>
-        {view === "mensajes" ? <Consultations embedded="browse" /> : <>
+        {view === "mensajes" ? <Consultations embedded="browse" onInboxChange={handleInboxChange} /> : <>
         {status}
         {!status && (
           <>
@@ -1244,6 +1273,20 @@ function BrowseContent() {
         )}
         </>}
       </main>
+      {appConfig.quoteBookingEnabled && <>
+        {messageNotice && view !== "mensajes" && <div className="browse-message-notice" role="status">
+          <button type="button" className="browse-message-notice-open" onClick={() => { setParams({ vista: "mensajes", id: messageNotice.id }); setMessageNotice(null); }}>
+            <ChatIcon name="chat" size={18} />
+            <span><strong>{messageNotice.name}</strong><small>{messageNotice.preview || "Te llegó un mensaje nuevo"}</small></span>
+          </button>
+          <button type="button" className="browse-message-notice-close" aria-label="Cerrar notificación" onClick={() => setMessageNotice(null)}><ChatIcon name="close" size={16} /></button>
+        </div>}
+        <button className={`browse-message-fab${view === "mensajes" ? " selected" : ""}`} type="button" aria-label={unreadMessages ? `Mensajes, ${unreadMessages} sin leer` : view === "mensajes" ? "Cerrar mensajes" : "Abrir mensajes"} aria-current={view === "mensajes" ? "page" : undefined} onClick={() => changeView(view === "mensajes" ? "inicio" : "mensajes")}>
+          <ChatIcon name={view === "mensajes" ? "close" : "chat"} size={23} />
+          <span>{view === "mensajes" ? "Cerrar" : "Mensajes"}</span>
+          {unreadMessages > 0 && <b aria-hidden="true">{unreadMessages > 99 ? "99+" : unreadMessages}</b>}
+        </button>
+      </>}
       {modal && (
         <Modal
           title={

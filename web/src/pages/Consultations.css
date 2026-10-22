@@ -20,3 +20,83 @@
 .consultations-embedded{width:100%;max-width:none;min-height:480px;border:1px solid #e5e9e3;border-radius:18px;box-shadow:0 8px 28px #142b1410}.consultations-embedded-browse{height:min(820px,calc(100dvh - 190px))}.consultations-embedded-panel{height:min(820px,calc(100dvh - 160px))}
 @media(max-width:860px){.consultations-embedded-panel{height:max(400px,calc(100dvh - 225px));min-height:400px}}
 @media(max-width:700px){.consultations-embedded-browse{height:max(390px,calc(100dvh - 198px));min-height:390px;border-radius:15px}.consultations-embedded{border-radius:15px}}
+
+.consultations{font-size:14px}
+.chat-wordmark{font-size:34px;letter-spacing:-1.5px}
+.chat-avatar{width:42px;height:42px;min-width:42px;font-size:22px}
+.chat-inbox{max-width:700px;padding:22px 24px 28px}
+.chat-inbox h1{font-size:21px;line-height:27px;margin-bottom:16px}
+.chat-inbox-list{gap:12px}
+.chat-inbox-item{min-height:78px;gap:13px;padding:10px 18px 10px 12px;border-radius:14px}
+.chat-inbox-copy{gap:4px}
+.chat-inbox-copy strong{font-size:18px;line-height:23px}
+.chat-inbox-copy>span{font-size:13px;font-weight:500}
+.chat-unread-dot{width:8px;height:8px;flex-basis:8px}
+.chat-bottom-nav{height:58px;max-width:400px}
+.chat-person{height:70px;min-height:70px;padding:10px 0;margin:0 20px;border-bottom-width:1px;gap:13px}
+.chat-person h1{font-size:20px;line-height:25px}
+.chat-person-actions{gap:10px}
+.chat-person-actions button{width:40px;height:40px}
+.chat-quote-strip{min-height:44px;margin-left:20px;margin-right:20px}
+.chat-quote-strip>strong{font-size:14px;line-height:19px}
+.chat-quote-strip>button{min-width:128px;min-height:32px;font-size:11px}
+.chat-messages{gap:9px;padding:16px 24px 8px}
+.chat-bubble{max-width:70%;padding:11px 15px;border-radius:13px}
+.chat-bubble p{font-size:14px;line-height:1.4;font-weight:500}
+.chat-photo-bubble{width:230px;max-width:62%}
+.chat-reference img{max-height:280px;min-height:120px}
+.chat-compose-area{padding:0 24px max(16px,env(safe-area-inset-bottom))}
+.chat-composer{min-height:58px;gap:9px;padding:7px 7px 7px 9px}
+.chat-composer textarea{height:42px;min-height:42px;padding:11px 14px;font-size:14px;line-height:20px}
+.chat-attach{width:28px;min-width:28px;height:36px}
+.chat-attach svg{width:21px;height:21px}
+.chat-send{width:42px;height:42px;min-width:42px}
+.chat-send svg{width:22px;height:22px}
+.chat-empty{padding:20px;font-size:14px}
+.chat-history{font-size:12px}
+.chat-error{font-size:12px}
+.chat-quote-form{gap:12px;padding:32px 24px 24px}
+.chat-quote-field{gap:7px;font-size:16px;line-height:21px}
+.chat-quote-field>input,.chat-quote-field>select,.chat-quote-field>textarea,.chat-price-input{height:44px;min-height:44px;padding:10px 12px;font-size:15px;line-height:20px}
+.chat-quote-field>textarea{height:90px;min-height:90px}
+.chat-price-input input{font-size:16px}
+.chat-quote-row{gap:24px}
+.chat-quote-submit{min-height:44px;min-width:170px;margin-top:12px;padding:11px 18px;font-size:14px}
+.chat-quote-view{padding:24px}
+.chat-quote-view h2{font-size:21px;margin-bottom:20px}
+.chat-quote-view dt{font-size:16px}
+.chat-quote-view dd{padding:11px 12px;font-size:14px;line-height:21px}
+.chat-quote-view .chat-quote-payment{padding:14px}
+.chat-quote-options{font-size:12px}
+
+@media(max-width:700px){
+  .chat-inbox{padding:16px 16px 18px}
+  .chat-inbox h1{font-size:20px;margin-bottom:13px}
+  .chat-inbox-item{min-height:72px;gap:11px;padding:9px 14px 9px 10px}
+  .chat-avatar{width:40px;height:40px;min-width:40px;font-size:20px}
+  .chat-inbox-copy strong{font-size:17px;line-height:21px}
+  .chat-inbox-copy>span{font-size:12px}
+  .chat-person{height:62px;min-height:62px;margin:0 14px;gap:10px}
+  .chat-person h1{font-size:18px;line-height:23px}
+  .chat-person-actions{gap:8px}
+  .chat-person-actions button{width:36px;height:36px}
+  .chat-person-actions button svg{width:20px;height:20px}
+  .chat-quote-strip{margin-left:14px;margin-right:14px;min-height:40px;gap:8px;padding-left:10px}
+  .chat-quote-strip>strong{font-size:13px}
+  .chat-quote-strip>button{min-width:116px;padding:7px 9px;font-size:10px}
+  .chat-messages{gap:8px;padding:14px 15px 8px}
+  .chat-bubble{max-width:84%;padding:10px 13px;border-radius:12px}
+  .chat-bubble p{font-size:13.5px;line-height:1.4}
+  .chat-photo-bubble{width:210px;max-width:76%;padding:6px}
+  .chat-reference img{max-height:250px;min-height:110px}
+  .chat-compose-area{padding:0 12px max(12px,env(safe-area-inset-bottom))}
+  .chat-composer{min-height:54px;gap:7px;padding:6px 6px 6px 8px}
+  .chat-composer textarea{height:40px;min-height:40px;padding:10px 12px;font-size:14px;line-height:20px}
+  .chat-attach{width:26px;min-width:26px;height:34px}
+  .chat-send{width:40px;height:40px;min-width:40px}
+  .chat-quote-form{gap:11px;padding:24px 18px 20px}
+  .chat-quote-row{gap:14px}
+  .chat-quote-field{font-size:15px}
+  .chat-quote-view{padding:20px 18px}
+  .chat-quote-view h2{font-size:20px;margin-bottom:16px}
+}
