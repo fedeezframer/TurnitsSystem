@@ -2983,7 +2983,7 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
 
     let equipoConsulta = [];
     if (quoteMode) {
-      const { data: equipo, error: equipoError } = await supabase.from("equipo")
+      const { data: equipo, error: equipoError } = await branchPanel.from(req, "equipo")
         .select("id")
         .eq("slug", slugClean)
         .eq("activo", true);
@@ -3013,7 +3013,7 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
 
     if (error) throw error;
     if (equipoConsulta.length) {
-      const { error: asignacionError } = await supabase.from("servicio_equipo").insert(
+      const { error: asignacionError } = await branchPanel.from(req, "servicio_equipo").insert(
         equipoConsulta.map(({ equipo_id }) => ({ servicio_id: data.id, equipo_id })),
       );
       if (asignacionError) {
