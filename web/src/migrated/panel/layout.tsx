@@ -295,7 +295,7 @@ function TurnitsPanel_Inner(props: any) {
                   al girar el celular. */}
             <style>{`
 .turnits-root{-webkit-text-size-adjust:100%;text-size-adjust:100%;max-width:100%;min-width:0}
-@keyframes panel-section-in{from{opacity:0}to{opacity:1}}
+@keyframes panel-section-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .turnits-root *{min-width:0}
 @media(max-width:860px){.turnits-root{width:100%;max-width:100%;overflow-x:clip!important}.turnits-root img,.turnits-root video,.turnits-root canvas{max-width:100%}.turnits-root input,.turnits-root textarea,.turnits-root select{max-width:100%;box-sizing:border-box}}
 @media(prefers-reduced-motion:reduce){.turnits-panel-content{animation:none!important}}
@@ -610,7 +610,7 @@ function TurnitsPanel_Inner(props: any) {
                 style={
                     {
                         flex: isMobile ? "0 0 auto" : 1,
-                        animation: "panel-section-in .2s ease both",
+                        animation: "panel-section-in .24s cubic-bezier(.2,.75,.25,1) both",
                         minWidth: 0,
                         minHeight: isMobile ? "auto" : 0,
                         padding: isMobile

@@ -2444,6 +2444,10 @@
 }
 @media(prefers-reduced-motion:reduce){.browse-message-notice{animation:none;transition:none}}
 
+.browse-main{animation:browse-view-in .24s cubic-bezier(.2,.75,.25,1) both}
+@keyframes browse-view-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.browse-main{animation:none!important}}
+
 .browse-header-actions .browse-messages-action{position:relative}
 .browse-header-actions .browse-messages-action.selected{color:var(--browse-green)}
 .browse-messages-action>b{position:absolute;top:1px;right:0;display:grid;place-items:center;min-width:17px;height:17px;padding:0 4px;border:2px solid #fff;border-radius:12px;background:#1b6b1a;color:#fff;font-size:9px;line-height:1;font-weight:700}

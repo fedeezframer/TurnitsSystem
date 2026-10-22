@@ -165,6 +165,46 @@
 .chat-panel-empty span{max-width:300px;font-size:13px;line-height:1.5}
 .chat-inbox-exit{display:none;align-items:center;justify-content:center;width:38px;height:38px;flex:0 0 38px;border:0;border-radius:50%;background:#f0f2f0;color:#1b241b}
 
+.chat-quote-form{gap:12px;padding:22px 24px 28px;animation:chat-quote-in .24s cubic-bezier(.2,.75,.25,1) both}
+.chat-quote-intro{padding:2px 2px 4px}
+.chat-quote-kicker{display:inline-flex;align-items:center;gap:7px;color:#1b6b1a;font-size:12px;font-weight:650;letter-spacing:.02em}
+.chat-quote-intro h2{margin:8px 0 4px;color:#192018;font-size:24px;line-height:1.2;letter-spacing:-.04em}
+.chat-quote-intro p{margin:0;color:#737b71;font-size:13px;line-height:1.5}
+.chat-quote-section{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid #e6eae4;border-radius:16px;background:#fff;box-shadow:0 2px 8px #13221206}
+.chat-quote-section-heading{display:flex;align-items:center;gap:11px;margin-bottom:2px}
+.chat-quote-section-heading>span{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:10px;background:#eef6ec;color:#1b6b1a;font-size:11px;font-weight:700}
+.chat-quote-section-heading>div{display:flex;min-width:0;flex-direction:column;gap:2px}
+.chat-quote-section-heading strong{color:#1a2119;font-size:14px;font-weight:650;line-height:19px}
+.chat-quote-section-heading small{color:#777f75;font-size:11px;line-height:1.4}
+.chat-quote-section .chat-quote-field{gap:6px;color:#30382f;font-size:12px;font-weight:600;line-height:17px}
+.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input{height:44px;min-height:44px;border:1px solid #e4e8e2;border-radius:10px;background:#f7f8f6;padding:10px 12px;color:#1d241c;font-size:14px;line-height:20px;transition:border-color .16s,background-color .16s,box-shadow .16s}
+.chat-quote-section .chat-quote-field>input:focus,.chat-quote-section .chat-quote-field>select:focus,.chat-quote-section .chat-quote-field>textarea:focus,.chat-quote-section .chat-price-input:focus-within,.chat-quote-suffix-input:focus-within{outline:0;border-color:#87b581;background:#fff;box-shadow:0 0 0 3px #1b6b1a12}
+.chat-quote-section .chat-quote-field>textarea{height:96px;min-height:96px;resize:vertical}
+.chat-quote-section .chat-price-input{display:flex;align-items:center;gap:8px;color:#81897e}
+.chat-quote-section .chat-price-input input,.chat-quote-suffix-input input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#192018;font-size:15px}
+.chat-quote-section .chat-quote-row{gap:12px}
+.chat-quote-suffix-input{display:flex;align-items:center;gap:8px}
+.chat-quote-suffix-input span{flex:none;color:#777f75;font-size:12px;font-weight:400}
+.chat-quote-optional{margin-left:4px;color:#858d83;font-size:11px;font-weight:400}
+.chat-quote-help{margin:-4px 0 0;color:#71796f;font-size:11px;line-height:1.5}
+.chat-quote-summary{display:flex;flex-direction:column;gap:9px;padding:12px 14px;border:1px solid #dfeadd;border-radius:12px;background:#f5faf3}
+.chat-quote-summary>div{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#5c685a;font-size:12px;line-height:18px}
+.chat-quote-summary>div strong{color:#20291e;font-size:13px;font-weight:650;text-align:right}
+.chat-quote-summary>div:first-child{padding-bottom:8px;border-bottom:1px solid #e0e9dd}
+.chat-quote-summary>div:first-child strong{color:#1b6b1a;font-size:17px;letter-spacing:-.02em}
+.chat-quote-options{margin:0;padding:0 14px;border:1px solid #e6eae4;border-radius:12px;background:#fff;color:#4c554a}
+.chat-quote-options summary{padding:12px 0;color:#353e33;font-size:12px;font-weight:600}
+.chat-quote-options .chat-quote-field{margin:0 0 12px;font-size:12px}
+.chat-quote-options p{margin:0 0 12px;color:#777f75;font-size:11px}
+.chat-quote-form-footer{display:flex;flex-direction:column;gap:10px;padding:2px 0 4px}
+.chat-quote-form-footer>p{margin:0;color:#747c72;font-size:11px;line-height:1.45}
+.chat-quote-form-footer .chat-quote-submit{width:100%;min-height:48px;margin:0;border-radius:12px;background:#1b6b1a;font-size:14px;box-shadow:0 4px 10px #1b6b1a20;transition:background-color .16s,transform .16s,box-shadow .16s}
+.chat-quote-form-footer .chat-quote-submit:hover:not(:disabled){transform:translateY(-1px);background:#165c15;box-shadow:0 7px 15px #1b6b1a26}
+@keyframes chat-quote-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:700px){.chat-quote-form{gap:10px;padding:16px 14px max(20px,env(safe-area-inset-bottom))}.chat-quote-intro h2{font-size:22px}.chat-quote-section{gap:10px;padding:13px;border-radius:14px}.chat-quote-section .chat-quote-row{gap:9px}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input{padding:9px 10px}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input input,.chat-quote-suffix-input input{font-size:16px}}
+@media(max-width:370px){.chat-quote-section .chat-quote-row{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){.chat-quote-form{animation:none}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input,.chat-quote-form-footer .chat-quote-submit{transition:none}}
+
 @media(max-width:860px){
   .consultations-embedded-panel{position:fixed;z-index:65;inset:0;width:100vw;height:100dvh;min-height:0;grid-template-columns:minmax(0,1fr);border:0;border-radius:0;box-shadow:none}
   .consultations-embedded-panel>.chat-inbox,.chat-panel-sidebar .chat-inbox{padding:18px 16px max(18px,env(safe-area-inset-bottom))}
