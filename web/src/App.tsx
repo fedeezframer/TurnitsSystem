@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react"
-import { Link, Navigate, Route, Routes, useParams } from "react-router"
+import { Link, Navigate, Route, Routes, useParams, useLocation } from "react-router"
 import { appConfig } from "./config"
 import Receipt from "./pages/Receipt"
 import ResetPassword from "./pages/ResetPassword"
@@ -40,7 +40,8 @@ function MissingPage() {
   return <div className="app-page"><section className="app-card"><img className="app-brand" src={appConfig.logoUrl} alt="Turnits" /><h1>Página no encontrada</h1><p>Revisá el enlace o volvé a iniciar sesión.</p><Link className="app-button" to="/login">Ir al login</Link></section></div>
 }
 export default function App() {
-  return <Suspense fallback={<BrandPreloader />}>{appConfig.staging && <div role="status" style={{position:"relative",zIndex:10000,padding:"8px 16px",textAlign:"center",background:"#fff0b3",color:"#604700",font:"600 13px Arial,sans-serif"}}>TURNITS TEST · Datos de prueba · Sin cobros reales · Funciones en desarrollo</div>}<Routes>
+  const location = useLocation()
+  return <Suspense fallback={<BrandPreloader />}>{appConfig.staging && location.pathname !== "/consultas" && <div role="status" style={{position:"relative",zIndex:10000,padding:"8px 16px",textAlign:"center",background:"#fff0b3",color:"#604700",font:"600 13px Arial,sans-serif"}}>TURNITS TEST · Datos de prueba · Sin cobros reales · Funciones en desarrollo</div>}<Routes>
     <Route path="/" element={<Home />} />
     <Route path="/login" element={<Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
     <Route path="/registro" element={<Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" />} />

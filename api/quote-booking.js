@@ -1,11 +1,16 @@
 import crypto from "node:crypto";
+import { quoteDetail } from "../web/src/shared/consultations.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const read = response => { if (response.error) throw response.error; return response.data; };
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { publicMessage: message, status }); };
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 export function validateQuote(body, now = Date.now()) {
-  const detail = typeof body.detalle === "string" ? body.detalle.trim() : "";
+  let detail = typeof body.detalle === "string" ? body.detalle.trim() : "";
+  if (body.servicio !== undefined) {
+    if (typeof body.servicio !== "string" || body.servicio.trim().length < 2 || body.servicio.trim().length > 120 || detail.length > 2200) fail("Revisá el servicio y la observación.");
+    detail = quoteDetail(body.servicio, detail);
+  }
   if (detail.length < 2 || detail.length > 3000) fail("Describí qué incluye el presupuesto.");
   const total = Number(body.total), deposit = Number(body.sena), duration = Number(body.duracion);
   if (!Number.isFinite(total) || total <= 0 || total > 100000000 || Math.round(total * 100) / 100 !== total || !Number.isFinite(deposit) || deposit < 0 || deposit > total || Math.round(deposit * 100) / 100 !== deposit) fail("Revisá el total y la seña.");
@@ -73,11 +78,26 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
     const prefix = business ? "/admin/consultas" : "/browse/consultas";
     const guards = business ? [feature, requireAuth, owner, limiter] : [feature, consumerAuth, limiter];
     app.get(prefix, ...guards, route(async (req, res) => {
-      const data = read(await supabase.from("consultas").select("id,titulo,estado,created_at,slug").eq(business ? "slug" : "consumidor_id", business ? req.auth.slug : req.consumer.id).order("created_at", { ascending: false }).limit(100));
+      const data = read(await supabase.rpc("consulta_bandeja", { p_consumidor: business ? null : req.consumer.id, p_slug: business ? req.auth.slug : null }));
       res.json({ success: true, consultas: data });
+    }));
+    app.post(prefix + "/:id/leida", ...guards, route(async (req,res) => {
+      const consultation = await thread(req,business);
+      if (!UUID.test(req.body.mensaje_id || "")) fail("Mensaje inválido.");
+      const message = read(await supabase.from("consulta_mensajes").select("created_at").eq("id",req.body.mensaje_id).eq("consulta_id",consultation.id).maybeSingle());
+      if (!message) fail("Mensaje no encontrado.",404);
+      const column = business ? "negocio_leido_at" : "cliente_leido_at";
+      if (!consultation[column] || Date.parse(consultation[column]) < Date.parse(message.created_at)) read(await supabase.from("consultas").update({ [column]:message.created_at }).eq("id",consultation.id).or(`${column}.is.null,${column}.lt.${message.created_at}`));
+      res.json({success:true});
     }));
     app.get(prefix + "/:id", ...guards, route(async (req, res) => {
       const consultation = await thread(req, business);
+      const [participantResult,serviceResult] = await Promise.all([
+        business ? supabase.from("consumidores").select("nombre_persona,apellido,foto_url").eq("id",consultation.consumidor_id).maybeSingle() : supabase.from("negocio_perfiles").select("nombre,foto_perfil_url").eq("slug",consultation.slug).maybeSingle(),
+        supabase.from("servicios").select("nombre,duracion").eq("id",consultation.servicio_id).eq("slug",consultation.slug).maybeSingle(),
+      ]);
+      const participant = read(participantResult), service = read(serviceResult);
+      const interlocutor = { nombre: business ? [participant?.nombre_persona,participant?.apellido].filter(Boolean).join(" ") || "Cliente" : participant?.nombre || consultation.slug, foto_url: business ? participant?.foto_url : participant?.foto_perfil_url };
       const before = req.query.before;
       if (before && !UUID.test(before)) fail("Cursor inválido.");
       let messages = supabase.from("consulta_mensajes").select("id,autor,texto,archivo,created_at").eq("consulta_id", consultation.id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(50);
@@ -93,7 +113,7 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
         return { ...message, archivo: undefined, referencia_url: signed.signedUrl };
       }));
       const quotes = read(await supabase.from("consulta_presupuestos").select("*").eq("consulta_id", consultation.id).order("created_at", { ascending: false }).limit(20));
-      res.json({ success: true, consulta: { id: consultation.id, titulo: consultation.titulo, estado: consultation.estado, slug: consultation.slug, servicio_id: consultation.servicio_id }, mensajes: safeMessages.reverse(), presupuestos: quotes, anterior: rows.length === 50 ? rows.at(-1).id : null });
+      res.json({ success: true, consulta: { id: consultation.id, titulo: consultation.titulo, estado: consultation.estado, slug: consultation.slug, servicio_id: consultation.servicio_id }, interlocutor, servicio:service, mensajes: safeMessages.reverse(), presupuestos: quotes, anterior: rows.length === 50 ? rows.at(-1).id : null });
     }));
     app.post(prefix + "/:id/mensajes", ...guards, route(async (req, res) => {
       const consultation = await thread(req, business);

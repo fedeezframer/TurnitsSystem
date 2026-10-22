@@ -31,6 +31,8 @@ Web y panel existentes, catálogo de dos negocios ficticios, favoritos y la prim
 
 ## Limitaciones explícitas
 
+La bandeja y el chat reproducen los bocetos móviles: una sola pantalla por estado, presupuesto separado del historial, referencias privadas y mensajes propios verdes. Los nombres, fotos, últimos mensajes y no leídos provienen de datos reales. Aplicar también `20261021235830_consultation_inbox_read_receipts.sql`; su función de bandeja solo es ejecutable por el servidor y cada ruta valida al participante. Las lecturas son monotónicas y se marcan hasta el mensaje recibido por el cliente, no hasta la hora del servidor. El refresco es cada 15 segundos con la pestaña visible.
+
 - Cobros reales, OAuth de Mercado Pago y webhooks de pagos bloqueados. No conectar cuentas ni tarjetas reales. El pago online por presupuesto sigue pendiente; se puede probar confirmación manual, sin registrar un pago.
 - Google, WhatsApp, push y correo real no están conectados. El registro con verificación por correo no completa su flujo hasta configurar un proveedor de correo de pruebas; usar las cuentas demo mientras tanto.
 - La agenda por presupuesto sigue en desarrollo. El editor sin precio obligatorio y los demás pendientes están en AGENDA-PRESUPUESTOS.md. No confundir una demo accesible con una funcionalidad terminada.

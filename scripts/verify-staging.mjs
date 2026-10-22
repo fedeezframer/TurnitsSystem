@@ -22,6 +22,12 @@ const uploaded = await fetch(credentials.site + `/browse/consultas/${request.id}
 assert.equal(uploaded.status, 200);
 await api(`/admin/consultas/${request.id}/mensajes`, ownerToken, { texto: "Respuesta de prueba del estudio. Coordinamos el diseño y el horario." });
 let conversation = await api(`/browse/consultas/${request.id}`, clientToken);
+assert(conversation.interlocutor.nombre);
+const inbox = await api("/browse/consultas", clientToken);
+assert(inbox.consultas.some(item => item.id === request.id && item.interlocutor_nombre));
+await api(`/browse/consultas/${request.id}/leida`, clientToken, { mensaje_id: conversation.mensajes.at(-1).id });
+const readInbox = await api("/browse/consultas", clientToken);
+assert.equal(Number(readInbox.consultas.find(item => item.id === request.id).no_leidos), 0);
 assert(conversation.mensajes.some(message => message.referencia_url && new URL(message.referencia_url).hostname === "glqflwmrxnavkdegjcdm.supabase.co"), "references use only private test storage");
 let quote = conversation.presupuestos.find(item => item.estado === "reservado");
 if (!quote) {
