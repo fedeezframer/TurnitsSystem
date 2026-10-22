@@ -20,6 +20,12 @@ const NAV_ICONS: Record<SeccionId, React.ReactElement> = {
       <path d="M9.5 8.8 20 20M20 4 9.5 15.2" />
     </>
   ),
+  consultas: (
+    <>
+      <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.5A7.5 7.5 0 1 1 20 11.5Z" />
+      <path d="M8 11h8M8 14.5h5" />
+    </>
+  ),
   clientes: (
     <>
       <circle cx="9" cy="8" r="3.2" />

@@ -2,6 +2,7 @@ import { fetchPanelRead } from "../../shared/panel-requests"
 import { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
+import { useQuoteMode } from "../../shared/agenda-mode"
 import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
 import {
@@ -62,6 +63,7 @@ function TurnitsPanel_Inner(props: any) {
         soporteUrl = "https://api.whatsapp.com/send/?phone=5493513087324&text&type=phone_number&app_absent=0",
         style,
     } = props
+    const quoteMode = useQuoteMode(baseUrl)
 
     // ─── Onboarding a pantalla completa: mientras el usuario no tenga
     // servicio + horarios + método de cobro, no se muestra el panel.
@@ -120,13 +122,14 @@ function TurnitsPanel_Inner(props: any) {
 
     const irA = (id: SeccionId) => {
         if (branchAdmin && !["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(id)) return
+        if (id === "consultas") { window.location.assign("/consultas"); return }
         setSeccionActiva(id)
         setMenuMobileAbierto(false)
     }
 
     const navItemsVisibles = NAV_ITEMS.filter(
-        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible)
-    )
+        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && !(quoteMode && item.id === "servicios") && !(quoteMode && item.id === "consultas" && branchAdmin)
+    ).map(item => quoteMode && item.id === "consultas" ? { ...item, label: "Chat" } : item)
 
     // Igual que irA: si el banner de referidos del menú se toca desde la
     // hoja inferior mobile, cerramos esa hoja para que no quede "detrás"
@@ -821,10 +824,10 @@ function TurnitsPanel_Inner(props: any) {
                             navIconos={navIconos}
                         />
                         <BottomNavIcon
-                            id="servicios"
-                            active={seccionActiva === "servicios"}
+                            id={quoteMode ? "consultas" : "servicios"}
+                            active={seccionActiva === (quoteMode ? "consultas" : "servicios")}
                             accentColor={accentColor}
-                            onClick={() => irA("servicios")}
+                            onClick={() => irA(quoteMode ? "consultas" : "servicios")}
                             navIconos={navIconos}
                         />
                         <div

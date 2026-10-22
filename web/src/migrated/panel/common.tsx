@@ -3742,6 +3742,7 @@ type SeccionId =
     | "perfil"
     | "inicio"
     | "servicios"
+    | "consultas"
     | "clientes"
     | "agenda"
     | "horarios"
@@ -3753,6 +3754,7 @@ type SeccionId =
 const NAV_ITEMS: { id: SeccionId; label: string }[] = [
     { id: "inicio", label: "Inicio" },
     { id: "servicios", label: "Servicios" },
+    { id: "consultas", label: "Consultas" },
     { id: "clientes", label: "Clientes" },
     { id: "agenda", label: "Agenda" },
     { id: "horarios", label: "Horarios" },
