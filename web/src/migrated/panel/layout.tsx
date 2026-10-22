@@ -14,6 +14,7 @@ import {
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
+import { useSearchParams } from "react-router"
 import { SeccionId, Turnits_useElementWidth, TurnitsGlobalSaveManager_get, MenuFooter_getSlug, MenuFooter_getToken, NAV_ITEMS, SeccionHeader } from "./common"
 import { TurnitsBetaInstallPrompt, QrFlotante, TurnitsGlobalSaveBar } from "./interfaz"
 import { OnboardingNube } from "./onboarding"
@@ -23,6 +24,7 @@ import { SeccionInicio, TurnitsDashboardSidePanel } from "./dashboard"
 import { CopyTurnosButton } from "./inicio"
 import { PerfilNegocio } from "./profile-section"
 import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, PagosSettingsGuard, MercadoPagoConexion, ConfigPagos, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
+import Consultations from "../../pages/Consultations"
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
@@ -64,6 +66,7 @@ function TurnitsPanel_Inner(props: any) {
         style,
     } = props
     const quoteMode = useQuoteMode(baseUrl)
+    const [searchParams, setSearchParams] = useSearchParams()
 
     // ─── Onboarding a pantalla completa: mientras el usuario no tenga
     // servicio + horarios + método de cobro, no se muestra el panel.
@@ -71,8 +74,9 @@ function TurnitsPanel_Inner(props: any) {
     // ─── Preloader de arranque (logo → "Hola, Nombre" → se difumina) ──
 
     // ─── Estado de navegación (reemplaza las variantes de Framer) ─────────
-    const [seccionActiva, setSeccionActiva] =
-        React.useState<SeccionId>("inicio")
+    const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() =>
+        searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
+    )
     const [mostrarNotificaciones, setMostrarNotificaciones] =
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
@@ -122,14 +126,23 @@ function TurnitsPanel_Inner(props: any) {
 
     const irA = (id: SeccionId) => {
         if (branchAdmin && !["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(id)) return
-        if (id === "consultas") { window.location.assign("/consultas"); return }
         setSeccionActiva(id)
+        setSearchParams(previous => {
+            const next = new URLSearchParams(previous)
+            if (id === "consultas") next.set("seccion", "consultas")
+            else {
+                next.delete("seccion")
+                next.delete("id")
+                next.delete("servicio_id")
+            }
+            return next
+        }, { replace: true })
         setMenuMobileAbierto(false)
     }
 
     const navItemsVisibles = NAV_ITEMS.filter(
-        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && !(quoteMode && item.id === "servicios") && !(quoteMode && item.id === "consultas" && branchAdmin)
-    ).map(item => quoteMode && item.id === "consultas" ? { ...item, label: "Chat" } : item)
+        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && (item.id !== "consultas" || appConfig.quoteBookingEnabled) && !(quoteMode && item.id === "servicios") && !(quoteMode && item.id === "consultas" && branchAdmin)
+    ).map(item => item.id === "consultas" ? { ...item, label: quoteMode ? "Chat" : "Mensajes" } : item)
 
     // Igual que irA: si el banner de referidos del menú se toca desde la
     // hoja inferior mobile, cerramos esa hoja para que no quede "detrás"
@@ -504,7 +517,7 @@ function TurnitsPanel_Inner(props: any) {
                     } as React.CSSProperties
                 }
             >
-                <div
+                {seccionActiva !== "consultas" && <div
                     style={{
                         // Un único bloque sticky conserva el orden en ambas
                         // vistas: header (móvil) → Guardar cambios → Comisiones.
@@ -520,9 +533,10 @@ function TurnitsPanel_Inner(props: any) {
                         accentColor={accentColor}
                         isMobile={isMobile}
                     />
-                </div>
+                </div>}
 
-                {branchAdmin && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
+                {branchAdmin && seccionActiva !== "consultas" && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
+                {seccionActiva === "consultas" && <Consultations embedded="panel" />}
                 {seccionActiva === "inicio" && (
                     <SectionLoadingBoundary>
                     <SeccionInicio

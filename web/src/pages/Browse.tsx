@@ -6,18 +6,20 @@ import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import { consumerHeaders } from "../shared/consumer-session";
 import BrowseCalendar from "./BrowseCalendar";
 import BookingReceipt from "../components/BookingReceipt";
+import Consultations from "./Consultations";
 import { BusinessFavoritesProvider, FavoriteButton, useBusinessFavorites } from "../components/BusinessFavorites";
 import { recommendServices } from "../shared/recommendations.js";
 import BrowseFlame from "./BrowseFlame";
 import LoadingRunner from "../components/LoadingRunner";
 import "./Browse.css";
 
-type View = "inicio" | "ofertas" | "agenda" | "buscar" | "coins" | "perfil";
+type View = "inicio" | "ofertas" | "agenda" | "buscar" | "mensajes" | "coins" | "perfil";
 const NAV_LABELS = {
   inicio: "Inicio",
   ofertas: "Ofertas",
   agenda: "Tu agenda",
   buscar: "Buscar",
+  mensajes: "Mensajes",
 };
 const PROVIDED_ICONS: Record<string, string> = {
   inicio: "bx_home.svg",
@@ -248,7 +250,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
             {kind === "servicio" ? (
               <Link
                 className="browse-pill"
-                to={appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? `/consultas?servicio_id=${encodeURIComponent(s.id)}` : `/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({servicio_id:s.id,...(s.sucursal_id?{sucursal_id:s.sucursal_id}:{})})}`}
+                to={appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? `/browse?${new URLSearchParams({ vista: "mensajes", servicio_id: s.id })}` : `/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({servicio_id:s.id,...(s.sucursal_id?{sucursal_id:s.sucursal_id}:{})})}`}
               >
                 {appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? "Consultar" : "Reservar"}
               </Link>
@@ -355,6 +357,7 @@ function BrowseContent() {
       "ofertas",
       "agenda",
       "buscar",
+      "mensajes",
       "coins",
       "perfil",
     ].includes(rawView)
@@ -449,11 +452,19 @@ function BrowseContent() {
     };
   }, []);
   React.useEffect(() => {
+    if (view === "mensajes") {
+      setLoading(false);
+      setError("");
+      return;
+    }
     if (!consumerHeaders().Authorization) {
-      navigate("/login?tipo=usuario", { replace: true });
+      const loginParams = new URLSearchParams({ tipo: "usuario" });
+      if (window.location.search) loginParams.set("volver", `${window.location.pathname}${window.location.search}`);
+      navigate(`/login?${loginParams}`, { replace: true });
       return;
     }
     const controller = new AbortController();
+    setLoading(true);
     setError("");
     Promise.all([
       api("/browse/catalogo", { signal: controller.signal }),
@@ -470,7 +481,7 @@ function BrowseContent() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [api, navigate, revision]);
+  }, [api, navigate, revision, view]);
   React.useEffect(() => {
     if (view !== "ofertas") return;
     let active = true;
@@ -553,7 +564,10 @@ function BrowseContent() {
   const logout = () => {
     [
       "access_token",
+      "user_token",
+      "token",
       "auth_token",
+      "turnits_token",
       "user_slug",
       "auth_slug",
       "account_type",
@@ -671,7 +685,7 @@ function BrowseContent() {
           />
         </Link>
         <nav className="browse-dock" aria-label="Navegación de Browse">
-          {(["inicio", "ofertas", "agenda", "buscar"] as const).map((v) => (
+          {(["inicio", "ofertas", "agenda", "buscar", ...(appConfig.quoteBookingEnabled ? ["mensajes" as const] : [])] as const).map((v) => (
             <button
               key={v}
               className={view === v ? "selected" : ""}
@@ -683,7 +697,6 @@ function BrowseContent() {
               <span className="browse-nav-label">{NAV_LABELS[v]}</span>
             </button>
           ))}
-          {appConfig.quoteBookingEnabled && <button type="button" aria-label="Mensajes" onClick={() => navigate("/consultas")}><BrowseIcon name="mensajes" /><span className="browse-nav-label">Mensajes</span></button>}
         </nav>
         <div className="browse-header-actions">
           <button
@@ -705,6 +718,7 @@ function BrowseContent() {
         </div>
       </header>
       <main key={view} className={`browse-main browse-view-${view}`}>
+        {view === "mensajes" ? <Consultations embedded="browse" /> : <>
         {status}
         {!status && (
           <>
@@ -1218,6 +1232,7 @@ function BrowseContent() {
             {favorites.error && view !== "inicio" && <p role="alert" className="browse-error">{favorites.error} <button type="button" onClick={favorites.retry}>Reintentar favoritos</button></p>}
           </>
         )}
+        </>}
       </main>
       {modal && (
         <Modal

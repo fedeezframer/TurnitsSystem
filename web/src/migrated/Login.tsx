@@ -1,6 +1,7 @@
 import { appConfig } from "../config"
 import * as React from "react"
 import { Link } from "react-router"
+import { safeMessagesReturn } from "../shared/consultation-session.js"
 
 
 type Props = {
@@ -397,9 +398,9 @@ export default function LoginApp(props: Props) {
         }
         setPassword("")
         const requestedReturn = new URLSearchParams(window.location.search).get("volver") || ""
-        const consumerReturn = /^\/consultas(?:\?|$)/.test(requestedReturn) ? requestedReturn : "/browse"
+        const messagesReturn = safeMessagesReturn(requestedReturn, window.location.origin)
         window.location.replace(
-            `${window.location.origin}${result.es_admin ? "/internal" : consumer ? consumerReturn : `/panel/${encodeURIComponent(slug)}`}`
+            `${window.location.origin}${result.es_admin ? "/internal" : messagesReturn || (consumer ? "/browse" : `/panel/${encodeURIComponent(slug)}`)}`
         )
     }
     async function authenticateGoogle(credential: string, nonce: string) {

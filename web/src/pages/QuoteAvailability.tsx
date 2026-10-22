@@ -22,7 +22,7 @@ export default function QuoteAvailability({ slug, business }: { slug: string; bu
     }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [slug, initialService, retry]);
-  const consult = `/consultas?${new URLSearchParams({ ...(service ? { servicio_id: service } : {}) })}`;
+  const consult = `/browse?${new URLSearchParams({ vista: "mensajes", ...(service ? { servicio_id: service } : {}) })}`;
   return <main className="quote-availability"><ChatHeader business={false} /><section className="quote-availability-content">
     <Link className="quote-availability-business" to={`/perfil/${encodeURIComponent(slug)}`}><ChatAvatar name={business.business_name} src={business.logo_url} /><span>{business.business_name}</span></Link>
     <div className="quote-availability-intro"><span className="quote-availability-kicker">AGENDA POR PRESUPUESTO</span><h1>Contanos qué te gustaría hacer</h1><p>Iniciá una conversación con {business.business_name}. Podés explicar tu idea, adjuntar referencias y coordinar por chat el precio, la duración y el horario.</p></div>

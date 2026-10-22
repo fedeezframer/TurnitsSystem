@@ -6,6 +6,7 @@ import ResetPassword from "./pages/ResetPassword"
 import BrandPreloader, { StartupRouteReady } from "./components/BrandPreloader"
 import AppGateway from "./pages/AppGateway"
 import { loadBrowse, loadPanel } from "./shared/session-routes"
+import { isBusinessSession, storedSessionToken } from "./shared/consultation-session.js"
 
 const Login = lazy(() => import("./migrated/Login"))
 const Register = lazy(() => import("./migrated/Register"))
@@ -25,6 +26,25 @@ const QuoteAvailability = lazy(() => import("./pages/QuoteAvailability"))
 
 function PanelRoute() {
   return <Panel {...appConfig.panel} baseUrl={appConfig.apiUrl} accentColor={appConfig.accentColor} logoImage={appConfig.logoUrl} mpClientId={appConfig.mpClientId} logoutUrl="/login" style={{ width: "100%", minHeight: "100dvh" }} />
+}
+function LegacyConsultationsRoute() {
+  const location = useLocation()
+  if (!appConfig.quoteBookingEnabled) return <Consultations />
+  const business = isBusinessSession()
+  if (!storedSessionToken()) {
+    const login = new URLSearchParams({ tipo: business ? "negocio" : "usuario", volver: `/consultas${location.search}` })
+    return <Navigate to={`/login?${login}`} replace />
+  }
+  const destination = new URLSearchParams(location.search)
+  if (business) {
+    destination.delete("vista")
+    destination.set("seccion", "consultas")
+    const slug = localStorage.getItem("user_slug") || ""
+    return <Navigate to={`/panel${slug ? `/${encodeURIComponent(slug)}` : ""}?${destination}`} replace />
+  }
+  destination.delete("seccion")
+  destination.set("vista", "mensajes")
+  return <Navigate to={`/browse?${destination}`} replace />
 }
 function RenewRoute() {
   const query = new URLSearchParams(window.location.search)
@@ -74,7 +94,7 @@ export default function App() {
     <Route path="/registro/negocio" element={<RegisterPage accountType="negocio" />} />
     <Route path="/register" element={<Navigate to={`/registro${window.location.search}`} replace />} />
     <Route path="/browse" element={<Browse />} />
-    <Route path="/consultas" element={<Consultations />} />
+    <Route path="/consultas" element={<LegacyConsultationsRoute />} />
     <Route path="/panel" element={<PanelRoute />} />
     <Route path="/panel/:slug" element={<PanelRoute />} />
     <Route path="/renovar" element={<RenewRoute />} />

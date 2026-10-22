@@ -2406,6 +2406,8 @@
 }
 
 .browse-main{animation:browse-view-in .22s cubic-bezier(.2,.75,.25,1) both}.browse-location-notice{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));z-index:130;transform:translateX(-50%);margin:0!important;padding:11px 16px;border:1px solid #dbe8d5;border-radius:14px;background:linear-gradient(135deg,#fff,#f1f7ed);box-shadow:0 8px 30px #17251c18;color:#31582c;animation:browse-toast-in .2s ease both}@keyframes browse-view-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}@keyframes browse-toast-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+.browse .browse-main.browse-view-mensajes{max-width:1000px;padding:24px 32px 64px}
+@media(max-width:700px){.browse .browse-main.browse-view-mensajes{max-width:none;padding:12px 12px 108px}}
 
 .browse-card-branch{font-size:inherit;color:inherit}
 .browse-profile-action>svg{width:51px!important;height:51px!important;stroke-width:2;color:#606060;flex:none}
