@@ -13,6 +13,26 @@ type EmbeddedSurface = "browse" | "panel";
 type Draft = { servicio: string; detalle: string; total: string; sena: string; duracion: string; equipo_id: string; fecha: string; hora: string; vence_at: string };
 const emptyDraft = (): Draft => ({ servicio: "", detalle: "", total: "", sena: "0", duracion: "60", equipo_id: "", fecha: "", hora: "", vence_at: "" });
 const money = (value: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 }).format(value);
+async function optimizeReference(file: File) {
+  if (file.size < 512 * 1024 || typeof createImageBitmap !== "function") return file;
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const compressed = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", 0.78));
+    if (!compressed || compressed.type !== "image/webp" || compressed.size >= file.size * 0.92) return file;
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "referencia";
+    return new File([compressed], `${baseName}.webp`, { type: "image/webp", lastModified: file.lastModified });
+  } finally {
+    bitmap?.close();
+  }
+}
 
 export default function Consultations({ embedded, onInboxChange, onExit }: { embedded?: EmbeddedSurface; onInboxChange?: (items: any[]) => void; onExit?: () => void } = {}) {
   if (!appConfig.quoteBookingEnabled) return <main className="consultations-unavailable"><h1>Mensajes</h1><p>Esta modalidad todavía no está habilitada.</p><Link to="/browse">Volver</Link></main>;
@@ -53,6 +73,7 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
   const [attachmentsOpen, setAttachmentsOpen] = React.useState(false);
   const [pendingFile, setPendingFile] = React.useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = React.useState("");
+  const [preparingPhoto, setPreparingPhoto] = React.useState(false);
   const [draggingImage, setDraggingImage] = React.useState(false);
   const [reference, setReference] = React.useState("");
   const [receipt, setReceipt] = React.useState<any>(null);
@@ -63,6 +84,7 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
   activeScreen.current = screen;
   const scrollArea = React.useRef<HTMLDivElement>(null), fileInput = React.useRef<HTMLInputElement>(null), cameraInput = React.useRef<HTMLInputElement>(null), composer = React.useRef<HTMLTextAreaElement>(null), referenceDialog = React.useRef<HTMLDialogElement>(null);
   const pendingScroll = React.useRef<{ top: number; height: number } | null>(null);
+  const photoPreparation = React.useRef(0);
   const api = React.useCallback(async (path: string, options: RequestInit = {}) => {
     const headers = business ? { Authorization: `Bearer ${token}` } : consumerHeaders();
     const response = await fetch(appConfig.apiUrl + path, { ...options, headers: { ...headers, ...options.headers }, cache: "no-store" });
@@ -103,7 +125,7 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
     api("/browse/consultas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ servicio_id: requestedService }), signal: controller.signal }).then(data => { if (!controller.signal.aborted) { const next = new URLSearchParams(window.location.search); next.delete("servicio_id"); next.set("id", data.id); setParams(next, { replace: true }); } }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); });
     return () => controller.abort();
   }, [requestedService, business, api, setParams, token]);
-  React.useEffect(() => { setConversation(null); setScreen("chat"); setText(!business ? availabilityInquiry(new URLSearchParams(window.location.search)) : ""); setError(""); setMembers([]); setMemberError(""); setDraft(emptyDraft()); setAttachmentsOpen(false); setPendingFile(null); setDraggingImage(false); stickBottom.current = true; pendingScroll.current = null; }, [current, business]);
+  React.useEffect(() => { photoPreparation.current++; setPreparingPhoto(false); setConversation(null); setScreen("chat"); setText(!business ? availabilityInquiry(new URLSearchParams(window.location.search)) : ""); setError(""); setMembers([]); setMemberError(""); setDraft(emptyDraft()); setAttachmentsOpen(false); setPendingFile(null); setDraggingImage(false); stickBottom.current = true; pendingScroll.current = null; }, [current, business]);
   React.useEffect(() => {
     if (!token) { setLoading(false); return; }
     const controller = new AbortController(); let pending = false;
@@ -149,7 +171,7 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
   }, [current, screen, conversation?.presupuestos?.find((item: any) => item.estado === "reservado")?.turno_id, api, prefix]);
   const act = async (action: () => Promise<void>) => {
     if (lock.current) return; const origin = current; lock.current = true; setBusy(true); setError("");
-    try { await action(); if (activeThread.current === origin) { await refreshInbox(); await refreshThread(); } }
+    try { await action(); if (activeThread.current === origin) await Promise.all([refreshInbox(), refreshThread()]); }
     catch (failure: any) { if (activeThread.current === origin) setError(failure.message || "No pudimos completar la operación."); }
     finally { lock.current = false; setBusy(false); }
   };
@@ -169,12 +191,20 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
     if (file.size > 2097152 || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setError("Elegí una foto JPG, PNG o WebP de hasta 2 MB."); return; }
     setPendingFile(file);
     setAttachmentsOpen(false);
+    const request = ++photoPreparation.current;
+    if (file.size < 512 * 1024) { setPreparingPhoto(false); return; }
+    setPreparingPhoto(true);
+    void optimizeReference(file).then(optimized => {
+      if (photoPreparation.current === request) setPendingFile(optimized);
+    }).catch(() => {}).finally(() => {
+      if (photoPreparation.current === request) setPreparingPhoto(false);
+    });
   };
   const choosePhoto = (event: React.ChangeEvent<HTMLInputElement>) => { addPhoto(event.target.files?.[0]); event.target.value = ""; };
   const send = (event: React.FormEvent) => {
     event.preventDefault();
     const message = text.trim(), file = pendingFile;
-    if (!message && !file) return;
+    if (preparingPhoto || (!message && !file)) return;
     void act(async () => {
       if (file) {
         const body = new FormData(); body.append("referencia", file); body.append("texto", message);
@@ -237,8 +267,8 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
         </div>
         {conversation.consulta.estado !== "cerrada" ? <div className="chat-compose-area">
           {attachmentsOpen && <div className="chat-attachment-menu" aria-label="Adjuntar foto"><button type="button" disabled={busy} onClick={() => fileInput.current?.click()}><ChatIcon name="photo" />Elegir de la galería</button><button type="button" disabled={busy} onClick={() => cameraInput.current?.click()}><ChatIcon name="camera" />Tomar una foto</button><small>JPG, PNG o WebP · Hasta 2 MB. También podés pegar o arrastrar una imagen.</small></div>}
-          {pendingFile && <div className="chat-pending-attachment"><img src={pendingPreview} alt="Vista previa de la foto adjunta" /><span><strong>Foto lista para enviar</strong><small>{pendingFile.name}</small></span><button type="button" aria-label="Quitar foto adjunta" disabled={busy} onClick={() => setPendingFile(null)}><ChatIcon name="close" size={18} /></button></div>}
-          <form className="chat-composer" onSubmit={send}><button className="chat-attach" type="button" aria-label="Adjuntar foto" aria-expanded={attachmentsOpen} disabled={busy || conversation.consulta.estado !== "abierta"} onClick={() => setAttachmentsOpen(value => !value)}><ChatIcon name="plus" size={25} /></button><textarea ref={composer} rows={1} aria-label="Escribe aqui..." placeholder="Escribe aqui..." maxLength={3000} value={text} onChange={event => setText(event.target.value)} onPaste={onPastePhoto} disabled={busy} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia("(pointer: coarse)").matches) { event.preventDefault(); send(event); } }} /><button className="chat-send" type="submit" aria-label="Enviar mensaje" disabled={busy || (!text.trim() && !pendingFile)}><ChatIcon name="send" size={28} /></button><input className="chat-file-input" ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" tabIndex={-1} aria-label="Elegir foto de referencia" onChange={choosePhoto} /><input className="chat-file-input" ref={cameraInput} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" tabIndex={-1} aria-label="Tomar foto de referencia" onChange={choosePhoto} /></form>
+          {pendingFile && <div className="chat-pending-attachment"><img src={pendingPreview} alt="Vista previa de la foto adjunta" /><span><strong>{preparingPhoto ? "Optimizando imagen…" : "Foto lista para enviar"}</strong><small>{pendingFile.name}</small></span><button type="button" aria-label="Quitar foto adjunta" disabled={busy} onClick={() => { photoPreparation.current++; setPreparingPhoto(false); setPendingFile(null); }}><ChatIcon name="close" size={18} /></button></div>}
+          <form className="chat-composer" onSubmit={send}><button className="chat-attach" type="button" aria-label="Adjuntar foto" aria-expanded={attachmentsOpen} disabled={busy || conversation.consulta.estado !== "abierta"} onClick={() => setAttachmentsOpen(value => !value)}><ChatIcon name="plus" size={25} /></button><textarea ref={composer} rows={1} aria-label="Escribe aqui..." placeholder="Escribe aqui..." maxLength={3000} value={text} onChange={event => setText(event.target.value)} onPaste={onPastePhoto} disabled={busy} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia("(pointer: coarse)").matches) { event.preventDefault(); send(event); } }} /><button className="chat-send" type="submit" aria-label="Enviar mensaje" disabled={busy || preparingPhoto || (!text.trim() && !pendingFile)}><ChatIcon name="send" size={28} /></button><input className="chat-file-input" ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" tabIndex={-1} aria-label="Elegir foto de referencia" onChange={choosePhoto} /><input className="chat-file-input" ref={cameraInput} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" tabIndex={-1} aria-label="Tomar foto de referencia" onChange={choosePhoto} /></form>
         </div> : <p className="chat-closed">Esta consulta está cerrada.</p>}
         {draggingImage && <div className="chat-drop-overlay" aria-live="polite"><span><ChatIcon name="photo" size={28} />Soltá la imagen para adjuntarla</span></div>}
       </>}

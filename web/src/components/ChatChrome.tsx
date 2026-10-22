@@ -10,7 +10,7 @@ export function ChatIcon({ name, size = 24 }: { name: string; size?: number }) {
     back: <path d="m10 6-5 5 5 5M5 11h9a5 5 0 0 1 5 5v4" />,
     send: <path d="M3 12h17m-7-7 7 7-7 7" />,
     plus: <><circle cx="12" cy="12" r="9" /><path d="M12 6v12M6 12h12" /></>,
-    tool: <><path d="m5 7 4-4 4 4-4 4zM7 5l2-2m2 6 9 9-3 3-9-9M3 10l3-3 5 5-3 3zM14 4l3 3-3 3" /></>,
+    tool: <><path d="m13.5 3 7.5 7.5-4 4L9.5 7l4-4Z" /><path d="m12.5 10.5 8.5 8.5" /><path d="m14.5 12.5-9 9" /><path d="m3 21 3-3" /></>,
     home: <path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10" />,
     flame: <path d="M13 2c2 5-3 6-1 10 1-2 3-2 4-5 3 3 5 6 4 9a8 8 0 0 1-16-1c0-5 5-6 4-10 3 1 3 3 3 4 2-3 1-5 2-7Z" />,
     calendar: <><rect x="4" y="5" width="16" height="17" rx="2" /><path d="M8 2v6m8-6v6M4 10h16M8 14h1m3 0h1m3 0h1m-9 4h1m3 0h1m3 0h1" /></>,

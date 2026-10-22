@@ -152,11 +152,10 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       const text = validateReferenceText(req.body?.texto);
       const type = referenceType(req.file?.buffer);
       if (!type) fail("Solo se permiten imágenes JPG, PNG o WebP.");
-      let image;
-      try { image = await sharp(req.file.buffer, { limitInputPixels: 20000000, animated: false, failOn: "warning" }).rotate().resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer(); }
-      catch { fail("La imagen no es válida o es demasiado grande."); }
+      const imagePromise = sharp(req.file.buffer, { limitInputPixels: 20000000, animated: false, failOn: "warning" }).rotate().resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer().catch(() => fail("La imagen no es válida o es demasiado grande."));
+      const countPromise = supabase.from("consulta_mensajes").select("id", { count: "exact", head: true }).eq("consulta_id", consultation.id).not("archivo", "is", null);
+      const [image, count] = await Promise.all([imagePromise, countPromise]);
       if (image.length > 2097152) fail("La imagen procesada supera el límite de 2 MB.");
-      const count = await supabase.from("consulta_mensajes").select("id", { count: "exact", head: true }).eq("consulta_id", consultation.id).not("archivo", "is", null);
       if (count.error) throw count.error;
       if (count.count >= 10) fail("Esta consulta alcanzó el límite de 10 referencias.");
       const path = `${consultation.id}/${crypto.randomUUID()}.webp`;
