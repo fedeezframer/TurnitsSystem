@@ -21,6 +21,7 @@ const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))
 const BusinessProfile = lazy(() => import("./pages/BusinessProfile"))
 const Consultations = lazy(() => import("./pages/Consultations"))
+const QuoteAvailability = lazy(() => import("./pages/QuoteAvailability"))
 
 function PanelRoute() {
   return <Panel {...appConfig.panel} baseUrl={appConfig.apiUrl} accentColor={appConfig.accentColor} logoImage={appConfig.logoUrl} mpClientId={appConfig.mpClientId} logoutUrl="/login" style={{ width: "100%", minHeight: "100dvh" }} />
@@ -33,7 +34,27 @@ function RenewRoute() {
   return <Navigate to={`/panel/${encodeURIComponent(slug)}?${query}`} replace />
 }
 function BookingRoute() {
-  const { slug } = useParams()
+  const { slug: pathSlug } = useParams()
+  const location = useLocation()
+  const slug = (pathSlug || new URLSearchParams(location.search).get("u") || localStorage.getItem("user_slug") || "").trim().toLowerCase()
+  const [business, setBusiness] = React.useState<any>(null)
+  const [error, setError] = React.useState(false)
+  const [retry, setRetry] = React.useState(0)
+  React.useEffect(() => {
+    if (!appConfig.quoteBookingEnabled || !slug) return
+    const controller = new AbortController(); setBusiness(null); setError(false)
+    fetch(`${appConfig.apiUrl}/negocio/${encodeURIComponent(slug)}`, { signal: controller.signal, cache: "no-store" }).then(async response => {
+      const data = await response.json()
+      if (!response.ok || !data.success || !data.negocio) throw Error("Negocio no disponible")
+      if (!controller.signal.aborted) setBusiness({ ...data.negocio, suspendido: data.suspendido })
+    }).catch(() => { if (!controller.signal.aborted) setError(true) })
+    return () => controller.abort()
+  }, [slug, retry])
+  if (appConfig.quoteBookingEnabled && slug) {
+    if (error) return <main className="app-page"><section className="app-card"><h1>No pudimos abrir la agenda</h1><button onClick={() => setRetry(value => value + 1)}>Reintentar</button></section></main>
+    if (!business) return <BrandPreloader />
+    if (!business.suspendido && business.modo_agenda === "presupuesto") return <QuoteAvailability slug={slug} business={business} />
+  }
   return <Booking {...appConfig.booking} baseUrl={appConfig.apiUrl} manualSlug={slug || ""} useNegocioTheme={true} />
 }
 function MissingPage() {

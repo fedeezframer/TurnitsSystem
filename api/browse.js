@@ -157,8 +157,9 @@ export function createBrowse({
       fail("El negocio no está disponible.", 404);
     return u;
   };
-  const context = async (slug, serviceId, memberId, read = freshRead) => {
+  const context = async (slug, serviceId, memberId, read = freshRead, quoted = false) => {
     const user = await read(["business", slug], () => visibleBusiness(slug));
+    if (user.modo_agenda === "presupuesto" && !quoted) fail("Este negocio coordina sus servicios mediante un presupuesto por chat.", 409);
     const [s, e, v] = await Promise.all([
       read(["service", slug, serviceId], () => supabase
         .from("servicios")
@@ -345,7 +346,7 @@ export function createBrowse({
       negocios: businesses,
       recompensas: rewards
         .filter(
-          (r) => r.stock !== 0 && items.some((s) => s.id === r.servicio_id),
+          (r) => r.stock !== 0 && items.some((s) => s.id === r.servicio_id && s.negocio.modo_agenda !== "presupuesto"),
         )
         .map((r) => ({
           ...r,
@@ -941,7 +942,7 @@ export function createBrowse({
         await supabase
           .from("turnos")
           .select(
-            "id,slug,nombre,apellido,email,telefono,fecha,hora,servicio_nombre,equipo_nombre,estado,pago_estado,precio_cobrado,monto_pagado,metodo_pago,tipo_cobro,extras,monto_extras,gestion_token,browse_tipo,browse_cierre,tc_gastados",
+            "id,slug,nombre,apellido,email,telefono,fecha,hora,servicio_nombre,equipo_nombre,estado,pago_estado,precio_cobrado,monto_pagado,metodo_pago,tipo_cobro,extras,monto_extras,gestion_token,browse_tipo,browse_cierre,tc_gastados" + (process.env.QUOTE_BOOKING_ENABLED === "true" ? ",presupuesto_detalle" : ""),
           )
           .eq("id", req.params.id)
           .eq("consumidor_id", req.consumer.id)
@@ -1130,5 +1131,5 @@ export function createBrowse({
       });
     }),
   );
-  return { auth, context };
+  return { auth, context, quoteContext: (slug, serviceId, memberId) => context(slug, serviceId, memberId, freshRead, true) };
 }

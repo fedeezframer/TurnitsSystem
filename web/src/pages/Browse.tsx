@@ -240,16 +240,16 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
           </div>
           <div className="browse-card-actions">
             {kind !== "offer" && (
-              <Link to={appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? `/consultas?servicio_id=${encodeURIComponent(s.id)}` : `/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({ servicio_id: s.id })}`}>
-                {appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? "Consultar" : "Ver Agenda"}
+              <Link to={`/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({ servicio_id: s.id })}`}>
+                {appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? "Ver disponibilidad" : "Ver Agenda"}
               </Link>
             )}
             {kind === "servicio" ? (
               <Link
                 className="browse-pill"
-                to={`/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({servicio_id:s.id,...(s.sucursal_id?{sucursal_id:s.sucursal_id}:{})})}`}
+                to={appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? `/consultas?servicio_id=${encodeURIComponent(s.id)}` : `/agenda/${encodeURIComponent(s.slug)}?${new URLSearchParams({servicio_id:s.id,...(s.sucursal_id?{sucursal_id:s.sucursal_id}:{})})}`}
               >
-                Reservar
+                {appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? "Consultar" : "Reservar"}
               </Link>
             ) : (
               <button

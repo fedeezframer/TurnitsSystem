@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
+import sharp from "sharp";
 import { quoteDetail } from "../web/src/shared/consultations.js";
+import { verifyQuoteWebhook } from "./quote-payments.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const read = response => { if (response.error) throw response.error; return response.data; };
@@ -28,16 +30,16 @@ export function referenceType(buffer) {
   if (buffer?.length >= 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") return { mime: "image/webp", extension: "webp" };
   return null;
 }
-export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, limiter, context, available, multer, enabled = process.env.QUOTE_BOOKING_ENABLED === "true" }) {
+export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, limiter, context, available, multer, payments, enabled = process.env.QUOTE_BOOKING_ENABLED === "true" }) {
   const route = handler => async (req, res) => {
     try { await handler(req, res); }
-    catch (error) { res.status(error.status || (error.code === "P0001" || error.code === "23505" ? 409 : 503)).json({ success: false, error: error.publicMessage || (error.code === "P0001" ? error.message : "No pudimos completar la consulta. Volvé a intentar.") }); }
+    catch (error) { res.status(error.status || (error.promoValidacion || error.code === "P0001" || error.code === "23505" ? 409 : 503)).json({ success: false, error: error.publicMessage || (error.promoValidacion || error.code === "P0001" ? error.message : "No pudimos completar la consulta. Volvé a intentar.") }); }
   };
   const feature = (_req, res, next) => enabled ? next() : res.status(404).json({ success: false, error: "Esta modalidad todavía no está habilitada." });
-  if (enabled) app.post(["/turnos/reservar", "/turnos/reservar-manual", "/api/create-preference"], (req,res,next) => route(async () => {
-    const slug = req.body?.slug;
+  app.post(["/turnos/reservar", "/turnos/reservar-manual", "/api/create-preference"], (req,res,next) => route(async () => {
+    const slug = typeof req.body?.slug === "string" ? req.body.slug.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : "";
     if (typeof slug === "string" && /^[a-z0-9_-]{1,100}$/.test(slug)) {
-      const business = read(await supabase.from("usuarios").select("modo_agenda").eq("slug",slug).maybeSingle());
+      const business = read(await supabase.from("usuarios").select("*").eq("slug",slug).maybeSingle());
       if (business?.modo_agenda === "presupuesto") fail("Este servicio se coordina desde una consulta con presupuesto.",409);
     }
     next();
@@ -113,7 +115,12 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
         return { ...message, archivo: undefined, referencia_url: signed.signedUrl };
       }));
       const quotes = read(await supabase.from("consulta_presupuestos").select("*").eq("consulta_id", consultation.id).order("created_at", { ascending: false }).limit(20));
-      res.json({ success: true, consulta: { id: consultation.id, titulo: consultation.titulo, estado: consultation.estado, slug: consultation.slug, servicio_id: consultation.servicio_id }, interlocutor, servicio:service, mensajes: safeMessages.reverse(), presupuestos: quotes, anterior: rows.length === 50 ? rows.at(-1).id : null });
+      let paymentStates = [];
+      if (payments?.enabled && quotes.length) {
+        const checkouts = read(await supabase.from("consulta_checkouts").select("id").in("presupuesto_id", quotes.map(quote => quote.id)));
+        if (checkouts.length) paymentStates = read(await supabase.from("consulta_pagos").select("estado,importe,turno_id,created_at").in("checkout_id", checkouts.map(checkout => checkout.id)).order("created_at", { ascending: false }));
+      }
+      res.json({ success: true, consulta: { id: consultation.id, titulo: consultation.titulo, estado: consultation.estado, slug: consultation.slug, servicio_id: consultation.servicio_id }, pagos: paymentStates, pago_online: payments?.enabled === true, interlocutor, servicio:service, mensajes: safeMessages.reverse(), presupuestos: quotes, anterior: rows.length === 50 ? rows.at(-1).id : null });
     }));
     app.post(prefix + "/:id/mensajes", ...guards, route(async (req, res) => {
       const consultation = await thread(req, business);
@@ -130,12 +137,16 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       await new Promise((resolve, reject) => upload(req, res, error => error ? reject(Object.assign(error, { status: 400, publicMessage: "Subí una sola imagen de hasta 2 MB." })) : resolve()));
       const type = referenceType(req.file?.buffer);
       if (!type) fail("Solo se permiten imágenes JPG, PNG o WebP.");
+      let image;
+      try { image = await sharp(req.file.buffer, { limitInputPixels: 20000000, animated: false, failOn: "warning" }).rotate().resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer(); }
+      catch { fail("La imagen no es válida o es demasiado grande."); }
+      if (image.length > 2097152) fail("La imagen procesada supera el límite de 2 MB.");
       const count = await supabase.from("consulta_mensajes").select("id", { count: "exact", head: true }).eq("consulta_id", consultation.id).not("archivo", "is", null);
       if (count.error) throw count.error;
       if (count.count >= 10) fail("Esta consulta alcanzó el límite de 10 referencias.");
-      const path = `${consultation.id}/${crypto.randomUUID()}.${type.extension}`;
-      read(await supabase.storage.from("consulta-referencias").upload(path, req.file.buffer, { contentType: type.mime, upsert: false }));
-      try { read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", archivo: path })); }
+      const path = `${consultation.id}/${crypto.randomUUID()}.webp`;
+      read(await supabase.storage.from("consulta-referencias").upload(path, image, { contentType: "image/webp", upsert: false }));
+      try { read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", archivo: path, archivo_bytes: image.length })); }
       catch (error) { await supabase.storage.from("consulta-referencias").remove([path]); throw error; }
       res.json({ success: true });
     }));
@@ -156,6 +167,34 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
     read(await supabase.rpc("consulta_aceptar", { p_consumidor: req.consumer.id, p_presupuesto: quote.id }));
     res.json({ success: true });
   }));
+  app.post("/browse/consultas/:id/pagar", feature, consumerAuth, limiter, route(async (req, res) => {
+    const consultation = await thread(req, false);
+    if (!payments?.enabled) fail("El pago online de presupuestos todavía no está habilitado.", 503);
+    res.json(await payments.prepare(consultation, req.body.presupuesto_id));
+  }));
+  app.post("/webhook/presupuestos/:checkout", feature, limiter, route(async (req, res) => {
+    const id = req.query["data.id"];
+    if (!UUID.test(req.params.checkout || "") || !verifyQuoteWebhook(req.headers, id, process.env.MP_WEBHOOK_SECRET)) fail("Notificación inválida.", 401);
+    if (!payments?.enabled) fail("Pago no habilitado.", 503);
+    await payments.process(req.params.checkout, id);
+    res.json({ success: true });
+  }));
+  for (const business of [false, true]) {
+    app.post(`${business ? "/admin" : "/browse"}/consultas/:id/cerrar`, feature, ...(business ? [requireAuth, owner] : [consumerAuth]), limiter, route(async (req, res) => {
+      const consultation = await thread(req, business);
+      if (consultation.estado !== "abierta") fail("Solo se pueden cerrar consultas sin reserva.", 409);
+      read(await supabase.from("consultas").update({ estado: "cerrada", cerrada_at: new Date().toISOString() }).eq("id", consultation.id).eq("estado", "abierta"));
+      res.json({ success: true });
+    }));
+    app.get(`${business ? "/admin" : "/browse"}/consultas/:id/comprobante`, feature, ...(business ? [requireAuth, owner] : [consumerAuth]), limiter, route(async (req, res) => {
+      const consultation = await thread(req, business);
+      const quote = read(await supabase.from("consulta_presupuestos").select("turno_id").eq("consulta_id", consultation.id).eq("estado", "reservado").maybeSingle());
+      if (!quote?.turno_id) fail("Esta consulta todavía no tiene una reserva.", 404);
+      const turno = read(await supabase.from("turnos").select("id,slug,nombre,apellido,email,telefono,fecha,hora,servicio_nombre,equipo_nombre,precio_cobrado,monto_pagado,estado,metodo_pago,pago_estado,tipo_cobro,extras,monto_extras,presupuesto_detalle").eq("id", quote.turno_id).eq("consumidor_id", consultation.consumidor_id).eq("slug", consultation.slug).maybeSingle());
+      if (!turno) fail("Reserva no disponible.", 404);
+      res.json({ success: true, turno });
+    }));
+  }
   app.post("/admin/consultas/:id/reservar", feature, requireAuth, owner, limiter, route(async (req, res) => {
     const consultation = await thread(req, true);
     await requireMode(consultation.slug);

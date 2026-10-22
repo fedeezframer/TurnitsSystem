@@ -21,6 +21,19 @@ El rubro sigue describiendo la actividad (se agregó Tatuajes y piercing). El mo
 
 ## Configuración de desarrollo
 
+### Avance del 22 de octubre
+
+- Booking específico de disponibilidad en `/agenda/:slug` y enlaces antiguos `?u=`. Muestra servicios, profesionales y horarios orientativos; no muestra precio ni checkout. La hora elegida prepara un mensaje editable por el cliente, sin enviarlo automáticamente ni bloquear cupo.
+- Bloqueo de la ruta normal de reserva y checkout, multipart de transferencia/efectivo, Offers, canjes y sesiones de tarjeta para cuentas por presupuesto. La gestión privada del titular conserva la reserva manual.
+- El editor principal y sus tarjetas ocultan precios fijos; el guardado global y los servicios creados por empleados aceptan modalidad presupuesto. Pendiente revisar visualmente todos los editores secundarios de sucursales/equipo antes de liberar.
+- Snapshot del detalle acordado en el turno, comprobante privado en el chat, calendario del cliente y detalle de agenda del negocio. El mismo generador produce el PDF. Las observaciones del presupuesto no se agregan al comprobante público sin autenticación.
+- Motor de pago separado, desactivado por defecto: `QUOTE_PAYMENTS_ENABLED=true` requiere además secreto de webhook y no se activa en staging. Importe y vendedor salen del servidor, las notificaciones se verifican con firma y el pago se relee con la cuenta del vendedor. Reconciliación transaccional e idempotente, más consulta periódica de pagos por si se pierde una notificación.
+- Decisión del dueño: pago aprobado sin disponibilidad, presupuesto reemplazado/vencido o cobro duplicado implica reintegro automático. Se registra una tarea persistente y se reintenta con la misma clave idempotente. Un fallo de Mercado Pago se mantiene como reintegro pendiente, nunca como devolución realizada.
+- Referencias reencodificadas a WebP sin EXIF, máximo 20 megapíxeles de entrada, 1600 px de salida y 2 MB. Límite transaccional global de 200 MB y de 50 MB por negocio, además de diez referencias por consulta. Cola privada de eliminación por cascadas; retención de referencias de consultas cerradas: 90 días. Todavía falta recuperación de archivos huérfanos si el proceso muere entre upload e inserción del mensaje.
+- Políticas actuales de Storage revisadas sin modificaciones: las públicas están limitadas a logos, equipo, extras y servicios, no al bucket de consultas. El bucket de test no tiene políticas públicas.
+
+Las pruebas aisladas cubren duplicados, monto incorrecto, horario ocupado entre checkout y confirmación, aislamiento, reintentos de devolución y lectura de comprobante. NO reemplazan una operación de sandbox real con cuentas vendedora/compradora separadas y notificaciones reales. Se solicitaron esas cuentas al dueño; no se usaron credenciales ni dinero de producción. También queda revisar eliminación de cuentas con historial/pagos pendientes y concurrencia contra el esquema completo antes de encender producción. Estas migraciones y el código no constituyen autorización técnica para activar cobros sin esas validaciones.
+
 Servidor: `QUOTE_BOOKING_ENABLED=true`. Web: `VITE_QUOTE_BOOKING_ENABLED=true`. Ambas desactivadas por defecto.
 
 Antes de encenderlas, aplicar la migración en un proyecto de pruebas, nunca activar la web contra una base sin migrar. No convertir cuentas existentes automáticamente.

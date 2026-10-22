@@ -1,6 +1,7 @@
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
+import { useQuoteMode } from "../../shared/agenda-mode"
 import ServiceBrowseConfig from "./service-browse-config"
 import { TurnitsGlobalSaveManager_get } from "./common"
 import * as React from "react"
@@ -1133,6 +1134,7 @@ function ServiciosManager_ServicioForm({
     employeeVariant = false,
     employeeMode = false,
 }: ServiciosManager_FormProps) {
+    const quoteMode = useQuoteMode(apiUrl)
     const branch = useBranchAdmin()
     const globalEdit = !!(modoEdicion && servicioId && !employeeVariant && !employeeMode && !branch)
     const [form, setForm] = React.useState<ServiciosManager_FormData>(() => globalEdit ? TurnitsGlobalSaveManager_get()?.getPending("servicios")?.[servicioId!] || initial : initial)
@@ -1159,14 +1161,14 @@ function ServiciosManager_ServicioForm({
     } as React.CSSProperties
 
     const handleSubmit = () => {
-        if (Number(form.precio) < ServiciosManager_PRECIO_MINIMO) {
+        if (!quoteMode && Number(form.precio) < ServiciosManager_PRECIO_MINIMO) {
             setPrecioError(
                 `El precio mínimo es $${ServiciosManager_PRECIO_MINIMO.toLocaleString("es-AR")}.`
             )
             return
         }
         setPrecioError("")
-        onSubmit(form)
+        onSubmit(quoteMode ? { ...form, precio: "0" } : form)
     }
 
     return (
@@ -1305,7 +1307,7 @@ function ServiciosManager_ServicioForm({
                         gap: isMobile ? 14 : 20,
                     }}
                 >
-                    <div style={{ gridColumn: isMobile ? "1 / -1" : "auto" }}>
+                    <div hidden={quoteMode} style={{ gridColumn: isMobile ? "1 / -1" : "auto" }}>
                         <ServiciosManager_Field
                             label="Precio"
                             icon="dollar"
@@ -1496,7 +1498,7 @@ function ServiciosManager_ServicioForm({
                     </ServiciosManager_Field>
                 )}
 
-                {!employeeVariant && !employeeMode && !branch && modoEdicion && servicioId && (
+                {!quoteMode && !employeeVariant && !employeeMode && !branch && modoEdicion && servicioId && (
                     <ServiceBrowseConfig key={servicioId} api={apiUrl.replace(/\/+$/, "")} serviceId={servicioId} name={form.nombre} price={Number(form.precio)} />
                 )}
 
@@ -1925,6 +1927,7 @@ function ServiciosManager_ServicioCard({
     employeeMode?: boolean
     employeeCanEdit?: boolean
 }) {
+    const quoteMode = useQuoteMode()
     const branch = useBranchAdmin()
     const [confirmDelete, setConfirmDelete] = React.useState(false)
     const [imgError, setImgError] = React.useState(false)
@@ -2019,7 +2022,7 @@ function ServiciosManager_ServicioCard({
                             fontVariantNumeric: "tabular-nums",
                         }}
                     >
-                        ${svc.precio.toLocaleString("es-AR")}
+                        {quoteMode ? "A presupuestar" : `$${svc.precio.toLocaleString("es-AR")}`}
                     </span>
                     <span style={{ fontSize: 11, color: "#cbd5e1" }}>·</span>
                     <span style={{ fontSize: 11, color: "#94a3b8" }}>

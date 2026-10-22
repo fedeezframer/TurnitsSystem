@@ -28,3 +28,10 @@ export function defaultQuoteExpiry(date, time, now = Date.now()) {
   const start = Date.parse(`${date}T${time}:00-03:00`);
   return Number.isFinite(start) && start > now ? new Date(Math.min(start, now + 7 * 86400000)).toISOString() : "";
 }
+
+export function availabilityInquiry(params) {
+  const date = params.get("fecha") || "", time = params.get("hora") || "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return "";
+  const professional = String(params.get("profesional") || "").slice(0, 120);
+  return `Hola, me gustaría consultar disponibilidad para el ${date.split("-").reverse().join("/")} a las ${time}${professional ? ` con ${professional}` : ""}. Quisiera coordinar mi proyecto y el presupuesto.`;
+}

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
+import sharp from "sharp";
 const credentials = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 if (credentials.site !== "https://turnits-test-api.onrender.com") throw new Error("This smoke test only runs against the isolated staging site.");
 async function api(path, token, body) {
@@ -17,7 +18,7 @@ assert(catalog.servicios.some(service => service.id === credentials.quote_servic
 const request = await api("/browse/consultas", clientToken, { servicio_id: credentials.quote_service });
 await api(`/browse/consultas/${request.id}/mensajes`, clientToken, { texto: "Consulta de prueba: diseño pequeño en blanco y negro." });
 const reference = new FormData();
-reference.append("referencia", new Blob([Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j7b0AAAAASUVORK5CYII=", "base64")], { type: "image/png" }), "referencia-demo.png");
+reference.append("referencia", new Blob([await sharp({ create: { width: 4, height: 4, channels: 3, background: "#ffffff" } }).png().toBuffer()], { type: "image/png" }), "referencia-demo.png");
 const uploaded = await fetch(credentials.site + `/browse/consultas/${request.id}/referencias`, { method: "POST", headers: { Authorization: "Bearer " + clientToken }, body: reference });
 assert.equal(uploaded.status, 200);
 await api(`/admin/consultas/${request.id}/mensajes`, ownerToken, { texto: "Respuesta de prueba del estudio. Coordinamos el diseño y el horario." });

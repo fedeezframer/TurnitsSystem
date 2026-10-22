@@ -1,5 +1,6 @@
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { appConfig } from "../../config"
+import { loadQuoteMode } from "../../shared/agenda-mode"
 import { DEFAULT_APPEARANCE, CARD_SHAPES, ICON_SHAPES } from "../../shared/appearance.js"
 import type { BusinessAppearance } from "../../shared/appearance.js"
 import { perfilDraft, perfilPayload } from "../../shared/profile-draft"
@@ -524,8 +525,9 @@ function TurnitsGlobalSaveManager_get() {
 
                 if (current.servicios !== undefined) {
                     try {
+                        const quoteMode = await loadQuoteMode(api(), slug)
                         for (const [serviceId, draft] of Object.entries(current.servicios) as [string, any][]) {
-                            if (!draft.nombre?.trim() || Number(draft.precio) < ServiciosManager_PRECIO_MINIMO)
+                            if (!draft.nombre?.trim() || (!quoteMode && Number(draft.precio) < ServiciosManager_PRECIO_MINIMO))
                                 throw new Error("Revisá el nombre y el precio del servicio.")
                             const res = await fetch(`${api()}/admin/servicios/${encodeURIComponent(serviceId)}`, {
                                 method: "PUT",

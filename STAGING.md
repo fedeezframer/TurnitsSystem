@@ -27,6 +27,8 @@ Son cuentas de prueba, no cuentas reales. Usar datos ficticios exclusivamente.
 
 Web y panel existentes, catálogo de dos negocios ficticios, favoritos y la primera versión de chat/presupuestos. Se habilitaron `QUOTE_BOOKING_ENABLED` y `VITE_QUOTE_BOOKING_ENABLED` solamente aquí.
 
+La agenda de cuentas por presupuesto presenta disponibilidad orientativa y consulta por chat, sin checkout ni reserva directa. Las migraciones `quote_payment_reconciliation`, `quote_reference_lifecycle` y `quote_chat_events` agregan snapshots, conciliación, cuota de referencias, limpieza y avisos en el chat. El motor de cobros permanece apagado y las operaciones de reintegro se prueban con dobles de Mercado Pago; no se conectaron cuentas reales.
+
 `node scripts/verify-staging.mjs ../.env.turnits-test-access.local` verifica ingreso de ambos roles, catálogo, consulta privada, mensajes, referencia en storage separado, presupuesto, aceptación, reserva manual e idempotencia. Escribe únicamente en staging.
 
 ## Limitaciones explícitas

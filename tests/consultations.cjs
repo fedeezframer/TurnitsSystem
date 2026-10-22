@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 (async () => {
-  const { quoteDetail, quotePresentation, messagePreview, mergeMessages, defaultQuoteExpiry } = await import("../web/src/shared/consultations.js");
+  const { quoteDetail, quotePresentation, messagePreview, mergeMessages, defaultQuoteExpiry, availabilityInquiry } = await import("../web/src/shared/consultations.js");
   const detail = quoteDetail("Tatuaje [personalizado]", "Referencia acordada");
   assert.deepEqual(quotePresentation({ detalle: detail }), { service: "Tatuaje [personalizado]", observation: "Referencia acordada" });
   assert.deepEqual(quotePresentation({ detalle: "Presupuesto anterior" }, "Diseño"), { service: "Diseño", observation: "Presupuesto anterior" });
@@ -14,5 +14,7 @@ const assert = require("node:assert/strict");
   assert.equal(defaultQuoteExpiry("2026-10-22", "15:00", now), "2026-10-22T18:00:00.000Z");
   assert.equal(defaultQuoteExpiry("2026-11-22", "15:00", now), "2026-10-28T12:00:00.000Z");
   assert.equal(defaultQuoteExpiry("2026-10-20", "15:00", now), "");
+  assert.match(availabilityInquiry(new URLSearchParams({ fecha: "2026-10-24", hora: "15:00", profesional: "Ana" })), /24\/10\/2026 a las 15:00 con Ana/);
+  assert.equal(availabilityInquiry(new URLSearchParams({ fecha: "2026-10-24", hora: "29:00" })), "");
   console.log("PASS consultations: service details, legacy budgets, participant previews, refreshed references and Argentina expiry.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

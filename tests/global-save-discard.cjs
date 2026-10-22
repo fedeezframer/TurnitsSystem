@@ -33,6 +33,7 @@ const ctx = {
   exports: {},
   React: {},
   appConfig: { apiUrl: "/api" },
+  loadQuoteMode: async () => false,
   safeLocalStorage: (key) => (key === "access_token" ? "fixture-token" : ""),
   GuardaSesion_leerJwt: () => ({ rol: "owner" }),
   getPanelScope: () => null,
@@ -103,6 +104,12 @@ const manager = vm.runInNewContext(
   assert.equal(requests.length, 0, "invalid service does not submit dependent Offers");
   assert(manager.isDirty("browse"));
   manager.discardAll();
+  ctx.loadQuoteMode = async () => true;
+  requests.length = 0;
+  manager.markDirty("servicios", { "test-service": { nombre: "Diseño a consultar", precio: "0" } });
+  await manager.saveAll();
+  assert.equal(requests[0].body.precio, 0, "quote-mode service does not require a fixed price");
+  assert.equal(manager.hasDirty(), false);
   console.log(
     "PASS discard: clears all pending sections and scoped storage, preserves baseline/other users, emits reset without requests, blocked during uploads and in-flight save. Real manager; no external writes.",
   );
