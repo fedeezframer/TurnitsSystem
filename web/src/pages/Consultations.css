@@ -123,3 +123,25 @@
   .chat-bubble p{font-size:14px;line-height:1.48}
 }
 @media(prefers-reduced-motion:reduce){.chat-inbox-item{transition:none}}
+.chat-attachment-menu{left:12px;right:auto;width:min(290px,calc(100% - 24px));padding:8px;border-color:#e6e9e6;border-radius:16px;box-shadow:0 12px 34px #1423141c}
+.chat-attachment-menu button{width:100%;min-height:44px;padding:9px 10px;border-radius:10px;text-align:left;font-size:14px;transition:background .15s ease}
+.chat-attachment-menu button:hover{background:#f3f6f2}
+.chat-attachment-menu button svg,.chat-camera-icon{width:30px;height:30px;flex:0 0 30px;display:grid;place-items:center;padding:6px;border-radius:9px;background:#eff4ed;color:var(--chat-green)}
+.chat-camera-icon{font-size:22px;font-weight:500;line-height:18px}
+.chat-attachment-menu small{padding:6px 10px 4px;font-size:11px;line-height:1.45}
+.chat-thread-dragging:after{position:absolute;inset:70px 0 84px;content:"";border:2px dashed var(--chat-green);border-radius:18px;background:#f4faf1d9;pointer-events:none;z-index:4}
+.chat-drop-overlay{position:absolute;inset:70px 0 84px;display:grid;place-items:center;pointer-events:none;z-index:5}
+.chat-drop-overlay span{display:flex;align-items:center;gap:10px;padding:14px 18px;border:1px solid #cfe0cb;border-radius:14px;background:#fff;color:#205b1e;font-size:14px;font-weight:600;box-shadow:0 8px 28px #1423141a}
+.chat-pending-attachment{display:flex;align-items:center;gap:11px;width:min(100%,440px);min-height:68px;margin:0 0 9px;padding:7px;border:1px solid #e3e9e1;border-radius:15px;background:#fff;box-shadow:0 3px 12px #1423140b}
+.chat-pending-attachment>img{width:52px;height:52px;flex:0 0 52px;border-radius:10px;object-fit:cover;background:#f1f3f0}
+.chat-pending-attachment>span{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.chat-pending-attachment strong{font-size:13px;font-weight:600;color:#1d261c}
+.chat-pending-attachment small{overflow:hidden;color:#737b72;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.chat-pending-attachment button{width:32px;height:32px;flex:0 0 32px;display:grid;place-items:center;border:0;border-radius:50%;background:#f1f3f1;color:#515850}
+.chat-quote-help{margin:-7px 0 2px;color:#687267;font-size:12px;line-height:1.5}
+.chat-quote-pay{display:flex;align-items:center;justify-content:center;width:min(100%,380px);min-width:0;gap:8px}
+@media(max-width:700px){
+  .chat-attachment-menu{left:12px;width:min(280px,calc(100% - 24px))}
+  .chat-quote-help{font-size:12px}
+  .consultations input,.consultations select,.consultations textarea{font-size:16px}
+}

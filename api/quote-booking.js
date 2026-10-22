@@ -30,6 +30,12 @@ export function referenceType(buffer) {
   if (buffer?.length >= 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") return { mime: "image/webp", extension: "webp" };
   return null;
 }
+export function validateReferenceText(value) {
+  if (value !== undefined && typeof value !== "string") fail("El mensaje puede tener hasta 3000 caracteres.");
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text.length > 3000) fail("El mensaje puede tener hasta 3000 caracteres.");
+  return text;
+}
 export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, limiter, context, available, multer, payments, webhookSecret = process.env.MP_WEBHOOK_SECRET, enabled = process.env.QUOTE_BOOKING_ENABLED === "true" }) {
   const route = handler => async (req, res) => {
     try { await handler(req, res); }
@@ -138,11 +144,12 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", texto: text }));
       res.json({ success: true });
     }));
-    const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2097152, files: 1, fields: 0 } }).single("referencia");
+    const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2097152, files: 1, fields: 1 } }).single("referencia");
     app.post(prefix + "/:id/referencias", ...guards, route(async (req, res) => {
       const consultation = await thread(req, business);
       if (consultation.estado !== "abierta") fail("La consulta ya no recibe referencias.", 409);
       await new Promise((resolve, reject) => upload(req, res, error => error ? reject(Object.assign(error, { status: 400, publicMessage: "Subí una sola imagen de hasta 2 MB." })) : resolve()));
+      const text = validateReferenceText(req.body?.texto);
       const type = referenceType(req.file?.buffer);
       if (!type) fail("Solo se permiten imágenes JPG, PNG o WebP.");
       let image;
@@ -154,7 +161,7 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       if (count.count >= 10) fail("Esta consulta alcanzó el límite de 10 referencias.");
       const path = `${consultation.id}/${crypto.randomUUID()}.webp`;
       read(await supabase.storage.from("consulta-referencias").upload(path, image, { contentType: "image/webp", upsert: false }));
-      try { read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", archivo: path, archivo_bytes: image.length })); }
+      try { read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", texto: text, archivo: path, archivo_bytes: image.length })); }
       catch (error) { await supabase.storage.from("consulta-referencias").remove([path]); throw error; }
       res.json({ success: true });
     }));

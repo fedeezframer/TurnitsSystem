@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 (async () => {
-  const { validateQuote, referenceType, createQuoteBooking } = await import("../api/quote-booking.js");
+  const { validateQuote, referenceType, validateReferenceText, createQuoteBooking } = await import("../api/quote-booking.js");
   const now = Date.parse("2026-10-21T12:00:00Z");
   const quote = { detalle: "Diseño personalizado de 10 cm", total: 10000, sena: 3000, duracion: 120, equipo_id: "00000000-0000-4000-8000-000000000001", fecha: "2026-10-24", hora: "15:00", vence_at: "2026-10-23T12:00:00Z" };
   assert.equal(validateQuote(quote, now).total, 10000);
@@ -8,6 +8,10 @@ const assert = require("node:assert/strict");
   assert.equal(referenceType(Buffer.from("<svg onload=alert(1)>")), null);
   assert.equal(referenceType(Buffer.from([255,216,255,0])).mime, "image/jpeg");
   assert.equal(referenceType(Buffer.from([137,80,78,71,13,10,26,10])).mime, "image/png");
+  assert.equal(validateReferenceText("  Mirá esta idea  "), "Mirá esta idea");
+  assert.equal(validateReferenceText(undefined), "");
+  assert.throws(() => validateReferenceText("x".repeat(3001)));
+  assert.throws(() => validateReferenceText(["Texto", "duplicado"]));
   const routes = new Map();
   const app = Object.fromEntries(["get", "post"].map(method => [method, (path, ...handlers) => routes.set(`${method} ${path}`, handlers)]));
   const queried = [];
