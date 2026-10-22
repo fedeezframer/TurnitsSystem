@@ -180,8 +180,8 @@ function TurnitsPanel_Inner(props: any) {
     }, [baseUrl, setSearchParams])
 
     const navItemsVisibles = NAV_ITEMS.filter(
-        (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && (item.id !== "consultas" || (appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin))
-    ).map(item => item.id === "consultas" ? { ...item, label: "Mensajes" } : item)
+        (item) => item.id !== "consultas" && (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible)
+    )
 
     const actualizarBandejaMensajes = React.useCallback((items: any[]) => {
         const next = Object.fromEntries(items.map(item => [item.id, Number(item.no_leidos) || 0])) as Record<string, number>
@@ -943,10 +943,10 @@ function TurnitsPanel_Inner(props: any) {
                             navIconos={navIconos}
                         />
                         <BottomNavIcon
-                            id={quoteMode ? "consultas" : "servicios"}
-                            active={seccionActiva === (quoteMode ? "consultas" : "servicios")}
+                            id="servicios"
+                            active={seccionActiva === "servicios"}
                             accentColor={accentColor}
-                            onClick={() => irA(quoteMode ? "consultas" : "servicios")}
+                            onClick={() => irA("servicios")}
                             navIconos={navIconos}
                         />
                         <div
