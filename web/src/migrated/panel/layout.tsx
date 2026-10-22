@@ -278,7 +278,6 @@ function TurnitsPanel_Inner(props: any) {
                                 navIconos={navIconos}
                             />
                         ))}
-                        {appConfig.quoteBookingEnabled && !branchAdmin && <a href="/consultas" style={{padding:"10px 14px",color:"inherit",textDecoration:"none"}}>Consultas y presupuestos</a>}
                     </nav>
 
                     {/* Footer: usuario, soporte y cerrar sesión */}
