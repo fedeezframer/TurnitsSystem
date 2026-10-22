@@ -27,7 +27,7 @@ export default function SiteMetadata() {
       robots.name = "robots"
       document.head.appendChild(robots)
     }
-    robots.content = canonicalPath ? "index,follow" : "noindex,follow"
+    robots.content = import.meta.env.VITE_APP_ENV === "staging" ? "noindex,nofollow,noarchive" : canonicalPath ? "index,follow" : "noindex,follow"
     let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')
     if (canonicalPath) {
       if (!canonical) {

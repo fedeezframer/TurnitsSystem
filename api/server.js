@@ -17,11 +17,27 @@ import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appeara
 import { createConsumerAccounts, consumerIdentity } from "./consumer-accounts.js";
 import { validCategories } from "../web/src/shared/categories.js";
 import { createBrowse } from "./browse.js";
+import { createQuoteBooking } from "./quote-booking.js";
+import { createQuotePayments } from "./quote-payments.js";
+import { createReferenceCleanup } from "./quote-references.js";
+import { validateEnvironment, stagingMiddleware } from "./environment.js";
+import path from "node:path";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
 // ══════════════════════════════════════════════════════════════
 const app = express();
+validateEnvironment();
+app.use(stagingMiddleware());
+if (process.env.APP_ENV === "staging") {
+  const webRoot = path.resolve("web/dist");
+  app.get("/robots.txt", (_req,res)=>res.type("text/plain").send("User-agent: *\nDisallow: /\n"));
+  app.use((req,res,next)=>{
+    if(req.method === "GET" && req.headers.accept?.includes("text/html") && /^\/(?:$|login(?:\/|$)|registro(?:\/|$)|register(?:\/|$)|browse(?:\/|$)|consultas(?:\/|$)|panel(?:\/|$)|agenda(?:\/|$)|perfil(?:\/|$)|planes(?:\/|$)|success(?:\/|$)|sucess(?:\/|$)|pendiente(?:\/|$)|error(?:\/|$)|alert(?:\/|$)|reprogramar(?:\/|$)|terminos(?:\/|$)|privacidad(?:\/|$)|cambiar-)/.test(req.path))return res.sendFile(path.join(webRoot,"index.html"));
+    next();
+  });
+  app.use(express.static(webRoot,{index:false}));
+}
 app.set("trust proxy", 1);
 // FIX-CACHE: la API nunca devuelve ETag/304. Junto con el "no-store" de más
 // abajo, evita que el navegador o una PWA reutilicen respuestas viejas.
@@ -78,6 +94,9 @@ const LOGRO_FACTURACION_META_ARS = parseInt(process.env.LOGRO_FACTURACION_META_A
 const MP_PLATFORM_TOKEN  = process.env.MP_PLATFORM_TOKEN          || "";
 // FIX-SEC: secret propio para validar la firma de los webhooks de MP.
 const MP_WEBHOOK_SECRET  = process.env.MP_WEBHOOK_SECRET          || "";
+const MP_TEST_ACCESS_TOKEN = process.env.MP_TEST_ACCESS_TOKEN || "";
+const MP_TEST_WEBHOOK_SECRET = process.env.MP_TEST_WEBHOOK_SECRET || "";
+const QUOTE_WEBHOOK_SECRET = process.env.APP_ENV === "staging" ? MP_TEST_WEBHOOK_SECRET : MP_WEBHOOK_SECRET;
 // FIX-SEC: clave para cifrar en reposo el access_token/refresh_token de MP
 // de cada negocio (AES-256-GCM). Generarla UNA sola vez con:
 //   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -88,7 +107,8 @@ const MP_TOKEN_ENC_KEY   = process.env.MP_TOKEN_ENC_KEY           || "";
 if (!MP_TOKEN_ENC_KEY) {
   console.warn("⚠️  MP_TOKEN_ENC_KEY no configurada. Los tokens de Mercado Pago de los negocios NO se pueden cifrar/descifrar (falta la clave).");
 }
-const PANEL_URL          = process.env.PANEL_URL                  || "https://turnits.com/panel";
+const WEB_URL            = process.env.WEB_URL                    || "https://turnits.com";
+const PANEL_URL          = process.env.PANEL_URL                  || `${WEB_URL}/panel`;
 const SUCCESS_URL        = process.env.SUCCESS_URL                || "https://turnits.com/success";
 const PENDIENTE_URL      = process.env.PENDING_URL                || "https://turnits.com/pendiente";
 const ERROR_URL          = process.env.ERROR_URL                  || "https://turnits.com/error";
@@ -1037,6 +1057,49 @@ const browse=createBrowse({app,supabase,jwt,bcrypt,requireAuth,consumerAccounts,
  mail:async body=>{if(!APPS_SCRIPT_URL)throw new Error('Mail unavailable');const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error('Mail unavailable')}
 });
 
+const quoteGatewayContext = async (slug, memberId) => {
+  const [userResult, memberResult] = await Promise.all([supabase.from("usuarios").select("*").eq("slug", slug).single(), supabase.from("equipo").select("*").eq("slug", slug).eq("id", memberId).single()]);
+  if (userResult.error || memberResult.error) throw userResult.error || memberResult.error;
+  return { user: userResult.data, member: memberResult.data };
+};
+const quoteGatewayToken = async ctx => {
+  if (process.env.APP_ENV === "staging") {
+    if (!MP_TEST_ACCESS_TOKEN) throw new Error("Falta la credencial de prueba de Mercado Pago.");
+    return MP_TEST_ACCESS_TOKEN;
+  }
+  const token = usaCuentaMpPersonal(ctx.member) ? await obtenerTokenMpVigenteEquipo(ctx.user.slug, ctx.member.id, ctx.member) : await obtenerTokenMpVigente(ctx.user.slug, ctx.user);
+  if (!token) throw new Error("El negocio debe reconectar Mercado Pago."); return token;
+};
+const quoteGatewayRequest = async (ctx, path, options = {}) => {
+  const response = await fetch(`https://api.mercadopago.com${path}`, { ...options, headers: { Authorization: `Bearer ${await quoteGatewayToken(ctx)}`, "Content-Type": "application/json", ...options.headers }, signal: AbortSignal.timeout(20000) });
+  if (!response.ok) throw new Error("No pudimos verificar la operación con Mercado Pago."); return response.json();
+};
+const quotePayments = createQuotePayments({supabase,context:browse.quoteContext,available:promoDisponibilidad,apiUrl:API_URL,siteUrl:WEB_URL,
+  enabled:process.env.QUOTE_PAYMENTS_ENABLED === "true" && !!QUOTE_WEBHOOK_SECRET && (process.env.APP_ENV !== "staging" || !!MP_TEST_ACCESS_TOKEN),
+  gateway:{context:quoteGatewayContext,
+    canPay:ctx=>process.env.APP_ENV === "staging" ? !!MP_TEST_ACCESS_TOKEN : !!ctx.config?.mp_access_token,
+    seller:async ctx=>({id:String((await quoteGatewayRequest(ctx,"/users/me")).id)}),
+    preference:async(ctx,body,key)=>{
+      const fee=process.env.APP_ENV === "staging" ? 0 : planCobraComision(ctx.user.plan,ctx.user.estado_suscripcion)?calcularComisionTurnits(Number(body.items[0].unit_price),ctx.user.plan,ctx.user.estado_suscripcion):0;
+      return new Preference(new MercadoPagoConfig({accessToken:await quoteGatewayToken(ctx)})).create({body:{...body,...(fee>0?{marketplace_fee:fee}:{})},requestOptions:{idempotencyKey:key}});
+    },
+    payment:(ctx,id)=>quoteGatewayRequest(ctx,`/v1/payments/${encodeURIComponent(id)}`),
+    search:(ctx,id)=>quoteGatewayRequest(ctx,`/v1/payments/search?external_reference=${encodeURIComponent(id)}&sort=date_created&criteria=desc&limit=20`),
+    refund:(ctx,id,key)=>quoteGatewayRequest(ctx,`/v1/payments/${encodeURIComponent(id)}/refunds`,{method:"POST",headers:{"X-Idempotency-Key":key},body:"{}"})
+  },
+  notify:async consultation=>crearNotificacion({slug:consultation.slug,tipo:"presupuesto_reintegrado",titulo:"Pago reintegrado",mensaje:"Se reintegró un pago de presupuesto que no pudo confirmarse. Revisá la consulta.",data:{consulta_id:consultation.id}})
+});
+if (quotePayments.enabled) {
+  const retryQuoteRefunds = () => quotePayments.retryRefunds().catch(() => console.error("Quote refund reconciliation unavailable"));
+  setInterval(retryQuoteRefunds,60000).unref(); void retryQuoteRefunds();
+}
+createQuoteBooking({app,supabase,consumerAuth:browse.auth,requireAuth,limiter:rateLimit({windowMs:60000,max:120,standardHeaders:true,legacyHeaders:false}),context:browse.quoteContext,available:promoDisponibilidad,multer,payments:quotePayments,webhookSecret:QUOTE_WEBHOOK_SECRET});
+if (process.env.QUOTE_BOOKING_ENABLED === "true") {
+  const cleanup = createReferenceCleanup(supabase);
+  const run = () => cleanup().catch(() => console.error("Quote reference cleanup pending"));
+  setInterval(run,3600000).unref(); void run();
+}
+
 // Sólo se asocian reservas a una cuenta verificada mediante su JWT, nunca por email del formulario.
 async function consumidorReserva(req) {
  const raw=req.headers.authorization?.split(' ')[1];if(!raw)return null;
@@ -1464,6 +1527,8 @@ app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prue
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
   try {
     const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan, ref } = req.body;
+    const modoAgenda = req.body.modo_agenda || "normal";
+    if (!["normal", "presupuesto"].includes(modoAgenda) || (modoAgenda === "presupuesto" && process.env.QUOTE_BOOKING_ENABLED !== "true")) return res.status(400).json({success:false,error:"Este tipo de agenda todavía no está habilitado."});
     const rubros = req.body.rubros === undefined ? null : validCategories(req.body.rubros, false);
     if (req.body.rubros !== undefined && !rubros)
       return res.status(400).json({success:false,error:"Elegí un solo rubro para tu negocio."});
@@ -1534,6 +1599,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       codigo_expiry,
       rubro: rubros?.[0] || null,
       slug_solicitado: requestedSlug,
+      ...(process.env.QUOTE_BOOKING_ENABLED === "true" ? {modo_agenda:modoAgenda} : {}),
     }], { onConflict: "email" });
 
     if (error) throw error;
@@ -1607,6 +1673,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       telefono:           pendiente.telefono           || null,
       business_name:      pendiente.business_name,
       ...(pendiente.rubro ? {rubro:pendiente.rubro} : {}),
+      ...(process.env.QUOTE_BOOKING_ENABLED === "true" ? {modo_agenda:pendiente.modo_agenda || "normal"} : {}),
       slug,
       password:           pendiente.password_hash,
       plan:               planFinal,
@@ -2278,7 +2345,7 @@ const { data: user, error } = await supabase.from("usuarios")
   .select(
     "slug, business_name, horarios, excepciones, duracion_turno, capacidad_por_turno, " +
     "metodo_pago, porcentaje_sena, mp_access_token, activo, plan, estado_suscripcion, " +
-    "fecha_vencimiento, tema, logo_url, acepta_transferencia, acepta_efectivo, datos_bancarios, telefono, agenda_sin_pagos"
+    "fecha_vencimiento, tema, logo_url, acepta_transferencia, acepta_efectivo, datos_bancarios, telefono, agenda_sin_pagos" + (process.env.QUOTE_BOOKING_ENABLED === "true" ? ",modo_agenda" : "")
   )
   .eq("slug", slug)
   .maybeSingle();
@@ -2369,6 +2436,7 @@ const { data: user, error } = await supabase.from("usuarios")
       negocio: {
         slug:                user.slug,
         business_name:       user.business_name,
+        modo_agenda:         process.env.QUOTE_BOOKING_ENABLED === "true" ? user.modo_agenda || "normal" : "normal",
         telefono:            user.telefono || null,
         horarios:            horariosPublicos         || {},
         excepciones:         excepcionesPublicas      || [],
@@ -2832,10 +2900,16 @@ function validarExtraBody({ nombre, precio }) {
 
 const PRECIO_MINIMO_SERVICIO = 2500; // mismo piso que usa el form en ServiciosManager.tsx
 
-function validarServicioBody({ nombre, precio }) {
+async function esAgendaPresupuesto(slug) {
+  if (process.env.QUOTE_BOOKING_ENABLED !== "true") return false;
+  const { data, error } = await supabase.from("usuarios").select("modo_agenda").eq("slug", slug).maybeSingle();
+  if (error) throw error;
+  return data?.modo_agenda === "presupuesto";
+}
+function validarServicioBody({ nombre, precio }, presupuesto = false) {
   if (!nombre || !nombre.trim() || nombre.trim().length > 80) return "Nombre inválido.";
   const p = Number(precio);
-  if (!Number.isFinite(p) || p < PRECIO_MINIMO_SERVICIO) return `El precio mínimo es $${PRECIO_MINIMO_SERVICIO}.`;
+  if (!presupuesto && (!Number.isFinite(p) || p < PRECIO_MINIMO_SERVICIO)) return `El precio mínimo es $${PRECIO_MINIMO_SERVICIO}.`;
   return null;
 }
 
@@ -2900,7 +2974,8 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
     const { slug, nombre, descripcion, duracion, precio, capacidad, orden } = req.body;
     const slugClean = cleanSlug(slug || req.auth.slug);
 
-    const errorValidacion = validarServicioBody({ nombre, precio });
+    const quoteMode = await esAgendaPresupuesto(slugClean);
+    const errorValidacion = validarServicioBody({ nombre, precio }, quoteMode);
     if (errorValidacion) return res.status(400).json({ success: false, error: errorValidacion });
     if (descripcion !== undefined && descripcion !== null && largoDescripcionServicio(descripcion) > 1000) {
       return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
@@ -2914,7 +2989,7 @@ app.post("/admin/servicios", requireAuth, async (req, res) => {
       nombre: nombre.trim(),
       descripcion: descripcion?.trim() || null,
       duracion: Number.isFinite(dur) && dur > 0 ? dur : 30,
-      precio: Number(precio),
+      precio: quoteMode ? 0 : Number(precio),
       capacidad: Number.isFinite(cap) && cap > 0 ? cap : 1,
       orden: parseInt(orden) || 0,
       activo: "true",
@@ -2935,6 +3010,7 @@ app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const slugClean = cleanSlug(req.body.slug || req.auth.slug);
     const { nombre, descripcion, duracion, precio, capacidad, orden, activo } = req.body;
+    const quoteMode = await esAgendaPresupuesto(slugClean);
 
     const update = {};
 
@@ -2946,10 +3022,10 @@ app.put("/admin/servicios/:id", requireAuth, async (req, res) => {
     }
     if (precio !== undefined) {
       const p = Number(precio);
-      if (!Number.isFinite(p) || p < PRECIO_MINIMO_SERVICIO) {
+      if (!quoteMode && (!Number.isFinite(p) || p < PRECIO_MINIMO_SERVICIO)) {
         return res.status(400).json({ success: false, error: `El precio mínimo es $${PRECIO_MINIMO_SERVICIO}.` });
       }
-      update.precio = p;
+      update.precio = quoteMode ? 0 : p;
     }
     if (descripcion !== undefined) {
       if (descripcion !== null && largoDescripcionServicio(descripcion) > 1000) {
@@ -3720,6 +3796,12 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
 
     if (metodo_pago === "transferencia" && !req.file) {
       return res.status(400).json({ success: false, error: "Adjuntá el comprobante de la transferencia." });
+    }
+
+    {
+      const mode = await supabase.from("usuarios").select("*").eq("slug", slugClean).maybeSingle();
+      if (mode.error) throw mode.error;
+      if (mode.data?.modo_agenda === "presupuesto") return res.status(409).json({ success: false, error: "Este negocio coordina las reservas mediante presupuesto por chat." });
     }
 
     const { data: user, error: userError } = await supabase.from("usuarios").select("*").eq("slug", slugClean).maybeSingle();
@@ -4518,6 +4600,7 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
         equipo_nombre:  t.equipo_nombre   || null,
         sucursal_id:    t.sucursal_id     || null,
         precio_cobrado: t.precio_cobrado  || 0,
+        presupuesto_detalle: t.presupuesto_detalle || null,
         monto_pagado:   t.monto_pagado    || 0,
         monto_pendiente_local: Math.max((t.precio_cobrado || 0) - (t.monto_pagado || 0), 0),
         tipo_cobro:     t.tipo_cobro || null,
@@ -5284,7 +5367,7 @@ app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, suc
 
     if (error) throw error;
     if (loginEmail && APPS_SCRIPT_URL) {
-      const resetUrl = `https://turnits.com/cambiar-contraseña?token=${loginResetToken}`;
+      const resetUrl = `${WEB_URL}/cambiar-contraseña?token=${loginResetToken}`;
       const { data: negocio } = await supabase.from("usuarios")
         .select("business_name").eq("slug", slugClean).maybeSingle();
       fetch(APPS_SCRIPT_URL, {
@@ -5759,7 +5842,8 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
     if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
     if (!miembro.puede_crear_servicios) return res.status(403).json({ success: false, error: "El titular no habilitó la creación de servicios." });
     const { nombre, descripcion, duracion, precio, capacidad, imagen_url } = req.body || {};
-    const errorValidacion = validarServicioBody({ nombre, precio });
+    const quoteMode = await esAgendaPresupuesto(slug);
+    const errorValidacion = validarServicioBody({ nombre, precio }, quoteMode);
     if (errorValidacion) return res.status(400).json({ success: false, error: errorValidacion });
     if (descripcion !== undefined && descripcion !== null && largoDescripcionServicio(descripcion) > 1000)
       return res.status(400).json({ success: false, error: "La descripción es demasiado larga." });
@@ -5783,7 +5867,7 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
       nombre: nombre.trim(),
       descripcion: `${imagen_url ? `[img:${imagen_url}]` : ""}${descripcion?.trim() || ""}` || null,
       duracion: Number.isFinite(dur) && dur > 0 ? dur : 30,
-      precio: Number(precio),
+      precio: quoteMode ? 0 : Number(precio),
       capacidad: Number.isFinite(cap) && cap > 0 ? cap : 1,
       orden: 0,
       activo: "true",
@@ -5799,7 +5883,7 @@ app.post("/empleado/:slug/servicios", requireAuth, async (req, res) => {
     if (vinculoExistente) return res.status(409).json({ success: false, error: "Ya tenés este servicio en tu agenda." });
     const orden = Number(req.body?.orden);
     const { error: linkError } = await supabase.from("servicio_equipo").insert(
-      [{ servicio_id: servicio.id, equipo_id: miembro.id, precio_override: Number(precio), imagen_url_override: imagen_url || null, orden_override: Number.isInteger(orden) && orden >= 0 ? orden : null }]
+      [{ servicio_id: servicio.id, equipo_id: miembro.id, precio_override: quoteMode ? null : Number(precio), imagen_url_override: imagen_url || null, orden_override: Number.isInteger(orden) && orden >= 0 ? orden : null }]
     );
     if (linkError) {
       if (servicioCreadoAhora) await supabase.from("servicios").delete().eq("id", servicio.id).eq("slug", slug);
@@ -5839,7 +5923,7 @@ app.put("/empleado/:slug/servicios/:id", requireAuth, async (req, res) => {
     if(servicio.owner_equipo_id === miembro.id) {
       const {data:assigned,error:assignedError}=await supabase.from("servicio_equipo").select("servicio_id").eq("servicio_id",id).eq("equipo_id",miembro.id).maybeSingle();if(assignedError)throw assignedError;if(!assigned)return res.status(404).json({success:false,error:"Servicio no asignado a tu perfil."});
       const body=req.body || {},fields={};
-      const validation=validarServicioBody({nombre:body.nombre ?? servicio.nombre,precio:body.precio ?? servicio.precio});if(validation)return res.status(400).json({success:false,error:validation});
+      const validation=validarServicioBody({nombre:body.nombre ?? servicio.nombre,precio:body.precio ?? servicio.precio},await esAgendaPresupuesto(slug));if(validation)return res.status(400).json({success:false,error:validation});
       if(body.nombre!==undefined)fields.nombre=body.nombre.trim();
       if(body.descripcion!==undefined){if(largoDescripcionServicio(body.descripcion)>1000)return res.status(400).json({success:false,error:"Descripción demasiado larga."});fields.descripcion=body.descripcion;}
       for(const key of ["duracion","capacidad"]){if(body[key]!==undefined){const n=Number(body[key]);if(!Number.isInteger(n)||n<1||n>10000)return res.status(400).json({success:false,error:"Duración o capacidad inválida."});fields[key]=n;}}
@@ -7327,7 +7411,7 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
         login_reset_token: token,
         login_reset_token_expiry: expiry.toISOString(),
       }).eq("id", miembro.id);
-      const resetUrl = `https://turnits.com/cambiar-contraseña?token=${token}`;
+      const resetUrl = `${WEB_URL}/cambiar-contraseña?token=${token}`;
       if (APPS_SCRIPT_URL) fetch(APPS_SCRIPT_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
@@ -7349,7 +7433,7 @@ app.post("/auth/forgot-password", limiterAuth, async (req, res) => {
       reset_token_expiry: expiry.toISOString(),
     }).eq("id", user.id);
 
-    const resetUrl = `https://turnits.com/cambiar-contraseña?token=${token}`;
+    const resetUrl = `${WEB_URL}/cambiar-contraseña?token=${token}`;
 
     fetch(APPS_SCRIPT_URL, {
       method: "POST",
@@ -7539,6 +7623,7 @@ async function cardContext(session) {
   if(!pending || pending.slug!==session.slug || Number(pending.monto)!==session.amount)throw new Error("Sesión de pago inválida.");
   const {data:user}=await supabase.from("usuarios").select("*").eq("slug",pending.slug).maybeSingle();
   if(!user)throw new Error("El negocio ya no está disponible.");
+  if(user.modo_agenda === "presupuesto")throw new Error("Este negocio coordina sus servicios mediante presupuesto.");
   let member=null;
   if(pending.equipo_id){const {data}=await supabase.from("equipo").select("*").eq("id",pending.equipo_id).eq("slug",pending.slug).maybeSingle();member=data;}
   const config=configNegocioParaEquipo(user,member);

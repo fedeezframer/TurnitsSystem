@@ -396,8 +396,10 @@ export default function LoginApp(props: Props) {
             )
         }
         setPassword("")
+        const requestedReturn = new URLSearchParams(window.location.search).get("volver") || ""
+        const consumerReturn = /^\/consultas(?:\?|$)/.test(requestedReturn) ? requestedReturn : "/browse"
         window.location.replace(
-            `${window.location.origin}${result.es_admin ? "/internal" : consumer ? "/browse" : `/panel/${encodeURIComponent(slug)}`}`
+            `${window.location.origin}${result.es_admin ? "/internal" : consumer ? consumerReturn : `/panel/${encodeURIComponent(slug)}`}`
         )
     }
     async function authenticateGoogle(credential: string, nonce: string) {

@@ -1,6 +1,12 @@
 import framerProps from "./framer-props.json"
 
+const staging = import.meta.env.VITE_APP_ENV === "staging";
+if (staging && (!import.meta.env.VITE_API_URL || new URL(import.meta.env.VITE_API_URL).hostname === "negosocio.onrender.com")) throw new Error("Staging cannot use the production API.");
+
 export const appConfig = {
+  staging,
+  siteUrl: (import.meta.env.VITE_SITE_URL || (staging ? window.location.origin : "https://turnits.com")).replace(/\/+$/, ""),
+  quoteBookingEnabled: import.meta.env.VITE_QUOTE_BOOKING_ENABLED === "true",
   apiUrl: (import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "/api" : "https://negosocio.onrender.com")).replace(/\/+$/, ""),
   logoUrl: import.meta.env.VITE_LOGO_URL || framerProps.panel.logoImage,
   loginLogoUrl: import.meta.env.VITE_LOGIN_LOGO_URL || framerProps.login.logoUrl,

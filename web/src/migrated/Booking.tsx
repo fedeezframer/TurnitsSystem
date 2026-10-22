@@ -10,10 +10,10 @@ const BranchSelection=React.lazy(()=>import("../components/BranchMap").then(m=>(
 
 import { motion, AnimatePresence } from "framer-motion"
 
-const SUCCESS_URL = "https://turnits.com/success"
-const PENDIENTE_URL = "https://turnits.com/pendiente"
-const ALERT_URL = "https://turnits.com/alert"
-const ERROR_URL = "https://turnits.com/error"
+const SUCCESS_URL = `${appConfig.siteUrl}/success`
+const PENDIENTE_URL = `${appConfig.siteUrl}/pendiente`
+const ALERT_URL = `${appConfig.siteUrl}/alert`
+const ERROR_URL = `${appConfig.siteUrl}/error`
 
 const MIN_DIGITOS_TEL = 5
 const MIN_DIGITOS_TEL_BOTON = 7

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import "./Register.css";
+import { appConfig } from "../config";
 
 type AccountType = "usuario" | "negocio";
 type Fields = {
@@ -100,31 +101,18 @@ function CategoryIcon({ icon }: { icon: string }) {
     </svg>
   );
 }
-function AccountArt({ business }: { business?: boolean }) {
-  return (
-    <svg
-      className="registration-art"
-      viewBox={business ? "1095 495 275 215" : "585 495 225 215"}
-      aria-hidden="true"
-    >
-      <image
-        href="/assets/registration/account-choices.jpg"
-        width="1920"
-        height="945"
-      />
-    </svg>
-  );
-}
 export default function Register({
   baseUrl = "https://negosocio.onrender.com",
   termsUrl = "/terminos",
   privacyUrl = "/privacidad",
+  accountType = "usuario",
 }: any) {
-  const [step, setStep] = useState(1);
-  const [type, setType] = useState<AccountType>("usuario");
+  const [step, setStep] = useState(2);
+  const type = accountType as AccountType;
   const [fields, setFields] = useState<Fields>(empty);
   const [phoneCountry, setPhoneCountry] = useState("AR");
   const [categories, setCategories] = useState<string[]>([]);
+  const [agendaMode, setAgendaMode] = useState("normal");
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [registrationId, setRegistrationId] = useState("");
   const [error, setError] = useState("");
@@ -175,7 +163,7 @@ export default function Register({
   useEffect(() => {
     window.scrollTo(0, 0);
     if (step === 4) inputs.current[0]?.focus();
-    else if (step !== 1) title.current?.focus();
+    else title.current?.focus();
   }, [step]);
   async function post(path: string, body: object) {
     const controller = new AbortController();
@@ -205,12 +193,6 @@ export default function Register({
     } finally {
       window.clearTimeout(timer);
     }
-  }
-  function chooseType(next: AccountType) {
-    setType(next);
-    setCategories([]);
-    setError("");
-    setStep(2);
   }
   function nextDetails(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -247,6 +229,7 @@ export default function Register({
               usuario: fields.usuario,
               business_name: fields.usuario,
               rubros: selected,
+              ...(appConfig.quoteBookingEnabled ? { modo_agenda: agendaMode } : {}),
               plan,
               ref: referral,
             },
@@ -450,7 +433,7 @@ export default function Register({
           turnits
         </Link>
       </header>
-      {step > 1 && (
+      {step > 2 && (
         <button
           className="registration-back"
           type="button"
@@ -470,52 +453,22 @@ export default function Register({
         aria-busy={busy}
       >
         <h1 ref={title} tabIndex={-1}>
-          {step === 1
-            ? "¿Qué tipo de cuenta quieres crear?"
-            : step === 2
-              ? type === "usuario"
-                ? "Completa tu perfil"
-                : "Completa tu negocio"
-              : step === 3
-                ? type === "usuario"
-                  ? "¿Qué rubro te interesa?"
-                  : "¿Qué rubro de negocio es?"
-                : "Verifica tu perfil"}
+          {step === 2
+            ? type === "usuario" ? "Crea tu cuenta" : "Registra tu negocio"
+            : step === 3
+              ? type === "usuario" ? "¿Qué servicios te interesan?" : "¿Qué rubro de negocio es?"
+              : type === "usuario" ? "Verifica tu cuenta" : "Verifica tu perfil"}
         </h1>
         {step !== 3 && (
           <p className="registration-subtitle">
-            {step === 1 ? (
-              "Para ajustar tu experiencia al máximo"
-            ) : step === 2 ? (
-              "Tus datos aseguran el funcionamiento de la agenda"
+            {step === 2 ? (
+              type === "usuario" ? "Encontrá servicios, descubrí negocios y reservá en Turnits." : "Tus datos aseguran el funcionamiento de la agenda"
             ) : (
               <>
                 Hemos enviado un código a {maskEmail(cleanEmail(fields.email))}
               </>
             )}
           </p>
-        )}
-        {step === 1 && (
-          <div className="registration-accounts">
-            <button
-              type="button"
-              className="registration-account"
-              onClick={() => chooseType("usuario")}
-            >
-              <strong>Usuario</strong>
-              <span>Administra y reserva turnos</span>
-              <AccountArt />
-            </button>
-            <button
-              type="button"
-              className="registration-account"
-              onClick={() => chooseType("negocio")}
-            >
-              <strong>Negocio</strong>
-              <span>Ofrece tus servicios y obtene tu agenda</span>
-              <AccountArt business />
-            </button>
-          </div>
         )}
         {step === 2 && (
           <form className={`registration-form ${type}`} onSubmit={nextDetails}>
@@ -608,8 +561,12 @@ export default function Register({
             </div>
           </form>
         )}
+        {step === 2 && type === "usuario" && <p className="registration-business-link">¿Tenés un negocio? <Link to="/registro/negocio">Registralo desde acá</Link></p>}
+        {step === 2 && type === "negocio" && <p className="registration-business-link">¿Buscabas una cuenta para reservar? <Link to="/registro">Crear cuenta de usuario</Link></p>}
         {step === 3 && (
           <>
+            {type === "usuario" && <p className="registration-subtitle">Elegí algunos rubros para que Turnits empiece a mostrarte opciones relevantes.</p>}
+            {type === "negocio" && appConfig.quoteBookingEnabled && <fieldset className="registration-agenda-mode"><legend>¿Cómo coordinás tus turnos?</legend><label><input type="radio" name="agenda-mode" checked={agendaMode === "normal"} onChange={() => setAgendaMode("normal")} /> Agenda normal: servicios con precio y horario</label><label><input type="radio" name="agenda-mode" checked={agendaMode === "presupuesto"} onChange={() => setAgendaMode("presupuesto")} /> Mediante presupuesto: consulta y referencias antes de reservar</label><p>El rubro describe tu actividad; el tipo de agenda define cómo reservan tus clientes.</p></fieldset>}
             <div
               className="registration-categories"
               role="group"
@@ -640,7 +597,7 @@ export default function Register({
                 disabled={busy || !categories.length}
                 onClick={() => void start(categories)}
               >
-                {busy ? "Enviando código…" : "Siguiente"}
+                {busy ? "Enviando código…" : "Crear cuenta"}
               </button>
             )}
             {type === "negocio" && busy && (

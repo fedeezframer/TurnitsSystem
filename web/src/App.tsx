@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react"
-import { Link, Navigate, Route, Routes, useParams } from "react-router"
+import { Link, Navigate, Route, Routes, useParams, useLocation } from "react-router"
 import { appConfig } from "./config"
 import Receipt from "./pages/Receipt"
 import ResetPassword from "./pages/ResetPassword"
@@ -20,6 +20,8 @@ const Internal = lazy(() => import("./migrated/public/AdminStats"))
 const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))
 const BusinessProfile = lazy(() => import("./pages/BusinessProfile"))
+const Consultations = lazy(() => import("./pages/Consultations"))
+const QuoteAvailability = lazy(() => import("./pages/QuoteAvailability"))
 
 function PanelRoute() {
   return <Panel {...appConfig.panel} baseUrl={appConfig.apiUrl} accentColor={appConfig.accentColor} logoImage={appConfig.logoUrl} mpClientId={appConfig.mpClientId} logoutUrl="/login" style={{ width: "100%", minHeight: "100dvh" }} />
@@ -32,19 +34,47 @@ function RenewRoute() {
   return <Navigate to={`/panel/${encodeURIComponent(slug)}?${query}`} replace />
 }
 function BookingRoute() {
-  const { slug } = useParams()
+  const { slug: pathSlug } = useParams()
+  const location = useLocation()
+  const slug = (pathSlug || new URLSearchParams(location.search).get("u") || localStorage.getItem("user_slug") || "").trim().toLowerCase()
+  const [business, setBusiness] = React.useState<any>(null)
+  const [error, setError] = React.useState(false)
+  const [retry, setRetry] = React.useState(0)
+  React.useEffect(() => {
+    if (!appConfig.quoteBookingEnabled || !slug) return
+    const controller = new AbortController(); setBusiness(null); setError(false)
+    fetch(`${appConfig.apiUrl}/negocio/${encodeURIComponent(slug)}`, { signal: controller.signal, cache: "no-store" }).then(async response => {
+      const data = await response.json()
+      if (!response.ok || !data.success || !data.negocio) throw Error("Negocio no disponible")
+      if (!controller.signal.aborted) setBusiness({ ...data.negocio, suspendido: data.suspendido })
+    }).catch(() => { if (!controller.signal.aborted) setError(true) })
+    return () => controller.abort()
+  }, [slug, retry])
+  if (appConfig.quoteBookingEnabled && slug) {
+    if (error) return <main className="app-page"><section className="app-card"><h1>No pudimos abrir la agenda</h1><button onClick={() => setRetry(value => value + 1)}>Reintentar</button></section></main>
+    if (!business) return <BrandPreloader />
+    if (!business.suspendido && business.modo_agenda === "presupuesto") return <QuoteAvailability slug={slug} business={business} />
+  }
   return <Booking {...appConfig.booking} baseUrl={appConfig.apiUrl} manualSlug={slug || ""} useNegocioTheme={true} />
 }
 function MissingPage() {
   return <div className="app-page"><section className="app-card"><img className="app-brand" src={appConfig.logoUrl} alt="Turnits" /><h1>Página no encontrada</h1><p>Revisá el enlace o volvé a iniciar sesión.</p><Link className="app-button" to="/login">Ir al login</Link></section></div>
 }
+function RegisterPage({ accountType = "usuario" }: { accountType?: "usuario" | "negocio" }) {
+  const location = useLocation()
+  if (accountType === "usuario" && new URLSearchParams(location.search).get("tipo") === "negocio") return <Navigate to={`/registro/negocio${location.search}`} replace />
+  return <Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" accountType={accountType} />
+}
 export default function App() {
-  return <Suspense fallback={<BrandPreloader />}><Routes>
+  const location = useLocation()
+  return <Suspense fallback={<BrandPreloader />}>{appConfig.staging && location.pathname !== "/consultas" && <div role="status" style={{position:"relative",zIndex:10000,padding:"8px 16px",textAlign:"center",background:"#fff0b3",color:"#604700",font:"600 13px Arial,sans-serif"}}>TURNITS TEST · Datos de prueba · Sin cobros reales · Funciones en desarrollo</div>}<Routes>
     <Route path="/" element={<Home />} />
     <Route path="/login" element={<Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
-    <Route path="/registro" element={<Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" />} />
+    <Route path="/registro" element={<RegisterPage />} />
+    <Route path="/registro/negocio" element={<RegisterPage accountType="negocio" />} />
     <Route path="/register" element={<Navigate to={`/registro${window.location.search}`} replace />} />
     <Route path="/browse" element={<Browse />} />
+    <Route path="/consultas" element={<Consultations />} />
     <Route path="/panel" element={<PanelRoute />} />
     <Route path="/panel/:slug" element={<PanelRoute />} />
     <Route path="/renovar" element={<RenewRoute />} />

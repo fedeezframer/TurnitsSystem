@@ -1,6 +1,7 @@
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
+import { useQuoteMode } from "../../shared/agenda-mode"
 import * as React from "react"
 import {
     useState,
@@ -411,6 +412,7 @@ function TeamManager_ServiciosVinculados({
     routePrefix?: string
 }) {
     const [loading, setLoading] = React.useState(true)
+    const quoteMode = useQuoteMode(apiUrl)
     const [servicios, setServicios] = React.useState<
         TeamManager_ServicioAsignable[]
     >([])
@@ -546,7 +548,7 @@ function TeamManager_ServiciosVinculados({
                                 opacity: pending ? 0.6 : s.activo ? 1 : 0.55,
                             }}
                         >
-                            {s.nombre} · ${s.precio.toLocaleString("es-AR")}
+                            {s.nombre} · {quoteMode ? "A presupuestar" : `$${s.precio.toLocaleString("es-AR")}`}
                             {!s.activo ? " (inactivo)" : ""}
                         </button>
                     </div>

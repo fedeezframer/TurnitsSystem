@@ -1,3 +1,4 @@
+import { quotePresentation } from "./consultations.js";
 const amount = value => {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(Math.round(number * 100) / 100, 0) : 0;
@@ -12,6 +13,7 @@ export function receiptDate(value) {
   }).format(date);
 }
 export function bookingReceipt(turno) {
+  const quote = turno.presupuesto_detalle ? quotePresentation({ detalle: turno.presupuesto_detalle }, turno.servicio_nombre || turno.servicio) : null;
   const extras = (Array.isArray(turno.extras) ? turno.extras : []).map(extra => ({
     name: String(extra.nombre || "Producto"),
     quantity: Math.max(1, Number(extra.cantidad) || 1),
@@ -27,7 +29,8 @@ export function bookingReceipt(turno) {
     ["Negocio", turno.business_name || turno.negocio_nombre || turno.slug],
     ["Reservó", [turno.nombre, turno.apellido].filter(Boolean).join(" ") || turno.cliente],
     ["Email", turno.email], ["Teléfono", turno.telefono],
-    ["Servicio", turno.servicio_nombre || turno.servicio],
+    ["Servicio", quote?.service || turno.servicio_nombre || turno.servicio],
+    ["Detalle acordado", quote?.observation],
     ["Profesional", turno.equipo_nombre], ["Sucursal", turno.sucursal_nombre],
     ["Día", receiptDate(turno.fecha)], ["Hora", turno.hora ? String(turno.hora).slice(0, 5) + " hs" : "Sin horario"],
   ].filter(([, value]) => value).map(([label, value]) => [label, String(value)]);
