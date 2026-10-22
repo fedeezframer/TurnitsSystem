@@ -108,20 +108,26 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
         if (!cursor) fail("Cursor inválido.");
         messages = messages.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${before})`);
       }
-      const rows = read(await messages) || [];
-      const safeMessages = await Promise.all(rows.map(async message => {
-        if (!message.archivo) return message;
-        const signed = read(await supabase.storage.from("consulta-referencias").createSignedUrl(message.archivo, 300));
-        return { ...message, archivo: undefined, referencia_url: signed.signedUrl };
-      }));
-      const quotes = read(await supabase.from("consulta_presupuestos").select("*").eq("consulta_id", consultation.id).order("created_at", { ascending: false }).limit(20));
+      const [messagesResult, quotesResult] = await Promise.all([
+        messages,
+        supabase.from("consulta_presupuestos").select("*").eq("consulta_id", consultation.id).order("created_at", { ascending: false }).limit(20),
+      ]);
+      const rows = read(messagesResult) || [], quotes = read(quotesResult) || [];
       const activeQuote = quotes.find(quote => quote.estado !== "reemplazado");
-      const paymentInfo = payments?.info ? await payments.info(consultation, activeQuote) : null;
-      let paymentStates = [];
-      if (payments?.enabled && quotes.length) {
+      const loadPaymentStates = async () => {
+        if (!payments?.enabled || !quotes.length) return [];
         const checkouts = read(await supabase.from("consulta_checkouts").select("id").in("presupuesto_id", quotes.map(quote => quote.id)));
-        if (checkouts.length) paymentStates = read(await supabase.from("consulta_pagos").select("estado,importe,turno_id,created_at").in("checkout_id", checkouts.map(checkout => checkout.id)).order("created_at", { ascending: false }));
-      }
+        return checkouts.length ? read(await supabase.from("consulta_pagos").select("estado,importe,turno_id,created_at").in("checkout_id", checkouts.map(checkout => checkout.id)).order("created_at", { ascending: false })) : [];
+      };
+      const [safeMessages, paymentInfo, paymentStates] = await Promise.all([
+        Promise.all(rows.map(async message => {
+          if (!message.archivo) return message;
+          const signed = read(await supabase.storage.from("consulta-referencias").createSignedUrl(message.archivo, 300));
+          return { ...message, archivo: undefined, referencia_url: signed.signedUrl };
+        })),
+        payments?.info ? payments.info(consultation, activeQuote) : null,
+        loadPaymentStates(),
+      ]);
       res.json({ success: true, consulta: { id: consultation.id, titulo: consultation.titulo, estado: consultation.estado, slug: consultation.slug, servicio_id: consultation.servicio_id }, pagos: paymentStates, pago_online: paymentInfo?.habilitado === true, pago_presupuesto: paymentInfo, interlocutor, servicio:service, mensajes: safeMessages.reverse(), presupuestos: quotes, anterior: rows.length === 50 ? rows.at(-1).id : null });
     }));
     app.post(prefix + "/:id/mensajes", ...guards, route(async (req, res) => {

@@ -82,12 +82,17 @@ function ConsultationsContent({ embedded, onInboxChange }: { embedded?: Embedded
     const data = await api(`${prefix}/${encodeURIComponent(current)}`, { signal });
     if (signal?.aborted || activeThread.current !== current) return;
     setConversation((previous: any) => previous?.consulta.id === current ? { ...data, mensajes: mergeMessages(previous.mensajes, data.mensajes), anterior: previous.historyLoaded ? previous.anterior : data.anterior, historyLoaded: previous.historyLoaded } : data);
+    setLoading(false);
     const message = data.mensajes.at(-1), marker = `${current}:${message?.id || ""}`;
     if (!document.hidden && activeScreen.current === "chat" && message && readMarker.current !== marker) {
-      await api(`${prefix}/${current}/leida`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mensaje_id: message.id }), signal });
-      if (!signal?.aborted && activeThread.current === current) { readMarker.current = marker; setInbox(items => items.map(item => item.id === current ? { ...item, no_leidos: 0 } : item)); }
+      void api(`${prefix}/${current}/leida`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mensaje_id: message.id }), signal }).then(() => {
+        if (!signal?.aborted && activeThread.current === current) {
+          readMarker.current = marker;
+          setInbox(items => { const next = items.map(item => item.id === current ? { ...item, no_leidos: 0 } : item); onInboxChange?.(next); return next; });
+        }
+      }).catch(() => {});
     }
-  }, [api, prefix, current]);
+  }, [api, onInboxChange, prefix, current]);
   React.useEffect(() => { const previous = document.title; document.title = `Mensajes | Turnits${appConfig.staging ? " TEST" : ""}`; return () => { document.title = previous; }; }, []);
   React.useEffect(() => {
     if (!requestedService || business || !token) return;
@@ -101,7 +106,7 @@ function ConsultationsContent({ embedded, onInboxChange }: { embedded?: Embedded
     const controller = new AbortController(); let pending = false;
     const load = async (initial = false) => {
       if (pending || (!initial && document.hidden)) return; pending = true;
-      try { await refreshInbox(controller.signal); await refreshThread(controller.signal); }
+      try { await Promise.all([refreshInbox(controller.signal), refreshThread(controller.signal)]); }
       catch (failure: any) { if (!controller.signal.aborted) setError(failure.message); }
       finally { pending = false; if (!controller.signal.aborted) setLoading(false); }
     };
@@ -140,7 +145,8 @@ function ConsultationsContent({ embedded, onInboxChange }: { embedded?: Embedded
     finally { lock.current = false; setBusy(false); }
   };
   const activeQuote = conversation?.presupuestos?.find((item: any) => item.estado !== "reemplazado"), presented = quotePresentation(activeQuote, conversation?.consulta.titulo);
-  const quoteExpired = activeQuote && Date.parse(activeQuote.vence_at) <= Date.now(), participant = conversation?.interlocutor || { nombre: "", foto_url: "" }, mine = business ? "negocio" : "cliente", canEdit = business && conversation?.consulta.estado === "abierta";
+  const inboxParticipant = inbox.find(item => item.id === current);
+  const quoteExpired = activeQuote && Date.parse(activeQuote.vence_at) <= Date.now(), participant = conversation?.interlocutor || { nombre: inboxParticipant?.interlocutor_nombre || inboxParticipant?.slug || "", foto_url: inboxParticipant?.foto_url || "" }, mine = business ? "negocio" : "cliente", canEdit = business && conversation?.consulta.estado === "abierta";
   const setField = (name: keyof Draft, value: string) => setDraft(previous => ({ ...previous, [name]: value }));
   const field = (name: keyof Draft) => ({ value: draft[name], onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setField(name, event.target.value) });
   const enterEditor = () => {

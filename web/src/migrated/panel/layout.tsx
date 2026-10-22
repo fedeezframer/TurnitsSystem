@@ -3,6 +3,7 @@ import { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import { loadQuoteMode, useQuoteMode } from "../../shared/agenda-mode"
+import { messagePreview } from "../../shared/consultations.js"
 import { useGlobalDiscardRevision } from "./common"
 import * as React from "react"
 import {
@@ -25,6 +26,7 @@ import { CopyTurnosButton } from "./inicio"
 import { PerfilNegocio } from "./profile-section"
 import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, PagosSettingsGuard, MercadoPagoConexion, ConfigPagos, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
 import Consultations from "../../pages/Consultations"
+import { ChatIcon } from "../../components/ChatChrome"
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
@@ -78,6 +80,9 @@ function TurnitsPanel_Inner(props: any) {
         searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
     )
     const [agendaConsultaPermitida, setAgendaConsultaPermitida] = React.useState(false)
+    const [mensajesSinLeer, setMensajesSinLeer] = React.useState(0)
+    const [avisoMensaje, setAvisoMensaje] = React.useState<any>(null)
+    const mensajesAnteriores = React.useRef<Record<string, number> | null>(null)
     const [mostrarNotificaciones, setMostrarNotificaciones] =
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
@@ -178,6 +183,67 @@ function TurnitsPanel_Inner(props: any) {
         (item) => (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible) && (item.id !== "consultas" || (appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin))
     ).map(item => item.id === "consultas" ? { ...item, label: "Mensajes" } : item)
 
+    const actualizarBandejaMensajes = React.useCallback((items: any[]) => {
+        const next = Object.fromEntries(items.map(item => [item.id, Number(item.no_leidos) || 0])) as Record<string, number>
+        const previous = mensajesAnteriores.current
+        const unread = Object.values(next).reduce((total, count) => total + count, 0)
+        if (previous && seccionActiva !== "consultas") {
+            const incoming = items.find(item => Number(item.no_leidos) > (previous[item.id] || 0))
+            if (incoming) {
+                const nombre = incoming.interlocutor_nombre || incoming.slug, preview = messagePreview(incoming, true)
+                setAvisoMensaje({ id: incoming.id, nombre, preview })
+                if (document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+                    const notification = new Notification(nombre, { body: preview || "Te llegó un mensaje nuevo", tag: `turnits-message-${incoming.id}` })
+                    notification.onclick = () => {
+                        window.focus()
+                        setSeccionActiva("consultas")
+                        setSearchParams(previousParams => { const next = new URLSearchParams(previousParams); next.set("seccion", "consultas"); next.set("id", incoming.id); return next }, { replace: true })
+                        setMenuMobileAbierto(false)
+                        setAvisoMensaje(null)
+                        notification.close()
+                    }
+                }
+            }
+        }
+        mensajesAnteriores.current = next
+        setMensajesSinLeer(unread)
+    }, [seccionActiva, setSearchParams])
+
+    React.useEffect(() => {
+        const slug = MenuFooter_getSlug()
+        const token = MenuFooter_getToken()
+        if (!appConfig.quoteBookingEnabled || !quoteMode || !agendaConsultaPermitida || branchAdmin || !slug || !token) return
+        const controller = new AbortController()
+        let active = true, pending = false
+        const refresh = async () => {
+            if (!active || pending || document.hidden) return
+            pending = true
+            try {
+                const response = await fetchPanelRead(`${baseUrl.replace(/\/+$/, "")}/admin/consultas`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal })
+                const data = await response.json()
+                if (active && response.ok && data?.success) actualizarBandejaMensajes(data.consultas || [])
+            } catch {} finally { pending = false }
+        }
+        const visible = () => { if (!document.hidden) void refresh() }
+        void refresh()
+        const timer = window.setInterval(() => void refresh(), 12000)
+        document.addEventListener("visibilitychange", visible)
+        return () => { active = false; controller.abort(); window.clearInterval(timer); document.removeEventListener("visibilitychange", visible) }
+    }, [agendaConsultaPermitida, baseUrl, branchAdmin, quoteMode, actualizarBandejaMensajes])
+
+    React.useEffect(() => {
+        if (!avisoMensaje) return
+        const timer = window.setTimeout(() => setAvisoMensaje(null), 5500)
+        return () => window.clearTimeout(timer)
+    }, [avisoMensaje])
+
+    const abrirMensajeNotificado = (id: string) => {
+        setSeccionActiva("consultas")
+        setSearchParams(previous => { const next = new URLSearchParams(previous); next.set("seccion", "consultas"); next.set("id", id); return next }, { replace: true })
+        setMenuMobileAbierto(false)
+        setAvisoMensaje(null)
+    }
+
     // Igual que irA: si el banner de referidos del menú se toca desde la
     // hoja inferior mobile, cerramos esa hoja para que no quede "detrás"
     // del panel lateral de referidos que se abre encima.
@@ -189,7 +255,7 @@ function TurnitsPanel_Inner(props: any) {
     return (
         <div
             ref={containerRef}
-            className="turnits-root"
+            className={`turnits-root${seccionActiva === "consultas" ? " turnits-messages-active" : ""}`}
             style={{
                 display: "flex",
                 flexDirection: isMobile ? "column" : "row",
@@ -542,7 +608,7 @@ function TurnitsPanel_Inner(props: any) {
                         minWidth: 0,
                         minHeight: isMobile ? "auto" : 0,
                         padding: isMobile
-                            ? "16px 16px calc(100px + env(safe-area-inset-bottom, 0px))"
+                            ? seccionActiva === "consultas" ? "12px 12px 16px" : "16px 16px calc(100px + env(safe-area-inset-bottom, 0px))"
                             : 32,
                         boxSizing: "border-box",
                         overflow: isMobile ? "visible" : "auto",
@@ -570,7 +636,7 @@ function TurnitsPanel_Inner(props: any) {
                 </div>}
 
                 {branchAdmin && seccionActiva !== "consultas" && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
-                {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <Consultations embedded="panel" />}
+                {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <Consultations embedded="panel" onInboxChange={actualizarBandejaMensajes} />}
                 {seccionActiva === "inicio" && (
                     <SectionLoadingBoundary>
                     <SeccionInicio
@@ -836,7 +902,7 @@ function TurnitsPanel_Inner(props: any) {
             /></OwnerOnly>
 
             {/* ─────────────── NAV FLOTANTE (mobile, estilo Instagram) ─── */}
-            {isMobile && (
+            {isMobile && seccionActiva !== "consultas" && (
                 <div
                     style={{
                         position: "fixed",
@@ -906,6 +972,19 @@ function TurnitsPanel_Inner(props: any) {
                     </div>
                 </div>
             )}
+            {appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin && seccionActiva !== "consultas" && <>
+                {avisoMensaje && <div className="panel-message-notice" role="status">
+                    <button type="button" onClick={() => abrirMensajeNotificado(avisoMensaje.id)}>
+                        <ChatIcon name="chat" size={18} />
+                        <span><strong>{avisoMensaje.nombre}</strong><small>{avisoMensaje.preview || "Te llegó un mensaje nuevo"}</small></span>
+                    </button>
+                    <button type="button" className="panel-message-notice-close" aria-label="Cerrar notificación" onClick={() => setAvisoMensaje(null)}><ChatIcon name="close" size={16} /></button>
+                </div>}
+                <button className="panel-message-fab" type="button" onClick={() => irA("consultas")} aria-label={mensajesSinLeer ? `Mensajes, ${mensajesSinLeer} sin leer` : "Abrir mensajes"}>
+                    <ChatIcon name="chat" size={21} /><span>Mensajes</span>
+                    {mensajesSinLeer > 0 && <b aria-hidden="true">{mensajesSinLeer > 99 ? "99+" : mensajesSinLeer}</b>}
+                </button>
+            </>}
         </div>
     )
 }

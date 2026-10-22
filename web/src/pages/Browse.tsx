@@ -223,7 +223,7 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
           {kind === "offer" && <b className="browse-time">{item.hora}hs</b>}
         </div>
         <div className="browse-card-footer">
-          <div className="browse-card-price">
+          <div className={`browse-card-price${appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? " browse-card-price-quote" : ""}`}>
             {appConfig.quoteBookingEnabled && n?.modo_agenda === "presupuesto" ? "A presupuestar" : kind === "reward" ? (
               <>
                 {item.tipo === "producto"
@@ -456,11 +456,18 @@ function BrowseContent() {
     const total = Object.values(next).reduce((sum, count) => sum + count, 0);
     if (previous && view !== "mensajes") {
       const incoming = items.find(item => Number(item.no_leidos) > (previous[item.id] || 0));
-      if (incoming) setMessageNotice({ id: incoming.id, name: incoming.interlocutor_nombre || incoming.slug, preview: messagePreview(incoming, false) });
+      if (incoming) {
+        const name = incoming.interlocutor_nombre || incoming.slug, preview = messagePreview(incoming, false);
+        setMessageNotice({ id: incoming.id, name, preview });
+        if (document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+          const notification = new Notification(name, { body: preview || "Te llegó un mensaje nuevo", tag: `turnits-message-${incoming.id}` });
+          notification.onclick = () => { window.focus(); setParams({ vista: "mensajes", id: incoming.id }); notification.close(); };
+        }
+      }
     }
     previousUnread.current = next;
     setUnreadMessages(total);
-  }, [view]);
+  }, [setParams, view]);
   React.useEffect(() => {
     if (!appConfig.quoteBookingEnabled || view === "mensajes" || !consumerHeaders().Authorization) return;
     const controller = new AbortController();
@@ -738,6 +745,16 @@ function BrowseContent() {
           ))}
         </nav>
         <div className="browse-header-actions">
+          {appConfig.quoteBookingEnabled && <button
+            aria-label={unreadMessages ? `Mensajes, ${unreadMessages} sin leer` : "Mensajes"}
+            aria-current={view === "mensajes" ? "page" : undefined}
+            className={`browse-messages-action${view === "mensajes" ? " selected" : ""}`}
+            onClick={() => changeView(view === "mensajes" ? "inicio" : "mensajes")}
+          >
+            <ChatIcon name="chat" size={25} />
+            <span className="browse-header-label">Mensajes</span>
+            {unreadMessages > 0 && <b aria-hidden="true">{unreadMessages > 99 ? "99+" : unreadMessages}</b>}
+          </button>}
           <button
             aria-label="T-Coins"
             className={view === "coins" ? "selected" : ""}
@@ -1281,11 +1298,6 @@ function BrowseContent() {
           </button>
           <button type="button" className="browse-message-notice-close" aria-label="Cerrar notificación" onClick={() => setMessageNotice(null)}><ChatIcon name="close" size={16} /></button>
         </div>}
-        <button className={`browse-message-fab${view === "mensajes" ? " selected" : ""}`} type="button" aria-label={unreadMessages ? `Mensajes, ${unreadMessages} sin leer` : view === "mensajes" ? "Cerrar mensajes" : "Abrir mensajes"} aria-current={view === "mensajes" ? "page" : undefined} onClick={() => changeView(view === "mensajes" ? "inicio" : "mensajes")}>
-          <ChatIcon name={view === "mensajes" ? "close" : "chat"} size={23} />
-          <span>{view === "mensajes" ? "Cerrar" : "Mensajes"}</span>
-          {unreadMessages > 0 && <b aria-hidden="true">{unreadMessages > 99 ? "99+" : unreadMessages}</b>}
-        </button>
       </>}
       {modal && (
         <Modal

@@ -100,3 +100,26 @@
   .chat-quote-view{padding:20px 18px}
   .chat-quote-view h2{font-size:20px;margin-bottom:16px}
 }
+
+.chat-messages{gap:14px;padding:20px clamp(16px,4vw,36px) 12px;background:#fff}
+.chat-bubble{max-width:min(78%,620px);padding:12px 16px;border:1px solid #e8ebe8;border-radius:18px 18px 18px 6px;background:#f4f5f6;color:#1b1d1b;box-shadow:0 1px 2px #15211508}
+.chat-bubble.mine{align-self:flex-end;border-color:#dcebd8;border-radius:18px 18px 6px 18px;background:#eaf4e7;color:#173116}
+.chat-bubble.theirs:before,.chat-bubble.mine:after{display:none;content:none}
+.chat-bubble p{font-size:14px;font-weight:400;line-height:1.5;letter-spacing:.005em}
+.chat-photo-bubble{width:min(250px,72%);padding:6px;border-radius:17px}
+.chat-photo-bubble.mine{border-radius:17px}
+.chat-reference img{border-radius:12px}
+.chat-person{border-color:#e7ebe7}
+.chat-person h1{font-size:18px;letter-spacing:-.2px}
+.chat-composer{border:1px solid #dfe4df;background:#f7f8f7;box-shadow:0 1px 2px #13231308}
+.chat-composer textarea{color:#1c211c}
+.chat-composer textarea::placeholder{color:#7b827b;opacity:1}
+.chat-send{box-shadow:0 2px 5px #176a1a26}
+.chat-inbox-item{transition:border-color .16s ease,background .16s ease,box-shadow .16s ease}
+.chat-inbox-item:hover{border-color:#c8d9c3;background:#fcfefb;box-shadow:0 3px 12px #1830180b}
+@media(max-width:700px){
+  .chat-messages{gap:12px;padding:18px 16px 10px}
+  .chat-bubble{max-width:86%;padding:11px 14px}
+  .chat-bubble p{font-size:14px;line-height:1.48}
+}
+@media(prefers-reduced-motion:reduce){.chat-inbox-item{transition:none}}
