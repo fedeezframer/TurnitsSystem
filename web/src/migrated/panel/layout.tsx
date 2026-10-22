@@ -562,6 +562,12 @@ function TurnitsPanel_Inner(props: any) {
                 onClose={() => setMostrarNotificaciones(false)}
                 iconosNotif={iconosNotificaciones}
                 onNavigate={(seccion) => irA(seccion as SeccionId)}
+                messageSlot={appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin && seccionActiva !== "consultas" ? (
+                    <button className="panel-message-fab" type="button" onClick={() => irA("consultas")} aria-label={mensajesSinLeer ? `Mensajes, ${mensajesSinLeer} sin leer` : "Abrir mensajes"} title="Mensajes">
+                        <ChatIcon name="chat" size={21} />
+                        {mensajesSinLeer > 0 && <b aria-hidden="true">{mensajesSinLeer > 99 ? "99+" : mensajesSinLeer}</b>}
+                    </button>
+                ) : null}
                 qrSlot={
                     isMobile ? (
                         <QrFlotante
@@ -636,7 +642,7 @@ function TurnitsPanel_Inner(props: any) {
                 </div>}
 
                 {branchAdmin && seccionActiva !== "consultas" && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
-                {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <Consultations embedded="panel" onInboxChange={actualizarBandejaMensajes} />}
+                {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <Consultations embedded="panel" onInboxChange={actualizarBandejaMensajes} onExit={() => irA("inicio")} />}
                 {seccionActiva === "inicio" && (
                     <SectionLoadingBoundary>
                     <SeccionInicio
@@ -980,10 +986,6 @@ function TurnitsPanel_Inner(props: any) {
                     </button>
                     <button type="button" className="panel-message-notice-close" aria-label="Cerrar notificación" onClick={() => setAvisoMensaje(null)}><ChatIcon name="close" size={16} /></button>
                 </div>}
-                <button className="panel-message-fab" type="button" onClick={() => irA("consultas")} aria-label={mensajesSinLeer ? `Mensajes, ${mensajesSinLeer} sin leer` : "Abrir mensajes"}>
-                    <ChatIcon name="chat" size={21} /><span>Mensajes</span>
-                    {mensajesSinLeer > 0 && <b aria-hidden="true">{mensajesSinLeer > 99 ? "99+" : mensajesSinLeer}</b>}
-                </button>
             </>}
         </div>
     )

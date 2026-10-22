@@ -1733,8 +1733,10 @@ function NotificacionesFlotantes({
     employeeMode = false,
     onNavigate,
     qrSlot,
+    messageSlot,
 }: {
     qrSlot?: React.ReactNode
+    messageSlot?: React.ReactNode
     baseUrl: string
     accentColor: string
     isMobile: boolean
@@ -1758,6 +1760,7 @@ function NotificacionesFlotantes({
                     gap: 8,
                 }}
             >
+                {messageSlot}
                 {qrSlot}
                 <BotonNotificaciones
                     apiBaseUrl={baseUrl}
