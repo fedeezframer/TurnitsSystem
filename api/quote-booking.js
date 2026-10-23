@@ -130,7 +130,7 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       ]);
       const participant = read(participantResult), service = read(serviceResult);
       const linkedProductIds = business ? read(await supabase.from("servicio_extras").select("extra_id").eq("servicio_id", consultation.servicio_id)) || [] : [];
-      const availableProducts = linkedProductIds.length ? read(await supabase.from("extras").select("id,nombre,precio,owner_equipo_id,orden").eq("slug", consultation.slug).eq("activo", true).in("id", linkedProductIds.map(item => item.extra_id))) || [] : [];
+      const availableProducts = linkedProductIds.length ? read(await supabase.from("extras").select("id,nombre,precio,imagen_url,owner_equipo_id,orden").eq("slug", consultation.slug).eq("activo", true).in("id", linkedProductIds.map(item => item.extra_id))) || [] : [];
       availableProducts.sort((first, second) => (first.orden || 0) - (second.orden || 0));
       const interlocutor = { nombre: business ? [participant?.nombre_persona,participant?.apellido].filter(Boolean).join(" ") || "Cliente" : participant?.nombre || consultation.slug, foto_url: business ? participant?.foto_url : participant?.foto_perfil_url };
       const before = req.query.before;

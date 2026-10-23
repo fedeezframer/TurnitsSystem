@@ -12,6 +12,7 @@ type Screen = "chat" | "edit" | "quote";
 type EmbeddedSurface = "browse" | "panel";
 type Draft = { servicio: string; detalle: string; total: string; duracion: string; equipo_id: string; fecha: string; hora: string; vence_at: string };
 type SelectedProduct = { id: string; cantidad: number };
+const PRODUCT_IMAGE_PLACEHOLDER = "/assets/framer/H7M2asyQ9r8aUd71aOfa3Bt2dc.svg";
 const emptyDraft = (): Draft => ({ servicio: "", detalle: "", total: "", duracion: "60", equipo_id: "", fecha: "", hora: "", vence_at: "" });
 const money = (value: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 }).format(value);
 async function optimizeReference(file: File) {
@@ -292,8 +293,29 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
           {members.length > 1 && <label className="chat-quote-field"><span className="chat-quote-label"><ChatIcon name="users" size={15} />Profesional</span><select required {...field("equipo_id")}><option value="">Elegí un profesional</option>{members.map(member => <option key={member.id} value={member.id}>{member.nombre} {member.apellido || ""}</option>)}</select></label>}
         </section>
         {(productCatalogue.length > 0 || selectedProductRows.length > 0) && <section className="chat-quote-section"><div className="chat-quote-section-heading"><div><strong>Productos</strong><small>Sumá productos vinculados a este servicio.</small></div></div><div className="chat-quote-product-list">
-          {productsForProfessional.map((product: any) => { const selected = selectedProducts.find(item => item.id === product.id), unitPrice = Number(product.precio) || 0; return <div className="chat-quote-product-option" key={product.id}><input id={`quote-product-${product.id}`} type="checkbox" checked={!!selected} onChange={event => setSelectedProducts(previous => event.target.checked ? [...previous, { id: product.id, cantidad: 1 }] : previous.filter(item => item.id !== product.id))} /><label htmlFor={`quote-product-${product.id}`} className="chat-quote-product-copy"><strong>{product.nombre}</strong><small>{money(unitPrice)} por unidad{selected ? ` · Subtotal ${money(unitPrice * selected.cantidad)}` : ""}</small></label>{selected && <label className="chat-quote-product-quantity"><span>Cant.</span><input type="number" min="1" max="99" step="1" inputMode="numeric" aria-label={`Cantidad de ${product.nombre}`} value={selected.cantidad} onChange={event => { const cantidad = Math.min(99, Math.max(1, Number(event.target.value) || 1)); setSelectedProducts(previous => previous.map(item => item.id === product.id ? { ...item, cantidad } : item)); }} /></label>}</div>; })}
-          {selectedProductRows.filter(product => !product.available).map(product => <div className="chat-quote-product-option unavailable" key={product.id}><input id={`quote-product-${product.id}`} type="checkbox" checked disabled={false} onChange={() => setSelectedProducts(previous => previous.filter(item => item.id !== product.id))} /><label htmlFor={`quote-product-${product.id}`} className="chat-quote-product-copy"><strong>{product.nombre}</strong><small>No disponible para este profesional. Quitalo del presupuesto.</small></label><span className="chat-quote-product-price">{money(product.unitPrice)} por unidad</span></div>)}
+          {productsForProfessional.map((product: any) => {
+            const selected = selectedProducts.find(item => item.id === product.id);
+            const unitPrice = Number(product.precio) || 0;
+            const inputId = `quote-product-${product.id}`;
+            return <div className={`chat-quote-product-option${selected ? " selected" : ""}`} key={product.id}>
+              <label htmlFor={inputId} className="chat-quote-product-choice">
+                <input id={inputId} type="checkbox" checked={!!selected} onChange={event => setSelectedProducts(previous => event.target.checked ? [...previous, { id: product.id, cantidad: 1 }] : previous.filter(item => item.id !== product.id))} />
+                <span className={`chat-quote-product-check${selected ? " checked" : ""}`} aria-hidden="true">{selected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6" /></svg>}</span>
+                <img className="chat-quote-product-image" src={product.imagen_url || PRODUCT_IMAGE_PLACEHOLDER} alt={product.nombre} onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = PRODUCT_IMAGE_PLACEHOLDER; }} />
+                <span className="chat-quote-product-copy"><strong>{product.nombre}</strong><small>{money(unitPrice)} por unidad{selected ? ` · Subtotal ${money(unitPrice * selected.cantidad)}` : ""}</small></span>
+              </label>
+              {selected && <label className="chat-quote-product-quantity"><span>Cant.</span><input type="number" min="1" max="99" step="1" inputMode="numeric" aria-label={`Cantidad de ${product.nombre}`} value={selected.cantidad} onChange={event => { const cantidad = Math.min(99, Math.max(1, Number(event.target.value) || 1)); setSelectedProducts(previous => previous.map(item => item.id === product.id ? { ...item, cantidad } : item)); }} /></label>}
+            </div>;
+          })}
+          {selectedProductRows.filter(product => !product.available).map(product => <div className="chat-quote-product-option unavailable selected" key={product.id}>
+            <label htmlFor={`quote-product-${product.id}`} className="chat-quote-product-choice">
+              <input id={`quote-product-${product.id}`} type="checkbox" checked onChange={() => setSelectedProducts(previous => previous.filter(item => item.id !== product.id))} />
+              <span className="chat-quote-product-check checked" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6" /></svg></span>
+              <img className="chat-quote-product-image" src={product.imagen_url || PRODUCT_IMAGE_PLACEHOLDER} alt={product.nombre} onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = PRODUCT_IMAGE_PLACEHOLDER; }} />
+              <span className="chat-quote-product-copy"><strong>{product.nombre}</strong><small>No disponible para este profesional. Quitalo del presupuesto.</small></span>
+            </label>
+            <span className="chat-quote-product-price">{money(product.unitPrice)} por unidad</span>
+          </div>)}
           {!productsForProfessional.length && !selectedProductRows.length && <p className="chat-quote-help">{members.length > 1 && !draft.equipo_id ? "Elegí un profesional para ver sus productos." : "No hay productos vinculados disponibles para este profesional."}</p>}
         </div></section>}
         <section className="chat-quote-section"><div className="chat-quote-section-heading"><div><strong>Disponibilidad</strong><small>Proponé un día y horario para el trabajo.</small></div></div><div className="chat-quote-row"><label className="chat-quote-field"><span className="chat-quote-label"><ChatIcon name="calendar" size={15} />Día</span><input required type="date" {...field("fecha")} onInput={event => setField("fecha", event.currentTarget.value)} /></label><label className="chat-quote-field"><span className="chat-quote-label"><ChatIcon name="clock" size={15} />Hora</span><input required type="time" {...field("hora")} onInput={event => setField("hora", event.currentTarget.value)} /></label></div><label className="chat-quote-field"><span className="chat-quote-label"><ChatIcon name="clock" size={15} />Duración estimada</span><span className="chat-quote-suffix-input"><input type="number" min="5" max="720" step="5" inputMode="numeric" {...field("duracion")} /><span>minutos</span></span></label></section>
