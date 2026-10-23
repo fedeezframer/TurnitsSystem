@@ -1300,12 +1300,6 @@ function ServiciosManager_ServicioForm({
                     </div>
                 )}
 
-                {quoteMode && (
-                    <div style={{ padding: "12px 14px", borderRadius: 10, background: "#f0f7ef", color: "#315b34", fontSize: 12.5, lineHeight: 1.5 }}>
-                        No cargues un precio ni una duración estándar: varían según cada pedido y se acuerdan en la consulta.
-                    </div>
-                )}
-
                 {/* Precio, capacidad y orden en una fila, sin selector de
                     moneda (el precio siempre es en la moneda de la cuenta). */}
                 <div
