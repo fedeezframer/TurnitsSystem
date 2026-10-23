@@ -5,6 +5,11 @@ import { appConfig } from "../config";
 export function ChatIcon({ name, size = 24 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
     chat: <path d="M21 11.5a9 9 0 0 1-9 9 10 10 0 0 1-4-.8L3 21l1.3-4.6A9 9 0 1 1 21 11.5Z" />,
+    tag: <><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42Z" /><circle cx="7.5" cy="7.5" r=".5" fill="currentColor" /></>,
+    "align-left": <><line x1="21" x2="3" y1="6" y2="6" /><line x1="15" x2="3" y1="12" y2="12" /><line x1="17" x2="3" y1="18" y2="18" /></>,
+    dollar: <><line x1="12" x2="12" y1="2" y2="22" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>,
+    clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
+    users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></>,
     coin: <><ellipse cx="12" cy="12" rx="5" ry="9" transform="rotate(23 12 12)" /><path d="m9 4 5 2m-7 9 5 2m-3-6 5 2m2-9 2 1c3 1 3 6 1 10s-5 7-8 6l-2-1" /></>,
     user: <><circle cx="12" cy="6.5" r="4" fill="currentColor" stroke="none" /><path d="M4 22v-3a8 8 0 0 1 16 0v3Z" fill="currentColor" stroke="none" /></>,
     back: <path d="m10 6-5 5 5 5M5 11h9a5 5 0 0 1 5 5v4" />,

@@ -187,11 +187,6 @@
 .chat-quote-suffix-input span{flex:none;color:#777f75;font-size:12px;font-weight:400}
 .chat-quote-optional{margin-left:4px;color:#858d83;font-size:11px;font-weight:400}
 .chat-quote-help{margin:-4px 0 0;color:#71796f;font-size:11px;line-height:1.5}
-.chat-quote-summary{display:flex;flex-direction:column;gap:9px;padding:12px 14px;border:1px solid #dfeadd;border-radius:12px;background:#f5faf3}
-.chat-quote-summary>div{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#5c685a;font-size:12px;line-height:18px}
-.chat-quote-summary>div strong{color:#20291e;font-size:13px;font-weight:650;text-align:right}
-.chat-quote-summary>div:first-child{padding-bottom:8px;border-bottom:1px solid #e0e9dd}
-.chat-quote-summary>div:first-child strong{color:#1b6b1a;font-size:17px;letter-spacing:-.02em}
 .chat-quote-options{margin:0;padding:0 14px;border:1px solid #e6eae4;border-radius:12px;background:#fff;color:#4c554a}
 .chat-quote-options summary{padding:12px 0;color:#353e33;font-size:12px;font-weight:600}
 .chat-quote-options .chat-quote-field{margin:0 0 12px;font-size:12px}
@@ -204,6 +199,20 @@
 @media(max-width:700px){.chat-quote-form{gap:10px;padding:16px 14px max(20px,env(safe-area-inset-bottom))}.chat-quote-intro h2{font-size:22px}.chat-quote-section{gap:10px;padding:13px;border-radius:14px}.chat-quote-section .chat-quote-row{gap:9px}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input{padding:9px 10px}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input input,.chat-quote-suffix-input input{font-size:16px}}
 @media(max-width:370px){.chat-quote-section .chat-quote-row{grid-template-columns:minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){.chat-quote-form{animation:none}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input,.chat-quote-form-footer .chat-quote-submit{transition:none}}
+.chat-quote-label{display:flex;align-items:center;gap:7px;color:#1e293b;font-size:13px;font-weight:700;letter-spacing:-.1px}
+.chat-quote-label>svg{flex:none;color:#64748b}
+.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input,.chat-quote-options .chat-quote-field>input{width:100%;min-width:0;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:9px;background:#fff;color:#1e293b;font-family:'Inter Display',-apple-system,sans-serif;font-size:13px;line-height:1.4;transition:border-color .15s,box-shadow .15s}
+.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-options .chat-quote-field>input{height:auto;min-height:38px;padding:9px 11px}
+.chat-quote-section .chat-quote-field>textarea{height:84px;min-height:84px;padding:9px 11px;resize:vertical}
+.chat-quote-section .chat-price-input,.chat-quote-suffix-input{display:flex;align-items:center;gap:8px;min-height:38px;padding:8px 11px}
+.chat-quote-section .chat-price-input input,.chat-quote-suffix-input input{width:100%;min-width:0;height:auto;min-height:0;padding:0;border:0;outline:0;background:transparent;color:#1e293b;font:inherit}
+.chat-quote-section .chat-price-input>span:first-child{color:#64748b}
+.chat-quote-section .chat-quote-field>input:focus,.chat-quote-section .chat-quote-field>select:focus,.chat-quote-section .chat-quote-field>textarea:focus,.chat-quote-section .chat-price-input:focus-within,.chat-quote-suffix-input:focus-within,.chat-quote-options .chat-quote-field>input:focus{outline:none;border-color:var(--chat-green);box-shadow:0 0 0 3px #1b6b1a1f}
+.chat-quote-suffix-input>span{flex:none;color:#64748b;font-size:12px;font-weight:400}
+.chat-quote-section .chat-quote-help{margin:0;color:#64748b;font-size:11px;line-height:1.5}
+.chat-quote-options .chat-quote-label{margin-bottom:7px}
+@media(max-width:700px){.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input input,.chat-quote-suffix-input input,.chat-quote-options .chat-quote-field>input{font-size:16px}}
+@media(prefers-reduced-motion:reduce){.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input,.chat-quote-options .chat-quote-field>input{transition:none}}
 
 @media(max-width:860px){
   .consultations-embedded-panel{position:fixed;z-index:65;inset:0;width:100vw;height:100dvh;min-height:0;grid-template-columns:minmax(0,1fr);border:0;border-radius:0;box-shadow:none}
