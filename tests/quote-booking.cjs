@@ -1,10 +1,25 @@
 const assert = require("node:assert/strict");
 (async () => {
-  const { validateQuote, referenceType, validateReferenceText, createQuoteBooking } = await import("../api/quote-booking.js");
+  const { validateQuote, resolveQuoteProducts, referenceType, validateReferenceText, createQuoteBooking } = await import("../api/quote-booking.js");
   const now = Date.parse("2026-10-21T12:00:00Z");
   const quote = { detalle: "Diseño personalizado de 10 cm", total: 10000, sena: 3000, duracion: 120, equipo_id: "00000000-0000-4000-8000-000000000001", fecha: "2026-10-24", hora: "15:00", vence_at: "2026-10-23T12:00:00Z" };
   assert.equal(validateQuote(quote, now).total, 10000);
+  const included = [{ id: "00000000-0000-4000-8000-000000000002", nombre: "Aftercare", cantidad: 2, precio_unitario: 500, precio: 1000 }];
+  const withProducts = validateQuote({ ...quote, total: 9000, servicio: "Tatuaje", detalle: "Trabajo personalizado" }, now, included);
+  assert.equal(withProducts.total, 10000);
+  assert.match(withProducts.detalle, /\[productos:/);
   for (const change of [{ total: -1 }, { sena: 10001 }, { total: "NaN" }, { duracion: 0 }, { duracion: 800 }, { hora: "23:30" }, { equipo_id: "other" }, { fecha: "2026-99-99" }, { fecha: "2026-02-30" }, { vence_at: "2026-10-25T12:00:00Z" }, { detalle: " " }]) assert.throws(() => validateQuote({ ...quote, ...change }, now));
+  const productTables = {
+    servicio_extras: [{ servicio_id: "service", extra_id: included[0].id }],
+    extras: [{ id: included[0].id, slug: "shop", activo: true, nombre: "Aftercare", precio: 500, owner_equipo_id: quote.equipo_id }],
+  };
+  const productSupabase = { from: table => {
+    const filters = [];
+    const query = { select: () => query, eq: (key, value) => { filters.push([key, value]); return query; }, in: (key, values) => { filters.push([key, values]); return query; }, then: resolve => resolve({ data: productTables[table].filter(row => filters.every(([key, value]) => Array.isArray(value) ? value.includes(row[key]) : row[key] === value)) }) };
+    return query;
+  } };
+  assert.deepEqual(await resolveQuoteProducts(productSupabase, { servicio_id: "service", slug: "shop" }, [{ id: included[0].id, cantidad: 2 }], quote.equipo_id), included);
+  await assert.rejects(resolveQuoteProducts(productSupabase, { servicio_id: "service", slug: "shop" }, [{ id: included[0].id, cantidad: 2 }], "00000000-0000-4000-8000-000000000003"));
   assert.equal(referenceType(Buffer.from("<svg onload=alert(1)>")), null);
   assert.equal(referenceType(Buffer.from([255,216,255,0])).mime, "image/jpeg");
   assert.equal(referenceType(Buffer.from([137,80,78,71,13,10,26,10])).mime, "image/png");
@@ -49,5 +64,5 @@ const assert = require("node:assert/strict");
   assert.equal((await call("/admin/consultas/:id/mensajes", { ...request, empleado: {} })).statusCode, 403);
   found = false;
   assert.equal((await call("/browse/consultas/:id/mensajes", request)).statusCode, 404);
-  console.log("PASS quote booking: feature gate, participant isolation, server-bound authors, owner restrictions, price/date validation and image signatures.");
+  console.log("PASS quote booking: linked product validation and totals, feature gate, participant isolation, server-bound authors, owner restrictions, price/date validation and image signatures.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -7,15 +7,39 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const read = response => { if (response.error) throw response.error; return response.data; };
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { publicMessage: message, status }); };
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-export function validateQuote(body, now = Date.now()) {
+export async function resolveQuoteProducts(supabase, consultation, selection, equipoId) {
+  const requested = selection ?? [];
+  if (!Array.isArray(requested) || requested.length > 10) fail("Elegí hasta 10 productos para el presupuesto.");
+  const unique = new Set();
+  const normalized = requested.map(item => {
+    if (!item || !UUID.test(item.id || "") || !Number.isInteger(item.cantidad) || item.cantidad < 1 || item.cantidad > 99 || unique.has(item.id)) fail("Revisá los productos seleccionados y sus cantidades.");
+    unique.add(item.id);
+    return { id: item.id, cantidad: item.cantidad };
+  });
+  if (!normalized.length) return [];
+  const ids = normalized.map(item => item.id);
+  const links = read(await supabase.from("servicio_extras").select("extra_id").eq("servicio_id", consultation.servicio_id).in("extra_id", ids)) || [];
+  if (new Set(links.map(link => link.extra_id)).size !== ids.length) fail("Uno de los productos ya no está vinculado a este servicio.", 409);
+  const extras = read(await supabase.from("extras").select("id,nombre,precio,owner_equipo_id").eq("slug", consultation.slug).eq("activo", true).in("id", ids)) || [];
+  const byId = new Map(extras.map(extra => [extra.id, extra]));
+  if (ids.some(id => !byId.has(id))) fail("Uno de los productos ya no está disponible.", 409);
+  return normalized.map(({ id, cantidad }) => {
+    const extra = byId.get(id), unitPrice = Math.round((Number(extra.precio) || 0) * 100) / 100;
+    if ((extra.owner_equipo_id && extra.owner_equipo_id !== equipoId) || !Number.isFinite(unitPrice) || unitPrice < 0) fail("Hay un producto que no está disponible para este profesional.", 409);
+    return { id, nombre: String(extra.nombre || "Producto").slice(0, 120), cantidad, precio_unitario: unitPrice, precio: Math.round(unitPrice * cantidad * 100) / 100 };
+  });
+}
+
+export function validateQuote(body, now = Date.now(), products = []) {
   let detail = typeof body.detalle === "string" ? body.detalle.trim() : "";
+  if (products.length && body.servicio === undefined) fail("El presupuesto debe indicar el servicio para incluir productos.");
   if (body.servicio !== undefined) {
     if (typeof body.servicio !== "string" || body.servicio.trim().length < 2 || body.servicio.trim().length > 120 || detail.length > 2200) fail("Revisá el servicio y la observación.");
-    detail = quoteDetail(body.servicio, detail);
+    detail = quoteDetail(body.servicio, detail, products);
   }
   if (detail.length < 2 || detail.length > 3000) fail("Describí qué incluye el presupuesto.");
-  const total = Number(body.total), deposit = Number(body.sena), duration = Number(body.duracion);
-  if (!Number.isFinite(total) || total <= 0 || total > 100000000 || Math.round(total * 100) / 100 !== total || !Number.isFinite(deposit) || deposit < 0 || deposit > total || Math.round(deposit * 100) / 100 !== deposit) fail("Revisá el total y la seña.");
+  const baseTotal = Number(body.total), productsTotal = products.reduce((sum, product) => sum + product.precio, 0), total = Math.round((baseTotal + productsTotal) * 100) / 100, deposit = Number(body.sena), duration = Number(body.duracion);
+  if (!Number.isFinite(baseTotal) || baseTotal < 0 || !Number.isFinite(total) || total <= 0 || total > 100000000 || Math.round(baseTotal * 100) / 100 !== baseTotal || !Number.isFinite(deposit) || deposit < 0 || deposit > total || Math.round(deposit * 100) / 100 !== deposit) fail("Revisá el precio del trabajo y la seña.");
   if (!Number.isInteger(duration) || duration < 5 || duration > 720 || !UUID.test(body.equipo_id || "")) fail("Revisá el profesional y la duración.");
   const date = String(body.fecha || ""), time = String(body.hora || "");
   const start = Date.parse(`${date}T${time}:00-03:00`), expiry = Date.parse(body.vence_at);
@@ -105,6 +129,9 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
         supabase.from("servicios").select("nombre,duracion").eq("id",consultation.servicio_id).eq("slug",consultation.slug).maybeSingle(),
       ]);
       const participant = read(participantResult), service = read(serviceResult);
+      const linkedProductIds = business ? read(await supabase.from("servicio_extras").select("extra_id").eq("servicio_id", consultation.servicio_id)) || [] : [];
+      const availableProducts = linkedProductIds.length ? read(await supabase.from("extras").select("id,nombre,precio,owner_equipo_id,orden").eq("slug", consultation.slug).eq("activo", true).in("id", linkedProductIds.map(item => item.extra_id))) || [] : [];
+      availableProducts.sort((first, second) => (first.orden || 0) - (second.orden || 0));
       const interlocutor = { nombre: business ? [participant?.nombre_persona,participant?.apellido].filter(Boolean).join(" ") || "Cliente" : participant?.nombre || consultation.slug, foto_url: business ? participant?.foto_url : participant?.foto_perfil_url };
       const before = req.query.before;
       if (before && !UUID.test(before)) fail("Cursor inválido.");
@@ -134,7 +161,7 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
         payments?.info ? payments.info(consultation, activeQuote) : null,
         loadPaymentStates(),
       ]);
-      res.json({ success: true, consulta: { id: consultation.id, titulo: consultation.titulo, estado: consultation.estado, slug: consultation.slug, servicio_id: consultation.servicio_id }, pagos: paymentStates, pago_online: paymentInfo?.habilitado === true, pago_presupuesto: paymentInfo, interlocutor, servicio:service, mensajes: safeMessages.reverse(), presupuestos: quotes, anterior: rows.length === 50 ? rows.at(-1).id : null });
+      res.json({ success: true, consulta: { id: consultation.id, titulo: consultation.titulo, estado: consultation.estado, slug: consultation.slug, servicio_id: consultation.servicio_id }, pagos: paymentStates, pago_online: paymentInfo?.habilitado === true, pago_presupuesto: paymentInfo, interlocutor, servicio:service, productos_disponibles: business ? availableProducts : undefined, mensajes: safeMessages.reverse(), presupuestos: quotes, anterior: rows.length === 50 ? rows.at(-1).id : null });
     }));
     app.post(prefix + "/:id/mensajes", ...guards, route(async (req, res) => {
       const consultation = await thread(req, business);
@@ -168,7 +195,8 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
   app.post("/admin/consultas/:id/presupuestos", feature, requireAuth, owner, limiter, route(async (req, res) => {
     const consultation = await thread(req, true);
     await requireMode(consultation.slug);
-    const quote = validateQuote(req.body);
+    const products = await resolveQuoteProducts(supabase, consultation, req.body.productos, req.body.equipo_id);
+    const quote = validateQuote(req.body, Date.now(), products);
     const ctx = await context(consultation.slug, consultation.servicio_id, quote.equipo_id);
     await available(consultation.slug, quote.fecha, quote.hora, { duracion: quote.duracion, capacidad: 1 }, ctx.config, ctx.member, consultation.servicio_id);
     const data = read(await supabase.rpc("consulta_proponer", { p_slug: consultation.slug, p_consulta: consultation.id, p_detalle: quote.detalle, p_total: quote.total, p_sena: quote.sena, p_equipo: quote.equipo_id, p_fecha: quote.fecha, p_hora: quote.hora, p_duracion: quote.duracion, p_vence: quote.vence_at }));

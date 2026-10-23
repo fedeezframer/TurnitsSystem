@@ -1,9 +1,10 @@
 const assert = require("node:assert/strict");
 (async () => {
   const { quoteDetail, quotePresentation, messagePreview, mergeMessages, defaultQuoteExpiry, availabilityInquiry } = await import("../web/src/shared/consultations.js");
-  const detail = quoteDetail("Tatuaje [personalizado]", "Referencia acordada");
-  assert.deepEqual(quotePresentation({ detalle: detail }), { service: "Tatuaje [personalizado]", observation: "Referencia acordada" });
-  assert.deepEqual(quotePresentation({ detalle: "Presupuesto anterior" }, "Diseño"), { service: "Diseño", observation: "Presupuesto anterior" });
+  const products = [{ id: "producto-1", nombre: "Crema post tatuaje", cantidad: 2, precio_unitario: 1500, precio: 3000 }];
+  const detail = quoteDetail("Tatuaje [personalizado]", "Referencia acordada", products);
+  assert.deepEqual(quotePresentation({ detalle: detail }), { service: "Tatuaje [personalizado]", observation: "Referencia acordada", products });
+  assert.deepEqual(quotePresentation({ detalle: "Presupuesto anterior" }, "Diseño"), { service: "Diseño", observation: "Presupuesto anterior", products: [] });
   assert.equal(messagePreview({ ultimo_autor: "cliente", ultima_foto: true }, false), "Enviaste una foto");
   assert.equal(messagePreview({ ultimo_autor: "cliente", ultima_foto: true }, true), "Te envió una foto");
   assert.equal(messagePreview({ ultimo_autor: "negocio", ultimo_texto: "Hola\n mundo" }, false), "Hola mundo");

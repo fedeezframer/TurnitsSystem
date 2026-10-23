@@ -1,13 +1,42 @@
-export function quotePresentation(quote, fallback = "Servicio") {
-  const detail = String(quote?.detalle || "");
-  const match = detail.match(/^\[servicio:([^\]]+)\]\n?/);
-  if (!match) return { service: fallback, observation: detail };
-  try { return { service: decodeURIComponent(match[1]), observation: detail.slice(match[0].length) }; }
-  catch { return { service: fallback, observation: detail }; }
+function encodeProducts(products) {
+  const bytes = new TextEncoder().encode(JSON.stringify(products));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-export function quoteDetail(service, observation) {
-  return `[servicio:${encodeURIComponent(service.trim())}]\n${observation.trim()}`;
+function decodeProducts(value) {
+  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+  const binary = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
+  const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+  const products = JSON.parse(new TextDecoder().decode(bytes));
+  if (!Array.isArray(products)) return [];
+  return products.filter(product => product && typeof product.id === "string" && typeof product.nombre === "string" && Number.isInteger(product.cantidad) && product.cantidad > 0 && Number.isFinite(Number(product.precio_unitario)) && Number(product.precio_unitario) >= 0).map(product => ({
+    id: product.id,
+    nombre: product.nombre,
+    cantidad: product.cantidad,
+    precio_unitario: Number(product.precio_unitario),
+    precio: Math.round(Number(product.precio_unitario) * product.cantidad * 100) / 100,
+  }));
+}
+
+export function quotePresentation(quote, fallback = "Servicio") {
+  let detail = String(quote?.detalle || "");
+  let products = [];
+  const productsMatch = detail.match(/\n?\[productos:([A-Za-z0-9_-]+)\]\s*$/);
+  if (productsMatch) {
+    try { products = decodeProducts(productsMatch[1]); detail = detail.slice(0, productsMatch.index).trimEnd(); }
+    catch {}
+  }
+  const match = detail.match(/^\[servicio:([^\]]+)\]\n?/);
+  if (!match) return { service: fallback, observation: detail, products };
+  try { return { service: decodeURIComponent(match[1]), observation: detail.slice(match[0].length), products }; }
+  catch { return { service: fallback, observation: detail, products }; }
+}
+
+export function quoteDetail(service, observation, products = []) {
+  const productDetail = products.length ? `\n\n[productos:${encodeProducts(products)}]` : "";
+  return `[servicio:${encodeURIComponent(service.trim())}]\n${observation.trim()}${productDetail}`;
 }
 
 export function messagePreview(item, business) {

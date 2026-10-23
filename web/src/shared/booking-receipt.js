@@ -14,7 +14,15 @@ export function receiptDate(value) {
 }
 export function bookingReceipt(turno) {
   const quote = turno.presupuesto_detalle ? quotePresentation({ detalle: turno.presupuesto_detalle }, turno.servicio_nombre || turno.servicio) : null;
-  const extras = (Array.isArray(turno.extras) ? turno.extras : []).map(extra => ({
+  const receiptExtras = Array.isArray(turno.extras) ? turno.extras : [];
+  const quotedExtras = (quote?.products || []).map(product => ({
+    id: product.id,
+    nombre: product.nombre,
+    cantidad: product.cantidad,
+    precio: product.precio,
+  }));
+  const quotedIds = new Set(quotedExtras.map(extra => extra.id));
+  const extras = [...receiptExtras.filter(extra => !quotedIds.has(extra.id)), ...quotedExtras].map(extra => ({
     name: String(extra.nombre || "Producto"),
     quantity: Math.max(1, Number(extra.cantidad) || 1),
     total: amount(extra.precio),
