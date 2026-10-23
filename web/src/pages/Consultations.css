@@ -165,14 +165,13 @@
 .chat-panel-empty span{max-width:300px;font-size:13px;line-height:1.5}
 .chat-inbox-exit{display:none;align-items:center;justify-content:center;width:38px;height:38px;flex:0 0 38px;border:0;border-radius:50%;background:#f0f2f0;color:#1b241b}
 
-.chat-quote-form{gap:12px;padding:22px 24px 28px;animation:chat-quote-in .24s cubic-bezier(.2,.75,.25,1) both}
+.chat-quote-form{gap:18px;padding:22px 24px 28px;animation:chat-quote-in .24s cubic-bezier(.2,.75,.25,1) both}
 .chat-quote-intro{padding:2px 2px 4px}
 .chat-quote-kicker{display:inline-flex;align-items:center;gap:7px;color:#1b6b1a;font-size:12px;font-weight:650;letter-spacing:.02em}
 .chat-quote-intro h2{margin:8px 0 4px;color:#192018;font-size:24px;line-height:1.2;letter-spacing:-.04em}
 .chat-quote-intro p{margin:0;color:#737b71;font-size:13px;line-height:1.5}
-.chat-quote-section{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid #e6eae4;border-radius:16px;background:#fff;box-shadow:0 2px 8px #13221206}
-.chat-quote-section-heading{display:flex;align-items:center;gap:11px;margin-bottom:2px}
-.chat-quote-section-heading>span{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:10px;background:#eef6ec;color:#1b6b1a;font-size:11px;font-weight:700}
+.chat-quote-section{display:flex;flex-direction:column;gap:10px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.chat-quote-section-heading{display:flex;align-items:center;gap:11px;margin:0 0 1px}
 .chat-quote-section-heading>div{display:flex;min-width:0;flex-direction:column;gap:2px}
 .chat-quote-section-heading strong{color:#1a2119;font-size:14px;font-weight:650;line-height:19px}
 .chat-quote-section-heading small{color:#777f75;font-size:11px;line-height:1.4}
@@ -196,7 +195,7 @@
 .chat-quote-form-footer .chat-quote-submit{width:100%;min-height:48px;margin:0;border-radius:12px;background:#1b6b1a;font-size:14px;box-shadow:0 4px 10px #1b6b1a20;transition:background-color .16s,transform .16s,box-shadow .16s}
 .chat-quote-form-footer .chat-quote-submit:hover:not(:disabled){transform:translateY(-1px);background:#165c15;box-shadow:0 7px 15px #1b6b1a26}
 @keyframes chat-quote-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
-@media(max-width:700px){.chat-quote-form{gap:10px;padding:16px 14px max(20px,env(safe-area-inset-bottom))}.chat-quote-intro h2{font-size:22px}.chat-quote-section{gap:10px;padding:13px;border-radius:14px}.chat-quote-section .chat-quote-row{gap:9px}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input{padding:9px 10px}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input input,.chat-quote-suffix-input input{font-size:16px}}
+@media(max-width:700px){.chat-quote-form{gap:18px;padding:16px 14px max(20px,env(safe-area-inset-bottom))}.chat-quote-intro h2{font-size:22px}.chat-quote-section{gap:10px}.chat-quote-section .chat-quote-row{gap:9px}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input{padding:9px 10px}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input input,.chat-quote-suffix-input input{font-size:16px}}
 @media(max-width:370px){.chat-quote-section .chat-quote-row{grid-template-columns:minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){.chat-quote-form{animation:none}.chat-quote-section .chat-quote-field>input,.chat-quote-section .chat-quote-field>select,.chat-quote-section .chat-quote-field>textarea,.chat-quote-section .chat-price-input,.chat-quote-suffix-input,.chat-quote-form-footer .chat-quote-submit{transition:none}}
 .chat-quote-label{display:flex;align-items:center;gap:7px;color:#1e293b;font-size:13px;font-weight:700;letter-spacing:-.1px}
