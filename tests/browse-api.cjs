@@ -24,6 +24,17 @@ const tables = {
       password: "",
       intereses: ["barberia"],
     },
+    {
+      id: otherId,
+      nombre_persona: "Bruno",
+      apellido: "Ejemplo",
+      email: "bruno@example.test",
+      telefono: "543511111112",
+      activo: true,
+      email_verificado: true,
+      password: "",
+      intereses: ["barberia"],
+    },
   ],
   usuarios: [
     {
@@ -69,8 +80,9 @@ const tables = {
       consumidor_id: consumerId,
       slug: "prueba",
       servicio_nombre: "Corte",
-      fecha: "2027-01-01",
+      fecha: "2026-10-20",
       hora: "15:00",
+      estado: "confirmado",
       gestion_token: "private-management-token",
     },
     { id: id(), consumidor_id: otherId, slug: "prueba" },
@@ -78,6 +90,7 @@ const tables = {
   extras: [],
   consumidor_favoritos: [{ consumidor_id: otherId, slug: "prueba" }],
   consumidor_servicios_favoritos: [{ consumidor_id: otherId, servicio_id: serviceId }],
+  resenas: [],
 };
 const read = (r, k) => k.split(".").reduce((v, p) => v?.[p], r);
 class Query {
@@ -95,6 +108,7 @@ class Query {
     this.filters.push((r) => read(r, k) === v);
     return this;
   }
+  lte(k,v){this.filters.push(r=>read(r,k)<=v);return this;}
   gt(k,v){this.filters.push(r=>read(r,k)>v);return this;}
   in(k, v) {
     this.filters.push((r) => v.includes(read(r, k)));
@@ -129,6 +143,11 @@ class Query {
     this.conflict = o.onConflict;
     return this;
   }
+  insert(v) {
+    this.op = "insert";
+    this.value = v;
+    return this;
+  }
   then(resolve, reject) {
     return Promise.resolve()
       .then(() => {
@@ -137,6 +156,10 @@ class Query {
         );
         if (this.op === "update")
           rows.forEach((r) => Object.assign(r, this.value));
+        if (this.op === "insert") {
+          rows = Array.isArray(this.value) ? this.value : [this.value];
+          tables[this.t].push(...rows);
+        }
         if (this.op === "delete")
           rows.forEach((r) =>
             tables[this.t].splice(tables[this.t].indexOf(r), 1),
@@ -146,8 +169,8 @@ class Query {
             (r) => this.conflict.split(",").every(key => r[key] === this.value[key]),
           );
           if (r) Object.assign(r, this.value);
-          else tables[this.t].push(this.value);
-          rows = [this.value];
+          else { r = this.value; tables[this.t].push(r); }
+          rows = [r];
         }
         rows = rows
           .slice(0, this.max || Infinity)
@@ -291,6 +314,26 @@ async function call(method, url, { body = {}, auth, params = {}, query = {} } = 
   assert.equal((await call("DELETE", "/browse/favoritos/:slug", { auth: token, params: { slug: "prueba" }, body: { consumidor_id: otherId } })).status, 200);
   assert.equal(tables.consumidor_favoritos.length, 1);
   assert.equal(tables.consumidor_favoritos[0].consumidor_id, otherId, "removal cannot affect another user's favorite");
+  const reviewState = await call("GET", "/browse/perfil/:slug/resena", { auth: token, params: { slug: "prueba" } });
+  assert.equal(reviewState.status, 200);
+  assert.equal(reviewState.body.puede_resenar, true, "past confirmed turns unlock a review");
+  const review = await call("PUT", "/browse/perfil/:slug/resena", { auth: token, params: { slug: "prueba" }, body: { puntuacion: 5, comentario: "Muy buena atención." } });
+  assert.equal(review.status, 200);
+  const reviewId = review.body.resena.id;
+  assert.equal(tables.resenas.length, 1);
+  const editedReview = await call("PUT", "/browse/perfil/:slug/resena", { auth: token, params: { slug: "prueba" }, body: { puntuacion: 4, comentario: "Actualicé mi opinión." } });
+  assert.equal(editedReview.status, 200);
+  assert.equal(editedReview.body.resena.id, reviewId, "editing updates the one existing review");
+  assert.equal(tables.resenas.length, 1, "a consumer cannot create duplicate reviews for the same business");
+  assert.equal((await call("PUT", "/browse/perfil/:slug/resena", { auth: token, params: { slug: "prueba" }, body: { puntuacion: 6 } })).status, 400);
+  const otherToken = jwt.sign({ rol: "consumidor", consumidorId: otherId }, secret);
+  assert.equal((await call("GET", "/browse/perfil/:slug/resena", { auth: otherToken, params: { slug: "prueba" } })).body.puede_resenar, false);
+  assert.equal((await call("PUT", "/browse/perfil/:slug/resena", { auth: otherToken, params: { slug: "prueba" }, body: { puntuacion: 5 } })).status, 403);
+  const reviewList = await call("GET", "/perfil/:slug/resenas", { params: { slug: "prueba" } });
+  assert.equal(reviewList.body.cantidad, 1);
+  assert.equal(reviewList.body.promedio, 4);
+  assert.equal(reviewList.body.resenas[0].nombre, "Ana P.");
+  assert.equal(JSON.stringify(reviewList.body).includes("ana@example.test"), false, "public reviews never expose reviewer emails");
   assert.equal((await call("PUT", "/browse/servicios-favoritos/:id", { params: { id: serviceId } })).status, 401);
   assert.equal((await call("PUT", "/browse/servicios-favoritos/:id", { auth: owner, params: { id: serviceId } })).status, 403);
   assert.equal((await call("PUT", "/browse/servicios-favoritos/:id", { auth: token, params: { id: serviceId }, body: { consumidor_id: otherId } })).status, 200);
@@ -500,7 +543,7 @@ async function call(method, url, { body = {}, auth, params = {}, query = {} } = 
     ).status,
     401,
   );
-  assert.equal(tables.consumidores.length, 1);
+  assert.equal(tables.consumidores.length, 2);
   assert.equal(
     (
       await call("PUT", "/browse/perfil", {

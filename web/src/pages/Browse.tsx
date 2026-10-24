@@ -810,7 +810,7 @@ function BrowseContent() {
                       </span>
                       <div>
                         ¿Cómo te fue en {recentService.negocio.nombre}?
-                        <p>Las reseñas estarán disponibles próximamente.</p>
+                        <p><Link to={`/perfil/${encodeURIComponent(recentService.slug)}#perfil-reviews`}>Dejá tu reseña</Link></p>
                       </div>
                     </article>
                   ) : (

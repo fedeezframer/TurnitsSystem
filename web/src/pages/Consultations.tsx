@@ -218,15 +218,39 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
   const choosePhoto = (event: React.ChangeEvent<HTMLInputElement>) => { addPhoto(event.target.files?.[0]); event.target.value = ""; };
   const send = (event: React.FormEvent) => {
     event.preventDefault();
-    const message = text.trim(), file = pendingFile;
-    if (preparingPhoto || (!message && !file)) return;
-    void act(async () => {
-      if (file) {
-        const body = new FormData(); body.append("referencia", file); body.append("texto", message);
-        await api(`${prefix}/${current}/referencias`, { method: "POST", body });
-      } else await post(`${prefix}/${current}/mensajes`, { texto: message });
-      if (activeThread.current === current) { setText(""); setPendingFile(null); stickBottom.current = true; }
-    });
+    const message = text.trim(), file = pendingFile, thread = current;
+    if (lock.current || preparingPhoto || (!message && !file) || !thread) return;
+    const temporaryId = `pending-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+    const optimistic = { id: temporaryId, autor: mine, texto: message, referencia_url: file ? pendingPreview : "", created_at: new Date().toISOString(), pending: true };
+    lock.current = true; setBusy(true); setError(""); setText(""); stickBottom.current = true;
+    setConversation((previous: any) => previous?.consulta.id === thread ? { ...previous, mensajes: mergeMessages(previous.mensajes, [optimistic]) } : previous);
+    void (async () => {
+      try {
+        let data;
+        if (file) {
+          const body = new FormData(); body.append("referencia", file); body.append("texto", message);
+          data = await api(`${prefix}/${thread}/referencias`, { method: "POST", body });
+        } else data = await post(`${prefix}/${thread}/mensajes`, { texto: message });
+        if (activeThread.current !== thread) return;
+        if (data.mensaje) {
+          setConversation((previous: any) => previous?.consulta.id === thread ? { ...previous, mensajes: mergeMessages(previous.mensajes.filter((item: any) => item.id !== temporaryId), [{ ...data.mensaje, pending: false }]) } : previous);
+          if (file && !data.mensaje.referencia_url) void refreshThread().catch(() => {});
+        } else {
+          await refreshThread();
+          setConversation((previous: any) => previous?.consulta.id === thread ? { ...previous, mensajes: previous.mensajes.filter((item: any) => item.id !== temporaryId) } : previous);
+        }
+        if (file) setPendingFile(null);
+        void refreshInbox().catch(() => {});
+      } catch (failure: any) {
+        if (activeThread.current === thread) {
+          setConversation((previous: any) => previous?.consulta.id === thread ? { ...previous, mensajes: previous.mensajes.filter((item: any) => item.id !== temporaryId) } : previous);
+          setText(message);
+          setError(failure.message || "No pudimos enviar el mensaje.");
+        }
+      } finally {
+        lock.current = false; setBusy(false);
+      }
+    })();
   };
   const imageFromTransfer = (transfer: DataTransfer) => Array.from(transfer.files).find(file => file.type.startsWith("image/")) || Array.from(transfer.items).filter(item => item.kind === "file" && item.type.startsWith("image/")).map(item => item.getAsFile()).find((file): file is File => !!file);
   const onPastePhoto = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -276,8 +300,8 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
         <div className="chat-messages" ref={scrollArea} role="log" aria-label="Mensajes de la conversación" aria-relevant="additions" onScroll={() => { if (scrollArea.current) stickBottom.current = scrollArea.current.scrollHeight - scrollArea.current.scrollTop - scrollArea.current.clientHeight < 120; }}>
           {conversation.anterior && <button className="chat-history" disabled={busy} onClick={older}>Ver mensajes anteriores</button>}
           {!conversation.mensajes.length && <p className="chat-empty">{business ? "Cuando el cliente te cuente qué busca o comparta referencias, pueden acordar por acá el alcance, el precio, el tiempo y la disponibilidad." : `Contale al profesional qué estás buscando${conversation.servicio?.nombre ? ` para ${conversation.servicio.nombre}` : ""}. Podés describir tu idea y adjuntar fotos de referencia. Después acuerdan por acá el alcance, el precio, el tiempo y la fecha. Enviar el mensaje todavía no reserva un turno ni genera un cobro.`}</p>}
-          {conversation.mensajes.map((message: any) => <article className={`chat-bubble ${message.autor === mine ? "mine" : "theirs"}${message.referencia_url ? " chat-photo-bubble" : ""}`} key={message.id} aria-label={`${message.autor === mine ? "Vos" : participant.nombre}, ${new Date(message.created_at).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}`}>
-            {message.texto && <p>{message.texto}</p>}{message.referencia_url && <button className="chat-reference" type="button" aria-label="Ampliar foto de referencia" onClick={() => setReference(message.referencia_url)}><img src={message.referencia_url} alt="Foto de referencia compartida" loading="lazy" onLoad={() => { if (stickBottom.current && scrollArea.current) scrollArea.current.scrollTop = scrollArea.current.scrollHeight; }} /></button>}
+          {conversation.mensajes.map((message: any) => <article className={`chat-bubble ${message.autor === mine ? "mine" : "theirs"}${message.referencia_url ? " chat-photo-bubble" : ""}${message.pending ? " pending" : ""}`} key={message.id} aria-busy={message.pending || undefined} aria-label={`${message.autor === mine ? "Vos" : participant.nombre}, ${new Date(message.created_at).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}${message.pending ? ", enviando" : ""}`}>
+            {message.texto && <p>{message.texto}</p>}{message.referencia_url && <button className="chat-reference" type="button" aria-label="Ampliar foto de referencia" onClick={() => setReference(message.referencia_url)}><img src={message.referencia_url} alt="Foto de referencia compartida" loading="lazy" onLoad={() => { if (stickBottom.current && scrollArea.current) scrollArea.current.scrollTop = scrollArea.current.scrollHeight; }} /></button>}{message.pending && <small className="chat-message-status">Enviando…</small>}
           </article>)}
         </div>
         {conversation.consulta.estado !== "cerrada" ? <div className="chat-compose-area">

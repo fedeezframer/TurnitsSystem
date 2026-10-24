@@ -168,8 +168,8 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       if (consultation.estado === "cerrada") fail("La consulta está cerrada.", 409);
       const text = typeof req.body.texto === "string" ? req.body.texto.trim() : "";
       if (!text || text.length > 3000) fail("Escribí un mensaje de hasta 3000 caracteres.");
-      read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", texto: text }));
-      res.json({ success: true });
+      const saved = read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", texto: text }).select("id,autor,texto,created_at").single());
+      res.json({ success: true, mensaje: saved });
     }));
     const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2097152, files: 1, fields: 1 } }).single("referencia");
     app.post(prefix + "/:id/referencias", ...guards, route(async (req, res) => {
@@ -187,9 +187,12 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       if (count.count >= 10) fail("Esta consulta alcanzó el límite de 10 referencias.");
       const path = `${consultation.id}/${crypto.randomUUID()}.webp`;
       read(await supabase.storage.from("consulta-referencias").upload(path, image, { contentType: "image/webp", upsert: false }));
-      try { read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", texto: text, archivo: path, archivo_bytes: image.length })); }
+      let saved;
+      try { saved = read(await supabase.from("consulta_mensajes").insert({ consulta_id: consultation.id, autor: business ? "negocio" : "cliente", texto: text, archivo: path, archivo_bytes: image.length }).select("id,autor,texto,archivo,created_at").single()); }
       catch (error) { await supabase.storage.from("consulta-referencias").remove([path]); throw error; }
-      res.json({ success: true });
+      let referenciaUrl;
+      try { referenciaUrl = read(await supabase.storage.from("consulta-referencias").createSignedUrl(path, 300)).signedUrl; } catch {}
+      res.json({ success: true, mensaje: { ...saved, archivo: undefined, referencia_url: referenciaUrl } });
     }));
   }
   app.post("/admin/consultas/:id/presupuestos", feature, requireAuth, owner, limiter, route(async (req, res) => {

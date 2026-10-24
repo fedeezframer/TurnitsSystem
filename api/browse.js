@@ -157,6 +157,10 @@ export function createBrowse({
       fail("El negocio no está disponible.", 404);
     return u;
   };
+  const completedTurnFor = async (consumerId, slug) => {
+    const rows = result(await supabase.from("turnos").select("id,fecha,hora").eq("consumidor_id", consumerId).eq("slug", slug).in("estado", ["confirmado", "completado"]).lte("fecha", argentinaDate()).order("fecha", { ascending: false }).limit(50)) || [];
+    return rows.find(turn => Date.parse(`${String(turn.fecha).slice(0, 10)}T${String(turn.hora || "00:00").slice(0, 8)}-03:00`) <= Date.now()) || null;
+  };
   const context = async (slug, serviceId, memberId, read = freshRead, quoted = false) => {
     const user = await read(["business", slug], () => visibleBusiness(slug));
     if (user.modo_agenda === "presupuesto" && !quoted) fail("Este negocio coordina sus servicios mediante un presupuesto por chat.", 409);
@@ -366,6 +370,42 @@ export function createBrowse({
     const rows = result(await supabase.from("consumidor_favoritos").select("slug").eq("consumidor_id", req.consumer.id).order("created_at", { ascending: false }));
     const services = result(await supabase.from("consumidor_servicios_favoritos").select("servicio_id").eq("consumidor_id", req.consumer.id).order("created_at", { ascending: false }));
     res.json({ success: true, favoritos: (rows || []).map(row => row.slug), servicios: (services || []).map(row => row.servicio_id) });
+  }));
+  app.get("/perfil/:slug/resenas", limiterRead, route(async (req, res) => {
+    const slug = req.params.slug;
+    if (!/^[a-z0-9_-]{1,100}$/.test(slug || "")) fail("Negocio inválido.");
+    await visibleBusiness(slug);
+    const rows = result(await supabase.from("resenas").select("id,consumidor_id,puntuacion,comentario,created_at,updated_at").eq("slug", slug).order("created_at", { ascending: false }).limit(200)) || [];
+    const ids = [...new Set(rows.map(row => row.consumidor_id))];
+    const people = ids.length ? result(await supabase.from("consumidores").select("id,nombre_persona,apellido").in("id", ids)) || [] : [];
+    const names = new Map(people.map(person => [person.id, `${person.nombre_persona || "Usuario"}${person.apellido ? ` ${person.apellido.trim().slice(0, 1)}.` : ""}`]));
+    const ratings = rows.map(row => Number(row.puntuacion));
+    res.json({ success: true, cantidad: rows.length, promedio: ratings.length ? Math.round(ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length * 10) / 10 : 0, resenas: rows.map(({ consumidor_id, ...row }) => ({ ...row, nombre: names.get(consumidor_id) || "Usuario" })) });
+  }));
+  app.get("/browse/perfil/:slug/resena", auth, limiterRead, route(async (req, res) => {
+    const slug = req.params.slug;
+    if (!/^[a-z0-9_-]{1,100}$/.test(slug || "")) fail("Negocio inválido.");
+    await visibleBusiness(slug);
+    const [own, turn] = await Promise.all([
+      supabase.from("resenas").select("id,puntuacion,comentario,created_at,updated_at").eq("consumidor_id", req.consumer.id).eq("slug", slug).maybeSingle(),
+      completedTurnFor(req.consumer.id, slug),
+    ]);
+    const review = result(own);
+    res.json({ success: true, resena: review || null, elegible: !!turn, puede_resenar: !!review || !!turn });
+  }));
+  app.put("/browse/perfil/:slug/resena", auth, limiterBooking, route(async (req, res) => {
+    const slug = req.params.slug;
+    if (!/^[a-z0-9_-]{1,100}$/.test(slug || "")) fail("Negocio inválido.");
+    await visibleBusiness(slug);
+    const puntuacion = req.body?.puntuacion;
+    const comentario = typeof req.body?.comentario === "string" ? req.body.comentario.trim() : "";
+    if (!Number.isInteger(puntuacion) || puntuacion < 1 || puntuacion > 5) fail("Elegí una puntuación del 1 al 5.");
+    if (comentario.length > 1000) fail("La reseña puede tener hasta 1000 caracteres.");
+    const existing = result(await supabase.from("resenas").select("id").eq("consumidor_id", req.consumer.id).eq("slug", slug).maybeSingle());
+    const turn = existing ? null : await completedTurnFor(req.consumer.id, slug);
+    if (!existing && !turn) fail("Podés dejar una reseña después de completar un turno.", 403);
+    const saved = result(await supabase.from("resenas").upsert({ consumidor_id: req.consumer.id, slug, turno_id: turn?.id || undefined, puntuacion, comentario, updated_at: new Date().toISOString() }, { onConflict: "consumidor_id,slug" }).select("id,puntuacion,comentario,created_at,updated_at").single());
+    res.json({ success: true, resena: saved });
   }));
   app.put("/browse/servicios-favoritos/:id", auth, limiterRead, route(async (req, res) => {
     const service = (await catalog()).servicios.find(item => item.id === req.params.id);

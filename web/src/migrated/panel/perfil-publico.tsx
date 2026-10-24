@@ -10,6 +10,7 @@ import { ProfilePhotoDialog } from "../../components/ProfilePhotoDialog";
 import { BusinessAvatar } from "../../components/BusinessAvatar";
 import { FavoriteButton } from "../../components/BusinessFavorites";
 import { cardRadius } from "../../shared/appearance.js";
+import { consumerHeaders } from "../../shared/consumer-session";
 import "./perfil.css";
 import "./perfil-publico.css";
 import "./perfil-publicaciones.css";
@@ -31,15 +32,15 @@ function PublicationsIcon() {
     </svg>
   );
 }
-function Stars() {
+function Stars({ rating = 0, label = "Sin puntuaciones todavía" }: { rating?: number; label?: string } = {}) {
   return (
     <span
       className="perfil-stars"
       role="img"
-      aria-label="Todavía sin puntuaciones"
+      aria-label={label}
     >
       {Array.from({ length: 5 }, (_, i) => (
-        <svg key={i} viewBox="0 0 24 24" aria-hidden="true">
+        <svg key={i} className={i < Math.round(rating) ? "perfil-star-filled" : undefined} viewBox="0 0 24 24" aria-hidden="true">
           <path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3L2.9 9.6l6.3-.9Z" />
         </svg>
       ))}
@@ -68,8 +69,58 @@ export function PerfilContenido({
     null,
   );
   const [expanded, setExpanded] = React.useState(initialExpanded);
+  const [reviews, setReviews] = React.useState<any[]>([]);
+  const [reviewSummary, setReviewSummary] = React.useState({ promedio: 0, cantidad: 0 });
+  const [myReview, setMyReview] = React.useState<any>(null);
+  const [reviewEligible, setReviewEligible] = React.useState(false);
+  const [reviewLoading, setReviewLoading] = React.useState(!!slug);
+  const [reviewBusy, setReviewBusy] = React.useState(false);
+  const [reviewEditing, setReviewEditing] = React.useState(false);
+  const [reviewRating, setReviewRating] = React.useState(5);
+  const [reviewComment, setReviewComment] = React.useState("");
+  const [reviewError, setReviewError] = React.useState("");
+  const [reviewNotice, setReviewNotice] = React.useState("");
+  const signedInConsumer = !!consumerHeaders().Authorization;
   const photos = (Array.isArray(perfil.fotos) ? perfil.fotos : []).filter((url: any) => typeof url === "string" && url);
   React.useEffect(() => setExpanded(initialExpanded), [slug, initialExpanded]);
+  React.useEffect(() => {
+    setReviews([]);
+    setReviewSummary({ promedio: 0, cantidad: 0 });
+    setMyReview(null);
+    setReviewEligible(false);
+    setReviewEditing(false);
+    setReviewLoading(!!slug);
+    setReviewError("");
+    if (!slug) return;
+    const controller = new AbortController();
+    const base = appConfig.apiUrl;
+    const encodedSlug = encodeURIComponent(slug);
+    fetch(`${base}/perfil/${encodedSlug}/resenas`, { signal: controller.signal })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || "No pudimos cargar las reseñas.");
+        if (!controller.signal.aborted) {
+          setReviews(data.resenas || []);
+          setReviewSummary({ promedio: Number(data.promedio) || 0, cantidad: Number(data.cantidad) || 0 });
+        }
+        const headers = consumerHeaders();
+        if (!headers.Authorization) return;
+        const ownResponse = await fetch(`${base}/browse/perfil/${encodedSlug}/resena`, { headers, signal: controller.signal });
+        const ownData = await ownResponse.json();
+        if (!ownResponse.ok || !ownData.success) throw new Error(ownData.error || "No pudimos revisar si podés reseñar este negocio.");
+        if (!controller.signal.aborted) {
+          setMyReview(ownData.resena || null);
+          setReviewEligible(ownData.elegible === true);
+          if (ownData.resena) {
+            setReviewRating(Number(ownData.resena.puntuacion) || 5);
+            setReviewComment(ownData.resena.comentario || "");
+          }
+        }
+      })
+      .catch(error => { if (!controller.signal.aborted) setReviewError(error.message); })
+      .finally(() => { if (!controller.signal.aborted) setReviewLoading(false); });
+    return () => controller.abort();
+  }, [slug]);
   const cover = perfil.banner_url;
   React.useEffect(() => setCoverFailed(false), [cover]);
   React.useEffect(() => {
@@ -187,16 +238,10 @@ export function PerfilContenido({
           <div className="perfil-rating">
             <div className="perfil-rating-heading">
               <span>Puntuación</span>
-              <Stars />
-              <small>(0)</small>
+              <Stars rating={reviewSummary.promedio} label={reviewSummary.cantidad ? `${reviewSummary.promedio} de 5 estrellas` : undefined} />
+              <small>({reviewSummary.cantidad})</small>
             </div>
-            <textarea
-              aria-label="Dejar comentario — próximamente"
-              placeholder="Dejar Comentario"
-              disabled
-              rows={3}
-            />
-            <span className="perfil-coming-soon">Próximamente</span>
+            <a className="perfil-review-jump" href="#perfil-reviews">{reviewSummary.cantidad ? "Ver reseñas" : "Sé la primera persona en reseñar"}</a>
           </div>
           <div className="perfil-location">
             <h2>Ubicación</h2>
@@ -353,8 +398,35 @@ export function PerfilContenido({
         </div>
         {photos.length > 6 && <button type="button" className="perfil-publications-more" aria-expanded={expanded} aria-controls="perfil-inline-gallery" onClick={() => setExpanded(value => !value)}>{expanded ? "Ver menos" : "Ver más publicaciones"}</button>}
       </section>}
-      <section className="perfil-reviews" aria-labelledby="perfil-reviews-title">
-        <h2 id="perfil-reviews-title">Reseñas</h2><p>Todavía no hay reseñas.</p><span>Próximamente vas a poder compartir tu experiencia.</span>
+      <section className="perfil-reviews" id="perfil-reviews" aria-labelledby="perfil-reviews-title">
+        <div className="perfil-reviews-heading">
+          <div><h2 id="perfil-reviews-title">Reseñas</h2><p>Experiencias de personas que reservaron en {name}.</p></div>
+          {reviewSummary.cantidad > 0 && <div className="perfil-reviews-score"><Stars rating={reviewSummary.promedio} label={`${reviewSummary.promedio} de 5 estrellas`} /><strong>{reviewSummary.promedio}</strong><span>({reviewSummary.cantidad})</span></div>}
+        </div>
+        {reviewLoading ? <p role="status">Cargando reseñas…</p> : reviews.length ? <div className="perfil-review-list">{reviews.map(review => <article className="perfil-review-card" key={review.id}><div className="perfil-review-card-heading"><strong>{review.nombre}</strong><time dateTime={review.created_at}>{new Intl.DateTimeFormat("es-AR", { dateStyle: "medium" }).format(new Date(review.created_at))}</time></div><Stars rating={Number(review.puntuacion)} label={`${review.puntuacion} de 5 estrellas`} /><p>{review.comentario || "Sin comentario escrito."}</p></article>)}</div> : reviewError ? <p className="perfil-review-error" role="alert">{reviewError}</p> : <p>Todavía no hay reseñas. Si ya completaste un turno, podés dejar la primera.</p>}
+        <div className="perfil-review-action">
+          {!signedInConsumer ? <p><Link to={`/login?${new URLSearchParams({ tipo: "usuario", volver: `/perfil/${slug || ""}#perfil-reviews` })}`}>Iniciá sesión como usuario para dejar una reseña.</Link></p> : myReview && !reviewEditing ? <button className="perfil-review-secondary" type="button" onClick={() => { setReviewRating(Number(myReview.puntuacion) || 5); setReviewComment(myReview.comentario || ""); setReviewEditing(true); setReviewError(""); setReviewNotice(""); }}>Editar mi reseña</button> : reviewEligible || myReview ? <form className="perfil-review-form" onSubmit={async event => {
+            event.preventDefault();
+            setReviewBusy(true); setReviewError(""); setReviewNotice("");
+            try {
+              const response = await fetch(`${appConfig.apiUrl}/browse/perfil/${encodeURIComponent(slug || "")}/resena`, { method: "PUT", headers: { ...consumerHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ puntuacion: reviewRating, comentario: reviewComment }) });
+              const data = await response.json();
+              if (!response.ok || !data.success) throw new Error(data.error || "No pudimos guardar la reseña.");
+              setMyReview(data.resena); setReviewEligible(true); setReviewEditing(false); setReviewNotice("Tu reseña quedó guardada.");
+              const listing = await fetch(`${appConfig.apiUrl}/perfil/${encodeURIComponent(slug || "")}/resenas`);
+              const listingData = await listing.json();
+              if (listing.ok && listingData.success) { setReviews(listingData.resenas || []); setReviewSummary({ promedio: Number(listingData.promedio) || 0, cantidad: Number(listingData.cantidad) || 0 }); }
+            } catch (error: any) { setReviewError(error.message || "No pudimos guardar la reseña."); }
+            finally { setReviewBusy(false); }
+          }}>
+            <label>Tu puntuación<div className="perfil-review-rating-input" role="radiogroup" aria-label="Puntuación de la reseña">{[1, 2, 3, 4, 5].map(value => <button key={value} type="button" role="radio" aria-checked={reviewRating === value} aria-label={`${value} ${value === 1 ? "estrella" : "estrellas"}`} onClick={() => setReviewRating(value)}><svg className={value <= reviewRating ? "perfil-star-filled" : undefined} viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3L2.9 9.6l6.3-.9Z" /></svg></button>)}</div></label>
+            <label htmlFor="perfil-review-comment">Tu comentario <span>Opcional</span></label>
+            <textarea id="perfil-review-comment" value={reviewComment} maxLength={1000} rows={4} placeholder="Contá brevemente cómo fue tu experiencia…" onChange={event => setReviewComment(event.target.value)} />
+            <div className="perfil-review-form-footer"><small>{reviewComment.length}/1000</small><div>{myReview && <button className="perfil-review-secondary" type="button" onClick={() => { setReviewEditing(false); setReviewError(""); setReviewComment(myReview.comentario || ""); setReviewRating(Number(myReview.puntuacion) || 5); }}>Cancelar</button>}<button className="perfil-review-submit" type="submit" disabled={reviewBusy}>{reviewBusy ? "Guardando…" : myReview ? "Guardar cambios" : "Publicar reseña"}</button></div></div>
+          </form> : <p>{reviewEligible ? "Podés compartir tu experiencia." : "Vas a poder reseñar este negocio después de completar un turno."}</p>}
+          {reviewError && !reviewLoading && <p className="perfil-review-error" role="alert">{reviewError}</p>}
+          {reviewNotice && <p className="perfil-review-notice" role="status">{reviewNotice}</p>}
+        </div>
       </section>
     </div>
   );
