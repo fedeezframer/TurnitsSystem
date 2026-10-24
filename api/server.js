@@ -1093,7 +1093,7 @@ if (quotePayments.enabled) {
   const retryQuoteRefunds = () => quotePayments.retryRefunds().catch(() => console.error("Quote refund reconciliation unavailable"));
   setInterval(retryQuoteRefunds,60000).unref(); void retryQuoteRefunds();
 }
-createQuoteBooking({app,supabase,consumerAuth:browse.auth,requireAuth,limiter:rateLimit({windowMs:60000,max:120,standardHeaders:true,legacyHeaders:false}),context:browse.quoteContext,available:promoDisponibilidad,multer,payments:quotePayments,webhookSecret:QUOTE_WEBHOOK_SECRET});
+createQuoteBooking({app,supabase,consumerAuth:browse.auth,requireAuth,limiter:rateLimit({windowMs:60000,max:120,standardHeaders:true,legacyHeaders:false}),guestLimiter:rateLimit({windowMs:15*60*1000,max:12,standardHeaders:true,legacyHeaders:false}),context:browse.quoteContext,available:promoDisponibilidad,multer,payments:quotePayments,webhookSecret:QUOTE_WEBHOOK_SECRET});
 if (process.env.QUOTE_BOOKING_ENABLED === "true") {
   const cleanup = createReferenceCleanup(supabase);
   const run = () => cleanup().catch(() => console.error("Quote reference cleanup pending"));

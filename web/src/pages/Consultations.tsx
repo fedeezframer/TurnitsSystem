@@ -1,9 +1,10 @@
 import * as React from "react";
-import { Link, Navigate, useSearchParams } from "react-router";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { appConfig } from "../config";
 import { consumerHeaders } from "../shared/consumer-session";
 import { clearQuoteBookingDraft, readQuoteBookingDraft } from "../shared/quote-booking-draft";
 import { isBusinessSession, storedSessionToken } from "../shared/consultation-session.js";
+import { clearGuestConsultationSession, readGuestConsultationSession } from "../shared/guest-consultation-session.js";
 import { availabilityInquiry, defaultQuoteExpiry, mergeMessages, messagePreview, quotePresentation } from "../shared/consultations.js";
 import { ChatAvatar, ChatHeader, ChatIcon } from "../components/ChatChrome";
 import BookingReceipt from "../components/BookingReceipt";
@@ -39,7 +40,10 @@ async function optimizeReference(file: File) {
 
 export default function Consultations({ embedded, onInboxChange, onExit }: { embedded?: EmbeddedSurface; onInboxChange?: (items: any[]) => void; onExit?: () => void } = {}) {
   if (!appConfig.quoteBookingEnabled) return <main className="consultations-unavailable"><h1>Mensajes</h1><p>Esta modalidad todavía no está habilitada.</p><Link to="/browse">Volver</Link></main>;
-  const business = isBusinessSession();
+  const requestedId = new URLSearchParams(window.location.search).get("id") || "";
+  const guestSession = embedded !== "panel" ? readGuestConsultationSession(requestedId) : null;
+  const guestAccessMissing = embedded === "browse" && Boolean(requestedId) && !guestSession && !consumerHeaders().Authorization;
+  const business = guestSession ? false : isBusinessSession();
   const wrongSurface = (embedded === "browse" && business) || (embedded === "panel" && !business);
   if (wrongSurface && storedSessionToken()) {
     const destination = new URLSearchParams(window.location.search);
@@ -54,13 +58,14 @@ export default function Consultations({ embedded, onInboxChange, onExit }: { emb
     destination.set("vista", "mensajes");
     return <Navigate to={`/browse?${destination}`} replace />;
   }
-  return <ConsultationsContent embedded={embedded} onInboxChange={onInboxChange} onExit={onExit} />;
+  return <ConsultationsContent embedded={embedded} guestToken={guestSession?.token || ""} guestAccessMissing={guestAccessMissing} onInboxChange={onInboxChange} onExit={onExit} />;
 }
-function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: EmbeddedSurface; onInboxChange?: (items: any[]) => void; onExit?: () => void }) {
+function ConsultationsContent({ embedded, guestToken = "", guestAccessMissing = false, onInboxChange, onExit }: { embedded?: EmbeddedSurface; guestToken?: string; guestAccessMissing?: boolean; onInboxChange?: (items: any[]) => void; onExit?: () => void }) {
   const [params, setParams] = useSearchParams();
-  const business = isBusinessSession();
+  const navigate = useNavigate();
+  const business = guestToken ? false : isBusinessSession();
   const prefix = business ? "/admin/consultas" : "/browse/consultas";
-  const token = storedSessionToken();
+  const token = guestToken || storedSessionToken();
   const current = params.get("id") || "", requestedService = params.get("servicio_id");
   const embeddedParam = embedded === "browse" ? { vista: "mensajes" } : embedded === "panel" ? { seccion: "consultas" } : {};
   const [inbox, setInbox] = React.useState<any[]>([]);
@@ -90,22 +95,27 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
   const pendingScroll = React.useRef<{ top: number; height: number } | null>(null);
   const photoPreparation = React.useRef(0);
   const api = React.useCallback(async (path: string, options: RequestInit = {}) => {
-    const headers = business ? { Authorization: `Bearer ${token}` } : consumerHeaders();
+    const headers = guestToken ? { Authorization: `Bearer ${guestToken}` } : business ? { Authorization: `Bearer ${token}` } : consumerHeaders();
     const response = await fetch(appConfig.apiUrl + path, { ...options, headers: { ...headers, ...options.headers }, cache: "no-store" });
     const data = await response.json();
+    if (response.status === 401 && guestToken) {
+      clearGuestConsultationSession(current);
+      throw new Error("El acceso a este chat invitado venció o ya no está disponible.");
+    }
     if (!response.ok || !data.success) throw new Error(data.error || "No pudimos cargar tus mensajes.");
     return data;
-  }, [business, token]);
+  }, [business, guestToken, token, current]);
   const post = (path: string, body: any) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const setThread = (id?: string) => setParams({ ...embeddedParam, ...(id ? { id } : {}) });
   const refreshInbox = React.useCallback(async (signal?: AbortSignal) => {
+    if (guestToken) return;
     const data = await api(prefix, { signal });
     if (!signal?.aborted) {
       const items = data.consultas || [];
       setInbox(items);
       onInboxChange?.(items);
     }
-  }, [api, onInboxChange, prefix]);
+  }, [api, guestToken, onInboxChange, prefix]);
   const refreshThread = React.useCallback(async (signal?: AbortSignal) => {
     if (!current) return;
     const data = await api(`${prefix}/${encodeURIComponent(current)}`, { signal });
@@ -124,7 +134,7 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
   }, [api, onInboxChange, prefix, current]);
   React.useEffect(() => { const previous = document.title; document.title = `Mensajes | Turnits${appConfig.staging ? " TEST" : ""}`; return () => { document.title = previous; }; }, []);
   React.useEffect(() => {
-    if (!requestedService || business || !token) return;
+    if (!requestedService || business || guestToken || !token) return;
     const controller = new AbortController();
     const open = async () => {
       const draft = readQuoteBookingDraft();
@@ -152,14 +162,14 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
     };
     void open().catch(failure => { if (!controller.signal.aborted) setError(failure.message); });
     return () => controller.abort();
-  }, [requestedService, business, api, setParams, token]);
+  }, [requestedService, business, guestToken, api, setParams, token]);
   React.useEffect(() => { photoPreparation.current++; setPreparingPhoto(false); setConversation(null); setScreen("chat"); setText(!business ? availabilityInquiry(new URLSearchParams(window.location.search)) : ""); setError(""); setMembers([]); setMemberError(""); setDraft(emptyDraft()); setSelectedProducts([]); setAttachmentsOpen(false); setPendingFile(null); setDraggingImage(false); stickBottom.current = true; pendingScroll.current = null; }, [current, business]);
   React.useEffect(() => {
     if (!token) { setLoading(false); return; }
     const controller = new AbortController(); let pending = false;
     const load = async (initial = false) => {
       if (pending || (!initial && document.hidden)) return; pending = true;
-      try { await Promise.all([refreshInbox(controller.signal), refreshThread(controller.signal)]); }
+      try { await Promise.all([...(guestToken ? [] : [refreshInbox(controller.signal)]), refreshThread(controller.signal)]); }
       catch (failure: any) { if (!controller.signal.aborted) setError(failure.message); }
       finally { pending = false; if (!controller.signal.aborted) setLoading(false); }
     };
@@ -167,7 +177,7 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
     const timer = window.setInterval(() => void load(), 15000), visible = () => { if (!document.hidden) void load(); };
     document.addEventListener("visibilitychange", visible);
     return () => { controller.abort(); window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
-  }, [refreshInbox, refreshThread, revision, token]);
+  }, [guestToken, refreshInbox, refreshThread, revision, token]);
   React.useEffect(() => {
     if (!business || !conversation?.consulta) return;
     const controller = new AbortController(), consultation = conversation.consulta;
@@ -317,7 +327,7 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
   </section>;
   const Container = embedded ? "section" : "main";
   const threadView = current ? <section className={`chat-thread${draggingImage ? " chat-thread-dragging" : ""}`} aria-label="Conversación" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDropPhoto}>
-      <header className="chat-person"><ChatAvatar name={participant.nombre || "?"} src={participant.foto_url} /><h1>{participant.nombre || "Cargando…"}</h1><div className="chat-person-actions">{business && conversation && <button className={`chat-tool${screen === "edit" ? " selected" : ""}`} type="button" disabled={busy} aria-label={screen === "edit" ? "Cerrar editor de presupuesto" : canEdit ? "Armar presupuesto" : "Ver presupuesto"} aria-pressed={screen === "edit"} onClick={() => screen === "edit" ? setScreen("chat") : enterEditor()}><ChatIcon name="tool" /></button>}<button className="chat-back" type="button" disabled={busy} aria-label={screen === "chat" ? "Volver a mensajes" : "Volver al chat"} onClick={() => { if (screen === "chat") setThread(); else { setScreen("chat"); setError(""); } }}><ChatIcon name="back" /></button></div></header>
+      <header className="chat-person"><ChatAvatar name={participant.nombre || "?"} src={participant.foto_url} /><h1>{participant.nombre || "Cargando…"}</h1><div className="chat-person-actions">{business && conversation && <button className={`chat-tool${screen === "edit" ? " selected" : ""}`} type="button" disabled={busy} aria-label={screen === "edit" ? "Cerrar editor de presupuesto" : canEdit ? "Armar presupuesto" : "Ver presupuesto"} aria-pressed={screen === "edit"} onClick={() => screen === "edit" ? setScreen("chat") : enterEditor()}><ChatIcon name="tool" /></button>}<button className="chat-back" type="button" disabled={busy} aria-label={screen === "chat" ? guestToken ? "Volver al negocio" : "Volver a mensajes" : "Volver al chat"} onClick={() => { if (screen === "chat") guestToken ? navigate(-1) : setThread(); else { setScreen("chat"); setError(""); } }}><ChatIcon name="back" /></button></div></header>
       {error && <div className="chat-error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>Reintentar</button></div>}
       {loading && !conversation && <p role="status" className="chat-empty">Cargando conversación…</p>}
       {conversation && screen === "chat" && <>
@@ -374,10 +384,10 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
         <details className="chat-quote-options"><summary>Vencimiento del presupuesto</summary><label className="chat-quote-field"><span className="chat-quote-label"><ChatIcon name="calendar" size={15} />Fecha y hora límite (Argentina)</span><input type="datetime-local" {...field("vence_at")} onInput={event => setField("vence_at", event.currentTarget.value)} /></label><p>Si no elegís una fecha, se calculará automáticamente.</p></details>
         <div className="chat-quote-form-footer"><p>Enviar el presupuesto no confirma ni bloquea el turno.</p><button className="chat-quote-submit" disabled={busy || !members.length || !!memberError}>{busy ? "Enviando…" : activeQuote ? "Actualizar presupuesto" : "Enviar presupuesto"}</button></div>
       </form></div>}
-{conversation && screen === "quote" && activeQuote && <div className="chat-quote-scroll"><section className="chat-quote-view" aria-label="Detalle del presupuesto"><h2>Presupuesto</h2><dl><dt>Servicio</dt><dd>{presented.service}</dd><div className="chat-quote-row"><div><dt>Día</dt><dd>{activeQuote.fecha.split("-").reverse().join("/")}</dd></div><div><dt>Hora</dt><dd>{activeQuote.hora.slice(0, 5)}</dd></div></div>{presented.products?.length > 0 && <><dt>Productos incluidos</dt><dd className="chat-quote-products-breakdown">{presented.products.map((product: any) => <span key={product.id}>{product.cantidad} × {product.nombre}<strong>{money(product.precio)}</strong></span>)}</dd></>}<dt>Precio total</dt><dd>{money(activeQuote.total)}</dd><dt>Observación</dt><dd className="chat-quote-observation">{presented.observation || "Sin observaciones adicionales."}</dd></dl>{activeQuote.estado === "aceptado" && conversation.pago_presupuesto?.habilitado && <dl className="chat-quote-payment"><dt>{conversation.pago_presupuesto.tipo === "sena" ? "Seña para reservar" : "Pago para reservar"}</dt><dd>{money(conversation.pago_presupuesto.importe)}</dd>{conversation.pago_presupuesto.saldo > 0 && <><dt>Saldo restante a pagar al profesional</dt><dd>{money(conversation.pago_presupuesto.saldo)}</dd></>}</dl>}<p className="chat-quote-note">{activeQuote.estado === "reservado" ? conversation.pagos?.some((payment: any) => payment.estado === "reservado") ? "Pago acreditado y turno reservado." : "Turno reservado. La confirmación de la reserva no acredita un pago." : quoteExpired ? "Este presupuesto venció. Pedí una nueva propuesta." : activeQuote.estado === "aceptado" && conversation.pago_online ? "Al pagar se confirma la reserva si el horario sigue disponible. Si se ocupó, el reintegro se procesa automáticamente." : activeQuote.estado === "aceptado" ? "Presupuesto aceptado. El horario se verifica nuevamente al confirmar la reserva." : "Aceptar no realiza un cobro ni bloquea el horario."}</p>{!business && activeQuote.estado === "propuesto" && !quoteExpired && <button className="chat-quote-submit" disabled={busy} onClick={() => act(async () => { await post(`${prefix}/${current}/aceptar`, { presupuesto_id: activeQuote.id }); })}>Aceptar Presupuesto</button>}{business && activeQuote.estado === "aceptado" && !quoteExpired && <button className="chat-quote-submit" disabled={busy} onClick={() => act(async () => { await post(`${prefix}/${current}/reservar`, { presupuesto_id: activeQuote.id }); })}>Marcar como reservado</button>}{!business && conversation.pago_online && activeQuote.estado === "aceptado" && !quoteExpired && !conversation.pagos?.length && <button className="chat-quote-submit chat-quote-pay" disabled={busy} onClick={payQuote}>{busy ? "Abriendo Mercado Pago…" : conversation.pago_presupuesto?.tipo === "sena" ? "Pagar seña con Mercado Pago" : "Pagar total con Mercado Pago"}</button>}{conversation.pagos?.map((payment: any, index: number) => <p className="chat-quote-note" role="status" key={index}>{payment.estado === "reintegro_pendiente" ? "No pudimos confirmar ese horario. El reintegro automático está pendiente; no vuelvas a pagar." : payment.estado === "reintegrado" ? "Pago reintegrado. Coordiná una nueva propuesta por chat." : "Pago acreditado y reserva confirmada."}</p>)}{receipt && <BookingReceipt turno={receipt} />}</section></div>}
+{conversation && screen === "quote" && activeQuote && <div className="chat-quote-scroll"><section className="chat-quote-view" aria-label="Detalle del presupuesto"><h2>Presupuesto</h2><dl><dt>Servicio</dt><dd>{presented.service}</dd><div className="chat-quote-row"><div><dt>Día</dt><dd>{activeQuote.fecha.split("-").reverse().join("/")}</dd></div><div><dt>Hora</dt><dd>{activeQuote.hora.slice(0, 5)}</dd></div></div>{presented.products?.length > 0 && <><dt>Productos incluidos</dt><dd className="chat-quote-products-breakdown">{presented.products.map((product: any) => <span key={product.id}>{product.cantidad} × {product.nombre}<strong>{money(product.precio)}</strong></span>)}</dd></>}<dt>Precio total</dt><dd>{money(activeQuote.total)}</dd><dt>Observación</dt><dd className="chat-quote-observation">{presented.observation || "Sin observaciones adicionales."}</dd></dl>{activeQuote.estado === "aceptado" && conversation.pago_presupuesto?.habilitado && <dl className="chat-quote-payment"><dt>{conversation.pago_presupuesto.tipo === "sena" ? "Seña para reservar" : "Pago para reservar"}</dt><dd>{money(conversation.pago_presupuesto.importe)}</dd>{conversation.pago_presupuesto.saldo > 0 && <><dt>Saldo restante a pagar al profesional</dt><dd>{money(conversation.pago_presupuesto.saldo)}</dd></>}</dl>}<p className="chat-quote-note">{activeQuote.estado === "reservado" ? conversation.pagos?.some((payment: any) => payment.estado === "reservado") ? "Pago acreditado y turno reservado." : "Turno reservado. La confirmación de la reserva no acredita un pago." : quoteExpired ? "Este presupuesto venció. Pedí una nueva propuesta." : activeQuote.estado === "aceptado" && conversation.pago_online ? "Al pagar se confirma la reserva si el horario sigue disponible. Si se ocupó, el reintegro se procesa automáticamente." : activeQuote.estado === "aceptado" ? "Presupuesto aceptado. El horario se verifica nuevamente al confirmar la reserva." : "Aceptar no realiza un cobro ni bloquea el horario."}</p>{guestToken && activeQuote.estado === "propuesto" && !quoteExpired && <p className="chat-quote-note">Para aceptar y pagar un presupuesto vas a necesitar una cuenta de Turnits.</p>}{!business && !guestToken && activeQuote.estado === "propuesto" && !quoteExpired && <button className="chat-quote-submit" disabled={busy} onClick={() => act(async () => { await post(`${prefix}/${current}/aceptar`, { presupuesto_id: activeQuote.id }); })}>Aceptar Presupuesto</button>}{business && activeQuote.estado === "aceptado" && !quoteExpired && <button className="chat-quote-submit" disabled={busy} onClick={() => act(async () => { await post(`${prefix}/${current}/reservar`, { presupuesto_id: activeQuote.id }); })}>Marcar como reservado</button>}{!business && !guestToken && conversation.pago_online && activeQuote.estado === "aceptado" && !quoteExpired && !conversation.pagos?.length && <button className="chat-quote-submit chat-quote-pay" disabled={busy} onClick={payQuote}>{busy ? "Abriendo Mercado Pago…" : conversation.pago_presupuesto?.tipo === "sena" ? "Pagar seña con Mercado Pago" : "Pagar total con Mercado Pago"}</button>}{conversation.pagos?.map((payment: any, index: number) => <p className="chat-quote-note" role="status" key={index}>{payment.estado === "reintegro_pendiente" ? "No pudimos confirmar ese horario. El reintegro automático está pendiente; no vuelvas a pagar." : payment.estado === "reintegrado" ? "Pago reintegrado. Coordiná una nueva propuesta por chat." : "Pago acreditado y reserva confirmada."}</p>)}{receipt && <BookingReceipt turno={receipt} />}</section></div>}
     </section> : null;
   return <Container aria-label={embedded ? "Mensajes" : undefined} className={`consultations ${embedded ? `consultations-embedded consultations-embedded-${embedded}` : ""} ${current ? "consultations-thread" : "consultations-inbox"}${embedded === "panel" && current ? " chat-panel-has-thread" : ""}`}>{!embedded && <ChatHeader business={business} messagesOnly />}
-    {!token ? <div className="chat-empty"><p>Iniciá sesión para ver tus mensajes.</p><Link to={`/login?${new URLSearchParams({ tipo: business ? "negocio" : "usuario", volver: `/consultas${window.location.search}` })}`}>Iniciar sesión</Link></div> : embedded === "panel" ? <>
+    {!token ? guestAccessMissing ? <div className="chat-empty"><p>Por seguridad, este chat invitado solo se puede abrir desde el navegador donde lo iniciaste.</p><Link to="/browse">Volver al inicio</Link></div> : <div className="chat-empty"><p>Iniciá sesión para ver tus mensajes.</p><Link to={`/login?${new URLSearchParams({ tipo: business ? "negocio" : "usuario", volver: `/consultas${window.location.search}` })}`}>Iniciar sesión</Link></div> : embedded === "panel" ? <>
       {current ? <aside className="chat-panel-sidebar">{inboxView}</aside> : inboxView}
       {threadView || <div className="chat-panel-empty"><ChatIcon name="chat" size={34} /><strong>Tus conversaciones</strong><span>Elegí un chat para ver los mensajes y coordinar la consulta.</span></div>}
     </> : current ? threadView : inboxView}

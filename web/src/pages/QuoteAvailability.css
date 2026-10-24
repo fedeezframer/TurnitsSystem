@@ -18,20 +18,19 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
-  margin: clamp(42px, 8vh, 86px) 0 0;
-  color: #493b37;
-  font-size: 30px;
-  line-height: 1;
-  letter-spacing: -1.2px;
+  gap: 12px;
+  margin: clamp(36px, 7vh, 72px) 0 0;
+  color: var(--quote-text, #171916);
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 650;
+  text-align: center;
 }
 
 .quote-availability-brand img {
-  width: 72px;
-  height: 72px;
-  padding: 12px;
-  border-radius: 50%;
-  background: #e7f1e6;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
   object-fit: contain;
 }
 
@@ -52,14 +51,16 @@
 
 .quote-availability form {
   display: grid;
-  gap: 11px;
+  gap: 10px;
 }
 
 .quote-availability-label {
-  margin: 0 0 1px;
-  color: var(--quote-muted, #817e7b);
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  margin: 4px 0 0;
+  color: var(--bf-text-faint, #818899);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .quote-availability-name-row {
@@ -74,70 +75,131 @@
 }
 
 .quote-availability input,
-.quote-availability select {
+.quote-availability-country-button {
   width: 100%;
-  height: 50px;
+  min-height: 44px;
   min-width: 0;
-  border: 1px solid #d7d0cc;
-  border-radius: 11px;
-  background: color-mix(in srgb, white 82%, var(--quote-background, #f8f9fa));
-  color: var(--quote-text, #171916);
+  border: 1px solid var(--bf-border-strong, #d1d5db);
+  border-radius: 10px;
+  background: var(--bf-input-bg, transparent);
+  color: var(--quote-text, #111827);
   font: inherit;
-  font-size: 16px;
+  font-size: 14px;
   outline: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .quote-availability input {
-  padding: 0 13px;
+  padding: 12px;
 }
 
 .quote-availability input::placeholder {
-  color: #8a8582;
+  color: var(--bf-text-muted, #6b7280);
   opacity: 1;
   font-size: 14px;
 }
 
-.quote-availability input:focus,
-.quote-availability select:focus {
-  border-color: var(--quote-primary, #000000);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--quote-primary, #000000) 12%, transparent);
-}
-
 .quote-availability-phone {
-  display: grid;
-  grid-template-columns: 60px 1fr;
+  position: relative;
+  display: flex;
+  align-items: stretch;
   min-width: 0;
-  overflow: hidden;
-  border: 1px solid #d7d0cc;
-  border-radius: 11px;
-  background: color-mix(in srgb, white 82%, var(--quote-background, #f8f9fa));
+  width: 100%;
+  border: 1px solid var(--bf-border-strong, #d1d5db);
+  border-radius: 10px;
+  background: var(--bf-input-bg, transparent);
 }
 
-.quote-availability-phone:focus-within {
+.quote-availability-phone:focus-within,
+.quote-availability input:focus {
   border-color: var(--quote-primary, #000000);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--quote-primary, #000000) 12%, transparent);
 }
 
-.quote-availability-phone select,
 .quote-availability-phone input {
-  height: 48px;
+  height: auto;
+  min-height: 42px;
   border: 0;
   border-radius: 0;
-  box-shadow: none;
   background: transparent;
 }
 
-.quote-availability-phone select {
-  padding: 0 7px;
-  border-right: 1px solid #d7d0cc;
-  font-size: 13px;
-  text-align: center;
-  appearance: none;
+.quote-availability-country {
+  position: relative;
+  flex-shrink: 0;
 }
 
-.quote-availability-phone input {
-  padding-left: 13px;
+.quote-availability-country-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  height: 100%;
+  min-height: 42px;
+  padding: 10px;
+  border: 0;
+  border-right: 1px solid var(--bf-border-strong, #d1d5db);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.quote-availability-country-button img,
+.quote-availability-country-menu img {
+  display: block;
+  width: 20px;
+  height: 14px;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.quote-availability-country-button span {
+  color: var(--quote-text, #111827);
+  font-size: 9px;
+}
+
+.quote-availability-country-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 5;
+  width: 220px;
+  max-width: calc(100vw - 32px);
+  max-height: 220px;
+  margin-top: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--bf-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--bf-panel-bg, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.quote-availability-country-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--quote-text, #111827);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quote-availability-country-menu button[aria-selected="true"] {
+  background: color-mix(in srgb, var(--quote-primary, #1f2937) 10%, transparent);
+}
+
+.quote-availability-country-menu button span:nth-of-type(1) {
+  flex: 1;
+  min-width: 0;
+}
+
+.quote-availability-country-menu button span:nth-of-type(2) {
+  color: var(--bf-text-faint, #818899);
+  font-size: 12px;
 }
 
 .quote-availability-phone:focus-within select,
@@ -157,15 +219,7 @@
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 160ms ease, transform 160ms ease;
-}
-
-.quote-availability-submit:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-.quote-availability-submit:active:not(:disabled) {
-  transform: scale(0.985);
+  animation: quote-availability-fade-in 180ms ease both;
 }
 
 .quote-availability-submit:disabled {
@@ -216,16 +270,24 @@
   outline-offset: 3px;
 }
 
+.quote-availability input:focus-visible {
+  outline: none;
+}
+
+@keyframes quote-availability-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @media (max-width: 520px) {
   .quote-availability-brand {
     margin-top: max(42px, 7vh);
-    font-size: 27px;
+    font-size: 19px;
   }
 
   .quote-availability-brand img {
-    width: 64px;
-    height: 64px;
-    padding: 11px;
+    width: 56px;
+    height: 56px;
   }
 
   .quote-availability-content {
@@ -245,9 +307,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .quote-availability input,
-  .quote-availability select,
   .quote-availability-submit {
-    transition: none;
+    animation: none;
   }
 }

@@ -1,5 +1,12 @@
 const assert = require("node:assert/strict");
 (async () => {
+  const sessionValues = new Map();
+  global.sessionStorage = {
+    getItem: key => sessionValues.get(key) || null,
+    setItem: (key, value) => sessionValues.set(key, value),
+    removeItem: key => sessionValues.delete(key),
+  };
+  const { saveGuestConsultationSession, readGuestConsultationSession, clearGuestConsultationSession } = await import("../web/src/shared/guest-consultation-session.js");
   const { quoteDetail, quotePresentation, messagePreview, mergeMessages, defaultQuoteExpiry, availabilityInquiry } = await import("../web/src/shared/consultations.js");
   const products = [{ id: "producto-1", nombre: "Crema post tatuaje", cantidad: 2, precio_unitario: 1500, precio: 3000 }];
   const detail = quoteDetail("Tatuaje [personalizado]", "Referencia acordada", products);
@@ -17,5 +24,12 @@ const assert = require("node:assert/strict");
   assert.equal(defaultQuoteExpiry("2026-10-20", "15:00", now), "");
   assert.match(availabilityInquiry(new URLSearchParams({ fecha: "2026-10-24", hora: "15:00", profesional: "Ana" })), /24\/10\/2026 a las 15:00 con Ana/);
   assert.equal(availabilityInquiry(new URLSearchParams({ fecha: "2026-10-24", hora: "29:00" })), "");
+  const guestExpiry = new Date(Date.now() + 60000).toISOString();
+  saveGuestConsultationSession("consultation-id", "turnits_guest_secret", guestExpiry);
+  assert.equal(readGuestConsultationSession("consultation-id").token, "turnits_guest_secret");
+  clearGuestConsultationSession("consultation-id");
+  assert.equal(readGuestConsultationSession("consultation-id"), null);
+  sessionValues.set("turnits_guest_consultation:expired", JSON.stringify({ token: "turnits_guest_secret", expiresAt: new Date(Date.now() - 1).toISOString() }));
+  assert.equal(readGuestConsultationSession("expired"), null);
   console.log("PASS consultations: service details, legacy budgets, participant previews, refreshed references and Argentina expiry.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

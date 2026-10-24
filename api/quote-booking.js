@@ -4,9 +4,23 @@ import { quoteDetail } from "../web/src/shared/consultations.js";
 import { verifyQuoteWebhook } from "./quote-payments.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const GUEST_TOKEN_PREFIX = "turnits_guest_";
 const read = response => { if (response.error) throw response.error; return response.data; };
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { publicMessage: message, status }); };
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+export function guestTokenDigest(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+export function validateGuestContact(body) {
+  const nombre = typeof body?.nombre === "string" ? body.nombre.trim() : "";
+  const apellido = typeof body?.apellido === "string" ? body.apellido.trim() : "";
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const telefono = typeof body?.telefono === "string" ? body.telefono.trim() : "";
+  if (nombre.length < 2 || nombre.length > 80 || apellido.length < 2 || apellido.length > 80) fail("Completá tu nombre y apellido.");
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("Ingresá un email válido.");
+  if (!/^\+[1-9]\d{6,14}$/.test(telefono)) fail("Ingresá un teléfono válido con código de país.");
+  return { nombre, apellido, email, telefono };
+}
 export async function resolveQuoteProducts(supabase, consultation, selection, equipoId) {
   const requested = selection ?? [];
   if (!Array.isArray(requested) || requested.length > 10) fail("Elegí hasta 10 productos para el presupuesto.");
@@ -60,7 +74,7 @@ export function validateReferenceText(value) {
   if (text.length > 3000) fail("El mensaje puede tener hasta 3000 caracteres.");
   return text;
 }
-export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, limiter, context, available, multer, payments, webhookSecret = process.env.MP_WEBHOOK_SECRET, enabled = process.env.QUOTE_BOOKING_ENABLED === "true" }) {
+export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, limiter, guestLimiter = limiter, context, available, multer, payments, webhookSecret = process.env.MP_WEBHOOK_SECRET, enabled = process.env.QUOTE_BOOKING_ENABLED === "true" }) {
   const route = handler => async (req, res) => {
     try { await handler(req, res); }
     catch (error) { res.status(error.status || (error.promoValidacion || error.code === "P0001" || error.code === "23505" ? 409 : 503)).json({ success: false, error: error.publicMessage || (error.promoValidacion || error.code === "P0001" ? error.message : "No pudimos completar la consulta. Volvé a intentar.") }); }
@@ -80,6 +94,7 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
   };
   const thread = async (req, business) => {
     if (!UUID.test(req.params.id || "")) fail("Consulta no encontrada.", 404);
+    if (!business && req.guestConsultation?.id === req.params.id) return req.guestConsultation;
     let query = supabase.from("consultas").select("*").eq("id", req.params.id);
     query = business ? query.eq("slug", req.auth.slug) : query.eq("consumidor_id", req.consumer.id);
     const data = read(await query.maybeSingle());
@@ -89,6 +104,21 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
   const requireMode = async slug => {
     const business = read(await supabase.from("usuarios").select("modo_agenda,activo,estado_suscripcion,fecha_vencimiento").eq("slug", slug).maybeSingle());
     if (business?.modo_agenda !== "presupuesto" || ![true, "true"].includes(business.activo) || business.estado_suscripcion === "suspendido" || (business.fecha_vencimiento && Date.parse(business.fecha_vencimiento) <= Date.now())) fail("Este negocio no recibe consultas.", 409);
+  };
+  const consumerOrGuest = (req, res, next) => {
+    const rawToken = /^Bearer\s+(.+)$/i.exec(req.headers?.authorization || "")?.[1] || "";
+    if (!rawToken.startsWith(GUEST_TOKEN_PREFIX)) return consumerAuth(req, res, next);
+    void (async () => {
+      if (!UUID.test(req.params.id || "")) fail("Consulta no encontrada.", 404);
+      const consultation = read(await supabase.from("consultas").select("*").eq("id", req.params.id).maybeSingle());
+      const storedDigest = consultation?.guest_token_hash;
+      const requestedDigest = guestTokenDigest(rawToken);
+      if (!consultation || !storedDigest || !/^[\da-f]{64}$/i.test(storedDigest) || !crypto.timingSafeEqual(Buffer.from(storedDigest, "hex"), Buffer.from(requestedDigest, "hex")) || !consultation.guest_expires_at || Date.parse(consultation.guest_expires_at) <= Date.now()) {
+        fail("No pudimos verificar el acceso a este chat invitado.", 401);
+      }
+      req.guestConsultation = consultation;
+      next();
+    })().catch(error => res.status(error.status || 503).json({ success: false, error: error.publicMessage || "No pudimos verificar el acceso a este chat." }));
   };
   app.post("/browse/consultas", feature, consumerAuth, limiter, route(async (req, res) => {
     const service = read(await supabase.from("servicios").select("id,slug,nombre,activo").eq("id", req.body.servicio_id).maybeSingle());
@@ -106,14 +136,39 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
     if (!saved) fail("No pudimos abrir la consulta. Reintentá.", 409);
     res.json({ success: true, id: saved.id });
   }));
+  app.post("/browse/consultas/invitado", feature, guestLimiter, limiter, route(async (req, res) => {
+    const serviceId = typeof req.body?.servicio_id === "string" ? req.body.servicio_id : "";
+    if (!UUID.test(serviceId)) fail("Servicio no disponible.", 404);
+    const contact = validateGuestContact(req.body);
+    const service = read(await supabase.from("servicios").select("id,slug,nombre,activo").eq("id", serviceId).maybeSingle());
+    if (!service || ![true, "true"].includes(service.activo)) fail("Servicio no disponible.", 404);
+    await requireMode(service.slug);
+    const profile = read(await supabase.from("negocio_perfiles").select("slug").eq("slug", service.slug).eq("publicado", true).maybeSingle());
+    if (!profile) fail("Negocio no disponible.", 404);
+    const token = `${GUEST_TOKEN_PREFIX}${crypto.randomBytes(32).toString("base64url")}`;
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+    const saved = read(await supabase.from("consultas").insert({
+      slug: service.slug,
+      servicio_id: service.id,
+      titulo: service.nombre.slice(0, 120),
+      guest_nombre: contact.nombre,
+      guest_apellido: contact.apellido,
+      guest_email: contact.email,
+      guest_telefono: contact.telefono,
+      guest_token_hash: guestTokenDigest(token),
+      guest_expires_at: expiresAt,
+    }).select("id").single());
+    res.json({ success: true, id: saved.id, guest_token: token, guest_expires_at: expiresAt });
+  }));
   for (const business of [false, true]) {
     const prefix = business ? "/admin/consultas" : "/browse/consultas";
     const guards = business ? [feature, requireAuth, owner, limiter] : [feature, consumerAuth, limiter];
+    const threadGuards = business ? guards : [feature, consumerOrGuest, limiter];
     app.get(prefix, ...guards, route(async (req, res) => {
       const data = read(await supabase.rpc("consulta_bandeja", { p_consumidor: business ? null : req.consumer.id, p_slug: business ? req.auth.slug : null }));
       res.json({ success: true, consultas: data });
     }));
-    app.post(prefix + "/:id/leida", ...guards, route(async (req,res) => {
+    app.post(prefix + "/:id/leida", ...threadGuards, route(async (req,res) => {
       const consultation = await thread(req,business);
       if (!UUID.test(req.body.mensaje_id || "")) fail("Mensaje inválido.");
       const message = read(await supabase.from("consulta_mensajes").select("created_at").eq("id",req.body.mensaje_id).eq("consulta_id",consultation.id).maybeSingle());
@@ -122,17 +177,17 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       if (!consultation[column] || Date.parse(consultation[column]) < Date.parse(message.created_at)) read(await supabase.from("consultas").update({ [column]:message.created_at }).eq("id",consultation.id).or(`${column}.is.null,${column}.lt.${message.created_at}`));
       res.json({success:true});
     }));
-    app.get(prefix + "/:id", ...guards, route(async (req, res) => {
+    app.get(prefix + "/:id", ...threadGuards, route(async (req, res) => {
       const consultation = await thread(req, business);
       const [participantResult,serviceResult] = await Promise.all([
-        business ? supabase.from("consumidores").select("nombre_persona,apellido,foto_url").eq("id",consultation.consumidor_id).maybeSingle() : supabase.from("negocio_perfiles").select("nombre,foto_perfil_url").eq("slug",consultation.slug).maybeSingle(),
+        business && consultation.consumidor_id ? supabase.from("consumidores").select("nombre_persona,apellido,foto_url").eq("id",consultation.consumidor_id).maybeSingle() : !business ? supabase.from("negocio_perfiles").select("nombre,foto_perfil_url").eq("slug",consultation.slug).maybeSingle() : Promise.resolve({ data: null }),
         supabase.from("servicios").select("nombre,duracion").eq("id",consultation.servicio_id).eq("slug",consultation.slug).maybeSingle(),
       ]);
       const participant = read(participantResult), service = read(serviceResult);
       const linkedProductIds = business ? read(await supabase.from("servicio_extras").select("extra_id").eq("servicio_id", consultation.servicio_id)) || [] : [];
       const availableProducts = linkedProductIds.length ? read(await supabase.from("extras").select("id,nombre,precio,imagen_url,owner_equipo_id,orden").eq("slug", consultation.slug).eq("activo", true).in("id", linkedProductIds.map(item => item.extra_id))) || [] : [];
       availableProducts.sort((first, second) => (first.orden || 0) - (second.orden || 0));
-      const interlocutor = { nombre: business ? [participant?.nombre_persona,participant?.apellido].filter(Boolean).join(" ") || "Cliente" : participant?.nombre || consultation.slug, foto_url: business ? participant?.foto_url : participant?.foto_perfil_url };
+      const interlocutor = { nombre: business ? [participant?.nombre_persona || consultation.guest_nombre,participant?.apellido || consultation.guest_apellido].filter(Boolean).join(" ") || "Cliente" : participant?.nombre || consultation.slug, foto_url: business ? participant?.foto_url : participant?.foto_perfil_url };
       const before = req.query.before;
       if (before && !UUID.test(before)) fail("Cursor inválido.");
       let messages = supabase.from("consulta_mensajes").select("id,autor,texto,archivo,created_at").eq("consulta_id", consultation.id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(50);
@@ -163,7 +218,7 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       ]);
       res.json({ success: true, consulta: { id: consultation.id, titulo: consultation.titulo, estado: consultation.estado, slug: consultation.slug, servicio_id: consultation.servicio_id }, pagos: paymentStates, pago_online: paymentInfo?.habilitado === true, pago_presupuesto: paymentInfo, interlocutor, servicio:service, productos_disponibles: business ? availableProducts : undefined, mensajes: safeMessages.reverse(), presupuestos: quotes, anterior: rows.length === 50 ? rows.at(-1).id : null });
     }));
-    app.post(prefix + "/:id/mensajes", ...guards, route(async (req, res) => {
+    app.post(prefix + "/:id/mensajes", ...threadGuards, route(async (req, res) => {
       const consultation = await thread(req, business);
       if (consultation.estado === "cerrada") fail("La consulta está cerrada.", 409);
       const text = typeof req.body.texto === "string" ? req.body.texto.trim() : "";
@@ -172,7 +227,7 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
       res.json({ success: true, mensaje: saved });
     }));
     const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2097152, files: 1, fields: 1 } }).single("referencia");
-    app.post(prefix + "/:id/referencias", ...guards, route(async (req, res) => {
+    app.post(prefix + "/:id/referencias", ...threadGuards, route(async (req, res) => {
       const consultation = await thread(req, business);
       if (consultation.estado !== "abierta") fail("La consulta ya no recibe referencias.", 409);
       await new Promise((resolve, reject) => upload(req, res, error => error ? reject(Object.assign(error, { status: 400, publicMessage: "Subí una sola imagen de hasta 2 MB." })) : resolve()));
@@ -225,7 +280,7 @@ export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, l
     res.json({ success: true });
   }));
   for (const business of [false, true]) {
-    app.post(`${business ? "/admin" : "/browse"}/consultas/:id/cerrar`, feature, ...(business ? [requireAuth, owner] : [consumerAuth]), limiter, route(async (req, res) => {
+    app.post(`${business ? "/admin" : "/browse"}/consultas/:id/cerrar`, feature, ...(business ? [requireAuth, owner] : [consumerOrGuest]), limiter, route(async (req, res) => {
       const consultation = await thread(req, business);
       if (consultation.estado !== "abierta") fail("Solo se pueden cerrar consultas sin reserva.", 409);
       read(await supabase.from("consultas").update({ estado: "cerrada", cerrada_at: new Date().toISOString() }).eq("id", consultation.id).eq("estado", "abierta"));

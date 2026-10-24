@@ -2,7 +2,7 @@ import * as React from "react";
 import { useNavigate } from "react-router";
 import { appConfig } from "../config";
 import { consumerHeaders } from "../shared/consumer-session";
-import { saveQuoteBookingDraft } from "../shared/quote-booking-draft";
+import { saveGuestConsultationSession } from "../shared/guest-consultation-session.js";
 import "./QuoteAvailability.css";
 
 const PHONE_COUNTRIES = [
@@ -19,6 +19,8 @@ const PHONE_COUNTRIES = [
   { code: "ES", dial: "+34", flag: "🇪🇸", name: "España" },
 ];
 
+const flagUrl = (code: string) => `https://flagcdn.com/${code.toLowerCase()}.svg`;
+
 const validColor = (value: unknown, fallback: string) =>
   typeof value === "string" && /^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(value)
     ? value
@@ -30,6 +32,8 @@ export default function QuoteAvailability({ slug, business }: { slug: string; bu
   const [services, setServices] = React.useState<any[]>([]);
   const [service, setService] = React.useState(initialService);
   const [countryCode, setCountryCode] = React.useState("AR");
+  const [countryDropdownOpen, setCountryDropdownOpen] = React.useState(false);
+  const countryControl = React.useRef<HTMLDivElement>(null);
   const [contact, setContact] = React.useState({ nombre: "", apellido: "", email: "", telefono: "" });
   const [loadingServices, setLoadingServices] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
@@ -45,6 +49,14 @@ export default function QuoteAvailability({ slug, business }: { slug: string; bu
     phoneDigits.length >= 7 && phoneDigits.length + country.dial.replace(/\D/g, "").length <= 15;
   const canContinue = validContact && Boolean(service) && !loadingServices;
   const theme = business.tema || {};
+  React.useEffect(() => {
+    if (!countryDropdownOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!countryControl.current?.contains(event.target as Node)) setCountryDropdownOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [countryDropdownOpen]);
   const pageStyle = {
     "--quote-background": validColor(theme.fondo, "#f8f9fa"),
     "--quote-text": validColor(theme.texto, "#171916"),
@@ -110,17 +122,29 @@ export default function QuoteAvailability({ slug, business }: { slug: string; bu
     event.preventDefault();
     if (!canContinue || busy) return;
     setError("");
-    const destination = `/browse?${new URLSearchParams({ vista: "mensajes", servicio_id: service })}`;
     if (!consumerAuthorization) {
-      saveQuoteBookingDraft({
-        nombre: contact.nombre.trim(),
-        apellido: contact.apellido.trim(),
-        email: contact.email.trim().toLowerCase(),
-        telefono: phoneDigits,
-        countryCode,
-        serviceId: service,
-      });
-      navigate(`/login?${new URLSearchParams({ tipo: "usuario", volver: destination })}`);
+      setBusy(true);
+      try {
+        const response = await fetch(`${appConfig.apiUrl}/browse/consultas/invitado`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            servicio_id: service,
+            nombre: contact.nombre.trim(),
+            apellido: contact.apellido.trim(),
+            email: contact.email.trim().toLowerCase(),
+            telefono: `${country.dial}${phoneDigits}`,
+          }),
+          cache: "no-store",
+        });
+        const consultation = await response.json().catch(() => null);
+        if (!response.ok || !consultation?.success) throw new Error(consultation?.error || "No pudimos abrir el chat.");
+        saveGuestConsultationSession(consultation.id, consultation.guest_token, consultation.guest_expires_at);
+        navigate(`/browse?${new URLSearchParams({ vista: "mensajes", id: consultation.id })}`);
+      } catch (failure) {
+        setError(failure instanceof Error ? failure.message : "No pudimos abrir el chat. Volvé a intentar.");
+        setBusy(false);
+      }
       return;
     }
     setBusy(true);
@@ -154,20 +178,30 @@ export default function QuoteAvailability({ slug, business }: { slug: string; bu
 
   return <main className="quote-availability" style={pageStyle}>
     <header className="quote-availability-brand">
-      <img src={appConfig.loginLogoUrl} alt="" />
-      <span>Turnits</span>
+      {business.logo_url && <img src={business.logo_url} alt="" />}
+      <span>{business.business_name}</span>
     </header>
     <section className="quote-availability-content" aria-labelledby="quote-title">
       <h1 id="quote-title">Comenzá tu consulta</h1>
       <form onSubmit={openChat} noValidate>
-        <p className="quote-availability-label">TUS DATOS</p>
+        <p className="quote-availability-label">Tus datos</p>
         <div className="quote-availability-name-row">
           <label><span className="quote-availability-sr-only">Nombre</span><input autoComplete="given-name" maxLength={80} placeholder="Nombre" value={contact.nombre} onChange={(event) => setContact({ ...contact, nombre: event.target.value })} /></label>
           <label><span className="quote-availability-sr-only">Apellido</span><input autoComplete="family-name" maxLength={80} placeholder="Apellido" value={contact.apellido} onChange={(event) => setContact({ ...contact, apellido: event.target.value })} /></label>
         </div>
         <label><span className="quote-availability-sr-only">Email</span><input autoComplete="email" inputMode="email" maxLength={254} placeholder="Email" readOnly={Boolean(consumerAuthorization && contact.email)} type="email" value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} /></label>
-        <div className="quote-availability-phone">
-          <label className="quote-availability-country"><span className="quote-availability-sr-only">País</span><select aria-label="País" value={countryCode} onChange={(event) => setCountryCode(event.target.value)}>{PHONE_COUNTRIES.map((item) => <option key={item.code} value={item.code}>{item.flag} {item.dial}</option>)}</select></label>
+        <div className="quote-availability-phone" ref={countryControl}>
+          <div className="quote-availability-country">
+            <button type="button" className="quote-availability-country-button" aria-label={`País: ${country.name}`} aria-expanded={countryDropdownOpen} onClick={() => setCountryDropdownOpen((open) => !open)}>
+              <img src={flagUrl(country.code)} alt={country.code} />
+              <span aria-hidden="true">▾</span>
+            </button>
+            {countryDropdownOpen && <div className="quote-availability-country-menu" role="listbox" aria-label="Elegí tu país">
+              {PHONE_COUNTRIES.map((item) => <button type="button" role="option" aria-selected={countryCode === item.code} key={item.code} onClick={() => { setCountryCode(item.code); setCountryDropdownOpen(false); }}>
+                <img src={flagUrl(item.code)} alt="" /><span>{item.name}</span><span>{item.dial}</span>
+              </button>)}
+            </div>}
+          </div>
           <label className="quote-availability-phone-number"><span className="quote-availability-sr-only">Número de teléfono</span><input autoComplete="tel-national" inputMode="tel" maxLength={20} placeholder="Número de teléfono" type="tel" value={contact.telefono} onChange={(event) => setContact({ ...contact, telefono: event.target.value })} /></label>
         </div>
         {error && <p className="quote-availability-error" role="alert">{error}{!services.length && <button type="button" onClick={() => setRetry((value) => value + 1)}>Reintentar</button>}</p>}
