@@ -3,6 +3,8 @@ import { Link } from "react-router";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import "./Register.css";
 import { appConfig } from "../config";
+import { readQuoteBookingDraft } from "../shared/quote-booking-draft";
+import { safeMessagesReturn } from "../shared/consultation-session.js";
 
 type AccountType = "usuario" | "negocio";
 type Fields = {
@@ -109,8 +111,15 @@ export default function Register({
 }: any) {
   const [step, setStep] = useState(2);
   const type = accountType as AccountType;
-  const [fields, setFields] = useState<Fields>(empty);
-  const [phoneCountry, setPhoneCountry] = useState("AR");
+  const [quoteDraft] = useState(() => type === "usuario" ? readQuoteBookingDraft() : null);
+  const [fields, setFields] = useState<Fields>(() => quoteDraft ? {
+    ...empty,
+    nombre_persona: quoteDraft.nombre,
+    apellido: quoteDraft.apellido,
+    email: quoteDraft.email,
+    telefono: quoteDraft.telefono,
+  } : empty);
+  const [phoneCountry, setPhoneCountry] = useState(() => PHONE_COUNTRIES.some((country) => country.code === quoteDraft?.countryCode) ? quoteDraft!.countryCode : "AR");
   const [categories, setCategories] = useState<string[]>([]);
   const [agendaMode, setAgendaMode] = useState("normal");
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
@@ -300,8 +309,10 @@ export default function Register({
       localStorage.removeItem("turnits_ref");
     }
     setFields((values) => ({ ...values, password: "" }));
+    const requestedReturn = new URLSearchParams(window.location.search).get("volver") || "";
+    const messagesReturn = safeMessagesReturn(requestedReturn, window.location.origin);
     window.location.replace(
-      consumer ? "/browse" : `/panel/${encodeURIComponent(result.slug)}`,
+      consumer ? messagesReturn || "/browse" : `/panel/${encodeURIComponent(result.slug)}`,
     );
   }
   async function verify(code = digits.join("")) {

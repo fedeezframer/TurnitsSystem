@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { appConfig } from "../config";
 import { consumerHeaders } from "../shared/consumer-session";
+import { clearQuoteBookingDraft, readQuoteBookingDraft } from "../shared/quote-booking-draft";
 import { isBusinessSession, storedSessionToken } from "../shared/consultation-session.js";
 import { availabilityInquiry, defaultQuoteExpiry, mergeMessages, messagePreview, quotePresentation } from "../shared/consultations.js";
 import { ChatAvatar, ChatHeader, ChatIcon } from "../components/ChatChrome";
@@ -125,7 +126,31 @@ function ConsultationsContent({ embedded, onInboxChange, onExit }: { embedded?: 
   React.useEffect(() => {
     if (!requestedService || business || !token) return;
     const controller = new AbortController();
-    api("/browse/consultas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ servicio_id: requestedService }), signal: controller.signal }).then(data => { if (!controller.signal.aborted) { const next = new URLSearchParams(window.location.search); next.delete("servicio_id"); next.set("id", data.id); setParams(next, { replace: true }); } }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); });
+    const open = async () => {
+      const draft = readQuoteBookingDraft();
+      if (draft?.serviceId === requestedService) {
+        const dialingCodes: Record<string, string> = { AR: "+54", UY: "+598", CL: "+56", PY: "+595", BR: "+55", BO: "+591", PE: "+51", CO: "+57", MX: "+52", US: "+1", ES: "+34" };
+        await api("/browse/perfil", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nombre_persona: draft.nombre,
+            apellido: draft.apellido,
+            telefono: `${dialingCodes[draft.countryCode] || "+54"}${draft.telefono}`,
+          }),
+          signal: controller.signal,
+        });
+      }
+      const data = await api("/browse/consultas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ servicio_id: requestedService }), signal: controller.signal });
+      if (!controller.signal.aborted) {
+        if (readQuoteBookingDraft()?.serviceId === requestedService) clearQuoteBookingDraft();
+        const next = new URLSearchParams(window.location.search);
+        next.delete("servicio_id");
+        next.set("id", data.id);
+        setParams(next, { replace: true });
+      }
+    };
+    void open().catch(failure => { if (!controller.signal.aborted) setError(failure.message); });
     return () => controller.abort();
   }, [requestedService, business, api, setParams, token]);
   React.useEffect(() => { photoPreparation.current++; setPreparingPhoto(false); setConversation(null); setScreen("chat"); setText(!business ? availabilityInquiry(new URLSearchParams(window.location.search)) : ""); setError(""); setMembers([]); setMemberError(""); setDraft(emptyDraft()); setSelectedProducts([]); setAttachmentsOpen(false); setPendingFile(null); setDraggingImage(false); stickBottom.current = true; pendingScroll.current = null; }, [current, business]);

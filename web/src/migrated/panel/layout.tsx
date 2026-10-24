@@ -855,13 +855,14 @@ function TurnitsPanel_Inner(props: any) {
                     >
                         <SeccionHeader
                             title="Temas"
-                            subtitle="Personalizá los colores y las formas de tu agenda"
+                            subtitle={quoteMode ? "Personalizá los colores de la agenda de consultas" : "Personalizá los colores y las formas de tu agenda"}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
                         <ThemeEditor
                             baseUrl={baseUrl}
                             accentColor={accentColor}
+                            quoteMode={quoteMode}
                             onOpenProfile={() => irA("perfil")}
                         />
                         </SectionLoadingBoundary>

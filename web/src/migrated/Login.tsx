@@ -196,6 +196,13 @@ export default function LoginApp(props: Props) {
     const [accountType, setAccountType] = React.useState<"usuario" | "negocio">(() =>
         typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tipo") === "usuario" ? "usuario" : "negocio"
     )
+    const registrationHref = React.useMemo(() => {
+        const registrationParams = new URLSearchParams({ tipo: accountType })
+        const requestedReturn = new URLSearchParams(window.location.search).get("volver") || ""
+        const messagesReturn = safeMessagesReturn(requestedReturn, window.location.origin)
+        if (messagesReturn) registrationParams.set("volver", messagesReturn)
+        return `${registerUrl}${registerUrl.includes("?") ? "&" : "?"}${registrationParams}`
+    }, [accountType, registerUrl])
     const [password, setPassword] = React.useState("")
     const [visible, setVisible] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
@@ -425,7 +432,7 @@ export default function LoginApp(props: Props) {
             )
             const result = await response.json().catch(() => null)
             if (result?.code === "google_registration_required") {
-                window.location.assign(registerUrl)
+                window.location.assign(registrationHref)
                 return
             }
             if (!response.ok || !result?.success)
@@ -775,7 +782,7 @@ export default function LoginApp(props: Props) {
                         ) : (
                             <a
                                 className="tt-login-v2-secondary"
-                                href={registerUrl}
+                                href={registrationHref}
                                 onClick={(e) => {
                                     if (loading) e.preventDefault()
                                 }}

@@ -16,6 +16,7 @@ import {
 } from "./common";
 import { TurnitsPlanRequirement } from "./shared";
 import { UploadPlaceholderIcon } from "./inicio";
+import { useQuoteMode } from "../../shared/agenda-mode";
 import {
   CARD_SHAPES,
   ICON_SHAPES,
@@ -28,13 +29,17 @@ function ThemeEditor({
   accentColor = "#197128",
   style,
   onOpenProfile,
+  quoteMode: quoteModeProp,
 }: {
   baseUrl?: string;
   accentColor?: string;
   style?: React.CSSProperties;
   onOpenProfile?: () => void;
+  quoteMode?: boolean;
 }) {
   const api = baseUrl.replace(/\/+$/, "");
+  const detectedQuoteMode = useQuoteMode(baseUrl);
+  const quoteMode = quoteModeProp ?? detectedQuoteMode;
   const [loading, setLoading] = React.useState(true),
     [enabled, setEnabled] = React.useState(false),
     [tema, setTema] = React.useState<ThemeEditor_Tema>(
@@ -158,18 +163,18 @@ function ThemeEditor({
       <div className="te-heading">
         <div>
           <h2>Apariencia</h2>
-          <p>Colores y formas de tu agenda y tu perfil público.</p>
+          <p>{quoteMode ? "Personalizá los colores de tu agenda de consultas." : "Colores y formas de tu agenda y tu perfil público."}</p>
         </div>
         {!enabled && <TurnitsPlanRequirement />}
       </div>
-      <div className="te-photo-note">
+      {!quoteMode && <div className="te-photo-note">
         <span>La foto del negocio se cambia desde Perfil.</span>
         {onOpenProfile && (
           <button type="button" onClick={onOpenProfile}>
             Editar foto
           </button>
         )}
-      </div>
+      </div>}
       <fieldset
         disabled={!enabled}
         style={!enabled ? TurnitsLockedStyle : undefined}
@@ -177,7 +182,7 @@ function ThemeEditor({
       >
         <section className="te-section">
           <h3>Colores</h3>
-          <p>Elegí una paleta clara para tu negocio.</p>
+          <p>{quoteMode ? "Elegí una paleta o ajustá los colores principales." : "Elegí una paleta clara para tu negocio."}</p>
           <div className="te-palettes">
             {ThemeEditor_PALETAS.map((p) => (
               <button
@@ -200,7 +205,19 @@ function ThemeEditor({
             ))}
           </div>
         </section>
-        {(
+        {quoteMode && <section className="te-section">
+          <div className="te-quote-colors">
+            {([
+              ["fondo", "Fondo de la agenda"],
+              ["texto", "Texto"],
+              ["primario", "Botón principal"],
+            ] as const).map(([key, label]) => <label className="te-quote-color" key={key}>
+              <span>{label}</span>
+              <input type="color" value={tema[key]} aria-label={label} onChange={(event) => update({ [key]: event.target.value })} />
+            </label>)}
+          </div>
+        </section>}
+        {!quoteMode && (
           [
             [
               "forma_tarjetas",
@@ -250,7 +267,7 @@ function ThemeEditor({
         <p role="alert" className="te-error">
           {error}
         </p>
-      )}
+        )}
     </div>
   );
 }

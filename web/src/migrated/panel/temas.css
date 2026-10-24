@@ -57,6 +57,38 @@
 .te-section {
   min-width: 0;
 }
+.te-quote-colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 2px;
+}
+.te-quote-color {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 9px 12px;
+  border: 1px solid #e2e8e4;
+  border-radius: 12px;
+  background: #fff;
+  color: #475569;
+  font: 500 12px "Inter Display", sans-serif;
+}
+.te-quote-color input {
+  width: 34px;
+  height: 34px;
+  padding: 3px;
+  border: 1px solid #e2e8e4;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+}
+.te-quote-color input:focus-visible {
+  outline: 2px solid var(--te-accent);
+  outline-offset: 3px;
+}
 .te-section h3 {
   font-size: 14px;
   color: #172033;
