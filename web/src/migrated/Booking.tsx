@@ -866,6 +866,7 @@ export default function BookingFlow(props: any) {
     const [diasCargando, setDiasCargando] = React.useState<string[]>([])
 
     const [slots, setSlots] = React.useState<Slot[]>([])
+    const [slotsRevision, setSlotsRevision] = React.useState(0)
     const [loadingSlots, setLoadingSlots] = React.useState(false)
     const [errorSlots, setErrorSlots] = React.useState("")
     const [hora, setHora] = React.useState<string>("")
@@ -1354,7 +1355,7 @@ export default function BookingFlow(props: any) {
         if (promoAplicada) url += `&promocion_id=${encodeURIComponent(promoAplicada.id)}`
         if (equipoId) url += `&equipo_id=${encodeURIComponent(equipoId)}`
 
-        fetch(url)
+        fetch(url, { cache: "no-store" })
             .then((r) => r.json())
             .then((data) => {
                 if (!alive) return
@@ -1380,7 +1381,7 @@ export default function BookingFlow(props: any) {
         return () => {
             alive = false
         }
-    }, [fecha, servicioId, slug, api, equipoId, habilitarListaEspera, promocionId, promoAplicada?.id])
+    }, [fecha, servicioId, slug, api, equipoId, habilitarListaEspera, promocionId, promoAplicada?.id, slotsRevision])
 
     const slotsDisponibles = React.useMemo(() => {
         const hoy = getHoyBAISO()
@@ -2828,6 +2829,7 @@ export default function BookingFlow(props: any) {
                                 }}
                             >
                                 {submitError}{recoveryUrl && <a href={recoveryUrl} style={{display:"block",color:"inherit",marginTop:8}}>Retomar el pago pendiente</a>}
+                                {submitError.includes("No hay tiempo suficiente para el combo") && <button type="button" onClick={() => { setSubmitError(""); setSubmitEstado("idle"); setHora(""); setEquipoIdReservado(null); setSlotsRevision(value => value + 1); irAPaso("hora"); }} style={{display:"block",marginTop:8,padding:0,border:0,background:"transparent",color:"inherit",font:"inherit",fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>Elegir otro horario</button>}
                             </div>
                         )}
 

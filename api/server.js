@@ -27,6 +27,7 @@ import path from "node:path";
 // CONFIGURACIÓN GLOBAL
 // ══════════════════════════════════════════════════════════════
 const app = express();
+const quoteBookingEnabled = process.env.QUOTE_BOOKING_ENABLED === "true" && process.env.QUOTE_BOOKING_ROLLOUT_ENABLED === "true";
 validateEnvironment();
 app.use(stagingMiddleware());
 if (process.env.APP_ENV === "staging") {
@@ -1075,7 +1076,7 @@ const quoteGatewayRequest = async (ctx, path, options = {}) => {
   if (!response.ok) throw new Error("No pudimos verificar la operación con Mercado Pago."); return response.json();
 };
 const quotePayments = createQuotePayments({supabase,context:browse.quoteContext,available:promoDisponibilidad,apiUrl:API_URL,siteUrl:WEB_URL,
-  enabled:process.env.QUOTE_PAYMENTS_ENABLED === "true" && !!QUOTE_WEBHOOK_SECRET && (process.env.APP_ENV !== "staging" || !!MP_TEST_ACCESS_TOKEN),
+  enabled:quoteBookingEnabled && process.env.QUOTE_PAYMENTS_ENABLED === "true" && !!QUOTE_WEBHOOK_SECRET && (process.env.APP_ENV !== "staging" || !!MP_TEST_ACCESS_TOKEN),
   gateway:{context:quoteGatewayContext,
     canPay:ctx=>process.env.APP_ENV === "staging" ? !!MP_TEST_ACCESS_TOKEN : !!ctx.config?.mp_access_token,
     seller:async ctx=>({id:String((await quoteGatewayRequest(ctx,"/users/me")).id)}),
@@ -1093,8 +1094,8 @@ if (quotePayments.enabled) {
   const retryQuoteRefunds = () => quotePayments.retryRefunds().catch(() => console.error("Quote refund reconciliation unavailable"));
   setInterval(retryQuoteRefunds,60000).unref(); void retryQuoteRefunds();
 }
-createQuoteBooking({app,supabase,consumerAuth:browse.auth,requireAuth,limiter:rateLimit({windowMs:60000,max:120,standardHeaders:true,legacyHeaders:false}),guestLimiter:rateLimit({windowMs:15*60*1000,max:12,standardHeaders:true,legacyHeaders:false}),context:browse.quoteContext,available:promoDisponibilidad,multer,payments:quotePayments,webhookSecret:QUOTE_WEBHOOK_SECRET});
-if (process.env.QUOTE_BOOKING_ENABLED === "true") {
+createQuoteBooking({app,supabase,consumerAuth:browse.auth,requireAuth,limiter:rateLimit({windowMs:60000,max:120,standardHeaders:true,legacyHeaders:false}),guestLimiter:rateLimit({windowMs:15*60*1000,max:12,standardHeaders:true,legacyHeaders:false}),context:browse.quoteContext,available:promoDisponibilidad,multer,payments:quotePayments,webhookSecret:QUOTE_WEBHOOK_SECRET,enabled:quoteBookingEnabled});
+if (quoteBookingEnabled) {
   const cleanup = createReferenceCleanup(supabase);
   const run = () => cleanup().catch(() => console.error("Quote reference cleanup pending"));
   setInterval(run,3600000).unref(); void run();
@@ -1528,7 +1529,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
   try {
     const { nombre_persona, apellido, email, telefono, business_name, password, horarios, duracion_turno, plan, ref } = req.body;
     const modoAgenda = req.body.modo_agenda || "normal";
-    if (!["normal", "presupuesto"].includes(modoAgenda) || (modoAgenda === "presupuesto" && process.env.QUOTE_BOOKING_ENABLED !== "true")) return res.status(400).json({success:false,error:"Este tipo de agenda todavía no está habilitado."});
+    if (!["normal", "presupuesto"].includes(modoAgenda) || (modoAgenda === "presupuesto" && !quoteBookingEnabled)) return res.status(400).json({success:false,error:"Este tipo de agenda todavía no está habilitado."});
     const rubros = req.body.rubros === undefined ? null : validCategories(req.body.rubros, false);
     if (req.body.rubros !== undefined && !rubros)
       return res.status(400).json({success:false,error:"Elegí un solo rubro para tu negocio."});
@@ -1599,7 +1600,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       codigo_expiry,
       rubro: rubros?.[0] || null,
       slug_solicitado: requestedSlug,
-      ...(process.env.QUOTE_BOOKING_ENABLED === "true" ? {modo_agenda:modoAgenda} : {}),
+      ...(quoteBookingEnabled ? {modo_agenda:modoAgenda} : {}),
     }], { onConflict: "email" });
 
     if (error) throw error;
@@ -1673,7 +1674,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       telefono:           pendiente.telefono           || null,
       business_name:      pendiente.business_name,
       ...(pendiente.rubro ? {rubro:pendiente.rubro} : {}),
-      ...(process.env.QUOTE_BOOKING_ENABLED === "true" ? {modo_agenda:pendiente.modo_agenda || "normal"} : {}),
+      ...(quoteBookingEnabled ? {modo_agenda:pendiente.modo_agenda || "normal"} : {}),
       slug,
       password:           pendiente.password_hash,
       plan:               planFinal,
@@ -2345,7 +2346,7 @@ const { data: user, error } = await supabase.from("usuarios")
   .select(
     "slug, business_name, horarios, excepciones, duracion_turno, capacidad_por_turno, " +
     "metodo_pago, porcentaje_sena, mp_access_token, activo, plan, estado_suscripcion, " +
-    "fecha_vencimiento, tema, logo_url, acepta_transferencia, acepta_efectivo, datos_bancarios, telefono, agenda_sin_pagos" + (process.env.QUOTE_BOOKING_ENABLED === "true" ? ",modo_agenda" : "")
+    "fecha_vencimiento, tema, logo_url, acepta_transferencia, acepta_efectivo, datos_bancarios, telefono, agenda_sin_pagos, modo_agenda"
   )
   .eq("slug", slug)
   .maybeSingle();
@@ -2436,7 +2437,7 @@ const { data: user, error } = await supabase.from("usuarios")
       negocio: {
         slug:                user.slug,
         business_name:       user.business_name,
-        modo_agenda:         process.env.QUOTE_BOOKING_ENABLED === "true" ? user.modo_agenda || "normal" : "normal",
+        modo_agenda:         user.modo_agenda || "normal",
         telefono:            user.telefono || null,
         horarios:            horariosPublicos         || {},
         excepciones:         excepcionesPublicas      || [],
@@ -2778,6 +2779,11 @@ app.get("/servicios/:slug", async (req, res) => {
     const slug = cleanSlug(req.params.slug);
     const { equipo_id } = req.query;
     if (!slug) return res.status(400).json({ success: false, error: "Slug inválido." });
+    if (!quoteBookingEnabled) {
+      const { data: negocio, error: negocioError } = await supabase.from("usuarios").select("modo_agenda").eq("slug", slug).maybeSingle();
+      if (negocioError) throw negocioError;
+      if (negocio?.modo_agenda === "presupuesto") return res.status(404).json({ success: false, error: "Negocio no encontrado." });
+    }
 
     // "Cualquiera" puede ofrecer la unión de los servicios asignados al
     // equipo activo, pero no servicios que nadie tiene configurados.
@@ -2901,7 +2907,7 @@ function validarExtraBody({ nombre, precio }) {
 const PRECIO_MINIMO_SERVICIO = 2500; // mismo piso que usa el form en ServiciosManager.tsx
 
 async function esAgendaPresupuesto(slug) {
-  if (process.env.QUOTE_BOOKING_ENABLED !== "true") return false;
+  if (!quoteBookingEnabled) return false;
   const { data, error } = await supabase.from("usuarios").select("modo_agenda").eq("slug", slug).maybeSingle();
   if (error) throw error;
   return data?.modo_agenda === "presupuesto";

@@ -21,7 +21,6 @@ const Internal = lazy(() => import("./migrated/public/AdminStats"))
 const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))
 const BusinessProfile = lazy(() => import("./pages/BusinessProfile"))
-const Consultations = lazy(() => import("./pages/Consultations"))
 const QuoteAvailability = lazy(() => import("./pages/QuoteAvailability"))
 
 function PanelRoute() {
@@ -29,7 +28,7 @@ function PanelRoute() {
 }
 function LegacyConsultationsRoute() {
   const location = useLocation()
-  if (!appConfig.quoteBookingEnabled) return <Consultations />
+  if (!appConfig.quoteBookingEnabled) return <Navigate to="/browse" replace />
   const business = isBusinessSession()
   if (!storedSessionToken()) {
     const login = new URLSearchParams({ tipo: business ? "negocio" : "usuario", volver: `/consultas${location.search}` })
@@ -61,7 +60,7 @@ function BookingRoute() {
   const [error, setError] = React.useState(false)
   const [retry, setRetry] = React.useState(0)
   React.useEffect(() => {
-    if (!appConfig.quoteBookingEnabled || !slug) return
+    if (!slug) return
     const controller = new AbortController(); setBusiness(null); setError(false)
     fetch(`${appConfig.apiUrl}/negocio/${encodeURIComponent(slug)}`, { signal: controller.signal, cache: "no-store" }).then(async response => {
       const data = await response.json()
@@ -70,10 +69,13 @@ function BookingRoute() {
     }).catch(() => { if (!controller.signal.aborted) setError(true) })
     return () => controller.abort()
   }, [slug, retry])
-  if (appConfig.quoteBookingEnabled && slug) {
+  if (slug) {
     if (error) return <main className="app-page"><section className="app-card"><h1>No pudimos abrir la agenda</h1><button onClick={() => setRetry(value => value + 1)}>Reintentar</button></section></main>
     if (!business) return <BrandPreloader />
-    if (!business.suspendido && business.modo_agenda === "presupuesto") return <QuoteAvailability slug={slug} business={business} />
+    if (business.modo_agenda === "presupuesto") {
+      if (appConfig.quoteBookingEnabled && !business.suspendido) return <QuoteAvailability slug={slug} business={business} />
+      return <main className="app-page"><section className="app-card"><h1>Agenda no disponible por ahora</h1><p>Este tipo de agenda está pausado temporalmente.</p><Link className="app-button" to="/browse">Volver a Browse</Link></section></main>
+    }
   }
   return <Booking {...appConfig.booking} baseUrl={appConfig.apiUrl} manualSlug={slug || ""} useNegocioTheme={true} />
 }

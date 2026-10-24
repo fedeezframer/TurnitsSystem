@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const quoteBookingEnabled = process.env.QUOTE_BOOKING_ENABLED === "true" && process.env.QUOTE_BOOKING_ROLLOUT_ENABLED === "true";
 const active = (v) => v === true || v === "true";
 const result = (r) => {
   if (r.error) throw r.error;
@@ -232,7 +233,7 @@ export function createBrowse({
       supabase
         .from("usuarios")
         .select(
-          "slug,business_name,rubro,activo,plan,estado_suscripcion,fecha_vencimiento" + (process.env.QUOTE_BOOKING_ENABLED === "true" ? ",modo_agenda" : ""),
+          "slug,business_name,rubro,activo,plan,estado_suscripcion,fecha_vencimiento,modo_agenda",
         )
         .in("slug", slugs),
       supabase
@@ -271,7 +272,8 @@ export function createBrowse({
       (n) =>
         active(n.activo) &&
         n.estado_suscripcion !== "suspendido" &&
-        (!n.fecha_vencimiento || Date.parse(n.fecha_vencimiento) > Date.now()),
+        (!n.fecha_vencimiento || Date.parse(n.fecha_vencimiento) > Date.now()) &&
+        (quoteBookingEnabled || n.modo_agenda !== "presupuesto"),
     );
     const branches = result(br) || [],
       members = (result(er) || []).filter(
@@ -298,7 +300,7 @@ export function createBrowse({
           ...p,
           nombre: p.nombre || n.business_name,
           rubro: n.rubro || "",
-          modo_agenda: process.env.QUOTE_BOOKING_ENABLED === "true" ? n.modo_agenda || "normal" : "normal",
+          modo_agenda: n.modo_agenda || "normal",
           latitud: b?.latitud ?? null,
           longitud: b?.longitud ?? null,
           sucursales: [
@@ -982,7 +984,7 @@ export function createBrowse({
         await supabase
           .from("turnos")
           .select(
-            "id,slug,nombre,apellido,email,telefono,fecha,hora,servicio_nombre,equipo_nombre,estado,pago_estado,precio_cobrado,monto_pagado,metodo_pago,tipo_cobro,extras,monto_extras,gestion_token,browse_tipo,browse_cierre,tc_gastados" + (process.env.QUOTE_BOOKING_ENABLED === "true" ? ",presupuesto_detalle" : ""),
+            "id,slug,nombre,apellido,email,telefono,fecha,hora,servicio_nombre,equipo_nombre,estado,pago_estado,precio_cobrado,monto_pagado,metodo_pago,tipo_cobro,extras,monto_extras,gestion_token,browse_tipo,browse_cierre,tc_gastados" + (quoteBookingEnabled ? ",presupuesto_detalle" : ""),
           )
           .eq("id", req.params.id)
           .eq("consumidor_id", req.consumer.id)

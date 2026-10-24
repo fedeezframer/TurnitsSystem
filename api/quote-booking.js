@@ -74,7 +74,7 @@ export function validateReferenceText(value) {
   if (text.length > 3000) fail("El mensaje puede tener hasta 3000 caracteres.");
   return text;
 }
-export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, limiter, guestLimiter = limiter, context, available, multer, payments, webhookSecret = process.env.MP_WEBHOOK_SECRET, enabled = process.env.QUOTE_BOOKING_ENABLED === "true" }) {
+export function createQuoteBooking({ app, supabase, consumerAuth, requireAuth, limiter, guestLimiter = limiter, context, available, multer, payments, webhookSecret = process.env.MP_WEBHOOK_SECRET, enabled = process.env.QUOTE_BOOKING_ENABLED === "true" && process.env.QUOTE_BOOKING_ROLLOUT_ENABLED === "true" }) {
   const route = handler => async (req, res) => {
     try { await handler(req, res); }
     catch (error) { res.status(error.status || (error.promoValidacion || error.code === "P0001" || error.code === "23505" ? 409 : 503)).json({ success: false, error: error.publicMessage || (error.promoValidacion || error.code === "P0001" ? error.message : "No pudimos completar la consulta. Volvé a intentar.") }); }
