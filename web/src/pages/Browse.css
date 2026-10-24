@@ -299,7 +299,7 @@
 }
 .browse-card-photo {
   position: relative;
-  aspect-ratio: 1.75;
+  aspect-ratio: 1.5;
   background: #eaf0e6;
   display: grid;
   place-items: center;
@@ -1953,7 +1953,7 @@
     border-radius: 11px;
   }
   .browse-card-photo {
-    aspect-ratio: 2/1;
+    aspect-ratio: 1.5;
   }
   .browse-card-profile {
     right: 10px;
