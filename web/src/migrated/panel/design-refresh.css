@@ -488,7 +488,10 @@
   color: var(--turnits-ink);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
-  white-space: nowrap;
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .turnits-dashboard-chart-tooltip strong {

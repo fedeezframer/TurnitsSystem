@@ -453,7 +453,12 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                     <div
                         className="turnits-dashboard-chart-tooltip"
                         style={{
-                            left: `${Math.min(94, Math.max(6, (hovered.x / w) * 100))}%`,
+                            left: `${Math.min(100, Math.max(0, (hovered.x / w) * 100))}%`,
+                            transform: hovered.x / w < 0.25
+                                ? "translateX(0)"
+                                : hovered.x / w > 0.75
+                                  ? "translateX(-100%)"
+                                  : "translateX(-50%)",
                             top: `${Math.max(0, hovered.y - 52)}px`,
                         }}
                         aria-live="polite"
