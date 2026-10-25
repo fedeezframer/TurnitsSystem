@@ -149,12 +149,14 @@ function AmbientOrbs({ accentColor }: { accentColor: string }) {
 
 function BottomNavIcon({
   id,
+  label,
   active,
   accentColor,
   onClick,
   navIconos,
 }: {
   id: SeccionId;
+  label: string;
   active: boolean;
   accentColor: string;
   onClick: () => void;
@@ -162,21 +164,27 @@ function BottomNavIcon({
 }) {
   return (
     <motion.button
+      className="turnits-bottom-nav-button"
       onClick={onClick}
       whileTap={{ scale: 0.9 }}
-      aria-label={id}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
       style={{
         border: "none",
-        background: "transparent",
+        background: active ? "#edf4e9" : "transparent",
         display: "flex",
+        flex: "1 1 0",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        width: 44,
-        height: 44,
-        borderRadius: 14,
+        gap: 4,
+        minWidth: 0,
+        height: 52,
+        padding: "5px 2px",
+        borderRadius: 12,
         cursor: "pointer",
-        color: active ? accentColor : "#94a3b8",
-        flexShrink: 0,
+        color: active ? accentColor : "#68736a",
+        fontFamily: "inherit",
       }}
     >
       <NavGlyph
@@ -185,35 +193,41 @@ function BottomNavIcon({
         size={22}
         strokeWidth={active ? 2.2 : 1.8}
       />
+      <span className="turnits-bottom-nav-label">{label}</span>
     </motion.button>
   );
 }
 
-function BottomNavMore({ onClick }: { onClick: () => void }) {
+function BottomNavMore({ onClick, active = false }: { onClick: () => void; active?: boolean }) {
   return (
     <motion.button
+      className="turnits-bottom-nav-button"
       onClick={onClick}
       whileTap={{ scale: 0.9 }}
-      aria-label="Más opciones"
+      aria-label="Más"
+      aria-current={active ? "page" : undefined}
       style={{
         border: "none",
-        background: "transparent",
+        background: active ? "#edf4e9" : "transparent",
         display: "flex",
+        flex: "1 1 0",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        width: 44,
-        height: 44,
-        borderRadius: 14,
+        gap: 4,
+        minWidth: 0,
+        height: 52,
+        padding: "5px 2px",
+        borderRadius: 12,
         cursor: "pointer",
-        color: "#94a3b8",
-        flexShrink: 0,
+        color: active ? "#173e1c" : "#68736a",
+        fontFamily: "inherit",
       }}
     >
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-        <circle cx="5" cy="12" r="1.8" />
-        <circle cx="12" cy="12" r="1.8" />
-        <circle cx="19" cy="12" r="1.8" />
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <path d="M4 6h16M4 12h16M4 18h16" />
       </svg>
+      <span className="turnits-bottom-nav-label">Más</span>
     </motion.button>
   );
 }
@@ -354,43 +368,32 @@ function NavButton({
 }) {
   return (
     <motion.button
+      className="turnits-panel-nav-button"
       onClick={onClick}
       whileHover={{ x: active ? 0 : 2 }}
       whileTap={{ scale: 0.97 }}
+      aria-current={active ? "page" : undefined}
       style={{
         position: "relative",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        gap: 11,
+        justifyContent: "flex-start",
+        gap: 10,
         padding: "10px 12px",
-        borderRadius: 12,
-        border: "none",
-        background: "transparent",
-        color: active ? accentColor : "#475569",
+        borderRadius: 10,
+        border: active ? "1px solid #dce8d3" : "1px solid transparent",
+        background: active ? "#edf4e9" : "transparent",
+        color: active ? "#173e1c" : "#68736a",
         fontSize: 14,
-        fontWeight: active ? 700 : 500,
+        fontWeight: active ? 650 : 500,
         cursor: "pointer",
-        textAlign: "center",
+        textAlign: "left",
         overflow: "hidden",
         fontFamily: "inherit",
       }}
     >
-      {active && (
-        <motion.div
-          layoutId="navActivePill"
-          transition={{ type: "spring", stiffness: 420, damping: 34 }}
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: 12,
-            background: `linear-gradient(90deg, ${accentColor}22, ${accentColor}08)`,
-            border: `1px solid ${accentColor}2e`,
-          }}
-        />
-      )}
       <NavGlyph id={item.id} navIconos={navIconos} size={18} />
-      <span style={{ position: "relative" }}>{item.label}</span>
+      <span>{item.label}</span>
     </motion.button>
   );
 }

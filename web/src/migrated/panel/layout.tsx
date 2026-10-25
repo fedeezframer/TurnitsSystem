@@ -22,7 +22,6 @@ import { OnboardingNube } from "./onboarding"
 import { AmbientOrbs, BrandMark, NavButton, BottomNavIcon, BottomNavMore } from "./navigation"
 import { MenuFooter as OwnerMenuFooter, MenuCuentaPagoRetorno, NotificacionesFlotantes } from "./cuenta"
 import { SeccionInicio, TurnitsDashboardSidePanel } from "./dashboard"
-import { CopyTurnosButton } from "./inicio"
 import { PerfilNegocio } from "./profile-section"
 import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, PagosSettingsGuard, MercadoPagoConexion, ConfigPagos, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
 import Consultations from "../../pages/Consultations"
@@ -329,6 +328,7 @@ function TurnitsPanel_Inner(props: any) {
             {/* ─────────────── SIDEBAR (desktop) ─────────────── */}
             {!isMobile && (
                 <div
+                    className="turnits-sidebar"
                     style={
                         {
                             width: 252,
@@ -354,6 +354,7 @@ function TurnitsPanel_Inner(props: any) {
                     <AmbientOrbs accentColor={accentColor} />
 
                     <div
+                        className="turnits-sidebar-brand"
                         style={{
                             position: "relative",
                             marginBottom: 30,
@@ -459,6 +460,7 @@ function TurnitsPanel_Inner(props: any) {
                         onClick={() => setMenuMobileAbierto(false)}
                     >
                         <motion.div
+                            className="turnits-mobile-menu-sheet"
                             initial={{ y: "100%" }}
                             animate={{ y: 0 }}
                             exit={{ y: "100%" }}
@@ -909,14 +911,16 @@ function TurnitsPanel_Inner(props: any) {
                 ilustracionRendimientoVacio={ilustracionRendimientoVacio}
             /></OwnerOnly>
 
-            {/* ─────────────── NAV FLOTANTE (mobile, estilo Instagram) ─── */}
+            {/* Navegación móvil basada en las cinco tareas principales. */}
             {isMobile && seccionActiva !== "consultas" && (
-                <div
+                <nav
+                    className="turnits-mobile-bottom-nav"
+                    aria-label="Navegación del panel"
                     style={{
                         position: "fixed",
                         left: 0,
                         right: 0,
-                        bottom: "calc(14px + env(safe-area-inset-bottom, 0px))",
+                        bottom: 0,
                         display: "flex",
                         justifyContent: "center",
                         zIndex: 60,
@@ -924,61 +928,58 @@ function TurnitsPanel_Inner(props: any) {
                     }}
                 >
                     <div
+                        className="turnits-mobile-bottom-nav-items"
                         style={{
                             pointerEvents: "auto",
                             display: "flex",
                             alignItems: "center",
                             gap: 4,
-                            background: "#ffffff",
-                            borderRadius: 30,
-                            padding: "8px 12px",
-                            boxShadow:
-                                "0 10px 30px rgba(15,23,42,0.18), 0 2px 10px rgba(15,23,42,0.08)",
-                            border: "1px solid #eef1f6",
+                            width: "min(100%, 520px)",
+                            background: "rgba(255,255,255,.97)",
+                            borderRadius: "18px 18px 0 0",
+                            padding: "8px 10px calc(8px + env(safe-area-inset-bottom, 0px))",
+                            boxShadow: "0 -6px 24px rgba(26,49,25,.08)",
+                            border: "1px solid #e3e9e1",
                         }}
                     >
                         <BottomNavIcon
                             id="inicio"
+                            label="Inicio"
                             active={seccionActiva === "inicio"}
                             accentColor={accentColor}
                             onClick={() => irA("inicio")}
                             navIconos={navIconos}
                         />
                         <BottomNavIcon
-                            id="servicios"
-                            active={seccionActiva === "servicios"}
-                            accentColor={accentColor}
-                            onClick={() => irA("servicios")}
-                            navIconos={navIconos}
-                        />
-                        <div
-                            style={{
-                                margin: "0 2px",
-                                display: "flex",
-                                alignItems: "center",
-                            }}
-                        >
-                            <CopyTurnosButton
-                                customIcon={iconos.botonCentral}
-                                checkIcon={iconos.botonCentralCheck}
-                                accentColor="#065f46"
-                                urlColor={accentColor}
-                                successText="¡Copiado!"
-                                size={48}
-                            />
-                        </div>
-                        <BottomNavIcon
                             id="agenda"
+                            label="Agenda"
                             active={seccionActiva === "agenda"}
                             accentColor={accentColor}
                             onClick={() => irA("agenda")}
                             navIconos={navIconos}
                         />
+                        <BottomNavIcon
+                            id="clientes"
+                            label="Clientes"
+                            active={seccionActiva === "clientes"}
+                            accentColor={accentColor}
+                            onClick={() => irA("clientes")}
+                            navIconos={navIconos}
+                        />
+                        <BottomNavIcon
+                            id="finanzas"
+                            label="Cobros"
+                            active={seccionActiva === "finanzas"}
+                            accentColor={accentColor}
+                            onClick={() => irA("finanzas")}
+                            navIconos={navIconos}
+                        />
                         <BottomNavMore
+                            active={menuMobileAbierto}
                             onClick={() => setMenuMobileAbierto(true)}
                         />
                     </div>
-                </div>
+                </nav>
             )}
             {appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin && seccionActiva !== "consultas" && <>
                 {avisoMensaje && <div className="panel-message-notice" role="status">

@@ -16,13 +16,12 @@ import LoadingRunner from "../components/LoadingRunner";
 import "./Browse.css";
 import "../migrated/panel/design-refresh.css";
 
-type View = "inicio" | "ofertas" | "agenda" | "buscar" | "mensajes" | "coins" | "perfil";
+type View = "inicio" | "ofertas" | "agenda" | "buscar" | "favoritos" | "mensajes" | "coins" | "perfil";
 const NAV_LABELS = {
-  inicio: "Inicio",
-  ofertas: "Ofertas",
-  agenda: "Tu agenda",
-  buscar: "Buscar",
-  mensajes: "Mensajes",
+  inicio: "Explorar",
+  agenda: "Mis turnos",
+  favoritos: "Guardados",
+  perfil: "Perfil",
 };
 const PROVIDED_ICONS: Record<string, string> = {
   inicio: "bx_home.svg",
@@ -106,6 +105,7 @@ export function BrowseIcon({
         <path d="M7 10V7a5 5 0 0 1 10 0v3" strokeWidth="2.4"/><path d="M12 15v3" strokeWidth="3.1"/><circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none"/>
       </>
     ),
+    guardados: <path d="M20.8 8.7c0 5.6-8.8 11.2-8.8 11.2S3.2 14.3 3.2 8.7a4.6 4.6 0 0 1 8.8-1.8 4.6 4.6 0 0 1 8.8 1.8Z" />,
     correo: (
       <>
         <rect x="2" y="4" width="20" height="16" rx="1" />
@@ -360,6 +360,7 @@ function BrowseContent() {
       "ofertas",
       "agenda",
       "buscar",
+    "favoritos",
       "mensajes",
       "coins",
       "perfil",
@@ -732,15 +733,15 @@ function BrowseContent() {
           />
         </Link>
         <nav className="browse-dock" aria-label="Navegación de Browse">
-          {(["inicio", "ofertas", "agenda", "buscar"] as const).map((v) => (
+          {(["inicio", "agenda", "favoritos", "perfil"] as const).map((v) => (
             <button
               key={v}
-              className={view === v ? "selected" : ""}
+              className={`${view === v ? "selected" : ""}${v === "perfil" ? " browse-nav-profile" : ""}`}
               aria-label={NAV_LABELS[v]}
               aria-current={view === v ? "page" : undefined}
               onClick={() => changeView(v)}
             >
-              {v === "ofertas" ? <BrowseFlame active={view === v} /> : <BrowseIcon name={v} />}
+              <BrowseIcon name={v === "favoritos" ? "guardados" : v} />
               <span className="browse-nav-label">{NAV_LABELS[v]}</span>
             </button>
           ))}
@@ -783,8 +784,14 @@ function BrowseContent() {
               <>
                 {searchBox}
                 <section className="browse-home-intro">
-                  <h1>¡Hola, {me?.perfil?.nombre_persona || "bienvenido"}!</h1>
-                  <p>Explorá los servicios y ofertas de hoy</p>
+                  <div>
+                    <h1>¡Hola, {me?.perfil?.nombre_persona || "bienvenido"}!</h1>
+                    <p>Explorá los servicios y ofertas de hoy</p>
+                  </div>
+                  <button className="browse-offers-entry" type="button" onClick={() => changeView("ofertas")}>
+                    <BrowseFlame active={false} />
+                    <span>Ver ofertas</span>
+                  </button>
                 </section>
                 <div className="browse-home-layout">
                   {recent && recentService ? (
@@ -925,20 +932,7 @@ function BrowseContent() {
                     )}
                   </section>
                 </div>
-                <section className="browse-favorites" aria-labelledby="browse-favorites-title">
-                  <h2 id="browse-favorites-title">Tus negocios favoritos</h2>
-                  <p>Solo vos podés ver tu lista.</p>
-                  {favorites.loading ? <p role="status">Cargando favoritos…</p> : favorites.error ? <p role="alert">{favorites.error} <button type="button" onClick={favorites.retry}>Reintentar</button></p> : (
-                    <div className="browse-favorite-businesses">{favorites.favorites.map((slug: string) => {
-                      const business = catalog.negocios.find((item: any) => item.slug === slug);
-                      const name = business?.nombre || slug;
-                      return <article key={slug}><Avatar name={name} src={business?.foto_perfil_url} /><Link to={`/perfil/${encodeURIComponent(slug)}`}>{name}</Link><FavoriteButton slug={slug} name={name} /></article>;
-                    })}</div>
-                  )}
-                  {!favorites.loading && !favorites.error && !favorites.favorites.length && <p>Guardá los negocios que te gustan tocando el corazón.</p>}
-                </section>
                 <section className="browse-discovery">
-                  {!!favorites.services.length && <><h2>Tus servicios favoritos</h2><div className="browse-card-grid">{catalog.servicios.filter((service: any) => favorites.services.includes(service.id)).map((service: any) => <Card key={service.id} item={locateService(service)} location={location} />)}</div></>}
                   <h2>Servicios que pueden interesarte</h2>
                   <p>Según tus intereses, favoritos y reservas anteriores</p>
                   <div className="browse-card-grid">
@@ -950,6 +944,59 @@ function BrowseContent() {
                     <Empty>
                       Todavía no hay servicios publicados. Volvé a mirar pronto.
                     </Empty>
+                  )}
+                </section>
+              </>
+            )}
+            {view === "favoritos" && (
+              <>
+                <div className="browse-view-heading">
+                  <h1>Guardados</h1>
+                  <p>Negocios y servicios que querés tener a mano.</p>
+                </div>
+                {favorites.error && (
+                  <p className="browse-error" role="alert">
+                    {favorites.error} <button type="button" onClick={favorites.retry}>Reintentar</button>
+                  </p>
+                )}
+                <section className="browse-favorites" aria-labelledby="browse-favorites-title">
+                  <div className="browse-section-heading">
+                    <div>
+                      <h2 id="browse-favorites-title">Negocios guardados</h2>
+                      <p>Solo vos podés ver esta lista.</p>
+                    </div>
+                  </div>
+                  {favorites.loading ? (
+                    <p role="status">Cargando favoritos…</p>
+                  ) : favorites.favorites.length ? (
+                    <div className="browse-favorite-businesses">
+                      {favorites.favorites.map((slug: string) => {
+                        const business = catalog.negocios.find((item: any) => item.slug === slug);
+                        const name = business?.nombre || slug;
+                        return (
+                          <article key={slug}>
+                            <Avatar name={name} src={business?.foto_perfil_url} />
+                            <Link to={`/perfil/${encodeURIComponent(slug)}`}>{name}</Link>
+                            <FavoriteButton slug={slug} name={name} />
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p>Guardá negocios tocando el corazón de sus perfiles.</p>
+                  )}
+                </section>
+                <section className="browse-discovery" aria-labelledby="browse-saved-services-title">
+                  <h2 id="browse-saved-services-title">Servicios guardados</h2>
+                  <div className="browse-card-grid">
+                    {catalog.servicios
+                      .filter((service: any) => favorites.services.includes(service.id))
+                      .map((service: any) => (
+                        <Card key={service.id} item={locateService(service)} location={location} />
+                      ))}
+                  </div>
+                  {!favorites.services.length && (
+                    <Empty>Guardá servicios desde Browse y van a aparecer acá.</Empty>
                   )}
                 </section>
               </>

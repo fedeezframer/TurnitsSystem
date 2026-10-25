@@ -3753,16 +3753,16 @@ type SeccionId =
 
 const NAV_ITEMS: { id: SeccionId; label: string }[] = [
     { id: "inicio", label: "Inicio" },
-    { id: "servicios", label: "Servicios" },
-    { id: "consultas", label: "Consultas" },
-    { id: "clientes", label: "Clientes" },
     { id: "agenda", label: "Agenda" },
     { id: "horarios", label: "Horarios" },
+    { id: "clientes", label: "Clientes" },
+    { id: "servicios", label: "Servicios" },
+    { id: "equipo", label: "Equipo" },
     { id: "pagos", label: "Pagos" },
     { id: "finanzas", label: "Finanzas" },
     { id: "temas", label: "Temas" },
-    { id: "equipo", label: "Equipo" },
-    { id: "perfil", label: "Perfil" },
+    { id: "consultas", label: "Consultas" },
+    { id: "perfil", label: "Mi negocio" },
 ]
 
 function MenuUserAvatar({

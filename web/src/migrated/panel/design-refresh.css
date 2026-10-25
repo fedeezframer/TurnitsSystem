@@ -204,3 +204,193 @@
     transition: none !important;
   }
 }
+
+/* Navigation from the Turnits concept: clear destinations, stable labels. */
+.turnits-sidebar {
+  width: 224px !important;
+  background: var(--turnits-surface) !important;
+  border-right-color: var(--turnits-line) !important;
+  padding: 24px 14px 16px !important;
+}
+
+.turnits-sidebar > div:first-child {
+  display: none !important;
+}
+
+.turnits-sidebar-brand {
+  justify-content: flex-start !important;
+  margin: 0 0 22px !important;
+}
+
+.turnits-panel-nav-button {
+  justify-content: flex-start !important;
+  text-align: left !important;
+  min-height: 40px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  transition: background-color 150ms ease, color 150ms ease !important;
+}
+
+.turnits-panel-nav-button:hover {
+  background: #f4f6f2 !important;
+}
+
+.turnits-panel-nav-button[aria-current="page"] {
+  color: var(--turnits-forest) !important;
+  background: var(--turnits-soft) !important;
+  border-color: #dce8d3 !important;
+  font-weight: 650 !important;
+}
+
+.turnits-mobile-menu-sheet {
+  background: var(--turnits-surface) !important;
+  border: 1px solid var(--turnits-line);
+  box-shadow: 0 -18px 55px rgba(26, 49, 25, 0.14);
+}
+
+.turnits-mobile-bottom-nav-items {
+  border-color: var(--turnits-line) !important;
+  border-bottom: 0 !important;
+  backdrop-filter: blur(16px);
+}
+
+.turnits-bottom-nav-button {
+  transition: background-color 150ms ease, color 150ms ease !important;
+}
+
+.turnits-bottom-nav-button[aria-current="page"] {
+  color: var(--turnits-forest) !important;
+  background: var(--turnits-soft) !important;
+}
+
+.turnits-bottom-nav-label {
+  position: relative;
+  font-size: 10px;
+  font-weight: 550;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.browse-home-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.browse-offers-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 14px;
+  border: 1px solid #dce8d3;
+  border-radius: 12px;
+  background: var(--turnits-soft);
+  color: var(--turnits-forest);
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.browse-offers-entry .browse-flame {
+  width: 19px !important;
+  height: 19px !important;
+}
+
+.browse-view-heading {
+  margin-bottom: 20px;
+}
+
+.browse-view-heading p,
+.browse-section-heading p {
+  margin-top: 5px;
+  color: var(--turnits-muted);
+}
+
+.browse-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1023px) {
+  .browse-header-actions button[aria-label="Mi perfil"] {
+    display: none !important;
+  }
+
+  .browse-dock {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    transform: none !important;
+    width: min(100%, 560px) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 auto !important;
+    padding: 7px 8px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+    justify-content: space-between !important;
+    gap: 4px !important;
+    border: 1px solid var(--turnits-line) !important;
+    border-bottom: 0 !important;
+    border-radius: 18px 18px 0 0 !important;
+    background: rgba(255, 255, 255, 0.97) !important;
+    box-shadow: 0 -6px 24px rgba(26, 49, 25, 0.08) !important;
+    backdrop-filter: blur(16px);
+  }
+
+  .browse-dock button {
+    flex: 1 1 0 !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+    min-height: 54px !important;
+    padding: 6px 2px !important;
+    border-radius: 12px !important;
+    color: var(--turnits-muted) !important;
+    font-size: 10px !important;
+  }
+
+  .browse-dock button.selected {
+    background: var(--turnits-soft) !important;
+    color: var(--turnits-forest) !important;
+  }
+
+  .browse-dock .browse-glyph,
+  .browse-dock .browse-flame {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .browse-nav-label {
+    display: block !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    font-weight: 600;
+  }
+
+  .browse-main {
+    padding-bottom: 116px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .browse-home-intro {
+    align-items: flex-start;
+  }
+
+  .browse-offers-entry {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .browse-dock .browse-nav-profile {
+    display: none !important;
+  }
+}
