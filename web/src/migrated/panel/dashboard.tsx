@@ -2790,7 +2790,7 @@ function TurnitsDashboard_Content({
                 />
                 <TurnitsDashboard_MetricCard
                     cardStyle={metricCardMobile}
-                    label="Clientes"
+                    label="Clientes nuevos"
                     value={clientesActuales}
                     trend={TurnitsDashboard_percent(
                         clientesActuales,
