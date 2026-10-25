@@ -279,7 +279,7 @@ function TurnitsPanel_Inner(props: any) {
                 ...(isMobile
                     ? {
                           height: "auto",
-                          minHeight: 0,
+                          minHeight: "100dvh",
                           overflow: "visible",
                           position: "relative" as const,
                       }
