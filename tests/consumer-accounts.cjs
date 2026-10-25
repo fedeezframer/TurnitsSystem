@@ -210,6 +210,7 @@ async function call(method, url, body = {}, headers = {}) {
   return { status, body: output };
 }
 (async () => {
+  const { validNewPassword, PASSWORD_ERROR } = await import("../web/src/shared/password-policy.js");
   const { createConsumerAccounts, consumerIdentity } = await import(
     pathToFileURL(path.join(__dirname, "../api/consumer-accounts.js"))
   );
@@ -240,6 +241,7 @@ async function call(method, url, body = {}, headers = {}) {
     console,
     Buffer,
     consumerAccounts: accounts,
+    quoteBookingEnabled: false,
     consumerIdentity,
     validCategories,
     limiterAuth: pass,
@@ -251,7 +253,8 @@ async function call(method, url, body = {}, headers = {}) {
         .trim()
         .toLowerCase(),
     validateEmail: (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e),
-    validatePassword: (p) => p?.length >= 6,
+    validatePassword: validNewPassword,
+    PASSWORD_ERROR,
     cleanPhone: (p) => p.replace(/\D/g, ""),
     validatePhone: (p) => /^\d{7,15}$/.test(p),
     BCRYPT_ROUNDS: 4,
@@ -279,6 +282,7 @@ async function call(method, url, body = {}, headers = {}) {
     crearNotificacion: () => {},
     generarTips: () => {},
     PANEL_URL: "https://turnits.com/panel",
+    WEB_URL: "https://turnits.com",
   });
   for (const url of ["/registro/iniciar", "/registro/verificar", "/login"])
     captureRoute("post", url, ctx);
@@ -321,7 +325,7 @@ async function call(method, url, body = {}, headers = {}) {
     apellido: "Prueba",
     email: "ana@test.example",
     telefono: "+54 351 5555555",
-    password: "testing123",
+    password: "testing123456",
     intereses: ["barberia", "vehiculos"],
   };
   const post = (url, body) => call("POST", url, body);
@@ -541,7 +545,7 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/auth/reset-password", {
         token: resetToken,
-        new_password: "updated123",
+        new_password: "updated123456",
       })
     ).status,
     200,
@@ -550,13 +554,13 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/auth/reset-password", {
         token: resetToken,
-        new_password: "updated123",
+        new_password: "updated123456",
       })
     ).status,
     400,
   );
   assert.equal(
-    (await post("/login", { email: data.email, password: "updated123" })).body
+    (await post("/login", { email: data.email, password: "updated123456" })).body
       .rol,
     "consumidor",
   );
@@ -729,7 +733,7 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/login", {
         email: data.email,
-        password: "updated123",
+        password: "updated123456",
         tipo_cuenta: "usuario",
       })
     ).body.rol,
@@ -862,7 +866,7 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/auth/reset-password", {
         token: ownerReset,
-        new_password: "new-owner",
+        new_password: "new-owner-password",
       })
     ).status,
     200,
@@ -872,7 +876,7 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/login", {
         email: pending.email,
-        password: "new-owner",
+        password: "new-owner-password",
         tipo_cuenta: "negocio",
       })
     ).body.slug,
@@ -882,7 +886,7 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/login", {
         email: pending.email,
-        password: "new-owner",
+        password: "new-owner-password",
         tipo_cuenta: "usuario",
       })
     ).status,
@@ -893,7 +897,7 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/login", {
         email: pending.email,
-        password: "new-owner",
+        password: "new-owner-password",
         tipo_cuenta: "usuario",
       })
     ).body.rol,
@@ -903,7 +907,7 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/login", {
         email: pending.email,
-        password: "new-owner",
+        password: "new-owner-password",
         tipo_cuenta: "negocio",
       })
     ).body.slug,
@@ -918,7 +922,7 @@ async function call(method, url, body = {}, headers = {}) {
     (
       await post("/auth/reset-password", {
         token: expiredToken,
-        new_password: "updated456",
+        new_password: "updated456789",
       })
     ).status,
     400,

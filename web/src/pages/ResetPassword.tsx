@@ -1,3 +1,4 @@
+import { validNewPassword, PASSWORD_ERROR } from "../shared/password-policy.js";
 import React from "react"
 import { Link } from "react-router"
 import { appConfig } from "../config"
@@ -11,7 +12,7 @@ export default function ResetPassword() {
   async function submit(e: React.FormEvent) {
     e.preventDefault(); if (busy) return
     if (!token) { setError("El enlace no tiene un token. Solicitá otro desde el login."); return }
-    if (password.length<6) { setError("La contraseña debe tener al menos 6 caracteres."); return }
+    if (!validNewPassword(password)) { setError(PASSWORD_ERROR); return }
     if (password!==confirmation) { setError("Las contraseñas no coinciden."); return }
     setBusy(true);setError("")
     try {

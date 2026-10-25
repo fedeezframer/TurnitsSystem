@@ -1,3 +1,4 @@
+import { validNewPassword, PASSWORD_ERROR } from "../shared/password-policy.js";
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
@@ -50,11 +51,7 @@ function detailsError(fields: Fields, type: AccountType, phone: string) {
     return "Revisá tu correo electrónico.";
   if (!/^[0-9]{7,15}$/.test(phone))
     return "Elegí el país e ingresá tu teléfono con código de área.";
-  if (
-    fields.password.length < 6 ||
-    new TextEncoder().encode(fields.password).length > 72
-  )
-    return "La contraseña debe tener al menos 6 caracteres y no superar 72 bytes.";
+  if (!validNewPassword(fields.password)) return PASSWORD_ERROR;
   if (
     type === "negocio" &&
     (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(fields.usuario) ||

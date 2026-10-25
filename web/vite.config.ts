@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from "vite"
 import react from "@vitejs/plugin-react"
+import { createHash } from "node:crypto"
 import { startupPreloaderHtml } from "./src/shared/brand-preloader.ts"
 import { sessionStartupHtml, sessionPreloadHtml } from "./src/shared/session-startup.ts"
 
@@ -42,7 +43,13 @@ export default defineConfig(({ mode, command }) => {
           assets.panel = collect("/src/migrated/panel/index.tsx")
           assets.browse = collect("/src/pages/Browse.tsx")
         }
-        return html.replace("<!-- TURNITS_SESSION_PRELOAD -->", sessionPreloadHtml(assets))
+        const page = html.replace("<!-- TURNITS_SESSION_PRELOAD -->", sessionPreloadHtml(assets))
+        if (!ctx.bundle) return page
+        const hashes = [...page.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+          .filter(([, attrs, code]) => !/\bsrc\s*=/i.test(attrs) && code.trim())
+          .map(([, , code]) => `'sha256-${createHash("sha256").update(code).digest("base64")}'`)
+        const policy = `script-src 'self' ${hashes.join(" ")} https://accounts.google.com https://apis.google.com https://sdk.mercadopago.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'`
+        return page.replace(/<head>/i, `<head>\n    <meta http-equiv="Content-Security-Policy" content="${policy}" />`)
       },
     },
   }],

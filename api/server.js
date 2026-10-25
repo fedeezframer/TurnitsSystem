@@ -22,11 +22,17 @@ import { createQuotePayments } from "./quote-payments.js";
 import { createReferenceCleanup } from "./quote-references.js";
 import { validateEnvironment, stagingMiddleware } from "./environment.js";
 import path from "node:path";
+import { createReceiptAccess } from "./receipt-access.js";
+import { securityHeaders, allowedOrigins, originGuard } from "./http-security.js";
+import { validNewPassword, PASSWORD_ERROR } from "../web/src/shared/password-policy.js";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
 // ══════════════════════════════════════════════════════════════
 const app = express();
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use(securityHeaders);
 validateEnvironment();
 app.use(stagingMiddleware());
 if (process.env.APP_ENV === "staging") {
@@ -111,13 +117,6 @@ const PENDIENTE_URL      = process.env.PENDING_URL                || "https://tu
 const ERROR_URL          = process.env.ERROR_URL                  || "https://turnits.com/error";
 const RENOVACION_SUCCESS = process.env.RENOVACION_SUCCESS_URL     || `${PANEL_URL}?status=renovacion_ok`;
 const RENOVACION_CANCEL  = process.env.RENOVACION_CANCEL_URL      || `${PANEL_URL}?status=renovacion_cancel`;
-
-// FIX-SEC: orígenes permitidos para el panel/admin (CORS restringido).
-// El widget público de reservas sigue abierto (lo necesita, corre en
-// el sitio de cada negocio en Framer). Las rutas de panel/admin en cambio
-// solo deberían aceptar pedidos desde tu propio dominio.
-const PANEL_ORIGINS = (process.env.PANEL_ORIGINS || "https://turnits.com,https://www.turnits.com")
-  .split(",").map((o) => o.trim()).filter(Boolean);
 
 const CBU_REGEX   = /^\d{22}$/;
 const ALIAS_REGEX = /^[a-zA-Z0-9._-]{6,30}$/;
@@ -431,7 +430,7 @@ async function borrarNegocioCompleto(slug) {
 }
 
 const validateEmail    = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-const validatePassword = (p) => p && p.length >= 6;
+const validatePassword = validNewPassword;
 const validatePhone    = (p) => /^[0-9]{7,15}$/.test(p.toString().replace(/\s/g, ""));
 const cleanPhone = (p) => p.toString().replace(/\s/g, "").replace(/^\+/, "").trim();
 
@@ -931,30 +930,15 @@ const limiterCodigo  = rateLimit({ windowMs: 15 * 60 * 1000, max: 10,  message: 
 
 // ══════════════════════════════════════════════════════════════
 // MIDDLEWARES
-// FIX-SEC: CORS separado. Las rutas públicas (widget de reserva)
-// siguen abiertas a "*", pero las rutas de panel/admin (definidas
-// más abajo con requireAuth / requireAdminKey) exigen que el Origin
-// esté en PANEL_ORIGINS. Esto reduce el impacto de un eventual robo
-// de JWT vía XSS: un sitio de terceros no puede usar el token desde
-// el navegador de la víctima contra las rutas sensibles (CORS no
-// protege contra un atacante pegándole directo a la API con curl,
-// pero sí contra el escenario más común de robo-y-uso-desde-otro-sitio).
-// ══════════════════════════════════════════════════════════════
+// Browser calls require an explicitly allowed application or widget origin.
+// Requests without Origin still require route authentication and authorization.
+const browserOrigins = allowedOrigins(process.env);
+app.use(originGuard(browserOrigins));
 app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
+  origin: (origin, cb) => cb(null, origin || false),
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key", "x-receipt-token"],
 }));
-
-const corsPanel = cors({
-  origin: (origin, cb) => {
-    // Permite llamadas sin Origin (ej. Postman, server-to-server, cron)
-    if (!origin || PANEL_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error("Origen no permitido."));
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
-});
 
 // FIX-CACHE: ninguna respuesta de la API debe quedar cacheada (ni en el
 // navegador, ni en una PWA instalada, ni en un proxy/CDN intermedio). Los
@@ -1047,6 +1031,7 @@ const sucursalesApp=crearSucursales({app,supabase,requireAuth,cleanSlug,isActivo
 const branchPanel=createBranchPanel({app,supabase,requireAuth,cleanSlug});
 const consumerAccounts=createConsumerAccounts({app,supabase,bcrypt,jwt,limiterAuth,limiterCodigo,fetch,
   mailUrl:APPS_SCRIPT_URL,rounds:BCRYPT_ROUNDS,expiry:JWT_EXPIRY});
+const receiptAccess = createReceiptAccess({ secret: () => process.env.JWT_SECRET, supabase, consumerAccounts });
 const browse=createBrowse({app,supabase,jwt,bcrypt,requireAuth,consumerAccounts,limiterAuth,limiterBooking,limiterRead:rateLimit({windowMs:60000,max:90,standardHeaders:true,legacyHeaders:false}),multer,
  configForMember:configNegocioParaEquipo,intervals:obtenerIntervalosDia,available:promoDisponibilidad,validateMember:(slug,id)=>sucursalesApp.validarEquipoReserva(slug,id),
  checkCommissions:agendaPausadaPorComisiones,createCheckout:crearCheckoutOffer,
@@ -1534,7 +1519,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
     if (!validateEmail(email))
       return res.status(400).json({ success: false, error: "Email inválido." });
     if (!validatePassword(password))
-      return res.status(400).json({ success: false, error: "La contraseña debe tener al menos 6 caracteres." });
+      return res.status(400).json({ success: false, error: PASSWORD_ERROR });
     if (telefono && !validatePhone(cleanPhone(telefono)))
       return res.status(400).json({ success: false, error: "Teléfono inválido (7-15 dígitos)." });
     if (business_name.trim().length < 2)
@@ -2235,7 +2220,7 @@ app.post("/admin/reset-password", requireAdminKey, async (req, res) => {
   try {
     const { email, new_password } = req.body;
     if (!email || !new_password) return res.status(400).json({ success: false, error: "Faltan email y new_password." });
-    if (!validatePassword(new_password)) return res.status(400).json({ success: false, error: "Mínimo 6 caracteres." });
+    if (!validatePassword(new_password)) return res.status(400).json({ success: false, error: PASSWORD_ERROR });
     const hash = await bcrypt.hash(String(new_password), BCRYPT_ROUNDS);
     const { error } = await supabase.from("usuarios").update({ password: hash }).eq("email", email.trim().toLowerCase());
     if (error) throw error;
@@ -3745,7 +3730,7 @@ let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, s
 
     invalidateCache(slugClean);
 
-    const comprobanteUrl = `${SUCCESS_URL}?slug=${slugClean}&turno_id=${turno.id}`;
+    const comprobanteUrl = receiptAccess.url(SUCCESS_URL, { slug: slugClean, turnoId: turno.id });
     res.json({ success: true, turno_id: turno.id, comprobante_url: comprobanteUrl, message: "Turno creado con éxito." });
   } catch (e) {
     console.error("Error en /turnos/reservar:", e.message);
@@ -3983,6 +3968,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     res.status(201).json({
       success: true,
       turno_id: turno.id,
+      comprobante_url: receiptAccess.url(PENDIENTE_URL, { slug: slugClean, turnoId: turno.id }),
       estado: "pendiente",
       message: "Tu reserva quedó pendiente de aprobación. Te avisamos apenas el negocio la confirme.",
     });
@@ -3996,85 +3982,9 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
 // TURNOS — COMPROBANTE PÚBLICO
 // GET /turnos/publico/:id
 // ══════════════════════════════════════════════════════════════
-app.get("/turnos/publico/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const slug   = cleanSlug(req.query.slug || "");
-    if (!id || !slug) return res.status(400).json({ success: false, error: "Faltan parámetros." });
+app.get("/turnos/publico/:id", receiptAccess.handler());
+app.get("/turnos/by-payment", receiptAccess.handler(true));
 
-    const { data: turno, error } = await supabase.from("turnos")
-      .select("id, slug, nombre, apellido, email, telefono, fecha, hora, servicio_nombre, equipo_nombre, precio_cobrado, monto_pagado, porcentaje_sena, tipo_cobro, metodo_pago, pago_estado, estado, extras, monto_extras, tc_gastados")
-      .eq("id", id).eq("slug", slug).maybeSingle();
-
-    if (error) throw error;
-    if (!turno) return res.status(404).json({ success: false, error: "Turno no encontrado." });
-
-    // FIX-MONTOS: se agrega "monto_pendiente_local", calculado acá (no
-    // en el front) a partir de tipo_cobro, para que la página de
-    // comprobante nunca tenga que adivinar cuánto falta pagar en el
-    // local. Reglas:
-    //  - tipo_cobro === "sena"  → pagó la seña online, el resto (total
-    //    - pagado) se abona en el local.
-    //  - tipo_cobro === "total" → pagó todo online, no queda nada
-    //    pendiente en el local.
-    //  - tipo_cobro null (efectivo, transferencia del total sin seña
-    //    configurada, o "none")  → si pago_estado es "aprobado" (p.ej.
-    //    transferencia ya verificada) tampoco queda saldo; si no, se
-    //    debe el total en el local.
-    const precioTotal  = Number(turno.precio_cobrado || 0);
-    const montoPagado  = Number(turno.monto_pagado || 0);
-    // monto_pagado ya refleja exactamente lo capturado (seña, total
-    // online, o el total una vez aprobado un pago manual), así que el
-    // saldo pendiente en el local siempre es simplemente la resta.
-    const montoPendienteLocal = Math.max(precioTotal - montoPagado, 0);
-
-    res.json({
-      success: true,
-      turno: {
-        ...turno,
-        monto_pendiente_local: montoPendienteLocal,
-      },
-    });
-  } catch (e) {
-    res.status(500).json({ success: false, error: "Error al obtener el turno." });
-  }
-});
-
-// ══════════════════════════════════════════════════════════════
-// TURNOS — BUSCAR POR PAYMENT_ID
-// GET /turnos/by-payment
-// ══════════════════════════════════════════════════════════════
-app.get("/turnos/by-payment", async (req, res) => {
-  try {
-    const { payment_id, slug } = req.query;
-    if (!payment_id || !slug) return res.status(400).json({ success: false, error: "Faltan parámetros." });
-
-    const { data: turno, error } = await supabase.from("turnos")
-      .select("id, slug, nombre, apellido, email, telefono, fecha, hora, servicio_nombre, equipo_nombre, precio_cobrado, monto_pagado, porcentaje_sena, tipo_cobro, metodo_pago, pago_estado, estado, fecha_pago, extras, monto_extras, tc_gastados")
-      .eq("payment_id", String(payment_id)).eq("slug", cleanSlug(slug)).maybeSingle();
-
-    if (error) throw error;
-    if (!turno) return res.status(404).json({ success: false, error: "Turno no encontrado." });
-
-    // FIX-MONTOS: mismo cálculo que /turnos/publico/:id — ver comentario ahí.
-    const montoPendienteLocal = Math.max(
-      Number(turno.precio_cobrado || 0) - Number(turno.monto_pagado || 0),
-      0
-    );
-
-    res.json({
-      success: true,
-      turno: { ...turno, monto_pendiente_local: montoPendienteLocal },
-    });
-  } catch (e) {
-    res.status(500).json({ success: false, error: "Error al obtener el turno." });
-  }
-});
-
-// ══════════════════════════════════════════════════════════════
-// TURNOS — PENDIENTES DE APROBACIÓN (transferencia / efectivo)
-// GET /admin/turnos-pendientes/:slug
-// ══════════════════════════════════════════════════════════════
 app.get("/admin/turnos-pendientes/:slug", requireAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -7144,7 +7054,7 @@ app.post("/superadmin/negocios", requireAdminKey, async (req, res) => {
       return res.status(400).json({ success: false, error: "Faltan campos obligatorios." });
     }
     if (!validateEmail(email))       return res.status(400).json({ success: false, error: "Email inválido." });
-    if (!validatePassword(password)) return res.status(400).json({ success: false, error: "Contraseña: mínimo 6 caracteres." });
+    if (!validatePassword(password)) return res.status(400).json({ success: false, error: PASSWORD_ERROR });
 
     const planFinal         = PLANES_VALIDOS.includes(plan) ? plan : "gratis";
     const slug              = await generarSlugUnico(business_name.trim());
@@ -7305,7 +7215,7 @@ app.post("/superadmin/admins", requireAdminKey, async (req, res) => {
     const { email, password, nombre } = req.body;
     if (!email || !password) return res.status(400).json({ success: false, error: "Faltan email y password." });
     if (!validateEmail(email)) return res.status(400).json({ success: false, error: "Email inválido." });
-    if (!validatePassword(password)) return res.status(400).json({ success: false, error: "Mínimo 6 caracteres." });
+    if (!validatePassword(password)) return res.status(400).json({ success: false, error: PASSWORD_ERROR });
 
     const hash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
     const { data, error } = await supabase.from("admins").insert([{
@@ -7444,7 +7354,7 @@ app.post("/auth/reset-password", limiterAuth, async (req, res) => {
     if (!token || !new_password)
       return res.status(400).json({ success: false, error: "Faltan token y nueva contraseña." });
     if (!validatePassword(new_password))
-      return res.status(400).json({ success: false, error: "Mínimo 6 caracteres." });
+      return res.status(400).json({ success: false, error: PASSWORD_ERROR });
 
     const { data: user } = await supabase
       .from("usuarios").select("id, reset_token_expiry")
@@ -7602,7 +7512,7 @@ async function crearCheckoutOffer(t,ctx,cardCheckout) {
   if(pending?.browse_payment_url)return {success:true,payment_url:pending.browse_payment_url,monto:Number(t.precio_cobrado)};
   if(!pending){const inserted=await supabase.from('pagos_pendientes').insert({slug:t.slug,nombre:t.nombre,apellido:t.apellido,telefono:t.telefono,email:t.email,fecha:t.fecha,hora:t.hora,servicio_id:t.servicio_id,servicio_nombre:t.servicio_nombre,equipo_id:t.equipo_id,equipo_nombre:t.equipo_nombre,precio_servicio:Number(t.precio_cobrado),metodo_pago:'total',monto:Number(t.precio_cobrado),extras:[],monto_extras:0,estado:'pendiente',consumidor_id:t.consumidor_id,browse_turno_id:t.id,duracion_reservada:t.duracion_reservada}).select('*').single();if(inserted.error)throw inserted.error;pending=inserted.data;}
   const fee=planCobraComision(user.plan,user.estado_suscripcion)?calcularComisionTurnits(Number(t.precio_cobrado),user.plan,user.estado_suscripcion):0;
-  const body={items:[{title:`${t.servicio_nombre} · Turnits Offer`,unit_price:Number(t.precio_cobrado),quantity:1,currency_id:'ARS'}],payer:{name:t.nombre,email:t.email,...(t.apellido?{surname:t.apellido}:{})},external_reference:pending.id,metadata:{slug:t.slug,browse_turno_id:t.id},notification_url:`${API_URL}/webhook/mp`,back_urls:{success:`${SUCCESS_URL}?slug=${t.slug}&turno_id=${t.id}`,pending:`${PENDIENTE_URL}?slug=${t.slug}&turno_id=${t.id}`,failure:`${ERROR_URL}?slug=${t.slug}&turno_id=${t.id}`},auto_return:'approved',expires:true,expiration_date_to:new Date(t.browse_cierre).toISOString(),...(fee>0?{marketplace_fee:fee}:{})};
+  const body={items:[{title:`${t.servicio_nombre} · Turnits Offer`,unit_price:Number(t.precio_cobrado),quantity:1,currency_id:'ARS'}],payer:{name:t.nombre,email:t.email,...(t.apellido?{surname:t.apellido}:{})},external_reference:pending.id,metadata:{slug:t.slug,browse_turno_id:t.id},notification_url:`${API_URL}/webhook/mp`,back_urls:{success:receiptAccess.url(SUCCESS_URL,{slug:t.slug,turnoId:t.id}),pending:receiptAccess.url(PENDIENTE_URL,{slug:t.slug,turnoId:t.id}),failure:receiptAccess.url(ERROR_URL,{slug:t.slug,turnoId:t.id})},auto_return:'approved',expires:true,expiration_date_to:new Date(t.browse_cierre).toISOString(),...(fee>0?{marketplace_fee:fee}:{})};
   const pref=await new Preference(new MercadoPagoConfig({accessToken:token})).create({body,requestOptions:{idempotencyKey:`offer-${t.id}`}});
   const {error:saveError}=await supabase.from('pagos_pendientes').update({preference_id:pref.id,browse_payment_url:pref.init_point}).eq('id',pending.id);if(saveError)throw saveError;
   return {success:true,payment_url:pref.init_point,monto:Number(t.precio_cobrado)};
@@ -7645,7 +7555,7 @@ async function finishCardPayment(ctx,pay,res) {
     }
     await procesarPagoConfirmado({...ctx.pending,tipo_cobro:ctx.pending.metodo_pago,payment_id:pay.id,estado:state,moneda:"ARS",comision_mp:mpFee,comision_plataforma:appFee});
     const {data:turno}=await supabase.from("turnos").select("id").eq("payment_id",String(pay.id)).maybeSingle();
-    if(turno)return res.json({status:"approved",success_url:SUCCESS_URL+"?slug="+encodeURIComponent(ctx.pending.slug)+"&turno_id="+turno.id});
+    if(turno)return res.json({status:"approved",success_url:receiptAccess.url(SUCCESS_URL,{slug:ctx.pending.slug,turnoId:turno.id})});
     return res.json({status:"review",message:"El pago fue aprobado, pero la reserva requiere revisión del negocio. No vuelvas a pagar."});
   }
   return res.json({status:state==="pendiente"?"pending":"rejected",message:state==="pendiente"?"Mercado Pago está revisando tu pago. No vuelvas a pagar.":"La tarjeta no pudo completar el pago. Podés volver e intentar con otra tarjeta."});
@@ -7861,7 +7771,7 @@ const fee = planCobraComision(user.plan, user.estado_suscripcion)
           metadata: metaPendiente,
           external_reference: pendiente.id,
           notification_url: `${API_URL}/webhook/mp`,
-          back_urls: { success: `${SUCCESS_URL}?slug=${slugClean}`, failure: `${ERROR_URL}?slug=${slugClean}`, pending: `${ERROR_URL}?slug=${slugClean}` },
+          back_urls: { success: receiptAccess.url(SUCCESS_URL, {slug:slugClean,pendingId:pendiente.id}), failure: receiptAccess.url(ERROR_URL, {slug:slugClean,pendingId:pendiente.id}), pending: receiptAccess.url(PENDIENTE_URL, {slug:slugClean,pendingId:pendiente.id}) },
           auto_return: "approved",
         };
         if (fee > 0) prefBody.marketplace_fee = fee;

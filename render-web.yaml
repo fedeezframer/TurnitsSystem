@@ -7,6 +7,25 @@ services:
     rootDir: web
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=86400
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=()"
     envVars:
       - key: NODE_VERSION
         value: 24.13.0
