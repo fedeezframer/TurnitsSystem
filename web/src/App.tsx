@@ -82,20 +82,31 @@ function BookingRoute() {
 function MissingPage() {
   return <div className="app-page"><section className="app-card"><img className="app-brand" src={appConfig.logoUrl} alt="Turnits" /><h1>Página no encontrada</h1><p>Revisá el enlace o volvé a iniciar sesión.</p><Link className="app-button" to="/login">Ir al login</Link></section></div>
 }
+function CustomerExperiencePaused() {
+  return <main className="app-page"><section className="app-card" aria-labelledby="customer-experience-title"><img className="app-brand" src={appConfig.logoUrl} alt="Turnits" /><p style={{ margin: "0 0 8px", color: "#1b6b1a", fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>Turnits para clientes</p><h1 id="customer-experience-title">Estamos sumando negocios</h1><p>Primero estamos armando una buena oferta de agendas. Muy pronto vas a poder descubrir negocios y gestionar tus turnos desde acá.</p><Link className="app-button" to="/registro/negocio">Sumá tu negocio a Turnits</Link><p style={{ marginTop: 16 }}><Link to="/">Volver al inicio</Link></p></section></main>
+}
 function RegisterPage({ accountType = "usuario" }: { accountType?: "usuario" | "negocio" }) {
   const location = useLocation()
+  if (accountType === "usuario" && !appConfig.customerExperienceEnabled) return <Navigate to={`/registro/negocio${location.search}`} replace />
   if (accountType === "usuario" && new URLSearchParams(location.search).get("tipo") === "negocio") return <Navigate to={`/registro/negocio${location.search}`} replace />
   return <Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" accountType={accountType} />
+}
+function BusinessRegisterRedirect() {
+  const location = useLocation()
+  const query = new URLSearchParams(location.search)
+  query.delete("tipo")
+  return <Navigate to={`/registro/negocio${query.size ? `?${query}` : ""}`} replace />
 }
 export default function App() {
   const location = useLocation()
   return <Suspense fallback={<BrandPreloader />}>{appConfig.staging && location.pathname !== "/consultas" && <div role="status" style={{position:"relative",zIndex:10000,padding:"8px 16px",textAlign:"center",background:"#fff0b3",color:"#604700",font:"600 13px Arial,sans-serif"}}>TURNITS TEST · Datos de prueba · Sin cobros reales · Funciones en desarrollo</div>}<Routes>
     <Route path="/" element={<Home />} />
     <Route path="/login" element={<Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
-    <Route path="/registro" element={<RegisterPage />} />
+    <Route path="/registro" element={<BusinessRegisterRedirect />} />
     <Route path="/registro/negocio" element={<RegisterPage accountType="negocio" />} />
-    <Route path="/register" element={<Navigate to={`/registro${window.location.search}`} replace />} />
-    <Route path="/browse" element={<Browse />} />
+    <Route path="/registro/negocios" element={<Navigate to={`/registro/negocio${window.location.search}`} replace />} />
+    <Route path="/register" element={<Navigate to={`/registro/negocio${window.location.search}`} replace />} />
+    <Route path="/browse" element={appConfig.customerExperienceEnabled ? <Browse /> : <CustomerExperiencePaused />} />
     <Route path="/consultas" element={<LegacyConsultationsRoute />} />
     <Route path="/panel" element={<PanelRoute />} />
     <Route path="/panel/:slug" element={<PanelRoute />} />
@@ -110,7 +121,7 @@ export default function App() {
     <Route path="/internal" element={<Internal loginPath="/login" refreshSeconds={60} />} />
     <Route path="/reprogramar" element={<Reschedule />} />
     <Route path="/login-test" element={<Navigate to={`/login${window.location.search}`} replace />} />
-    <Route path="/register-test" element={<Navigate to={`/registro${window.location.search}`} replace />} />
+    <Route path="/register-test" element={<Navigate to={`/registro/negocio${window.location.search}`} replace />} />
     <Route path="/panel-test" element={<PanelRoute />} />
     <Route path="/agenda-test" element={<BookingRoute />} />
     <Route path="/test" element={<AnimationTest />} />

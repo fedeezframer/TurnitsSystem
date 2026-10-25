@@ -570,7 +570,7 @@ export default function Register({
           </form>
         )}
         {step === 2 && type === "usuario" && <p className="registration-business-link">¿Tenés un negocio? <Link to="/registro/negocio">Registralo desde acá</Link></p>}
-        {step === 2 && type === "negocio" && <p className="registration-business-link">¿Buscabas una cuenta para reservar? <Link to="/registro">Crear cuenta de usuario</Link></p>}
+        {step === 2 && type === "negocio" && <p className="registration-business-link">Tus clientes pueden reservar directamente desde el enlace de tu agenda.</p>}
         {step === 3 && (
           <>
             {type === "usuario" && <p className="registration-subtitle">Elegí algunos rubros para que Turnits empiece a mostrarte opciones relevantes.</p>}

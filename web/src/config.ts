@@ -14,6 +14,7 @@ if (
 
 export const appConfig = {
   staging,
+  customerExperienceEnabled: import.meta.env.VITE_CUSTOMER_EXPERIENCE_ENABLED === "true",
   siteUrl: (import.meta.env.VITE_SITE_URL || (staging ? window.location.origin : "https://turnits.com")).replace(/\/+$/, ""),
   quoteBookingEnabled: import.meta.env.VITE_QUOTE_BOOKING_ENABLED === "true" && import.meta.env.VITE_QUOTE_BOOKING_ROLLOUT_ENABLED === "true",
   apiUrl: (configuredApiUrl || (import.meta.env.DEV ? "/api" : "https://negosocio.onrender.com")).replace(/\/+$/, ""),
