@@ -134,9 +134,12 @@ function TurnitsDashboard_Chart({
     stats,
     accentColor,
     monthMode = false,
+    monthRevenue = 0,
+    monthTrend = null,
 }: any) {
-    const [metric, setMetric] = React.useState<"turnos" | "ingresos">("turnos")
+    const [metric, setMetric] = React.useState<"turnos" | "ingresos">("ingresos")
     const [range, setRange] = React.useState("30d")
+    const [hoveredPoint, setHoveredPoint] = React.useState<number | null>(null)
     // Ancho real de la tarjeta: el SVG se dibuja a ese ancho (1 unidad = 1px)
     // para que llene todo el espacio y los textos se vean a tamaño real.
     const wrapRef = React.useRef<HTMLDivElement>(null)
@@ -185,7 +188,7 @@ function TurnitsDashboard_Chart({
 
     const w = Math.max(Math.round(wrapW), 240)
     const isNarrow = w < 520
-    const h = isNarrow ? 230 : 270
+    const h = isNarrow ? 190 : 230
     const fontSize = isNarrow ? 11 : 11.5
     // márgenes: a la izquierda para los valores del eje Y, abajo para las
     // etiquetas de fecha del eje X.
@@ -216,134 +219,84 @@ function TurnitsDashboard_Chart({
     const xLabelIdx = new Set<number>()
     for (let i = data.length - 1; i >= 0; i -= labelStep) xLabelIdx.add(i)
 
-    const yTicks = [0, 0.25, 0.5, 0.75, 1]
+    // En series vacías el eje solo necesita mostrar el inicio y el máximo;
+    // evita repetir varias veces el mismo valor redondeado.
+    const yTicks = max <= 1 ? [0, 1] : [0, 0.5, 1]
+    const hovered = hoveredPoint == null ? null : pts[hoveredPoint]
+    const plotBottom = marginTop + usableH
+    const barWidth = Math.max(2, Math.min(9, usableW / Math.max(data.length, 1) * 0.42))
 
     return (
-        <div className="turnits-dashboard-chart"
-            style={{
-                background: "#fff",
-                border: "1px solid #e8edf2",
-                borderRadius: 16,
-                padding: "18px 18px 14px",
-                boxShadow: "0 1px 2px rgba(15,23,42,.02)",
-                boxSizing: "border-box",
-                width: "100%",
-                minWidth: 0,
-                maxWidth: "100%",
-            }}
-        >
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    alignItems: "flex-start",
-                    flexWrap: "wrap",
-                }}
-            >
+        <div className="turnits-dashboard-chart">
+            <section className="turnits-dashboard-revenue-hero" aria-label="Resumen de ingresos del mes">
+                <span className="turnits-dashboard-revenue-label">Ingresos del mes</span>
+                <div className="turnits-dashboard-revenue-hero-value">
+                    <strong className="turnits-dashboard-revenue-value">
+                        {TurnitsDashboard_money(monthRevenue)}
+                    </strong>
+                    {monthTrend && (
+                        <span className={`turnits-dashboard-revenue-trend turnits-dashboard-revenue-trend-${monthTrend.tono}`}>
+                            {monthTrend.texto}
+                        </span>
+                    )}
+                </div>
+                <span className="turnits-dashboard-revenue-caption">comparado con el mes anterior</span>
+            </section>
+
+            <div className="turnits-dashboard-chart-toolbar">
                 <div>
-                    <div
-                        style={{
-                            fontSize: 16,
-                            fontWeight: 750,
-                            color: "#111827",
-                        }}
-                    >
-                        Rendimiento
-                    </div>
-                    <div
-                        style={{
-                            fontSize: 12.5,
-                            color: "#94a3b8",
-                            marginTop: 3,
-                        }}
-                    >
+                    <div className="turnits-dashboard-chart-title">Tendencia</div>
+                    <div className="turnits-dashboard-chart-summary">
                         {data.length > 0
-                            ? `${metric === "ingresos" ? "Facturaste" : "Hiciste"} ${fmtValue(total)}${metric === "ingresos" ? "" : " turnos"} en este período`
+                            ? `${metric === "ingresos" ? "Ingresos" : "Turnos"} · ${metric === "ingresos" ? (range === "7d" ? "últimos 7 días" : "últimos 30 días") : "actividad reciente"} · ${fmtValue(total)}`
                             : "Evolución reciente de tu negocio"}
                     </div>
                 </div>
-                <div
-                    style={{
-                        display: "flex",
-                        gap: 4,
-                        background: "#f6f8fa",
-                        padding: 3,
-                        borderRadius: 9,
-                    }}
-                >
-                    {[
-                        ["turnos", "Turnos"],
-                        ["ingresos", "Ingresos"],
-                    ].map(([id, label]) => (
-                        <button
-                            key={id}
-                            type="button"
-                            onClick={() => setMetric(id as any)}
-                            style={{
-                                border: "none",
-                                borderRadius: 7,
-                                padding: "6px 10px",
-                                background:
-                                    metric === id ? "#fff" : "transparent",
-                                color: metric === id ? accentColor : "#64748b",
-                                fontWeight: 700,
-                                fontSize: 11.5,
-                                boxShadow:
-                                    metric === id
-                                        ? "0 1px 2px rgba(15,23,42,.06)"
-                                        : "none",
-                                cursor: "pointer",
-                            }}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                <div className="turnits-dashboard-chart-controls">
+                    <div className="turnits-dashboard-chart-switch" aria-label="Métrica del gráfico">
+                        {[
+                            ["ingresos", "Ingresos"],
+                            ["turnos", "Turnos"],
+                        ].map(([id, label]) => (
+                            <button
+                                key={id}
+                                type="button"
+                                aria-pressed={metric === id}
+                                onClick={() => { setMetric(id as any); setHoveredPoint(null) }}
+                                className={metric === id ? "is-active" : ""}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                    {metric === "ingresos" && (
+                        <div className="turnits-dashboard-chart-range" aria-label="Período de la gráfica">
+                            {["7d", "30d"].map((id) => (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    aria-pressed={range === id}
+                                    onClick={() => { setRange(id); setHoveredPoint(null) }}
+                                    className={range === id ? "is-active" : ""}
+                                >
+                                    {id === "7d" ? "7 días" : "30 días"}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
-            {metric === "ingresos" && (
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        marginTop: 8,
-                        gap: 4,
-                    }}
-                >
-                    {["7d", "30d"].map((id) => (
-                        <button
-                            key={id}
-                            type="button"
-                            onClick={() => setRange(id)}
-                            style={{
-                                border: "none",
-                                background:
-                                    range === id
-                                        ? `${accentColor}10`
-                                        : "transparent",
-                                color: range === id ? accentColor : "#94a3b8",
-                                borderRadius: 7,
-                                padding: "5px 8px",
-                                fontSize: 10.5,
-                                fontWeight: 700,
-                                cursor: "pointer",
-                            }}
-                        >
-                            {id === "7d" ? "7 días" : "30 días"}
-                        </button>
-                    ))}
-                </div>
-            )}
             <div
                 ref={wrapRef}
+                onMouseLeave={() => setHoveredPoint(null)}
                 style={{
                     position: "relative",
                     width: "100%",
                     minWidth: 0,
                     maxWidth: "100%",
-                    height: data.length > 0 ? h : undefined,
+                    height: h,
                     overflow: "hidden",
-                    marginTop: 4,
+                    marginTop: 10,
                 }}
             >
                 {data.length > 0 ? (
@@ -395,26 +348,74 @@ function TurnitsDashboard_Chart({
                         <polygon
                             points={area}
                             fill={accentColor || "#22c55e"}
-                            fillOpacity={0.08}
+                            fillOpacity={0.045}
                         />
+                        {pts.map((p: any, i: number) => (
+                            <g
+                                key={`bar-${i}`}
+                                onMouseEnter={() => setHoveredPoint(i)}
+                                onFocus={() => setHoveredPoint(i)}
+                                onBlur={() => setHoveredPoint(null)}
+                                onClick={() => setHoveredPoint(i)}
+                                style={{ cursor: "crosshair" }}
+                            >
+                                <rect
+                                    x={p.x - 5}
+                                    y={marginTop}
+                                    width={10}
+                                    height={usableH}
+                                    fill="transparent"
+                                    tabIndex={0}
+                                    role="button"
+                                    aria-label={`${p.label}: ${fmtValue(p.value)}${metric === "ingresos" ? "" : " turnos"}`}
+                                />
+                                {p.value > 0 && (
+                                    <rect
+                                        x={p.x - barWidth / 2}
+                                        y={p.y}
+                                        width={barWidth}
+                                        height={Math.max(plotBottom - p.y, 2)}
+                                        rx={barWidth / 2}
+                                        fill={accentColor || "#1b6b1a"}
+                                        opacity={hoveredPoint === i ? 0.48 : 0.17}
+                                        pointerEvents="none"
+                                    />
+                                )}
+                                {hoveredPoint === i && (
+                                    <line
+                                        x1={p.x}
+                                        x2={p.x}
+                                        y1={marginTop}
+                                        y2={plotBottom}
+                                        stroke={accentColor || "#1b6b1a"}
+                                        strokeWidth="1"
+                                        strokeDasharray="3 4"
+                                        opacity=".42"
+                                        pointerEvents="none"
+                                    />
+                                )}
+                            </g>
+                        ))}
                         <polyline
                             points={line}
                             fill="none"
-                            stroke={accentColor}
-                            strokeWidth="2.5"
+                            stroke={accentColor || "#1b6b1a"}
+                            strokeWidth="2.2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
+                            pointerEvents="none"
                         />
                         {pts.map((p: any, i: number) => (
                             <g key={i}>
-                                {!isNarrow && (
+                                {(!isNarrow || hoveredPoint === i) && (
                                     <circle
                                         cx={p.x}
                                         cy={p.y}
-                                        r={data.length > 20 ? 2.5 : 3.5}
-                                        fill="#fff"
-                                        stroke={accentColor}
-                                        strokeWidth="1.6"
+                                        r={hoveredPoint === i ? 4.5 : data.length > 20 ? 1.7 : 2.7}
+                                        fill={hoveredPoint === i ? accentColor : "#fff"}
+                                        stroke={accentColor || "#1b6b1a"}
+                                        strokeWidth="1.5"
+                                        pointerEvents="none"
                                     >
                                         <title>{`${p.label}: ${fmtValue(p.value)}${metric === "ingresos" ? "" : " turnos"}`}</title>
                                     </circle>
@@ -446,6 +447,19 @@ function TurnitsDashboard_Chart({
                     >
                         Todavía no hay suficiente actividad para mostrar el
                         gráfico.
+                    </div>
+                )}
+                {hovered && data.length > 0 && (
+                    <div
+                        className="turnits-dashboard-chart-tooltip"
+                        style={{
+                            left: `${Math.min(94, Math.max(6, (hovered.x / w) * 100))}%`,
+                            top: `${Math.max(0, hovered.y - 52)}px`,
+                        }}
+                        aria-live="polite"
+                    >
+                        <strong>{fmtValue(hovered.value)}</strong>
+                        <span>{hovered.label}</span>
                     </div>
                 )}
             </div>
@@ -2800,30 +2814,12 @@ function TurnitsDashboard_Content({
 
             <style>{`.tn-hscroll{scrollbar-width:none;-ms-overflow-style:none}.tn-hscroll::-webkit-scrollbar{display:none}`}</style>
             <div className="turnits-dashboard-revenue-overview">
-                <div className="turnits-dashboard-revenue-summary">
-                    <span className="turnits-dashboard-revenue-label">
-                        Ingresos del mes
-                    </span>
-                    <strong className="turnits-dashboard-revenue-value">
-                        {TurnitsDashboard_money(ingresosActuales)}
-                    </strong>
-                    <span className="turnits-dashboard-revenue-caption">
-                        Comparación con el mes anterior
-                    </span>
-                    {tendenciaIngresos && (
-                        <span
-                            className={`turnits-dashboard-revenue-trend turnits-dashboard-revenue-trend-${tendenciaIngresos.tono}`}
-                        >
-                            {tendenciaIngresos.texto}
-                        </span>
-                    )}
-                </div>
-                <div className="turnits-dashboard-revenue-chart">
-                    <TurnitsDashboard_Chart
-                        stats={stats}
-                        accentColor={accentColor}
-                    />
-                </div>
+                <TurnitsDashboard_Chart
+                    stats={stats}
+                    accentColor={accentColor}
+                    monthRevenue={ingresosActuales}
+                    monthTrend={tendenciaIngresos}
+                />
             </div>
             <div
                 className="tn-hscroll turnits-dashboard-metrics"

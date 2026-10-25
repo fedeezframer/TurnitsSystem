@@ -323,58 +323,80 @@
 }
 
 .turnits-dashboard-revenue-overview {
-  display: grid;
-  grid-template-columns: minmax(220px, .72fr) minmax(0, 1.8fr);
-  gap: 14px;
-  align-items: stretch;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 
-.turnits-dashboard-revenue-summary {
+.turnits-dashboard-chart {
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.turnits-dashboard-revenue-hero {
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 26px 28px;
-  border: 1px solid #dcebd9;
-  border-radius: 24px;
-  background: linear-gradient(145deg, #e3f2e1 0%, #f3faf3 78%, #fff 100%);
+  align-items: center;
+  padding: 18px 16px 24px;
+  overflow: hidden;
+  border-radius: 28px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(222, 239, 215, .82), transparent 67%),
+    linear-gradient(180deg, rgba(248, 251, 247, .84), rgba(255, 255, 255, 0));
+  animation: turnits-revenue-enter 420ms cubic-bezier(.2,.7,.2,1) both;
 }
 
 .turnits-dashboard-revenue-label {
-  color: #647568;
+  color: var(--turnits-muted);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .1em;
+  font-weight: 650;
+  letter-spacing: .12em;
   text-transform: uppercase;
 }
 
+.turnits-dashboard-revenue-hero-value {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .turnits-dashboard-revenue-value {
-  margin: 8px 0 9px;
+  margin: 6px 0 0;
   color: var(--turnits-ink);
-  font-size: clamp(40px, 5vw, 68px);
-  font-weight: 300;
-  letter-spacing: -.055em;
-  line-height: 1;
+  font-size: clamp(54px, 9vw, 104px);
+  font-weight: 280;
+  letter-spacing: -.075em;
+  line-height: .98;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .turnits-dashboard-revenue-caption {
   color: var(--turnits-muted);
-  font-size: 12px;
+  font-size: 11.5px;
   line-height: 1.45;
 }
 
 .turnits-dashboard-revenue-trend {
   display: inline-flex;
   align-items: center;
-  margin-top: 10px;
-  padding: 4px 9px;
+  margin-top: 6px;
+  padding: 6px 10px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, .82);
+  background: #e5f2e0;
   color: var(--turnits-forest);
   font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .turnits-dashboard-revenue-trend-baja {
@@ -387,14 +409,105 @@
   background: rgba(255, 255, 255, .82);
 }
 
-.turnits-dashboard-revenue-chart {
-  min-width: 0;
+.turnits-dashboard-revenue-trend-sube {
+  color: #286534;
+  background: #e4f3df;
 }
 
-.turnits-dashboard-revenue-chart .turnits-dashboard-chart {
-  height: 100%;
-  min-height: 240px;
-  border-radius: 24px !important;
+.turnits-dashboard-chart-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 8px 2px 0;
+}
+
+.turnits-dashboard-chart-title {
+  color: var(--turnits-ink);
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -.025em;
+}
+
+.turnits-dashboard-chart-summary {
+  margin-top: 4px;
+  color: var(--turnits-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.turnits-dashboard-chart-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.turnits-dashboard-chart-switch,
+.turnits-dashboard-chart-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--turnits-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .84);
+}
+
+.turnits-dashboard-chart-switch button,
+.turnits-dashboard-chart-range button {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--turnits-muted);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.turnits-dashboard-chart-switch button.is-active,
+.turnits-dashboard-chart-range button.is-active {
+  background: var(--turnits-forest);
+  color: #fff;
+  box-shadow: 0 2px 7px rgba(23, 62, 28, .18);
+}
+
+.turnits-dashboard-chart-tooltip {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transform: translateX(-50%);
+  padding: 8px 11px;
+  border: 1px solid rgba(227, 233, 225, .92);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 7px 22px rgba(24, 34, 26, .12);
+  color: var(--turnits-ink);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.turnits-dashboard-chart-tooltip strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.turnits-dashboard-chart-tooltip span {
+  color: var(--turnits-muted);
+  font-size: 10px;
+}
+
+@keyframes turnits-revenue-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .turnits-dashboard-metrics {
@@ -402,7 +515,6 @@
 }
 
 .turnits-dashboard-metric,
-.turnits-dashboard-chart,
 .turnits-dashboard-upcoming,
 .turnits-dashboard-services,
 .turnits-dashboard-business,
@@ -425,22 +537,50 @@
 }
 
 @media (max-width: 900px) {
-  .turnits-dashboard-revenue-overview {
-    grid-template-columns: 1fr;
+  .turnits-dashboard-revenue-value {
+    font-size: clamp(52px, 12vw, 82px);
   }
 
-  .turnits-dashboard-revenue-summary {
-    min-height: 164px;
-    padding: 24px;
+  .turnits-dashboard-chart-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .turnits-dashboard-chart-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 520px) {
+  .turnits-dashboard-revenue-hero {
+    padding: 16px 8px 18px;
     border-radius: 22px;
   }
 
   .turnits-dashboard-revenue-value {
-    font-size: clamp(48px, 12vw, 68px);
+    font-size: clamp(48px, 14vw, 68px);
   }
 
-  .turnits-dashboard-revenue-chart .turnits-dashboard-chart {
-    min-height: 250px;
+  .turnits-dashboard-chart-toolbar {
+    gap: 10px;
+  }
+
+  .turnits-dashboard-chart-controls {
+    gap: 6px;
+  }
+
+  .turnits-dashboard-chart-switch button,
+  .turnits-dashboard-chart-range button {
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turnits-dashboard-revenue-hero {
+    animation: none;
   }
 }
 
