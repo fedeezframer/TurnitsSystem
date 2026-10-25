@@ -339,6 +339,14 @@
   box-shadow: none !important;
 }
 
+.turnits-dashboard-chart-plot {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.turnits-dashboard-chart-plot:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .turnits-dashboard-revenue-hero {
   display: flex;
   flex-direction: column;

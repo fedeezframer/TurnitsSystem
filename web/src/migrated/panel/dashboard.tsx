@@ -312,6 +312,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                 {data.length > 0 ? (
                     <svg
                         viewBox={`0 0 ${w} ${h}`}
+                        className="turnits-dashboard-chart-plot"
                         preserveAspectRatio="none"
                         width="100%"
                         height={h}
