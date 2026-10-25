@@ -205,12 +205,12 @@
   }
 }
 
-/* Navigation from the Turnits concept: clear destinations, stable labels. */
+/* Turnits panel: Claude's information architecture, in the Turnits palette. */
 .turnits-sidebar {
-  width: 224px !important;
-  background: var(--turnits-surface) !important;
-  border-right-color: var(--turnits-line) !important;
-  padding: 24px 14px 16px !important;
+  width: 248px !important;
+  background: linear-gradient(180deg, #d3edd1 0%, #f3faf3 46%, #fff 100%) !important;
+  border-right: 1px solid #e8ece9 !important;
+  padding: 26px 14px 14px !important;
 }
 
 .turnits-sidebar > div:first-child {
@@ -219,38 +219,85 @@
 
 .turnits-sidebar-brand {
   justify-content: flex-start !important;
-  margin: 0 0 22px !important;
+  padding-left: 10px;
+  margin-bottom: 26px !important;
 }
 
 .turnits-panel-nav-button {
+  width: 100%;
   justify-content: flex-start !important;
   text-align: left !important;
   min-height: 40px !important;
+  padding: 9px 13px !important;
+  border-radius: 14px !important;
+  color: var(--turnits-ink) !important;
   font-size: 13px !important;
-  font-weight: 500 !important;
+  font-weight: 450 !important;
   transition: background-color 150ms ease, color 150ms ease !important;
 }
 
 .turnits-panel-nav-button:hover {
-  background: #f4f6f2 !important;
+  background: rgba(255, 255, 255, .55) !important;
 }
 
 .turnits-panel-nav-button[aria-current="page"] {
-  color: var(--turnits-forest) !important;
-  background: var(--turnits-soft) !important;
-  border-color: #dce8d3 !important;
-  font-weight: 650 !important;
+  background: rgba(255, 255, 255, .78) !important;
+  border-color: #fff !important;
+  color: var(--turnits-green) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(26, 49, 25, .045);
+}
+
+.turnits-panel-nav-button[aria-current="page"] > div {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.turnits-mobile-topbar {
+  background: linear-gradient(180deg, #e3f2e1, #f3faf3) !important;
+  border-bottom-color: #e8ece9 !important;
+}
+
+.turnits-mobile-topbar > div:first-child {
+  display: none !important;
 }
 
 .turnits-mobile-menu-sheet {
-  background: var(--turnits-surface) !important;
+  background: linear-gradient(180deg, #f3faf3 0%, #fff 38%) !important;
   border: 1px solid var(--turnits-line);
-  box-shadow: 0 -18px 55px rgba(26, 49, 25, 0.14);
+  box-shadow: 0 -18px 55px rgba(26, 49, 25, .14);
+}
+
+.turnits-mobile-menu-sheet > div:first-child {
+  display: none !important;
+}
+
+.turnits-mobile-sheet-nav .turnits-panel-nav-button {
+  min-height: 78px !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 12px 5px !important;
+  border: 1px solid transparent !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  box-shadow: none !important;
+}
+
+.turnits-mobile-sheet-nav .turnits-panel-nav-button[aria-current="page"] {
+  background: var(--turnits-soft) !important;
+  border-color: #d3e4cc !important;
+  color: var(--turnits-forest) !important;
 }
 
 .turnits-mobile-bottom-nav-items {
-  border-color: var(--turnits-line) !important;
-  border-bottom: 0 !important;
+  background: rgba(255, 255, 255, .97) !important;
+  border: 1px solid var(--turnits-line) !important;
+  border-radius: 999px !important;
+  padding: 7px 10px !important;
+  box-shadow: 0 8px 30px rgba(26, 49, 25, .15) !important;
   backdrop-filter: blur(16px);
 }
 
@@ -263,134 +310,152 @@
   background: var(--turnits-soft) !important;
 }
 
-.turnits-bottom-nav-label {
-  position: relative;
-  font-size: 10px;
-  font-weight: 550;
+.turnits-home-dashboard {
+  max-width: 1280px !important;
+  gap: 16px !important;
+}
+
+.turnits-home-dashboard > div:first-child h1 {
+  color: var(--turnits-ink) !important;
+  font-size: clamp(28px, 3vw, 36px) !important;
+  font-weight: 350 !important;
+  letter-spacing: -.04em !important;
+}
+
+.turnits-dashboard-revenue-overview {
+  display: grid;
+  grid-template-columns: minmax(220px, .72fr) minmax(0, 1.8fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.turnits-dashboard-revenue-summary {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 26px 28px;
+  border: 1px solid #dcebd9;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #e3f2e1 0%, #f3faf3 78%, #fff 100%);
+}
+
+.turnits-dashboard-revenue-label {
+  color: #647568;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.turnits-dashboard-revenue-value {
+  margin: 8px 0 9px;
+  color: var(--turnits-ink);
+  font-size: clamp(40px, 5vw, 68px);
+  font-weight: 300;
+  letter-spacing: -.055em;
   line-height: 1;
   white-space: nowrap;
 }
 
-.browse-home-intro {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+.turnits-dashboard-revenue-caption {
+  color: var(--turnits-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
-.browse-offers-entry {
+.turnits-dashboard-revenue-trend {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 9px 14px;
-  border: 1px solid #dce8d3;
-  border-radius: 12px;
-  background: var(--turnits-soft);
+  margin-top: 10px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .82);
   color: var(--turnits-forest);
-  font-weight: 650;
-  white-space: nowrap;
-  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.browse-offers-entry .browse-flame {
-  width: 19px !important;
-  height: 19px !important;
+.turnits-dashboard-revenue-trend-baja {
+  color: #a33b2e;
+  background: #fff0ed;
 }
 
-.browse-view-heading {
-  margin-bottom: 20px;
+.turnits-dashboard-revenue-trend-igual {
+  color: #59635d;
+  background: rgba(255, 255, 255, .82);
 }
 
-.browse-view-heading p,
-.browse-section-heading p {
-  margin-top: 5px;
-  color: var(--turnits-muted);
+.turnits-dashboard-revenue-chart {
+  min-width: 0;
 }
 
-.browse-section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 8px;
+.turnits-dashboard-revenue-chart .turnits-dashboard-chart {
+  height: 100%;
+  min-height: 240px;
+  border-radius: 24px !important;
 }
 
-@media (max-width: 1023px) {
-  .browse-header-actions button[aria-label="Mi perfil"] {
-    display: none !important;
+.turnits-dashboard-metrics {
+  gap: 12px !important;
+}
+
+.turnits-dashboard-metric,
+.turnits-dashboard-chart,
+.turnits-dashboard-upcoming,
+.turnits-dashboard-services,
+.turnits-dashboard-business,
+.turnits-dashboard-clients,
+.turnits-dashboard-weekly {
+  border-radius: 22px !important;
+  border-color: var(--turnits-line) !important;
+  box-shadow: 0 3px 12px rgba(26, 49, 25, .04) !important;
+}
+
+.turnits-dashboard-metric {
+  min-height: 110px;
+  padding: 20px 21px !important;
+}
+
+.turnits-dashboard-main-grid,
+.turnits-dashboard-data-grid,
+.turnits-dashboard-extra-grid {
+  gap: 14px !important;
+}
+
+@media (max-width: 900px) {
+  .turnits-dashboard-revenue-overview {
+    grid-template-columns: 1fr;
   }
 
-  .browse-dock {
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    transform: none !important;
-    width: min(100%, 560px) !important;
-    height: auto !important;
-    min-height: 0 !important;
-    margin: 0 auto !important;
-    padding: 7px 8px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
-    justify-content: space-between !important;
-    gap: 4px !important;
-    border: 1px solid var(--turnits-line) !important;
-    border-bottom: 0 !important;
-    border-radius: 18px 18px 0 0 !important;
-    background: rgba(255, 255, 255, 0.97) !important;
-    box-shadow: 0 -6px 24px rgba(26, 49, 25, 0.08) !important;
-    backdrop-filter: blur(16px);
+  .turnits-dashboard-revenue-summary {
+    min-height: 164px;
+    padding: 24px;
+    border-radius: 22px;
   }
 
-  .browse-dock button {
-    flex: 1 1 0 !important;
-    flex-direction: column !important;
-    gap: 4px !important;
-    min-width: 0 !important;
-    min-height: 54px !important;
-    padding: 6px 2px !important;
-    border-radius: 12px !important;
-    color: var(--turnits-muted) !important;
-    font-size: 10px !important;
+  .turnits-dashboard-revenue-value {
+    font-size: clamp(48px, 12vw, 68px);
   }
 
-  .browse-dock button.selected {
-    background: var(--turnits-soft) !important;
-    color: var(--turnits-forest) !important;
-  }
-
-  .browse-dock .browse-glyph,
-  .browse-dock .browse-flame {
-    width: 20px !important;
-    height: 20px !important;
-  }
-
-  .browse-nav-label {
-    display: block !important;
-    font-size: 10px !important;
-    line-height: 1 !important;
-    font-weight: 600;
-  }
-
-  .browse-main {
-    padding-bottom: 116px !important;
+  .turnits-dashboard-revenue-chart .turnits-dashboard-chart {
+    min-height: 250px;
   }
 }
 
 @media (max-width: 520px) {
-  .browse-home-intro {
-    align-items: flex-start;
+  .turnits-mobile-menu-sheet {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
   }
 
-  .browse-offers-entry {
-    min-height: 38px;
-    padding: 8px 10px;
-    font-size: 12px;
+  .turnits-mobile-sheet-nav {
+    gap: 3px !important;
   }
-}
 
-@media (min-width: 1024px) {
-  .browse-dock .browse-nav-profile {
-    display: none !important;
+  .turnits-mobile-sheet-nav .turnits-panel-nav-button {
+    min-height: 72px !important;
+    font-size: 11px !important;
   }
 }

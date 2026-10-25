@@ -2718,6 +2718,10 @@ function TurnitsDashboard_Content({
         ingresosAnteriores != null && turnosAnteriores > 0
             ? ingresosAnteriores / turnosAnteriores
             : null
+    const tendenciaIngresos =
+        ingresosAnteriores == null
+            ? null
+            : TurnitsDashboard_percent(ingresosActuales, ingresosAnteriores)
     const metricCardMobile: React.CSSProperties | undefined = isMobile
         ? {
               flex: "0 0 auto",
@@ -2795,6 +2799,32 @@ function TurnitsDashboard_Content({
             </div>
 
             <style>{`.tn-hscroll{scrollbar-width:none;-ms-overflow-style:none}.tn-hscroll::-webkit-scrollbar{display:none}`}</style>
+            <div className="turnits-dashboard-revenue-overview">
+                <div className="turnits-dashboard-revenue-summary">
+                    <span className="turnits-dashboard-revenue-label">
+                        Ingresos del mes
+                    </span>
+                    <strong className="turnits-dashboard-revenue-value">
+                        {TurnitsDashboard_money(ingresosActuales)}
+                    </strong>
+                    <span className="turnits-dashboard-revenue-caption">
+                        Comparación con el mes anterior
+                    </span>
+                    {tendenciaIngresos && (
+                        <span
+                            className={`turnits-dashboard-revenue-trend turnits-dashboard-revenue-trend-${tendenciaIngresos.tono}`}
+                        >
+                            {tendenciaIngresos.texto}
+                        </span>
+                    )}
+                </div>
+                <div className="turnits-dashboard-revenue-chart">
+                    <TurnitsDashboard_Chart
+                        stats={stats}
+                        accentColor={accentColor}
+                    />
+                </div>
+            </div>
             <div
                 className="tn-hscroll turnits-dashboard-metrics"
                 data-lenis-prevent="true"
@@ -2817,7 +2847,7 @@ function TurnitsDashboard_Content({
                           }
                         : {
                               display: "grid",
-                              gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+                              gridTemplateColumns: "repeat(3,minmax(0,1fr))",
                               gap: 12,
                           }
                 }
@@ -2830,19 +2860,6 @@ function TurnitsDashboard_Content({
                         turnosActuales,
                         turnosAnteriores
                     )}
-                />
-                <TurnitsDashboard_MetricCard
-                    cardStyle={metricCardMobile}
-                    label="Ingresos"
-                    value={TurnitsDashboard_shortMoney(ingresosActuales)}
-                    trend={
-                        ingresosAnteriores == null
-                            ? null
-                            : TurnitsDashboard_percent(
-                                  ingresosActuales,
-                                  ingresosAnteriores
-                              )
-                    }
                 />
                 <TurnitsDashboard_MetricCard
                     cardStyle={metricCardMobile}
@@ -2873,7 +2890,7 @@ function TurnitsDashboard_Content({
                     display: "grid",
                     gridTemplateColumns: isMobile
                         ? "1fr"
-                        : "minmax(320px,.92fr) minmax(0,1.45fr)",
+                        : "minmax(320px,1fr) minmax(280px,.78fr)",
                     gap: 12,
                 }}
             >
@@ -2883,10 +2900,7 @@ function TurnitsDashboard_Content({
                     onNavigate={onNavigate}
                     ilustracionVacia={ilustracionProximosTurnosVacio}
                 />
-                <TurnitsDashboard_Chart
-                    stats={stats}
-                    accentColor={accentColor}
-                />
+                <TurnitsDashboard_RecentClients stats={stats} />
             </div>
 
             <div className="turnits-dashboard-data-grid"
@@ -2894,7 +2908,9 @@ function TurnitsDashboard_Content({
                     display: "grid",
                     gridTemplateColumns: isMobile
                         ? "1fr"
-                        : branch ? "repeat(2,minmax(0,1fr))" : "minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)",
+                        : branch
+                          ? "1fr"
+                          : "repeat(2,minmax(0,1fr))",
                     gap: 12,
                 }}
             >
@@ -2910,7 +2926,6 @@ function TurnitsDashboard_Content({
                     colorHasta={referidosPromoBgHasta}
                     onOpenPanel={onOpenPanel}
                 /></OwnerOnly>
-                <TurnitsDashboard_RecentClients stats={stats} />
             </div>
 
             <div className="turnits-dashboard-extra-grid"

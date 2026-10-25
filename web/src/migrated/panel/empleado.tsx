@@ -1777,14 +1777,12 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
             </AnimatePresence>
             {isMobile && (
                 <>
-                    <nav
-                        className="turnits-mobile-bottom-nav"
-                        aria-label="Navegación del empleado"
+                    <div
                         style={{
                             position: "fixed",
                             left: 0,
                             right: 0,
-                            bottom: 0,
+                            bottom: "calc(14px + env(safe-area-inset-bottom, 0px))",
                             display: "flex",
                             justifyContent: "center",
                             zIndex: 60,
@@ -1792,23 +1790,21 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                         }}
                     >
                         <div
-                            className="turnits-mobile-bottom-nav-items"
                             style={{
                                 pointerEvents: "auto",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: 4,
-                                width: "min(100%, 520px)",
-                                background: "rgba(255,255,255,.97)",
-                                borderRadius: "18px 18px 0 0",
-                                padding: "8px 10px calc(8px + env(safe-area-inset-bottom, 0px))",
-                                boxShadow: "0 -6px 24px rgba(26,49,25,.08)",
-                                border: "1px solid #e3e9e1",
+                                background: "#fff",
+                                borderRadius: 30,
+                                padding: "8px 12px",
+                                boxShadow:
+                                    "0 10px 30px rgba(15,23,42,.18),0 2px 10px rgba(15,23,42,.08)",
+                                border: "1px solid #eef1f6",
                             }}
                         >
                             <BottomNavIcon
                                 id="inicio"
-                                label="Inicio"
                                 active={tab === "inicio"}
                                 accentColor={accentColor}
                                 onClick={() => navegarA("inicio")}
@@ -1816,7 +1812,6 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                             />
                             <BottomNavIcon
                                 id="servicios"
-                                label="Servicios"
                                 active={tab === "servicios"}
                                 accentColor={accentColor}
                                 onClick={() => navegarA("servicios")}
@@ -1824,18 +1819,16 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                             />
                             <BottomNavIcon
                                 id="agenda"
-                                label="Agenda"
                                 active={tab === "agenda"}
                                 accentColor={accentColor}
                                 onClick={() => navegarA("agenda")}
                                 navIconos={navIconos}
                             />
                             <BottomNavMore
-                                active={menuMobileAbierto}
                                 onClick={() => setMenuMobileAbierto(true)}
                             />
                         </div>
-                    </nav>
+                    </div>
                     <AnimatePresence>
                         {menuMobileAbierto && (
                             <motion.div
