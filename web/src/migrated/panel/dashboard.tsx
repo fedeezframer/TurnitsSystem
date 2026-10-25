@@ -183,12 +183,13 @@ function TurnitsDashboard_Chart({
 
     const values = data.map((d: any) => d.value)
     const total = values.reduce((a: number, b: number) => a + b, 0)
+    const hasActivity = values.some((value: number) => value > 0)
     const max = Math.max(...values, 1)
     const min = 0 // los ejes arrancan siempre en 0, más fácil de leer
 
     const w = Math.max(Math.round(wrapW), 240)
     const isNarrow = w < 520
-    const h = isNarrow ? 190 : 230
+    const h = hasActivity ? (isNarrow ? 190 : 230) : (isNarrow ? 152 : 170)
     const fontSize = isNarrow ? 11 : 11.5
     // márgenes: a la izquierda para los valores del eje Y, abajo para las
     // etiquetas de fecha del eje X.
@@ -221,7 +222,7 @@ function TurnitsDashboard_Chart({
 
     // En series vacías el eje solo necesita mostrar el inicio y el máximo;
     // evita repetir varias veces el mismo valor redondeado.
-    const yTicks = max <= 1 ? [0, 1] : [0, 0.5, 1]
+    const yTicks = hasActivity ? (max <= 1 ? [0, 1] : [0, 0.5, 1]) : []
     const hovered = hoveredPoint == null ? null : pts[hoveredPoint]
     const plotBottom = marginTop + usableH
     const barWidth = Math.max(2, Math.min(9, usableW / Math.max(data.length, 1) * 0.42))
@@ -345,12 +346,35 @@ function TurnitsDashboard_Chart({
                                 </g>
                             )
                         })}
-                        <polygon
-                            points={area}
-                            fill={accentColor || "#22c55e"}
-                            fillOpacity={0.045}
-                        />
-                        {pts.map((p: any, i: number) => (
+                        {!hasActivity && (
+                            <>
+                                <line
+                                    x1={marginLeft}
+                                    x2={w - marginRight}
+                                    y1={plotBottom}
+                                    y2={plotBottom}
+                                    stroke="#dfe8dc"
+                                    strokeWidth="1.2"
+                                />
+                                <text
+                                    x={marginLeft + usableW / 2}
+                                    y={marginTop + usableH * 0.53}
+                                    textAnchor="middle"
+                                    fontSize={isNarrow ? 11 : 12}
+                                    fill="#89958b"
+                                >
+                                    {`Sin ${metric === "ingresos" ? "ingresos" : "turnos"} registrados en este período`}
+                                </text>
+                            </>
+                        )}
+                        {hasActivity && (
+                            <polygon
+                                points={area}
+                                fill={accentColor || "#22c55e"}
+                                fillOpacity={0.045}
+                            />
+                        )}
+                        {hasActivity && pts.map((p: any, i: number) => (
                             <g
                                 key={`bar-${i}`}
                                 onMouseEnter={() => setHoveredPoint(i)}
@@ -396,16 +420,18 @@ function TurnitsDashboard_Chart({
                                 )}
                             </g>
                         ))}
-                        <polyline
-                            points={line}
-                            fill="none"
-                            stroke={accentColor || "#1b6b1a"}
-                            strokeWidth="2.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            pointerEvents="none"
-                        />
-                        {pts.map((p: any, i: number) => (
+                        {hasActivity && (
+                            <polyline
+                                points={line}
+                                fill="none"
+                                stroke={accentColor || "#1b6b1a"}
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                pointerEvents="none"
+                            />
+                        )}
+                        {hasActivity && pts.map((p: any, i: number) => (
                             <g key={i}>
                                 {(!isNarrow || hoveredPoint === i) && (
                                     <circle
@@ -449,7 +475,7 @@ function TurnitsDashboard_Chart({
                         gráfico.
                     </div>
                 )}
-                {hovered && data.length > 0 && (
+                {hasActivity && hovered && (
                     <div
                         className="turnits-dashboard-chart-tooltip"
                         style={{
