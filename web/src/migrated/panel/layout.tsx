@@ -27,6 +27,7 @@ import { PerfilNegocio } from "./profile-section"
 import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, PagosSettingsGuard, MercadoPagoConexion, ConfigPagos, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
 import Consultations from "../../pages/Consultations"
 import { ChatIcon } from "../../components/ChatChrome"
+import "./design-refresh.css"
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 

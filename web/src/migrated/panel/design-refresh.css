@@ -1,0 +1,206 @@
+.turnits-root {
+  --turnits-ink: #18221a;
+  --turnits-muted: #68736a;
+  --turnits-line: #e3e9e1;
+  --turnits-canvas: #f4f6f2;
+  --turnits-surface: #fff;
+  --turnits-green: #1b6b1a;
+  --turnits-forest: #173e1c;
+  --turnits-soft: #edf4e9;
+  background: var(--turnits-canvas) !important;
+  color: var(--turnits-ink);
+}
+
+.turnits-panel-content {
+  background: transparent;
+  color: var(--turnits-ink);
+}
+
+.turnits-panel-content :focus-visible {
+  outline: 2px solid var(--turnits-green);
+  outline-offset: 3px;
+}
+
+.turnits-section-heading {
+  margin-bottom: 8px !important;
+}
+
+.turnits-section-heading-title {
+  color: var(--turnits-ink) !important;
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  letter-spacing: -1.15px;
+  line-height: 1.1;
+}
+
+.turnits-section-heading-subtitle {
+  color: var(--turnits-muted) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.5;
+}
+
+.turnits-home-dashboard {
+  max-width: 1320px !important;
+  gap: 18px !important;
+  color: var(--turnits-ink);
+}
+
+.turnits-home-dashboard > div:first-child h1 {
+  color: var(--turnits-ink) !important;
+  font-size: 32px !important;
+  letter-spacing: -1.3px !important;
+}
+
+.turnits-dashboard-metrics,
+.turnits-dashboard-main-grid,
+.turnits-dashboard-data-grid,
+.turnits-dashboard-extra-grid {
+  gap: 14px !important;
+}
+
+.turnits-dashboard-metric,
+.turnits-dashboard-chart,
+.turnits-dashboard-upcoming,
+.turnits-dashboard-services,
+.turnits-dashboard-business,
+.turnits-dashboard-clients,
+.turnits-dashboard-weekly {
+  background: var(--turnits-surface) !important;
+  border: 1px solid var(--turnits-line) !important;
+  border-radius: 19px !important;
+  box-shadow: 0 2px 8px rgba(26, 49, 25, 0.035) !important;
+  color: var(--turnits-ink);
+}
+
+.turnits-dashboard-metric {
+  min-height: 112px;
+  padding: 20px 21px !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease !important;
+}
+
+.turnits-dashboard-metric:hover {
+  border-color: #cbd9c8 !important;
+  box-shadow: 0 8px 22px rgba(26, 49, 25, 0.07) !important;
+}
+
+.turnits-dashboard-chart,
+.turnits-dashboard-upcoming,
+.turnits-dashboard-services,
+.turnits-dashboard-business,
+.turnits-dashboard-clients,
+.turnits-dashboard-weekly {
+  padding: 21px !important;
+}
+
+.turnits-dashboard-chart > div:first-child,
+.turnits-dashboard-upcoming > div:first-child,
+.turnits-dashboard-services > div:first-child,
+.turnits-dashboard-business > div:first-child,
+.turnits-dashboard-clients > div:first-child,
+.turnits-dashboard-weekly > div:first-child {
+  color: var(--turnits-ink) !important;
+}
+
+.turnits-dashboard-upcoming [style*="borderTop"],
+.turnits-dashboard-clients [style*="borderTop"] {
+  border-color: var(--turnits-line) !important;
+}
+
+.turnits-dashboard-main-grid,
+.turnits-dashboard-data-grid,
+.turnits-dashboard-extra-grid {
+  align-items: stretch;
+}
+
+.browse-card-grid {
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.browse-card {
+  border-color: #e3e9e1;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(26, 49, 25, 0.035);
+  transition: transform 180ms ease, box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.browse-card:hover {
+  transform: translateY(-3px);
+  border-color: #cbd9c8;
+  box-shadow: 0 12px 28px rgba(26, 49, 25, 0.1);
+}
+
+.browse-card-photo {
+  aspect-ratio: 1.62;
+  background: linear-gradient(135deg, #edf4e9, #f7f8f5);
+}
+
+.browse-card-content {
+  padding: 17px 18px 16px;
+}
+
+.browse-card-business {
+  color: var(--turnits-muted);
+  margin-bottom: 8px;
+}
+
+.browse-card-name {
+  color: var(--turnits-ink);
+  font-size: 17px;
+  font-weight: 650;
+  margin-bottom: 15px;
+}
+
+.browse-card-price {
+  color: var(--turnits-forest);
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.browse-card-actions .browse-pill {
+  min-height: 42px;
+  border-radius: 12px;
+  padding: 10px 17px;
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .turnits-section-heading-title {
+    font-size: 25px !important;
+  }
+
+  .turnits-home-dashboard > div:first-child h1 {
+    font-size: 27px !important;
+  }
+
+  .turnits-dashboard-metrics {
+    gap: 10px !important;
+  }
+
+  .turnits-dashboard-metric {
+    min-height: 104px;
+    padding: 17px !important;
+  }
+
+  .turnits-dashboard-chart,
+  .turnits-dashboard-upcoming,
+  .turnits-dashboard-services,
+  .turnits-dashboard-business,
+  .turnits-dashboard-clients,
+  .turnits-dashboard-weekly {
+    padding: 17px !important;
+  }
+
+  .browse-card-grid {
+    gap: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browse-card,
+  .turnits-dashboard-metric {
+    transition: none !important;
+  }
+}

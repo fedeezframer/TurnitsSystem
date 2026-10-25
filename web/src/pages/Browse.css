@@ -1,4 +1,12 @@
 .browse {
+  --turnits-ink: #18221a;
+  --turnits-muted: #68736a;
+  --turnits-line: #e3e9e1;
+  --turnits-canvas: #f4f6f2;
+  --turnits-surface: #fff;
+  --turnits-green: #1b6b1a;
+  --turnits-forest: #173e1c;
+  --turnits-soft: #edf4e9;
   --browse-green: #1b6b1a;
   --browse-border: #dfe5da;
   --browse-muted: #778170;

@@ -5002,8 +5002,9 @@ function SeccionHeader({
     isMobile?: boolean
 }) {
     return (
-        <div style={{ marginBottom: 4 }}>
+        <div className="turnits-section-heading" style={{ marginBottom: 4 }}>
             <h1
+                className="turnits-section-heading-title"
                 style={{
                     fontFamily: "'Inter Display', -apple-system, sans-serif",
                     fontSize: isMobile ? 22 : 28,
@@ -5016,6 +5017,7 @@ function SeccionHeader({
             </h1>
             {subtitle && (
                 <p
+                    className="turnits-section-heading-subtitle"
                     style={{
                         fontFamily:
                             "'Inter Display', -apple-system, sans-serif",

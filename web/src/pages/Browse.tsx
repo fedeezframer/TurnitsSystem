@@ -14,6 +14,7 @@ import BrowseFlame from "./BrowseFlame";
 import { ChatIcon } from "../components/ChatChrome";
 import LoadingRunner from "../components/LoadingRunner";
 import "./Browse.css";
+import "../migrated/panel/design-refresh.css";
 
 type View = "inicio" | "ofertas" | "agenda" | "buscar" | "mensajes" | "coins" | "perfil";
 const NAV_LABELS = {

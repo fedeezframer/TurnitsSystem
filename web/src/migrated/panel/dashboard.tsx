@@ -23,7 +23,7 @@ function TurnitsDashboard_MetricCard({ label, value, trend, cardStyle }: any) {
               ? "#dc2626"
               : "#64748b"
     return (
-        <motion.div
+        <motion.div className="turnits-dashboard-metric"
             whileHover={{ y: -2 }}
             transition={{ duration: 0.16 }}
             style={{
@@ -219,7 +219,7 @@ function TurnitsDashboard_Chart({
     const yTicks = [0, 0.25, 0.5, 0.75, 1]
 
     return (
-        <div
+        <div className="turnits-dashboard-chart"
             style={{
                 background: "#fff",
                 border: "1px solid #e8edf2",
@@ -469,7 +469,7 @@ function TurnitsDashboard_Upcoming({
         )
         .slice(0, 5)
     return (
-        <div
+        <div className="turnits-dashboard-upcoming"
             style={{
                 background: "#fff",
                 border: "1px solid #e8edf2",
@@ -656,7 +656,7 @@ function TurnitsDashboard_ServicesMostRequested({
         1
     )
     return (
-        <div
+        <div className="turnits-dashboard-services"
             style={{
                 background: "#fff",
                 border: "1px solid #e8edf2",
@@ -790,7 +790,7 @@ function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
     )
     const top = dias[0]
     return (
-        <div
+        <div className="turnits-dashboard-business"
             style={{
                 background: "#fff",
                 border: "1px solid #e8edf2",
@@ -1070,7 +1070,7 @@ function TurnitsDashboard_RecentClients({ stats }: any) {
         if (items.length >= 4) break
     }
     return (
-        <div
+        <div className="turnits-dashboard-clients"
             style={{
                 background: "#fff",
                 border: "1px solid #e8edf2",
@@ -1263,7 +1263,7 @@ function TurnitsDashboard_WeeklySummary({ stats, accentColor }: any) {
     }
 
     return (
-        <div
+        <div className="turnits-dashboard-weekly"
             style={{
                 background: "#fff",
                 border: "1px solid #e8edf2",
@@ -2727,7 +2727,7 @@ function TurnitsDashboard_Content({
           }
         : undefined
     return (
-        <div
+        <div className="turnits-home-dashboard"
             style={{
                 display: "flex",
                 flexDirection: "column",
@@ -2796,7 +2796,7 @@ function TurnitsDashboard_Content({
 
             <style>{`.tn-hscroll{scrollbar-width:none;-ms-overflow-style:none}.tn-hscroll::-webkit-scrollbar{display:none}`}</style>
             <div
-                className="tn-hscroll"
+                className="tn-hscroll turnits-dashboard-metrics"
                 data-lenis-prevent="true"
                 style={
                     isMobile
@@ -2868,28 +2868,28 @@ function TurnitsDashboard_Content({
                 />
             </div>
 
-            <div
+            <div className="turnits-dashboard-main-grid"
                 style={{
                     display: "grid",
                     gridTemplateColumns: isMobile
                         ? "1fr"
-                        : "minmax(0,1.55fr) minmax(320px,.8fr)",
+                        : "minmax(320px,.92fr) minmax(0,1.45fr)",
                     gap: 12,
                 }}
             >
-                <TurnitsDashboard_Chart
-                    stats={stats}
-                    accentColor={accentColor}
-                />
                 <TurnitsDashboard_Upcoming
                     stats={stats}
                     accentColor={accentColor}
                     onNavigate={onNavigate}
                     ilustracionVacia={ilustracionProximosTurnosVacio}
                 />
+                <TurnitsDashboard_Chart
+                    stats={stats}
+                    accentColor={accentColor}
+                />
             </div>
 
-            <div
+            <div className="turnits-dashboard-data-grid"
                 style={{
                     display: "grid",
                     gridTemplateColumns: isMobile
@@ -2913,7 +2913,7 @@ function TurnitsDashboard_Content({
                 <TurnitsDashboard_RecentClients stats={stats} />
             </div>
 
-            <div
+            <div className="turnits-dashboard-extra-grid"
                 style={{
                     display: "grid",
                     gridTemplateColumns: isMobile
