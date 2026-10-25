@@ -1994,7 +1994,7 @@ export default function BookingFlow(props: any) {
                     data.error ||
                         `No se pudo crear la reserva (status ${res.status}).`
                 )
-            window.location.href = `${PENDIENTE_URL}?slug=${slug}&turno_id=${data.turno_id}&pendiente=true`
+            window.location.href = data.comprobante_url || `${PENDIENTE_URL}?slug=${slug}&turno_id=${data.turno_id}&pendiente=true`
         } catch (err: any) {
             console.error("❌ Error en reserva:", err?.message, {
                 slug,

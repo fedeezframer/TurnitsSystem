@@ -1,3 +1,4 @@
+import { validNewPassword, PASSWORD_ERROR } from "../web/src/shared/password-policy.js";
 import crypto from "node:crypto";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const quoteBookingEnabled = process.env.QUOTE_BOOKING_ENABLED === "true" && process.env.QUOTE_BOOKING_ROLLOUT_ENABLED === "true";
@@ -602,11 +603,9 @@ export function createBrowse({
       )
         fail("La contraseña actual no es correcta.", 401);
       if (
-        typeof nueva !== "string" ||
-        nueva.length < 6 ||
-        Buffer.byteLength(nueva) > 72
+        !validNewPassword(nueva)
       )
-        fail("Usá una contraseña de entre 6 y 72 bytes.");
+        fail(PASSWORD_ERROR);
       result(
         await supabase
           .from("consumidores")

@@ -1,3 +1,4 @@
+import { validNewPassword, PASSWORD_ERROR } from "../web/src/shared/password-policy.js";
 import crypto from "node:crypto";
 import { validCategories } from "../web/src/shared/categories.js";
 
@@ -121,15 +122,13 @@ export function createConsumerAccounts({
         /[\x00-\x1f]/.test(nombre + apellido) ||
         !emailValid(email) ||
         !/^[0-9]{7,15}$/.test(telefono) ||
-        typeof body.password !== "string" ||
-        body.password.length < 6 ||
-        Buffer.byteLength(body.password) > 72 ||
+        !validNewPassword(body.password) ||
         !intereses
       )
         return res.status(400).json({
           success: false,
           error:
-            "Revisá tus datos y elegí al menos un rubro. La contraseña debe tener entre 6 y 72 bytes.",
+            `Revisá tus datos y elegí al menos un rubro. ${PASSWORD_ERROR}`,
         });
       if (await findByEmail(email))
         return res.status(409).json({
@@ -351,13 +350,11 @@ export function createConsumerAccounts({
         });
       const password = req.body?.new_password;
       if (
-        typeof password !== "string" ||
-        password.length < 6 ||
-        Buffer.byteLength(password) > 72
+        !validNewPassword(password)
       )
         return res.status(400).json({
           success: false,
-          error: "La contraseña debe tener entre 6 y 72 bytes.",
+          error: PASSWORD_ERROR,
         });
       const updated = check(
         await supabase

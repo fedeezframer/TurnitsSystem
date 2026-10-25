@@ -131,6 +131,8 @@ for (const name of ["crearCheckoutOffer", "procesarPagoConfirmado"]) {
   vm.runInContext(fn.getText(ast), context);
 }
 (async () => {
+  const { createReceiptAccess } = await import("../api/receipt-access.js");
+  context.receiptAccess = createReceiptAccess({ secret: "test-receipt-secret" });
   const ctx = { user: { plan: "gratis" }, member: {}, config: {} };
   await assert.rejects(context.crearCheckoutOffer({...turn},{...ctx,config:{agenda_sin_pagos:true}},false),error=>error.status===409);
   assert.equal(preferences.length,0,'no new payment for a no-pay agenda');
@@ -139,6 +141,11 @@ for (const name of ["crearCheckoutOffer", "procesarPagoConfirmado"]) {
   assert.equal(preferences.length, 1);
   assert.equal(preferences[0].body.items[0].unit_price, 12000);
   assert.equal(preferences[0].body.marketplace_fee, 240);
+  const returnUrl = new URL(preferences[0].body.back_urls.success);
+  assert.equal(returnUrl.searchParams.get("turno_id"), id);
+  const scope = require("jsonwebtoken").verify(returnUrl.searchParams.get("receipt_token"), "test-receipt-secret:receipt", { audience: "turnits-receipt" });
+  assert.equal(scope.turnoId, id);
+  assert.equal(scope.slug, turn.slug);
   assert.equal(preferences[0].requestOptions.idempotencyKey, "offer-" + id);
   assert.equal(tables.pagos_pendientes[0].consumidor_id, consumer);
   assert.equal(tables.pagos_pendientes[0].browse_turno_id, id);

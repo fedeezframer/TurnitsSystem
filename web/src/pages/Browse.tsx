@@ -1613,7 +1613,7 @@ function BrowseContent() {
                       Nueva contraseña
                       <input
                         required
-                        minLength={6}
+                        minLength={12}
                         type="password"
                         autoComplete="new-password"
                         value={form.nueva || ""}

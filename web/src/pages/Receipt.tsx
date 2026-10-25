@@ -1,3 +1,4 @@
+import { selectStoredSession } from "../shared/session-startup";
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { appConfig } from "../config";
@@ -18,7 +19,8 @@ export default function Receipt({ failed = false }: { failed?: boolean }) {
   const slug = query.get("slug") || query.get("u") || "";
   const id = query.get("turno_id") || "";
   const paymentId = query.get("payment_id") || query.get("collection_id") || "";
-  const requestKey = `${slug}/${id}/${paymentId}`;
+  const receiptToken = query.get("receipt_token") || "";
+  const requestKey = `${slug}/${id}/${paymentId}/${receiptToken}`;
   const [snapshot, setSnapshot] = React.useState<any>(null);
   const turno = snapshot?.key === requestKey ? snapshot.turno : null;
   const [error, setError] = React.useState("");
@@ -34,7 +36,10 @@ export default function Receipt({ failed = false }: { failed?: boolean }) {
     const load = async () => {
       try {
         const path = id ? `/turnos/publico/${encodeURIComponent(id)}?slug=${encodeURIComponent(slug)}` : `/turnos/by-payment?payment_id=${encodeURIComponent(paymentId)}&slug=${encodeURIComponent(slug)}`;
-        const response = await fetch(appConfig.apiUrl + path, { signal: controller.signal, cache: "no-store" });
+        const token = selectStoredSession()?.token;
+        const headers: Record<string, string> = receiptToken ? { "x-receipt-token": receiptToken } : token ? { Authorization: `Bearer ${token}` } : {};
+        const response = await fetch(appConfig.apiUrl + path, { headers, signal: controller.signal, cache: "no-store", referrerPolicy: "no-referrer" });
+        if (response.status === 401 || response.status === 403) { setLoading(false); setError("Abrí el enlace completo del comprobante o iniciá sesión con la cuenta de la reserva."); return; }
         const data = await response.json();
         if (!response.ok || !data.success || !data.turno || (id && data.turno.id !== id)) throw new Error("Reserva no disponible");
         if (controller.signal.aborted) return;
@@ -49,17 +54,18 @@ export default function Receipt({ failed = false }: { failed?: boolean }) {
     };
     load();
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [slug, id, paymentId, requestKey]);
+  }, [slug, id, paymentId, receiptToken, requestKey]);
   const state = turno ? reservationState(turno) : null;
   React.useEffect(() => {
     if (!state) return;
     const destination = state === "confirmed" ? "/success" : state === "pending" ? "/pendiente" : "/alert";
     if (location.pathname === destination) return;
     const params = new URLSearchParams({ slug });
+    if (receiptToken) params.set("receipt_token", receiptToken);
     if (turno.id) params.set("turno_id", turno.id);
     else if (paymentId) params.set("payment_id", paymentId);
     navigate(`${destination}?${params}`, { replace: true });
-  }, [state, turno?.id, slug, paymentId, location.pathname, navigate]);
+  }, [state, turno?.id, slug, paymentId, receiptToken, location.pathname, navigate]);
   return <div className="receipt-page">
     <header className="receipt-header"><Link to={home} aria-label="Turnits, volver al inicio"><img src="/assets/browse/LogoTurnitsCompletoB.png" alt="Turnits" /></Link></header>
     <main className="receipt-main"><section className="receipt-content" aria-labelledby="receipt-title">
