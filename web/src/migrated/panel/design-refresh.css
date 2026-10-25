@@ -248,7 +248,7 @@
   box-shadow: 0 2px 8px rgba(26, 49, 25, .045);
 }
 
-.turnits-panel-nav-button[aria-current="page"] > div {
+.turnits-panel-nav-button[aria-current="page"] > .turnits-panel-nav-active-bg {
   background: transparent !important;
   border: 0 !important;
 }
@@ -396,9 +396,44 @@
 
 .turnits-dashboard-chart-toolbar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   min-height: 34px;
   margin: 0 12px;
+}
+
+.turnits-dashboard-chart-toolbar-start {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.turnits-dashboard-copy-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--turnits-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.turnits-dashboard-copy-link:hover {
+  color: var(--turnits-green);
+}
+
+.turnits-dashboard-copy-link:focus-visible {
+  outline: 2px solid var(--turnits-green);
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 .turnits-dashboard-chart-range {
@@ -478,12 +513,6 @@
   padding: 22px 22px 19px !important;
 }
 
-.turnits-dashboard-agenda-link {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: -8px;
-}
-
 .turnits-dashboard-main-grid,
 .turnits-dashboard-data-grid,
 .turnits-dashboard-extra-grid {
@@ -510,6 +539,12 @@
   }
 
   .turnits-dashboard-chart-range { gap: 15px; }
+
+  .turnits-dashboard-chart-toolbar { margin: 0 8px; gap: 8px; }
+
+  .turnits-dashboard-copy-link { gap: 6px; }
+
+  .turnits-dashboard-copy-link > div > span { font-size: 11.5px !important; }
 }
 
 @media (max-width: 520px) {

@@ -243,6 +243,9 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
     return (
         <div className="turnits-dashboard-chart">
             <div className="turnits-dashboard-chart-toolbar">
+                <div className="turnits-dashboard-chart-toolbar-start">
+                    <TurnitsDashboard_CopyAgendaLink accentColor={accentColor} />
+                </div>
                 <div className="turnits-dashboard-chart-range" role="tablist" aria-label="Período de ingresos">
                     {[["week", "Semana"], ["month", "Mes"], ["year", "Año"]].map(([id, label]) => (
                         <button
@@ -2594,15 +2597,11 @@ function TurnitsDashboard_CopyAgendaLink({ accentColor }: any) {
         setTimeout(() => setCopiado(false), 2000)
     }
     return (
-        <div
+        <button
+            type="button"
+            className="turnits-dashboard-copy-link"
             onClick={handleCopy}
-            style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: "pointer",
-                userSelect: "none",
-            }}
+            aria-label={copiado ? "Enlace copiado" : "Copiar link de tu agenda"}
         >
             <MercadoPagoConexion_LinkIcon size={14} />
             <div
@@ -2652,7 +2651,7 @@ function TurnitsDashboard_CopyAgendaLink({ accentColor }: any) {
                     ¡Copiado!
                 </span>
             </div>
-        </div>
+        </button>
     )
 }
 
@@ -2798,10 +2797,6 @@ function TurnitsDashboard_Content({
                         texto: `${Math.round(Number(servicioTop.porcentaje || 0))}% de tus reservas`,
                     } : null}
                 />
-            </div>
-
-            <div className="turnits-dashboard-agenda-link">
-                <TurnitsDashboard_CopyAgendaLink accentColor={accentColor} />
             </div>
 
             <div className="turnits-dashboard-main-grid"

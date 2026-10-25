@@ -390,6 +390,7 @@ function NavButton({
     >
       {active && (
         <motion.div
+          className="turnits-panel-nav-active-bg"
           layoutId="navActivePill"
           transition={{ type: "spring", stiffness: 420, damping: 34 }}
           style={{
