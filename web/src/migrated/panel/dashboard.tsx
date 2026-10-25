@@ -135,10 +135,9 @@ function TurnitsDashboard_Chart({
     accentColor,
     monthMode = false,
     monthRevenue = 0,
-    monthTrend = null,
 }: any) {
     const [metric, setMetric] = React.useState<"turnos" | "ingresos">("ingresos")
-    const [range, setRange] = React.useState("30d")
+    const [range, setRange] = React.useState("month")
     const [hoveredPoint, setHoveredPoint] = React.useState<number | null>(null)
     // Ancho real de la tarjeta: el SVG se dibuja a ese ancho (1 unidad = 1px)
     // para que llene todo el espacio y los textos se vean a tamaño real.
@@ -159,10 +158,12 @@ function TurnitsDashboard_Chart({
         }
         const map = stats?.ventasPorDia || {}
         const now = new Date()
-        const days = range === "7d" ? 7 : 30
+        const mondayOffset = (now.getDay() + 6) % 7
+        const weekStart = Math.max(1, now.getDate() - mondayOffset)
+        const startDay = range === "week" ? weekStart : 1
+        const days = Math.max(1, now.getDate() - startDay + 1)
         return Array.from({ length: days }, (_, i) => {
-            const d = new Date(now)
-            d.setDate(now.getDate() - (days - 1 - i))
+            const d = new Date(now.getFullYear(), now.getMonth(), startDay + i)
             const iso = d.toISOString().slice(0, 10)
             return {
                 label: d
@@ -182,7 +183,6 @@ function TurnitsDashboard_Chart({
             : Math.round(n).toLocaleString("es-AR")
 
     const values = data.map((d: any) => d.value)
-    const total = values.reduce((a: number, b: number) => a + b, 0)
     const hasActivity = values.some((value: number) => value > 0)
     const max = Math.max(...values, 1)
     const min = 0 // los ejes arrancan siempre en 0, más fácil de leer
@@ -225,7 +225,7 @@ function TurnitsDashboard_Chart({
     const yTicks = hasActivity ? (max <= 1 ? [0, 1] : [0, 0.5, 1]) : []
     const hovered = hoveredPoint == null ? null : pts[hoveredPoint]
     const plotBottom = marginTop + usableH
-    const barWidth = Math.max(2, Math.min(9, usableW / Math.max(data.length, 1) * 0.42))
+    const barWidth = Math.max(3, Math.min(12, usableW / Math.max(data.length, 1) * 0.68))
 
     return (
         <div className="turnits-dashboard-chart">
@@ -235,22 +235,13 @@ function TurnitsDashboard_Chart({
                     <strong className="turnits-dashboard-revenue-value">
                         {TurnitsDashboard_money(monthRevenue)}
                     </strong>
-                    {monthTrend && (
-                        <span className={`turnits-dashboard-revenue-trend turnits-dashboard-revenue-trend-${monthTrend.tono}`}>
-                            {monthTrend.texto}
-                        </span>
-                    )}
                 </div>
-                <span className="turnits-dashboard-revenue-caption">comparado con el mes anterior</span>
             </section>
 
             <div className="turnits-dashboard-chart-toolbar">
                 <div>
-                    <div className="turnits-dashboard-chart-title">Tendencia</div>
-                    <div className="turnits-dashboard-chart-summary">
-                        {data.length > 0
-                            ? `${metric === "ingresos" ? "Ingresos" : "Turnos"} · ${metric === "ingresos" ? (range === "7d" ? "últimos 7 días" : "últimos 30 días") : "actividad reciente"} · ${fmtValue(total)}`
-                            : "Evolución reciente de tu negocio"}
+                    <div className="turnits-dashboard-chart-title">
+                        {metric === "ingresos" ? "Ingresos por día" : "Turnos por semana"}
                     </div>
                 </div>
                 <div className="turnits-dashboard-chart-controls">
@@ -272,7 +263,7 @@ function TurnitsDashboard_Chart({
                     </div>
                     {metric === "ingresos" && (
                         <div className="turnits-dashboard-chart-range" aria-label="Período de la gráfica">
-                            {["7d", "30d"].map((id) => (
+                            {[["week", "Semana"], ["month", "Mes"]].map(([id, label]) => (
                                 <button
                                     key={id}
                                     type="button"
@@ -280,7 +271,7 @@ function TurnitsDashboard_Chart({
                                     onClick={() => { setRange(id); setHoveredPoint(null) }}
                                     className={range === id ? "is-active" : ""}
                                 >
-                                    {id === "7d" ? "7 días" : "30 días"}
+                                    {label}
                                 </button>
                             ))}
                         </div>
@@ -401,7 +392,7 @@ function TurnitsDashboard_Chart({
                                         height={Math.max(plotBottom - p.y, 2)}
                                         rx={barWidth / 2}
                                         fill={accentColor || "#1b6b1a"}
-                                        opacity={hoveredPoint === i ? 0.48 : 0.17}
+                                        opacity={hoveredPoint === i ? 0.56 : 0.3}
                                         pointerEvents="none"
                                     />
                                 )}
@@ -2758,10 +2749,6 @@ function TurnitsDashboard_Content({
         ingresosAnteriores != null && turnosAnteriores > 0
             ? ingresosAnteriores / turnosAnteriores
             : null
-    const tendenciaIngresos =
-        ingresosAnteriores == null
-            ? null
-            : TurnitsDashboard_percent(ingresosActuales, ingresosAnteriores)
     const metricCardMobile: React.CSSProperties | undefined = isMobile
         ? {
               flex: "0 0 auto",
@@ -2844,7 +2831,6 @@ function TurnitsDashboard_Content({
                     stats={stats}
                     accentColor={accentColor}
                     monthRevenue={ingresosActuales}
-                    monthTrend={tendenciaIngresos}
                 />
             </div>
             <div
