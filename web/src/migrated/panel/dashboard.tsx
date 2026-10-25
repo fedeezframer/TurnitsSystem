@@ -150,6 +150,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                 const key = `${now.getFullYear()}-${String(month + 1).padStart(2, "0")}`
                 return {
                     label: date.toLocaleDateString("es-AR", { month: "short" }).replace(".", ""),
+                    detailLabel: date.toLocaleDateString("es-AR", { month: "long", year: "numeric" }),
                     value: byMonth.get(key) || 0,
                 }
             })
@@ -168,6 +169,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                     : i === 0
                       ? `${d.getDate()} ${d.toLocaleDateString("es-AR", { month: "short" }).replace(".", "")}`
                       : String(d.getDate()),
+                detailLabel: d.toLocaleDateString("es-AR", { day: "numeric", month: "short" }).replace(".", ""),
                 value: Number(map?.[iso]?.volumen || 0),
             }
         })
@@ -238,7 +240,26 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
 
     const hovered = hoveredPoint == null ? null : pts[hoveredPoint]
     const plotBottom = marginTop + usableH
-    const hitWidth = usableW / Math.max(data.length, 1)
+    const selectPointAt = (clientX: number, bounds: DOMRect) => {
+        if (!pts.length) return
+        const chartX = ((clientX - bounds.left) / Math.max(bounds.width, 1)) * w
+        const progress = Math.min(1, Math.max(0, (chartX - marginLeft) / Math.max(usableW, 1)))
+        setHoveredPoint(Math.round(progress * Math.max(pts.length - 1, 0)))
+    }
+    const handleChartKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+        if (event.key === "Escape") {
+            setHoveredPoint(null)
+            return
+        }
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return
+        event.preventDefault()
+        setHoveredPoint((current) => {
+            if (event.key === "Home") return 0
+            if (event.key === "End") return Math.max(pts.length - 1, 0)
+            const start = current ?? (event.key === "ArrowRight" ? -1 : pts.length)
+            return Math.min(Math.max(start + (event.key === "ArrowRight" ? 1 : -1), 0), pts.length - 1)
+        })
+    }
 
     return (
         <div className="turnits-dashboard-chart">
@@ -278,7 +299,6 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
 
             <div
                 ref={wrapRef}
-                onMouseLeave={() => setHoveredPoint(null)}
                 style={{
                     position: "relative",
                     width: "100%",
@@ -306,10 +326,38 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                             width: "100%",
                             height: h,
                             maxWidth: "100%",
+                            touchAction: "pan-y",
+                            cursor: hasActivity ? "crosshair" : "default",
                         }}
-                        role="img"
-                        aria-label={`Ingresos por ${range === "year" ? "mes" : "día"}`}
+                        role="group"
+                        aria-roledescription="gráfico interactivo"
+                        aria-label={hovered
+                            ? `${hovered.detailLabel}: ${fmtValue(hovered.value)}. Usa las flechas para recorrer las fechas.`
+                            : `Ingresos por ${range === "year" ? "mes" : "día"}. Toca o desliza para consultar cada fecha.`}
+                        tabIndex={data.length ? 0 : -1}
+                        onKeyDown={handleChartKeyDown}
+                        onPointerDown={(event) => {
+                            selectPointAt(event.clientX, event.currentTarget.getBoundingClientRect())
+                            if (event.pointerType === "touch") event.currentTarget.setPointerCapture(event.pointerId)
+                        }}
+                        onPointerMove={(event) => {
+                            if (event.pointerType !== "mouse" || event.buttons > 0) {
+                                selectPointAt(event.clientX, event.currentTarget.getBoundingClientRect())
+                            }
+                        }}
+                        onPointerLeave={(event) => {
+                            if (event.pointerType === "mouse") setHoveredPoint(null)
+                        }}
+                        onClick={(event) => selectPointAt(event.clientX, event.currentTarget.getBoundingClientRect())}
                     >
+                        <rect
+                            x={marginLeft}
+                            y={marginTop}
+                            width={usableW}
+                            height={usableH}
+                            fill="transparent"
+                            pointerEvents="all"
+                        />
                         <line
                             x1={marginLeft}
                             x2={w - marginRight}
@@ -332,40 +380,19 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                                 />
                             })
                         )}
-                        {hasActivity && pts.map((p: any, i: number) => (
-                            <g
-                                key={`point-hit-${i}`}
-                                onMouseEnter={() => setHoveredPoint(i)}
-                                onFocus={() => setHoveredPoint(i)}
-                                onBlur={() => setHoveredPoint(null)}
-                                onClick={() => setHoveredPoint(i)}
-                                style={{ cursor: "crosshair" }}
-                            >
-                                <rect
-                                    x={Math.max(marginLeft, Math.min(p.x - hitWidth / 2, w - marginRight - hitWidth))}
-                                    y={marginTop}
-                                    width={hitWidth}
-                                    height={usableH}
-                                    fill="transparent"
-                                    tabIndex={0}
-                                    role="button"
-                                    aria-label={`${p.label}: ${fmtValue(p.value)}`}
-                                />
-                                {hoveredPoint === i && (
-                                    <line
-                                        x1={p.x}
-                                        x2={p.x}
-                                        y1={marginTop}
-                                        y2={plotBottom}
-                                        stroke={accentColor || "#1b6b1a"}
-                                        strokeWidth="1"
-                                        strokeDasharray="3 4"
-                                        opacity=".42"
-                                        pointerEvents="none"
-                                    />
-                                )}
-                            </g>
-                        ))}
+                        {hovered && (
+                            <line
+                                x1={hovered.x}
+                                x2={hovered.x}
+                                y1={marginTop}
+                                y2={plotBottom}
+                                stroke={accentColor || "#1b6b1a"}
+                                strokeWidth="1"
+                                strokeDasharray="3 4"
+                                opacity=".42"
+                                pointerEvents="none"
+                            />
+                        )}
                         {hasActivity && (
                             <polyline
                                 points={line}
@@ -421,7 +448,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                         gráfico.
                     </div>
                 )}
-                {hasActivity && hovered && (
+                {hovered && (
                     <div
                         className="turnits-dashboard-chart-tooltip"
                         style={{
@@ -431,7 +458,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                         aria-live="polite"
                     >
                         <strong>{fmtValue(hovered.value)}</strong>
-                        <span>{hovered.label}</span>
+                        <span>{hovered.detailLabel || hovered.label}</span>
                     </div>
                 )}
             </div>
