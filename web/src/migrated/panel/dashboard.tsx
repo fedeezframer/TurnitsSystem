@@ -225,10 +225,6 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
         return { x, y, ...d }
     })
     const line = pts.map((p: any) => `${p.x},${p.y}`).join(" ")
-    const area = pts.length
-        ? `${marginLeft},${marginTop + usableH} ${line} ${w - marginRight},${marginTop + usableH}`
-        : ""
-
     // Mantiene pocas marcas regulares, como un calendario mensual.
     const labelStep = range === "week" ? 1 : range === "month" ? 7 : isNarrow ? 3 : 2
     const xLabelIdx = new Set<number>()
@@ -242,7 +238,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
 
     const hovered = hoveredPoint == null ? null : pts[hoveredPoint]
     const plotBottom = marginTop + usableH
-    const barWidth = Math.max(3, Math.min(12, usableW / Math.max(data.length, 1) * 0.68))
+    const hitWidth = usableW / Math.max(data.length, 1)
 
     return (
         <div className="turnits-dashboard-chart">
@@ -319,29 +315,23 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                             stroke="#cfd7cf"
                             strokeWidth="1"
                         />
-                        {!hasActivity && (
-                            pts.map((p: any, i: number) => (
-                                <rect
-                                    key={`empty-day-${i}`}
-                                    x={p.x - 2}
-                                    y={plotBottom - 3}
-                                    width={4}
-                                    height={3}
-                                    rx={1}
-                                    fill="#cfd7cf"
-                                />
-                            ))
-                        )}
                         {hasActivity && (
-                            <polygon
-                                points={area}
-                                fill={accentColor || "#22c55e"}
-                                fillOpacity={0.045}
-                            />
+                            [0.25, 0.5, 0.75].map((step) => {
+                                const y = marginTop + usableH * (1 - step)
+                                return <line
+                                    key={`guide-${step}`}
+                                    x1={marginLeft}
+                                    x2={w - marginRight}
+                                    y1={y}
+                                    y2={y}
+                                    stroke="#e7ece7"
+                                    strokeWidth="1"
+                                />
+                            })
                         )}
                         {hasActivity && pts.map((p: any, i: number) => (
                             <g
-                                key={`bar-${i}`}
+                                key={`point-hit-${i}`}
                                 onMouseEnter={() => setHoveredPoint(i)}
                                 onFocus={() => setHoveredPoint(i)}
                                 onBlur={() => setHoveredPoint(null)}
@@ -349,27 +339,15 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                                 style={{ cursor: "crosshair" }}
                             >
                                 <rect
-                                    x={p.x - 5}
+                                    x={Math.max(marginLeft, Math.min(p.x - hitWidth / 2, w - marginRight - hitWidth))}
                                     y={marginTop}
-                                    width={10}
+                                    width={hitWidth}
                                     height={usableH}
                                     fill="transparent"
                                     tabIndex={0}
                                     role="button"
                                     aria-label={`${p.label}: ${fmtValue(p.value)}`}
                                 />
-                                {p.value > 0 && (
-                                    <rect
-                                        x={p.x - barWidth / 2}
-                                        y={p.y}
-                                        width={barWidth}
-                                        height={Math.max(plotBottom - p.y, 2)}
-                                        rx={barWidth / 2}
-                                        fill={accentColor || "#1b6b1a"}
-                                        opacity={hoveredPoint === i ? 0.56 : 0.3}
-                                        pointerEvents="none"
-                                    />
-                                )}
                                 {hoveredPoint === i && (
                                     <line
                                         x1={p.x}
@@ -390,7 +368,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                                 points={line}
                                 fill="none"
                                 stroke={accentColor || "#1b6b1a"}
-                                strokeWidth="2.2"
+                                strokeWidth="2.6"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 pointerEvents="none"
