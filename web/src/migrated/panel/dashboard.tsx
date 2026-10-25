@@ -9,7 +9,7 @@ import {
     useCallback,
     useLayoutEffect,
 } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, animate as animateValue, useReducedMotion } from "framer-motion"
 import { createPortal } from "react-dom"
 import { Turnits_useElementWidth, TurnitsDashboard_shortMoney, TurnitsDashboard_dateLabel, TurnitsDashboard_money, TurnitsDashboard_COLOR_SUBE, TurnitsDashboard_COLOR_BAJA, TurnitsDashboard_COLOR_IGUAL, TurnitsDashboard_rangoLabel, TurnitsDashboard_variacion, TurnitsDashboard_getSlug, TurnitsDashboard_getToken, QrPanel_slug, TurnitsDashboard_percent } from "./common"
 import { PlanEstado, RendimientoEquipo } from "./inicio"
@@ -194,6 +194,20 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
         : range === "week"
           ? Number(periodComparison?.actual?.ingresos ?? totalSeries)
           : totalSeries
+    const [animatedRevenue, setAnimatedRevenue] = React.useState(0)
+    const animatedRevenueRef = React.useRef(0)
+    const prefersReducedMotion = useReducedMotion()
+    React.useEffect(() => {
+        const controls = animateValue(animatedRevenueRef.current, periodRevenue, {
+            duration: prefersReducedMotion ? 0 : 0.42,
+            ease: [0.22, 1, 0.36, 1],
+            onUpdate: (value) => {
+                animatedRevenueRef.current = value
+                setAnimatedRevenue(Math.round(value))
+            },
+        })
+        return () => controls.stop()
+    }, [periodRevenue, prefersReducedMotion])
     const previousRevenue = range === "year"
         ? previousYearTotal
         : periodComparison?.anterior?.ingresos == null
@@ -287,7 +301,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                 <span className="turnits-dashboard-revenue-label">Ingresos</span>
                 <div className="turnits-dashboard-revenue-hero-value">
                     <strong className="turnits-dashboard-revenue-value">
-                        {TurnitsDashboard_money(periodRevenue)}
+                        {TurnitsDashboard_money(animatedRevenue)}
                     </strong>
                 </div>
                 {showRevenueTrend && (
