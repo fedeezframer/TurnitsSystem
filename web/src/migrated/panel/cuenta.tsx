@@ -969,7 +969,7 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
                     const gratis = p.id === "gratis", featured = p.id === "basico", monto = periodo === "anual" && !gratis ? p.precio_anual : p.precio_mensual
                     const actual = cuenta?.plan === p.id && (gratis || (cuenta?.estado === "activo" && (!cuenta.fecha_vencimiento || new Date(cuenta.fecha_vencimiento) > new Date())))
                     return <div key={p.id} className={"tn-planes-card" + (featured ? " featured" : "")}>
-                        {featured && <span style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", padding: "6px 13px", borderRadius: 99, background: "#196b1f", color: "#fff", fontSize: 12, fontWeight: 700 }}><TurnitsPlanIcon plan="basico" size={14} />Más elegido</span>}
+                        {featured && <span style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", padding: "6px 13px", borderRadius: 99, background: "#196b1f", color: "#fff", fontSize: 12, fontWeight: 700 }}>Más elegido</span>}
                         <div style={{ textAlign: "center" }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, fontSize: 15, color: featured ? "#196b1f" : "#111827" }}>{!gratis && <TurnitsPlanIcon plan={p.id} size={20} />}Plan {p.nombre}</div>
                             <div style={{ fontSize: 31, fontWeight: 800, marginTop: 12, color: featured ? "#196b1f" : "#111827", letterSpacing: "-.7px" }}>{gratis ? "GRATIS" : money(monto)}</div>
