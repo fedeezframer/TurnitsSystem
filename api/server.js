@@ -379,32 +379,12 @@ async function generarSlugUnico(businessName) {
 // se puede dejar ninguna fila huérfana con ese slug: la cuenta nueva la
 // "heredaría" (servicios, extras, equipo, notificaciones —y como los tips se
 // deduplican por slug, ni siquiera se generarían los nuevos—, etc.).
-// No se confía en que existan ON DELETE CASCADE en la base: se borra todo
-// explícitamente, hijos primero. Si ya cascadea, estos deletes no hacen nada.
+// Una sola operación: las FK del negocio eliminan sus dependencias y las
+// referencias cruzadas de presupuestos se validan al confirmar la transacción.
+// Si alguna relación impide el borrado, se conserva la cuenta completa.
 async function borrarNegocioCompleto(slug) {
-  const borrarPor = async (tabla, columna, valor) => {
-    const { error } = await supabase.from(tabla).delete().eq(columna, valor);
-    if (error) throw new Error(`${tabla}: ${error.message}`);
-  };
-
-  // ids de servicios: hacen falta para limpiar las tablas de vínculo
-  const { data: servs, error: servsErr } = await supabase.from("servicios").select("id").eq("slug", slug);
-  if (servsErr) throw new Error(`servicios: ${servsErr.message}`);
-  const servicioIds = (servs || []).map((s) => s.id);
-
-  for (const tabla of ["reprogramaciones", "turnos", "lista_espera", "notificaciones", "pagos_pendientes", "push_subscriptions"]) {
-    await borrarPor(tabla, "slug", slug);
-  }
-  if (servicioIds.length) {
-    for (const tabla of ["servicio_extras", "servicio_equipo"]) {
-      const { error } = await supabase.from(tabla).delete().in("servicio_id", servicioIds);
-      if (error) throw new Error(`${tabla}: ${error.message}`);
-    }
-  }
-  for (const tabla of ["servicios", "extras", "equipo"]) {
-    await borrarPor(tabla, "slug", slug);
-  }
-  await borrarPor("usuarios", "slug", slug);
+  const { error } = await supabase.from("usuarios").delete().eq("slug", slug);
+  if (error) throw new Error(`usuarios: ${error.message}`);
 
   // Imágenes en Storage (logo, comprobantes, fotos de servicios / equipo /
   // extras). "Best effort": el negocio ya está borrado, si algo falla acá
