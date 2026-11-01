@@ -12,7 +12,16 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
 import { OnboardingNube_ACCENT, OnboardingNube_HAIRLINE, OnboardingNube_INK, OnboardingNube_FONT_BODY, OnboardingNube_getSlug, safeLocalStorage, OnboardingNube_getToken, OnboardingNube_marcarVisto, safeLocalStorageSet, OnboardingNube_esperarToken, OnboardingNube_MSG_SIN_SESION, OnboardingNube_DIAS, MercadoPagoConexion_solicitarUrlOAuth, OnboardingNube_MUTED, OnboardingNube_FONT_DISPLAY, OnboardingNube_DURACIONES } from "./common"
-import { OnboardingNube_Fondo, OnboardingNube_Glass, OnboardingNube_Folio, OnboardingNube_Input } from "./cuenta"
+import { OnboardingNube_Input } from "./cuenta"
+import SetupArtwork, { type SetupStep } from "../../components/SetupArtwork"
+import "./onboarding.css"
+
+function OnboardingSetupCard({ step, children }: { step: SetupStep; children: React.ReactNode }) {
+    return <section className="tn-onb-card" data-step={step} aria-label="Configuración inicial">
+        <div className="tn-onb-art"><SetupArtwork step={step} /></div>
+        <div className="tn-onb-content">{children}</div>
+    </section>
+}
 
 function OnboardingNube_Chip({
     active,
@@ -69,7 +78,7 @@ function OnboardingNube_BotonPrincipal({
             style={{
                 width: "100%",
                 padding: "13px 16px",
-                borderRadius: 12,
+                borderRadius: 999,
                 border: "none",
                 background:
                     disabled || loading
@@ -77,13 +86,10 @@ function OnboardingNube_BotonPrincipal({
                         : OnboardingNube_ACCENT,
                 color: "#fff",
                 fontSize: 14.5,
-                fontWeight: 700,
+                fontWeight: 500,
                 cursor: disabled || loading ? "default" : "pointer",
                 fontFamily: OnboardingNube_FONT_BODY,
-                boxShadow:
-                    disabled || loading
-                        ? "none"
-                        : "0 8px 20px rgba(27,107,26,0.24)",
+                boxShadow: "none",
             }}
         >
             {loading ? "Guardando..." : children}
@@ -603,18 +609,6 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
             {/* Si la tarjeta es más alta que la pantalla (teclado abierto,
                 celulares chicos) se puede scrollear en vez de quedar
                 cortada arriba. "safe center" evita el corte del tope. */}
-            <style>{`
-.tn-onb-root{overflow-y:auto}
-@supports (align-items:safe center){.tn-onb-root{align-items:safe center !important}}
-.tn-onb-time-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:14px;row-gap:10px;width:100%;min-width:0}
-.tn-onb-time-row>label{width:100%;max-width:100%;min-width:0}
-.tn-onb-time-row input[type=time]{display:block;width:calc(100% - 6px) !important;max-width:calc(100% - 6px) !important;min-width:0 !important;box-sizing:border-box;font-size:16px !important;padding:7px 4px !important;justify-self:start}
-@media (max-width:640px){
-.tn-onb-root{padding:20px 14px !important}
-.tn-onb-glass{padding:26px 20px !important}
-}
-`}</style>
-            <OnboardingNube_Fondo />
 
             <AnimatePresence mode="wait">
                 {fase === "cargando" && (
@@ -665,66 +659,32 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                             ease: "easeOut",
                         }}
                         style={{
-                            width: "min(100%, 460px)",
+                            width: "min(100%, 880px)",
                             boxSizing: "border-box",
                             margin: "0 auto",
                         }}
                     >
-                        <OnboardingNube_Glass>
+                        <OnboardingSetupCard step={paso === 0 ? "servicios" : paso === pasoPago ? "pagos" : "horarios"}>
                             <button
+                                className="tn-onb-skip"
                                 onClick={omitirTodo}
-                                style={{
-                                    display: "block",
-                                    margin: "-10px 0 14px auto",
-                                    background: "transparent",
-                                    border: "none",
-                                    padding: "4px 0",
-                                    fontSize: 12.5,
-                                    fontWeight: 700,
-                                    color: OnboardingNube_MUTED,
-                                    textDecoration: "underline",
-                                    textUnderlineOffset: "3px",
-                                    cursor: "pointer",
-                                    fontFamily: OnboardingNube_FONT_BODY,
-                                }}
                             >
                                 Seguir después desde Inicio
                             </button>
-                            <div
-                                style={{
-                                    textAlign: "center" as const,
-                                    marginBottom: 22,
-                                }}
-                            >
-                                <div style={{ display: "flex", justifyContent: "center" }}>
-                                    <OnboardingNube_Folio total={totalPasos} current={paso} />
+                            <div className="tn-onb-heading">
+                                <div className="tn-onb-progress" role="img" aria-label={`Paso ${paso + 1} de ${totalPasos}`}>
+                                    {Array.from({ length: totalPasos }, (_, index) => <span key={index} data-active={index <= paso} />)}
                                 </div>
 
-                                <div
-                                    style={{
-                                        fontFamily: OnboardingNube_FONT_DISPLAY,
-                                        fontSize: 22,
-                                        fontWeight: 700,
-                                        color: OnboardingNube_INK,
-                                        letterSpacing: "-0.01em",
-                                        marginTop: 10,
-                                        marginBottom: 6,
-                                    }}
-                                >
+                                <h2 className="tn-onb-title">
                                     {paso === 0 && (quoteMode ? "Mostrá qué trabajos realizás" : "Creá tu primer servicio")}
 
                                     {paso === 1 && !quoteMode && "Elegí tu disponibilidad"}
 
                                     {paso === pasoPago && (quoteMode ? "¿Cómo querés cobrar después?" : "Cómo confirman la reserva")}
-                                </div>
+                                </h2>
 
-                                <div
-                                    style={{
-                                        fontSize: 13,
-                                        color: OnboardingNube_MUTED,
-                                        lineHeight: 1.45,
-                                    }}
-                                >
+                                <div className="tn-onb-description">
                                     {paso === 0 &&
                                         (quoteMode
                                             ? "Creá una opción para que te encuentren en Browse. Cuando publiques tu perfil, van a poder consultarte por chat. El precio, el tiempo y el alcance se acuerdan en cada consulta."
@@ -1076,7 +1036,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     )}
                                 </div>
                             )}
-                        </OnboardingNube_Glass>
+                        </OnboardingSetupCard>
                     </motion.div>
                 )}
 
@@ -1100,12 +1060,12 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                             ease: "easeOut",
                         }}
                         style={{
-                            width: "min(100%, 460px)",
+                            width: "min(100%, 880px)",
                             boxSizing: "border-box",
                             margin: "0 auto",
                         }}
                     >
-                        <OnboardingNube_Glass>
+                        <OnboardingSetupCard step="horarios">
                             <div
                                 style={{
                                     textAlign: "center" as const,
@@ -1163,7 +1123,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                         : "En Inicio podés revisar lo que falta, abrir tu agenda y copiar el enlace para tus clientes."}
                                 </div>
                             </div>
-                        </OnboardingNube_Glass>
+                        </OnboardingSetupCard>
                     </motion.div>
                 )}
             </AnimatePresence>

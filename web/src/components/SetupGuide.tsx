@@ -3,6 +3,7 @@ import { selectStoredSession } from "../shared/session-startup";
 import { fetchPanelRead } from "../shared/panel-requests";
 import { setupProgress } from "../shared/setup-progress";
 import "./SetupGuide.css";
+import SetupArtwork, { type SetupStep } from "./SetupArtwork";
 
 export default function SetupGuide({ baseUrl, onNavigate }: {
   baseUrl: string; onNavigate: (section: "servicios" | "horarios" | "pagos") => void;
@@ -48,8 +49,9 @@ export default function SetupGuide({ baseUrl, onNavigate }: {
   const next = snapshot?.progress.steps.find(step => !step.done);
   const titles: Record<string, string> = { servicios: "Sumá tu primer servicio", horarios: "Definí tus horarios", pagos: "Configurá tus cobros" };
   const actions: Record<string, string> = { servicios: "Agregar servicio", horarios: "Elegir horarios", pagos: "Ir a Pagos" };
-  return <section className="setup-guide" aria-labelledby="setup-guide-title" aria-busy={!snapshot && !error} data-completed={snapshot?.progress.completed}>
-    <img className="setup-guide-art" src="/assets/setup/setup-calendar.webp" alt="" aria-hidden="true" decoding="async" />
+  const artStep = !error && !snapshot?.progress.paused ? next?.id as SetupStep | undefined : undefined;
+  return <section className="setup-guide" aria-labelledby="setup-guide-title" aria-busy={!snapshot && !error} data-completed={snapshot?.progress.completed} data-step={artStep}>
+    <SetupArtwork step={artStep} className="setup-guide-art" />
     <div className="setup-guide-surface">
     <div className="setup-guide-main">
       <div>

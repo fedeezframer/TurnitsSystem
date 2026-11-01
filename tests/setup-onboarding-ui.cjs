@@ -5,14 +5,15 @@ const base = process.env.SETUP_TEST_URL || "http://127.0.0.1:4182";
 const output = process.env.SETUP_SCREENSHOTS;
 (async () => {
   const browser = await chromium.launch({ headless: true, channel: "msedge" });
-  const context = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"] });
+  const context = await browser.newContext({ reducedMotion: "reduce", permissions: ["clipboard-read", "clipboard-write"] });
   const page = await context.newPage();
+  page.setDefaultTimeout(15000);
   const errors = [], writes = [];
   page.on("pageerror", error => errors.push(error.message));
-  let complete = false, failed = false, fresh = false;
+  let complete = false, failed = false, fresh = false, missing = "pagos";
   const settings = () => ({ slug: "demo", activo: true, plan: "basico", business_name: "Demo", estado_suscripcion: "activa",
     mp_status: complete ? "Conectado" : "Desconectado", metodo_pago: "sena", porcentaje_sena: 30,
-    horarios: fresh ? {} : { lunes: { activo: true, jornada: ["09:00", "18:00"], descanso: [null, null] } }, excepciones: [] });
+    horarios: fresh || missing === "horarios" ? {} : { lunes: { activo: true, jornada: ["09:00", "18:00"], descanso: [null, null] } }, excepciones: [] });
   await context.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url());
     const api = url.pathname.startsWith("/api/") || url.hostname === "negosocio.onrender.com";
@@ -20,7 +21,7 @@ const output = process.env.SETUP_SCREENSHOTS;
     const endpoint = url.pathname.replace(/^\/api/, "");
     if (request.method() !== "GET") writes.push({ endpoint, body: request.postDataJSON() });
     let body = { success: true, active: true, rol: "owner", slug: "demo", settings: settings(),
-      servicios: fresh ? [] : [{ id: "service", nombre: "Corte", precio: 8500, duracion: 30, activo: true }],
+      servicios: fresh || missing === "servicios" ? [] : [{ id: "service", nombre: "Corte", precio: 8500, duracion: 30, activo: true }],
       equipo: [], turnos: [], turnosLista: [], notificaciones: [], no_leidas: 0, planes: [], mensajes: [],
       turnosMes: 0, turnosHoy: 0, totalClientes: 0, clientesNuevos: 0, turnosMesAnterior: 0,
       logros: {}, ventas: {}, chartData: [], ventasPorDia: {}, negocios: [], consultas: [], promociones: [] };
@@ -102,6 +103,23 @@ const output = process.env.SETUP_SCREENSHOTS;
         await page.screenshot({ path: path.join(output, `Turnits-inicio-integrado-${width}.png`) });
       }
     }
+    for (const [step, asset] of [["servicios", "services"], ["horarios", "calendar"], ["pagos", "payments"]]) {
+      console.log('Checking artwork:', step);
+      missing = step;
+      for (const width of [320, 390, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(base + "/panel/demo");
+        const guide = page.locator(`.setup-guide[data-step="${step}"]`);
+        await guide.waitFor();
+        await page.locator("#turnits-startup-preloader").waitFor({state:"hidden"});
+        const art = guide.locator('.setup-guide-art');
+        await art.evaluate(image => image.decode());
+        assert.ok((await art.getAttribute('src')).endsWith(`setup-${asset}.webp`));
+        assert.equal(await guide.getByRole('button').count(), 1);
+        assert.equal(await guide.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+        if (output) await guide.screenshot({path: path.join(output, `Turnits-aviso-${step}-${width}.png`)});
+      }
+    }
     await page.locator(".setup-guide").getByRole("button", { name: "Ir a Pagos", exact: true }).click();
     await page.locator(".setup-guide").waitFor({ state: "detached" });
     complete = true;
@@ -122,7 +140,15 @@ const output = process.env.SETUP_SCREENSHOTS;
     await page.goto(base + "/panel/demo?tutorial=1");
     await page.locator(".tn-onb-root").waitFor();
     await page.getByText("Creá tu primer servicio", { exact: true }).waitFor();
+    await page.locator("#turnits-startup-preloader").waitFor({state:"hidden"});
     assert.equal(await page.locator(".setup-guide").count(), 0, "the reminder does not replace or appear before the original tutorial");
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({width, height: 900});
+      const card = page.locator('.tn-onb-card[data-step="servicios"]');
+      await card.locator('img').evaluate(image => image.decode());
+      assert.equal(await card.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+      if (output) await card.screenshot({path: path.join(output, `Turnits-tutorial-servicios-${width}.png`)});
+    }
     await page.getByRole("button", { name: "Seguir después desde Inicio" }).click();
     await page.locator(".tn-onb-root").waitFor({ state: "detached" });
     await page.locator('.setup-guide[data-completed="0"]').waitFor();
@@ -130,8 +156,25 @@ const output = process.env.SETUP_SCREENSHOTS;
     assert.equal(await page.locator(".setup-guide").getByRole("button", { name: "Agregar servicio", exact: true }).isVisible(), true);
     assert.deepEqual(errors, []);
     assert.equal(writes.length, 1, "guide and retry never mutate settings or services");
+    await page.goto(base + "/panel/demo?tutorial=1");
+    await page.getByLabel('Nombre del servicio', {exact:true}).fill('Corte de prueba');
+    await page.getByLabel('Precio total del servicio').fill('8500');
+    await page.getByRole('button', {name:'Crear y continuar',exact:true}).click();
+    for (const step of ['horarios', 'pagos']) {
+      const card = page.locator(`.tn-onb-card[data-step="${step}"]`);
+      await card.waitFor();
+      for (const width of [320, 390, 1280]) {
+        await page.setViewportSize({width,height:900});
+        await card.locator('img').evaluate(image => image.decode());
+        assert.equal(await card.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+        if (output) await card.screenshot({path:path.join(output, `Turnits-tutorial-${step}-${width}.png`)});
+      }
+      if (step === 'horarios') await page.getByRole('button', {name:'Guardar y continuar',exact:true}).click();
+    }
+    assert.equal(writes.length, 3, 'tutorial writes only the explicitly submitted service and schedule, all intercepted');
     console.log("PASS local UI: visible actions, actionable validation, category confirmation, one mocked registration, skipped onboarding recovery, progress, navigation, ready/share, failure/retry, mobile/desktop; no external writes.");
-  } finally { await browser.close(); }
+  } catch (error) { console.error('UI failure:', error); throw error; }
+  finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
 
 
