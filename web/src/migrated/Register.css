@@ -260,8 +260,7 @@
   background: transparent;
 }
 .registration-field small {
-  position: absolute;
-  top: calc(100% + 5px);
+  position: static;
   font-size: 12px;
   font-weight: 400;
   line-height: 1.3;

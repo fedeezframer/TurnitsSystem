@@ -18,7 +18,6 @@ import { createPortal } from "react-dom"
 import { useSearchParams } from "react-router"
 import { SeccionId, Turnits_useElementWidth, TurnitsGlobalSaveManager_get, MenuFooter_getSlug, MenuFooter_getToken, NAV_ITEMS, SeccionHeader } from "./common"
 import { TurnitsBetaInstallPrompt, QrFlotante, TurnitsGlobalSaveBar } from "./interfaz"
-import { OnboardingNube } from "./onboarding"
 import { AmbientOrbs, BrandMark, NavButton, BottomNavIcon, BottomNavMore } from "./navigation"
 import { MenuFooter as OwnerMenuFooter, MenuCuentaPagoRetorno, NotificacionesFlotantes } from "./cuenta"
 import { SeccionInicio, TurnitsDashboardSidePanel } from "./dashboard"
@@ -28,6 +27,9 @@ import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, Excepcione
 import Consultations from "../../pages/Consultations"
 import { ChatIcon } from "../../components/ChatChrome"
 import "./design-refresh.css"
+
+const SetupGuide = React.lazy(() => import("../../components/SetupGuide"))
+const OnboardingNube = React.lazy(() => import("./onboarding").then(module => ({ default: module.OnboardingNube })))
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
@@ -71,8 +73,8 @@ function TurnitsPanel_Inner(props: any) {
     const quoteMode = useQuoteMode(baseUrl)
     const [searchParams, setSearchParams] = useSearchParams()
 
-    // ─── Onboarding a pantalla completa: mientras el usuario no tenga
-    // servicio + horarios + método de cobro, no se muestra el panel.
+    // El tutorial habitual se resuelve primero. Si se omite o queda
+    // incompleto, Inicio ofrece el siguiente paso sin volver a bloquear.
     const [onboardingListo, setOnboardingListo] = React.useState(false)
     // ─── Preloader de arranque (logo → "Hola, Nombre" → se difumina) ──
 
@@ -318,12 +320,12 @@ function TurnitsPanel_Inner(props: any) {
             />
 
             {true && (
-                <OwnerOnly><OnboardingNube
+                <OwnerOnly><React.Suspense fallback={null}><OnboardingNube
                     baseUrl={baseUrl}
                     accentColor={accentColor}
                     mpClientId={mpClientId}
                     onFinish={() => setOnboardingListo(true)}
-                /></OwnerOnly>
+                /></React.Suspense></OwnerOnly>
             )}
 
             {/* ─────────────── SIDEBAR (desktop) ─────────────── */}
@@ -655,6 +657,8 @@ function TurnitsPanel_Inner(props: any) {
                 {branchAdmin && seccionActiva !== "consultas" && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
                 {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <Consultations embedded="panel" onInboxChange={actualizarBandejaMensajes} onExit={() => irA("inicio")} />}
                 {seccionActiva === "inicio" && (
+                    <>
+                    {onboardingListo && !quoteMode && <OwnerOnly><React.Suspense fallback={null}><SetupGuide baseUrl={baseUrl} onNavigate={irA} /></React.Suspense></OwnerOnly>}
                     <SectionLoadingBoundary>
                     <SeccionInicio
                         baseUrl={baseUrl}
@@ -683,6 +687,7 @@ function TurnitsPanel_Inner(props: any) {
                         }
                     />
                     </SectionLoadingBoundary>
+                    </>
                 )}
 
                 {seccionActiva === "servicios" && (

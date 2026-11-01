@@ -261,7 +261,6 @@ export default function Register({
     setError("");
     if (type === "negocio") {
       setCategories([id]);
-      void start([id]);
     } else
       setCategories((values) =>
         values.includes(id)
@@ -426,11 +425,12 @@ export default function Register({
             }));
             setError("");
           }}
-          aria-describedby={error ? "registration-error" : undefined}
+          aria-describedby={[error ? "registration-error" : "", key === "usuario" ? "registration-link-help" : "", key === "password" ? "registration-password-help" : ""].filter(Boolean).join(" ") || undefined}
         />
         {key === "usuario" && (
-          <small>turnits.com/agenda/{fields.usuario || "tu-usuario"}</small>
+          <small id="registration-link-help">Tu enlace: turnits.com/agenda/{fields.usuario || "tu-negocio"}</small>
         )}
+        {key === "password" && <small id="registration-password-help">Usá al menos 12 caracteres.</small>}
       </label>
     );
   }
@@ -465,12 +465,12 @@ export default function Register({
             ? type === "usuario" ? "Crea tu cuenta" : "Registra tu negocio"
             : step === 3
               ? type === "usuario" ? "¿Qué servicios te interesan?" : "¿Qué rubro de negocio es?"
-              : type === "usuario" ? "Verifica tu cuenta" : "Verifica tu perfil"}
+              : "Verificá tu email"}
         </h1>
         {step !== 3 && (
           <p className="registration-subtitle">
             {step === 2 ? (
-              type === "usuario" ? "Encontrá servicios, descubrí negocios y reservá en Turnits." : "Tus datos aseguran el funcionamiento de la agenda"
+              type === "usuario" ? "Encontrá servicios, descubrí negocios y reservá en Turnits." : "Creá tu cuenta y empezá a preparar tu agenda."
             ) : (
               <>
                 Hemos enviado un código a {maskEmail(cleanEmail(fields.email))}
@@ -528,30 +528,27 @@ export default function Register({
             </div>
             {field("email", "Correo Electrónico", "email", "email")}
             {type === "negocio" &&
-              field("usuario", "Usuario", "text", "username")}
+              field("usuario", "Tu enlace", "text", "username")}
             {field("password", "Contraseña", "password", "new-password")}
             <div
-              className="registration-actions registration-reveal"
+              className="registration-actions"
               data-ready={detailsComplete}
-              aria-hidden={!detailsComplete}
             >
               <button
                 className="registration-next"
                 type="submit"
                 data-ready={detailsComplete}
-                disabled={!detailsComplete}
-                aria-hidden={!detailsComplete}
+                disabled={busy}
                 aria-describedby="registration-consent"
               >
-                Siguiente
+                Continuar
               </button>
               <p className="registration-consent" id="registration-consent">
-                Al presionar «Siguiente», aceptás los{" "}
+                Al presionar «Continuar», aceptás los{" "}
                 <a
                   href={termsUrl}
                   target="_blank"
                   rel="noreferrer"
-                  tabIndex={detailsComplete ? undefined : -1}
                 >
                   Términos y condiciones
                 </a>{" "}
@@ -560,7 +557,6 @@ export default function Register({
                   href={privacyUrl}
                   target="_blank"
                   rel="noreferrer"
-                  tabIndex={detailsComplete ? undefined : -1}
                 >
                   Política de privacidad
                 </a>
@@ -573,6 +569,7 @@ export default function Register({
         {step === 2 && type === "negocio" && <p className="registration-business-link">Tus clientes pueden reservar directamente desde el enlace de tu agenda.</p>}
         {step === 3 && (
           <>
+            {type === "negocio" && <p className="registration-subtitle">Elegí tu actividad.</p>}
             {type === "usuario" && <p className="registration-subtitle">Elegí algunos rubros para que Turnits empiece a mostrarte opciones relevantes.</p>}
             {type === "negocio" && appConfig.quoteBookingEnabled && <fieldset className="registration-agenda-mode"><legend>¿Cómo coordinás tus turnos?</legend><label><input type="radio" name="agenda-mode" checked={agendaMode === "normal"} onChange={() => setAgendaMode("normal")} /> Agenda normal: servicios con precio y horario</label><label><input type="radio" name="agenda-mode" checked={agendaMode === "presupuesto"} onChange={() => setAgendaMode("presupuesto")} /> Mediante presupuesto: consulta y referencias antes de reservar</label><p>El rubro describe tu actividad; el tipo de agenda define cómo reservan tus clientes.</p></fieldset>}
             <div
@@ -596,16 +593,15 @@ export default function Register({
                 </button>
               ))}
             </div>
-            {type === "usuario" && (
+            {(
               <button
-                className="registration-next registration-interests-next registration-reveal"
+                className="registration-next registration-interests-next"
                 type="button"
                 data-ready={categories.length > 0}
-                aria-hidden={categories.length === 0}
                 disabled={busy || !categories.length}
                 onClick={() => void start(categories)}
               >
-                {busy ? "Enviando código…" : "Crear cuenta"}
+                {busy ? "Enviando código…" : type === "negocio" ? "Enviar código a mi email" : "Crear cuenta"}
               </button>
             )}
             {type === "negocio" && busy && (

@@ -115,9 +115,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
     const [metodoListo, setMetodoListo] = React.useState(false)
     const [quoteMode, setQuoteMode] = React.useState(false)
 
-    const [plan, setPlan] = React.useState<"gratis" | "basico">("gratis")
+    const [plan, setPlan] = React.useState<"gratis" | "basico" | "premium">("gratis")
 
-    const esPremium = plan === "basico"
+    const esPremium = plan === "premium"
 
     const [svcNombre, setSvcNombre] = React.useState("")
     const [svcPrecio, setSvcPrecio] = React.useState("")
@@ -304,7 +304,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                 setMetodoListo(yaMetodo)
                 setQuoteMode(isQuoteMode)
                 setPlan(
-                    ["basico", "premium"].includes(s.plan) ? "basico" : "gratis"
+                    ["basico", "premium"].includes(s.plan) ? s.plan : "gratis"
                 )
 
                 // El tutorial es SOLO para cuentas nuevas. La señal de "cuenta ya
@@ -433,6 +433,15 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
     const guardarHorarios = async () => {
         if (diasSel.size === 0) {
             setErrorMsg("Elegí al menos un día")
+            return
+        }
+        if (!horaInicio || !horaFin || horaInicio >= horaFin) {
+            setErrorMsg("La hora de cierre tiene que ser posterior a la de apertura.")
+            return
+        }
+        if (Boolean(descansoInicio) !== Boolean(descansoFin) ||
+            (descansoInicio && descansoFin && (descansoInicio >= descansoFin || descansoInicio < horaInicio || descansoFin > horaFin))) {
+            setErrorMsg("Completá el inicio y el fin del descanso dentro de tu horario de atención, o dejá ambos vacíos.")
             return
         }
 
@@ -679,7 +688,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     fontFamily: OnboardingNube_FONT_BODY,
                                 }}
                             >
-                                Saltear por ahora
+                                Seguir después desde Inicio
                             </button>
                             <div
                                 style={{
@@ -706,7 +715,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
 
                                     {paso === 1 && !quoteMode && "Elegí tu disponibilidad"}
 
-                                    {paso === pasoPago && (quoteMode ? "¿Cómo querés cobrar después?" : "¿Cómo te van a pagar?")}
+                                    {paso === pasoPago && (quoteMode ? "¿Cómo querés cobrar después?" : "Cómo confirman la reserva")}
                                 </div>
 
                                 <div
@@ -719,7 +728,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     {paso === 0 &&
                                         (quoteMode
                                             ? "Creá una opción para que te encuentren en Browse. Cuando publiques tu perfil, van a poder consultarte por chat. El precio, el tiempo y el alcance se acuerdan en cada consulta."
-                                            : "Lo básico para que tus clientes puedan reservar. Después podés sumar más y editarlo.")}
+                                            : "Es lo que tus clientes van a elegir al reservar. Empezá con uno; después podés agregar más.")}
 
                                     {paso === 1 && !quoteMode && "Marcá los días que atendés y un horario — lo podés afinar más adelante."}
 
@@ -728,7 +737,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                             ? "Configurá Mercado Pago para ofrecer una seña o el pago acordado una vez que definan el trabajo."
                                             : esPremium
                                                 ? "Conectá Mercado Pago o arrancá cobrando en efectivo, lo que prefieras ahora."
-                                                : "Conectá Mercado Pago para poder cobrarle a tus clientes al reservar.")}
+                                                : "Conectá Mercado Pago. Después, en Pagos, elegí si pedís una seña o el pago total al reservar.")}
                                 </div>
                             </div>
 
@@ -742,7 +751,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 >
                                     <OnboardingNube_Input
                                         label={quoteMode ? "Tipo de trabajo o servicio" : "Nombre del servicio"}
-                                        placeholder={quoteMode ? "Ej.: Tatuaje personalizado" : "Nombre del servicio"}
+                                        placeholder={quoteMode ? "Ej.: Tatuaje personalizado" : "Ej.: Corte de cabello"}
                                         value={svcNombre}
                                         onChange={(e: any) =>
                                             setSvcNombre(e.target.value)
@@ -756,7 +765,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     ) : (
                                         <>
                                             <OnboardingNube_Input
-                                                label="Precio"
+                                                label="Precio total del servicio"
                                                 type="number"
                                                 prefix="$"
                                                 placeholder="0"
@@ -774,7 +783,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                                 marginBottom: 6,
                                             }}
                                         >
-                                            Duración
+                                            Cuánto tiempo necesitás para atenderlo
                                         </span>
 
                                         <div
@@ -994,6 +1003,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 >
                                     <OnboardingNube_BotonPrincipal
                                         onClick={conectarMercadoPago}
+                                        loading={guardando}
                                     >
                                         Conectar Mercado Pago
                                     </OnboardingNube_BotonPrincipal>
@@ -1048,7 +1058,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                         >
                                             Cobrar en efectivo o por
                                             transferencia está disponible en el
-                                            Plan Básico.
+                                            Plan Premium.
                                         </div>
                                     )}
 
@@ -1139,7 +1149,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                         marginBottom: 4,
                                     }}
                                 >
-                                    {quoteMode ? "¡Ya podés recibir consultas!" : "¡Tu agenda ya está lista!"}
+                                    {quoteMode ? "Configuración de consultas guardada" : "Configuración guardada"}
                                 </div>
 
                                 <div
@@ -1150,7 +1160,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 >
                                     {quoteMode
                                         ? "Tus clientes podrán contarte qué necesitan. Acordá el alcance, el precio, el tiempo y la fecha por chat."
-                                        : "Ya podés empezar a recibir turnos."}
+                                        : "En Inicio podés revisar lo que falta, abrir tu agenda y copiar el enlace para tus clientes."}
                                 </div>
                             </div>
                         </OnboardingNube_Glass>
