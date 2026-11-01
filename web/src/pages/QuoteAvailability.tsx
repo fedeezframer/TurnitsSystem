@@ -1,4 +1,5 @@
 import * as React from "react";
+import { validNationalPhone, phoneLimit, parsePhoneInput, phoneHint } from "../shared/phone-policy.js";
 import { useNavigate } from "react-router";
 import { appConfig } from "../config";
 import { consumerHeaders } from "../shared/consumer-session";
@@ -46,7 +47,7 @@ export default function QuoteAvailability({ slug, business }: { slug: string; bu
     contact.nombre.trim().length >= 2 && contact.nombre.trim().length <= 80 &&
     contact.apellido.trim().length >= 2 && contact.apellido.trim().length <= 80 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim()) &&
-    phoneDigits.length >= 7 && phoneDigits.length + country.dial.replace(/\D/g, "").length <= 15;
+    validNationalPhone(phoneDigits, countryCode);
   const canContinue = validContact && Boolean(service) && !loadingServices;
   const theme = business.tema || {};
   React.useEffect(() => {
@@ -202,7 +203,7 @@ export default function QuoteAvailability({ slug, business }: { slug: string; bu
               </button>)}
             </div>}
           </div>
-          <label className="quote-availability-phone-number"><span className="quote-availability-sr-only">Número de teléfono</span><input autoComplete="tel-national" inputMode="tel" maxLength={20} placeholder="Número de teléfono" type="tel" value={contact.telefono} onChange={(event) => setContact({ ...contact, telefono: event.target.value })} /></label>
+          <label className="quote-availability-phone-number"><span className="quote-availability-sr-only">Número de teléfono</span><input autoComplete="tel-national" inputMode="tel" maxLength={phoneLimit(countryCode, contact.telefono)} placeholder={countryCode === "AR" ? "3515551234" : "Código de área y número"} title={phoneHint(countryCode)} type="tel" value={contact.telefono} onChange={(event) => setContact({ ...contact, telefono: event.target.value.replace(/\D/g, '') })} onPaste={event => { event.preventDefault(); const parsed = parsePhoneInput(event.clipboardData.getData('text'), countryCode); if (parsed.tooLong) { setError('El teléfono tiene demasiados dígitos.'); return; } setCountryCode(parsed.code); setContact({ ...contact, telefono: parsed.digits }); setError(''); }} /></label>
         </div>
         {error && <p className="quote-availability-error" role="alert">{error}{!services.length && <button type="button" onClick={() => setRetry((value) => value + 1)}>Reintentar</button>}</p>}
         {loadingServices && <p className="quote-availability-status" role="status">Cargando…</p>}

@@ -1,4 +1,5 @@
 import { validNewPassword, PASSWORD_ERROR } from "../web/src/shared/password-policy.js";
+import { validInternationalPhone } from "../web/src/shared/phone-policy.js";
 import crypto from "node:crypto";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const quoteBookingEnabled = process.env.QUOTE_BOOKING_ENABLED === "true" && process.env.QUOTE_BOOKING_ROLLOUT_ENABLED === "true";
@@ -531,7 +532,7 @@ export function createBrowse({
             /[\x00-\x1f]/.test(v),
         ) ||
         typeof telefono !== "string" ||
-        !/^\+?[0-9]{7,15}$/.test(telefono)
+        !validInternationalPhone(telefono)
       )
         fail("Revisá tus datos y el teléfono internacional.");
       result(
@@ -849,7 +850,7 @@ export function createBrowse({
       telefono: String(req.body.telefono ?? req.consumer.telefono).replace(/\D/g, ""),
       email: String(req.body.email ?? req.consumer.email).trim().toLowerCase(),
     };
-    if(contact.nombre.length < 2 || contact.nombre.length > 100 || contact.apellido.length > 100 || !/^\d{5,18}$/.test(contact.telefono) || contact.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) fail("Revisá tus datos de contacto.");
+    if(contact.nombre.length < 2 || contact.nombre.length > 100 || contact.apellido.length > 100 || !validInternationalPhone(contact.telefono) || contact.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) fail("Revisá tus datos de contacto.");
     // Reuse a payment already in progress. A retry must never claim a second
     // slot, nor block its own slot when availability is checked again.
     const pending = result(await supabase.from("turnos").select("*").eq("consumidor_id", req.consumer.id).eq("browse_tipo", "offer").eq("estado", "pendiente").gt("browse_cierre", new Date().toISOString()).order("browse_cierre").limit(1).maybeSingle());

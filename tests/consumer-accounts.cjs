@@ -211,6 +211,7 @@ async function call(method, url, body = {}, headers = {}) {
 }
 (async () => {
   const { validNewPassword, PASSWORD_ERROR } = await import("../web/src/shared/password-policy.js");
+  const { validInternationalPhone } = await import("../web/src/shared/phone-policy.js");
   const { createConsumerAccounts, consumerIdentity } = await import(
     pathToFileURL(path.join(__dirname, "../api/consumer-accounts.js"))
   );
@@ -254,6 +255,7 @@ async function call(method, url, body = {}, headers = {}) {
         .toLowerCase(),
     validateEmail: (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e),
     validatePassword: validNewPassword,
+    validInternationalPhone,
     PASSWORD_ERROR,
     cleanPhone: (p) => p.replace(/\D/g, ""),
     validatePhone: (p) => /^\d{7,15}$/.test(p),
@@ -325,7 +327,7 @@ async function call(method, url, body = {}, headers = {}) {
     apellido: "Prueba",
     email: "ana@test.example",
     telefono: "+54 351 5555555",
-    password: "testing123456",
+    password: "test1234",
     intereses: ["barberia", "vehiculos"],
   };
   const post = (url, body) => call("POST", url, body);

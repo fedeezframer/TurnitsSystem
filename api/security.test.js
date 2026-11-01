@@ -140,7 +140,7 @@ test("security headers also protect rejected requests and HTTPS enables bounded 
   assert.equal(response.headers.get("strict-transport-security"), "max-age=86400");
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
-test("new passwords require 12 characters and respect bcrypt's UTF-8 byte limit", () => {
-  for (const value of [undefined, {}, "123456", "12345678901", "a".repeat(73), "é".repeat(37)]) assert.equal(validNewPassword(value), false);
-  for (const value of ["a new passphrase", "a".repeat(72), "é".repeat(36)]) assert.equal(validNewPassword(value), true);
+test("new passwords require 8 characters and respect bcrypt's UTF-8 byte limit", () => {
+  for (const value of [undefined, {}, "123456", "1234567", "a".repeat(73), "é".repeat(37)]) assert.equal(validNewPassword(value), false);
+  for (const value of ["12345678", "12345678901", "a new passphrase", "a".repeat(72), "é".repeat(36)]) assert.equal(validNewPassword(value), true);
 });

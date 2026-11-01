@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { validInternationalPhone } from "../web/src/shared/phone-policy.js";
 import sharp from "sharp";
 import { quoteDetail } from "../web/src/shared/consultations.js";
 import { verifyQuoteWebhook } from "./quote-payments.js";
@@ -18,7 +19,7 @@ export function validateGuestContact(body) {
   const telefono = typeof body?.telefono === "string" ? body.telefono.trim() : "";
   if (nombre.length < 2 || nombre.length > 80 || apellido.length < 2 || apellido.length > 80) fail("Completá tu nombre y apellido.");
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("Ingresá un email válido.");
-  if (!/^\+[1-9]\d{6,14}$/.test(telefono)) fail("Ingresá un teléfono válido con código de país.");
+  if (!telefono.startsWith('+') || !validInternationalPhone(telefono)) fail("Ingresá un teléfono válido con código de país y de área.");
   return { nombre, apellido, email, telefono };
 }
 export async function resolveQuoteProducts(supabase, consultation, selection, equipoId) {
