@@ -1,4 +1,5 @@
 import { validNewPassword, PASSWORD_ERROR } from "../web/src/shared/password-policy.js";
+import { validInternationalPhone } from "../web/src/shared/phone-policy.js";
 import crypto from "node:crypto";
 import { validCategories } from "../web/src/shared/categories.js";
 
@@ -121,7 +122,7 @@ export function createConsumerAccounts({
         apellido.length > 80 ||
         /[\x00-\x1f]/.test(nombre + apellido) ||
         !emailValid(email) ||
-        !/^[0-9]{7,15}$/.test(telefono) ||
+        !validInternationalPhone(telefono) ||
         !validNewPassword(body.password) ||
         !intereses
       )

@@ -25,6 +25,7 @@ import path from "node:path";
 import { createReceiptAccess } from "./receipt-access.js";
 import { securityHeaders, allowedOrigins, originGuard } from "./http-security.js";
 import { validNewPassword, PASSWORD_ERROR } from "../web/src/shared/password-policy.js";
+import { validInternationalPhone } from "../web/src/shared/phone-policy.js";
 
 // ══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN GLOBAL
@@ -415,8 +416,11 @@ async function borrarNegocioCompleto(slug) {
 
 const validateEmail    = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const validatePassword = validNewPassword;
-const validatePhone    = (p) => /^[0-9]{7,15}$/.test(p.toString().replace(/\s/g, ""));
-const cleanPhone = (p) => p.toString().replace(/\s/g, "").replace(/^\+/, "").trim();
+const validatePhone = (p) => {
+  const digits = String(p).replace(/\s/g, "");
+  return /^[0-9]{7,15}$/.test(digits) && (!digits.startsWith("54") || validInternationalPhone(digits));
+};
+const cleanPhone = (p) => p.toString().replace(/[\s()+-]/g, "").trim();
 
 function fechaArgentinaISO(fecha = new Date()) {
   const local = new Date(fecha.toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
@@ -1510,8 +1514,8 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Email inválido." });
     if (!validatePassword(password))
       return res.status(400).json({ success: false, error: PASSWORD_ERROR });
-    if (telefono && !validatePhone(cleanPhone(telefono)))
-      return res.status(400).json({ success: false, error: "Teléfono inválido (7-15 dígitos)." });
+    if (telefono && !(rubros ? validInternationalPhone(cleanPhone(telefono)) : validatePhone(cleanPhone(telefono))))
+      return res.status(400).json({ success: false, error: "Ingresá un teléfono válido con código de país y de área." });
     if (business_name.trim().length < 2)
       return res.status(400).json({ success: false, error: "El nombre del negocio es demasiado corto." });
     // FIX-SEC: nombre_persona / apellido / business_name ahora se validan
