@@ -36,7 +36,7 @@ function loadGoogleScript(): Promise<void> {
     if (googleScriptPromise) return googleScriptPromise
     googleScriptPromise = new Promise<void>((resolve, reject) => {
         const existing = document.querySelector<HTMLScriptElement>(
-            'script[src="https://accounts.google.com/gsi/client"]'
+            'script[src="https://accounts.google.com/gsi/client?hl=es"]'
         )
         const script = existing || document.createElement("script")
         const timer = window.setTimeout(
@@ -62,7 +62,7 @@ function loadGoogleScript(): Promise<void> {
         script.addEventListener("load", loaded)
         script.addEventListener("error", failed)
         if (!existing) {
-            script.src = "https://accounts.google.com/gsi/client"
+            script.src = "https://accounts.google.com/gsi/client?hl=es"
             script.async = true
             script.defer = true
             document.head.appendChild(script)
