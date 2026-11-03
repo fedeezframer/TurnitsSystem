@@ -8315,20 +8315,24 @@ async function obtenerTokenMpVigente(slug, userRow) {
         grant_type: "refresh_token",
         refresh_token: refreshTokenPlano,
       }),
+      signal: AbortSignal.timeout(20000),
     });
     const data = await response.json();
-    if (!data.access_token) {
+    if (!response.ok || !data.access_token) {
       const errorSeguro = String(data.error || "refresh_failed").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
       console.error(`⚠️ No se pudo renovar el token de MP para ${slug}: ${errorSeguro || "refresh_failed"}`);
       return accessTokenPlano; // usamos el viejo mientras siga vivo
     }
 
     const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
-    await supabase.from("usuarios").update({
+    const refreshed = {
       mp_access_token:     encryptMpSecret(data.access_token),
       mp_refresh_token:    encryptMpSecret(data.refresh_token || refreshTokenPlano),
       mp_token_expires_at: expiresAt,
-    }).eq("slug", slug);
+    };
+    const { error } = await supabase.from("usuarios").update(refreshed).eq("slug", slug);
+    if (error) throw error;
+    Object.assign(userRow, refreshed);
     invalidateCache(slug);
 
     console.log(`🔄 Token de MP renovado para ${slug} (vence: ${expiresAt || "sin dato"})`);
@@ -8361,9 +8365,10 @@ async function obtenerTokenMpVigenteEquipo(slug, equipoId, row) {
         client_secret: process.env.MP_TURNERO_CLIENT_SECRET,
         grant_type: "refresh_token", refresh_token: refreshTokenPlano,
       }),
+      signal: AbortSignal.timeout(20000),
     });
     const data = await response.json();
-    if (!data.access_token) return accessTokenPlano;
+    if (!response.ok || !data.access_token) return accessTokenPlano;
     const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
     const { error } = await supabase.from("equipo").update({
       mp_access_token: encryptMpSecret(data.access_token),
@@ -8386,10 +8391,11 @@ async function obtenerTokenMpVigenteEquipo(slug, equipoId, row) {
 // El state de OAuth debe ser único, impredecible y verificable al volver
 // desde Mercado Pago. Se firma con el secret de la aplicación para evitar
 // que alguien cambie el slug y vincule una cuenta a otro negocio.
-function crearMpOAuthState(slug, equipoId = null) {
+function crearMpOAuthState(slug, equipoId = null, returnTo = "pagos") {
   const payload = Buffer.from(JSON.stringify({
     slug,
     equipoId,
+    returnTo: returnTo === "onboarding" ? "onboarding" : "pagos",
     issuedAt: Date.now(),
     nonce: crypto.randomBytes(24).toString("base64url"),
   })).toString("base64url");
@@ -8414,8 +8420,17 @@ function leerMpOAuthState(state) {
     const slug = cleanSlug(data.slug);
     if (!slug || slug !== data.slug) return null;
     if (data.equipoId && !UUID_REGEX.test(data.equipoId)) return null;
-    return { slug, equipoId: data.equipoId || null };
+    if (data.returnTo !== undefined && !["pagos", "onboarding"].includes(data.returnTo)) return null;
+    return { slug, equipoId: data.equipoId || null, returnTo: data.returnTo || "pagos" };
   } catch { return null; }
+}
+
+function mpOAuthReturnUrl(oauthState, status, reason = "") {
+  const params = new URLSearchParams({ status });
+  if (oauthState.returnTo === "onboarding" && !oauthState.equipoId) params.set("onboarding", "mp");
+  else params.set("seccion", "pagos");
+  if (reason) params.set("reason", reason);
+  return `${PANEL_URL}/${encodeURIComponent(oauthState.slug)}?${params}`;
 }
 
 // FIX-SEC (pedido del usuario): el frontend ya no arma la URL de
@@ -8436,7 +8451,7 @@ app.post("/mp/connect/:slug", requireAuth, (req, res) => {
   // No forzar scope=offline_access: Mercado Pago documenta la autorización
   // del Marketplace sin ese query param y el intercambio devuelve los scopes
   // habilitados (incluidos pagos/escritura y offline si están autorizados).
-  const state = encodeURIComponent(crearMpOAuthState(slug));
+  const state = encodeURIComponent(crearMpOAuthState(slug, null, req.body?.returnTo));
   const authUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(process.env.MP_TURNERO_CLIENT_ID)}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${redirectUri}`;
   res.json({ success: true, authorization_url: authUrl });
 });
@@ -8467,17 +8482,18 @@ app.get("/oauth-callback", async (req, res) => {
     // Registrar solo el código de error, nunca query completa ni tokens.
     const errorSeguro = String(oauthError).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || "authorization_denied";
     console.warn(`⚠️ OAuth MP denegado para ${slug}: ${errorSeguro}`);
-    return res.redirect(`${PANEL_URL}/${slug}?status=mp_error&reason=${encodeURIComponent(errorSeguro)}`);
+    return res.redirect(mpOAuthReturnUrl(oauthState, "mp_error", errorSeguro));
   }
   if (typeof code !== "string" || !code) {
     console.warn(`⚠️ Callback OAuth de MP sin código para ${slug}.`);
-    return res.redirect(`${PANEL_URL}/${slug}?status=mp_error&reason=missing_code`);
+    return res.redirect(mpOAuthReturnUrl(oauthState, "mp_error", "missing_code"));
   }
   try {
     const slugClean = slug;
     const response  = await fetch("https://api.mercadopago.com/oauth/token", {
       method: "POST", headers: { "Accept": "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ client_id: process.env.MP_TURNERO_CLIENT_ID, client_secret: process.env.MP_TURNERO_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: `${API_URL}/oauth-callback`, state }),
+      signal: AbortSignal.timeout(20000),
     });
     const data = await response.json();
     // FIX-SEC: nunca loguear la respuesta completa (traía access_token y
@@ -8485,7 +8501,7 @@ app.get("/oauth-callback", async (req, res) => {
     const tieneOfflineAccess = String(data.scope || "").split(/\s+/).includes("offline_access");
     const errorOAuthSeguro = String(data.error || "token_exchange_failed").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
     console.log(`🔑 OAuth MP para ${slugClean}: ${data.access_token ? "ok" : `error (${errorOAuthSeguro || "token_exchange_failed"})`} — refresh_token: ${data.refresh_token ? "sí" : "no"} — offline_access: ${tieneOfflineAccess ? "sí" : "no"}`);
-    if (data.access_token) {
+    if (response.ok && data.access_token) {
       const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null;
 
       // FIX-UX: conectar MP guardaba el token pero dejaba metodo_pago tal
@@ -8505,19 +8521,20 @@ app.get("/oauth-callback", async (req, res) => {
       if (equipoId) {
         const { data: miembro, error: miembroError } = await supabase.from("equipo")
           .select("id, metodo_pago, puede_recibir_pagos_personales").eq("id", equipoId).eq("slug", slugClean).eq("es_dueño", false).maybeSingle();
-        if (miembroError || !miembro) return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error`);
-        if (!miembro.puede_recibir_pagos_personales) return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error&reason=permission`);
+        if (miembroError || !miembro) return res.redirect(mpOAuthReturnUrl(oauthState, "mp_error"));
+        if (!miembro.puede_recibir_pagos_personales) return res.redirect(mpOAuthReturnUrl(oauthState, "mp_error", "permission"));
         if (!["sena", "total"].includes(miembro.metodo_pago)) updateMp.metodo_pago = "total";
         const result = await supabase.from("equipo").update(updateMp).eq("id", equipoId).eq("slug", slugClean);
         updError = result.error;
       } else {
-        const { data: negocioPrevio } = await supabase.from("usuarios")
+        const { data: negocioPrevio, error: negocioError } = await supabase.from("usuarios")
           .select("metodo_pago").eq("slug", slugClean).maybeSingle();
-        if (!negocioPrevio || !["sena", "total"].includes(negocioPrevio.metodo_pago)) updateMp.metodo_pago = "total";
+        if (negocioError || !negocioPrevio) return res.redirect(mpOAuthReturnUrl(oauthState, "mp_error"));
+        if (!["sena", "total"].includes(negocioPrevio.metodo_pago)) updateMp.metodo_pago = "total";
         const result = await supabase.from("usuarios").update(updateMp).eq("slug", slugClean);
         updError = result.error;
       }
-      if (updError) { console.error("Error guardando token MP:", updError.message); return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error`); }
+      if (updError) { console.error("Error guardando token MP:", updError.message); return res.redirect(mpOAuthReturnUrl(oauthState, "mp_error")); }
       invalidateCache(slugClean);
 
       if (!equipoId) crearNotificacion({
@@ -8530,11 +8547,11 @@ app.get("/oauth-callback", async (req, res) => {
         data: { clave: "mp_conectado", seccion: "pagos" },
       });
 
-      return res.redirect(`${PANEL_URL}/${slugClean}?status=mp_success`);
+      return res.redirect(mpOAuthReturnUrl(oauthState, "mp_success"));
     }
-    res.redirect(`${PANEL_URL}/${slugClean}?status=mp_error`);
+    res.redirect(mpOAuthReturnUrl(oauthState, "mp_error"));
   } catch (e) {
-    res.status(500).send("Error al vincular Mercado Pago.");
+    res.redirect(mpOAuthReturnUrl(oauthState, "mp_error"));
   }
 });
 
