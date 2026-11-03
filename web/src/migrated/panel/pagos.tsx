@@ -1,6 +1,7 @@
 import { MercadoPagoConexion_LinkIcon } from "./link-icon"
 import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
+import { useSearchParams } from "react-router"
 import * as React from "react"
 import {
     useState,
@@ -298,6 +299,8 @@ function MercadoPagoConexion(props: any) {
         kind: "success" | "error"
         text: string
     } | null>(null)
+    const [returnParams, setReturnParams] = useSearchParams()
+    const [oauthResult] = React.useState(() => returnParams.get("status"))
 
     const [plan, setPlan] = React.useState<"gratis" | "basico" | "premium">("gratis")
     const [esVip, setEsVip] = React.useState(false)
@@ -459,27 +462,28 @@ function MercadoPagoConexion(props: any) {
     // ── Leer el resultado de la conexión OAuth ──────────────────
     React.useEffect(() => {
         if (typeof window === "undefined") return
-        const params = new URLSearchParams(window.location.search)
-        const status = params.get("status")
+        const status = oauthResult
         if (status === "mp_success" || status === "mp_error") {
-            if (status === "mp_success") {
-                setEstado("conectado")
-                setOauthNotice({
-                    kind: "success",
-                    text: "Mercado Pago quedó conectado correctamente.",
-                })
-            } else {
+            if (status === "mp_error") {
                 setOauthNotice({
                     kind: "error",
                     text: "Mercado Pago no pudo completar la conexión. Revisá que hayas autorizado el acceso e intentá nuevamente. Si Mercado Pago muestra un aviso de seguridad, el bloqueo debe resolverse desde la configuración de la aplicación o con soporte de Mercado Pago.",
                 })
             }
-            const url = new URL(window.location.href)
-            url.searchParams.delete("status")
-            url.searchParams.delete("reason")
-            window.history.replaceState({}, "", url.toString())
+            setReturnParams(previous => {
+                const next = new URLSearchParams(previous)
+                next.delete("status"); next.delete("reason")
+                return next
+            }, { replace: true })
         }
     }, [])
+
+    React.useEffect(() => {
+        if (oauthResult !== "mp_success" || loading) return
+        setOauthNotice(estado === "conectado"
+            ? { kind: "success", text: "Mercado Pago quedó conectado correctamente." }
+            : { kind: "error", text: "No pudimos confirmar la conexión. Tus cambios siguen guardados; volvé a intentarlo." })
+    }, [oauthResult, loading, estado])
 
     const handleConectar = async () => {
         const slug = MercadoPagoConexion_getSlug()

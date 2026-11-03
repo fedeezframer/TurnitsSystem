@@ -1,0 +1,61 @@
+const assert=require('node:assert/strict');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE_PATH||'playwright');
+const base=process.env.SETUP_TEST_URL||'http://127.0.0.1:4182';
+(async()=>{
+  const browser=await chromium.launch({headless:true,channel:'msedge'});
+  const context=await browser.newContext({reducedMotion:'reduce'});
+  const page=await context.newPage();page.setDefaultTimeout(15000);
+  page.on('dialog',dialog=>dialog.accept());
+  const writes=[],errors=[];let connected=false;
+  page.on('pageerror',error=>errors.push(error.message));
+  const claims=Buffer.from(JSON.stringify({slug:'demo',rol:'owner',negocioId:'test',iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600})).toString('base64url');
+  await context.addInitScript(token=>{
+    localStorage.setItem('access_token',token);localStorage.setItem('user_slug','demo');localStorage.setItem('account_type','negocio');
+    localStorage.setItem('onboarding_omitido_demo','1');
+  },`e30.${claims}.test`);
+  await context.route('**/*',async route=>{
+    const req=route.request(),url=new URL(req.url());
+    if(url.hostname==='mp-fixture.invalid')return route.fulfill({contentType:'text/html',body:'Autorización simulada; sin acceso a Mercado Pago.'});
+    const api=url.hostname==='negosocio.onrender.com'||url.pathname.startsWith('/api/');
+    if(!api)return url.origin===base?route.continue():route.abort();
+    const endpoint=url.pathname.replace(/^\/api/,'');
+    if(req.method()!=='GET')writes.push({endpoint,body:req.postDataJSON()});
+    const settings={slug:'demo',activo:true,plan:'basico',business_name:'Demo',estado_suscripcion:'activa',mp_status:connected?'Conectado':'Desconectado',metodo_pago:'sena',porcentaje_sena:30,horarios:{lunes:{activo:true,jornada:['09:00','18:00'],descanso:[null,null]}},excepciones:[]};
+    let body={success:true,active:true,rol:'owner',slug:'demo',settings,servicios:[{id:'fixture',nombre:'Corte',precio:8500,duracion:30,activo:true}],equipo:[],turnos:[],turnosLista:[],notificaciones:[],no_leidas:0,planes:[],mensajes:[],turnosMes:0,turnosHoy:0,totalClientes:0,clientesNuevos:0,turnosMesAnterior:0,logros:{},ventas:{},chartData:[],ventasPorDia:{},negocios:[],consultas:[],promociones:[]};
+    if(endpoint==='/negocio/demo')body={success:true,negocio:{modo_agenda:'normal'}};
+    if(endpoint==='/mp/connect/demo')body={success:true,authorization_url:'https://mp-fixture.invalid/authorization'};
+    return route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+  });
+  try{
+    await page.setViewportSize({width:390,height:900});
+    await page.goto(base+'/panel/demo?status=mp_error&seccion=pagos');
+    await page.getByText('Mercado Pago no pudo completar la conexión.',{exact:false}).waitFor();
+    await page.locator('#turnits-startup-preloader').waitFor({state:'hidden'});
+    await page.waitForFunction(()=>!location.search.includes('status='));
+    await page.evaluate(()=>window.__turnitsGlobalSaveManager.markDirty('pagos',{porcentaje_sena:45}));
+    await page.getByRole('button',{name:'Conectar',exact:true}).click();
+    await page.waitForURL('https://mp-fixture.invalid/authorization');
+    assert.equal(writes.at(-1).body.returnTo,'pagos');
+    await page.goto(base+'/panel/demo?status=mp_success&seccion=pagos');
+    await page.getByText('No pudimos confirmar la conexión.',{exact:false}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__turnitsGlobalSaveManager.getPending('pagos').porcentaje_sena),45,'draft survives authorization navigation');
+    connected=true;
+    await page.goto(base+'/panel/demo?status=mp_success&seccion=pagos');
+    await page.getByText('Mercado Pago quedó conectado correctamente.',{exact:true}).waitFor();
+    connected=false;
+    await page.goto(base+'/panel/demo?onboarding=mp&status=mp_error');
+    const tutorial=page.locator('.tn-onb-card[data-step="pagos"]');await tutorial.waitFor();
+    await page.getByText('La conexión no se completó.',{exact:false}).waitFor();
+    await page.locator('#turnits-startup-preloader').waitFor({state:'hidden'});
+    await tutorial.getByRole('button',{name:'Conectar Mercado Pago',exact:true}).click();
+    await page.waitForURL('https://mp-fixture.invalid/authorization');
+    assert.equal(writes.at(-1).body.returnTo,'onboarding');
+    connected=true;
+    await page.goto(base+'/panel/demo?onboarding=mp&status=mp_success');
+    await page.getByText('Configuración guardada',{exact:true}).waitFor();
+    await page.locator('.tn-onb-root').waitFor({state:'detached'});
+    assert.deepEqual(errors,[]);
+    assert.equal(writes.length,2,'only requests the authorization URLs; no settings or services recreated');
+    console.log('PASS OAuth UI: returns to payments/tutorial, resumes saved steps, preserves drafts and confirms server state; all API/provider requests simulated.');
+  }catch(error){console.error(error);throw error}finally{await browser.close()}
+})().catch(error=>{console.error(error);process.exitCode=1});

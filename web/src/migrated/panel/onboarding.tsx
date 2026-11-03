@@ -1,5 +1,6 @@
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { appConfig } from "../../config"
+import { useSearchParams } from "react-router"
 import { loadQuoteMode } from "../../shared/agenda-mode"
 import * as React from "react"
 import {
@@ -98,6 +99,8 @@ function OnboardingNube_BotonPrincipal({
 }
 
 function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
+    const [returnParams, setReturnParams] = useSearchParams()
+    const [mpReturn] = React.useState(() => returnParams.get("onboarding") === "mp" && ["mp_success", "mp_error"].includes(returnParams.get("status") || "") ? returnParams.get("status") : null)
     const api = (baseUrl || appConfig.apiUrl).replace(
         /\/+$/,
         ""
@@ -155,7 +158,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
             ? `onboarding_omitido_${slugParaFlag}`
             : "onboarding_omitido"
 
-        if (slugParaFlag && safeLocalStorage(claveOmitido) === "1") {
+        if (!mpReturn && slugParaFlag && safeLocalStorage(claveOmitido) === "1") {
             console.warn(
                 `[OnboardingNube] ⛔ localStorage['${claveOmitido}'] === '1' → ` +
                     "el tutorial se oculta sin más chequeos para esta cuenta. " +
@@ -322,6 +325,25 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                 // exigía también el método de pago, y una cuenta vieja que cobra
                 // por transferencia o sin seña (mp_status desconectado y
                 // acepta_efectivo vacío) veía el tutorial en cada carga.
+                if (mpReturn) {
+                    setReturnParams(previous => {
+                        const next = new URLSearchParams(previous)
+                        next.delete("onboarding"); next.delete("status"); next.delete("reason")
+                        return next
+                    }, { replace: true })
+                    if (mpReturn === "mp_success" && s.mp_status === "Conectado" && yaServicios && (isQuoteMode || yaHorarios)) {
+                        OnboardingNube_marcarVisto(slug)
+                        setFase("listo")
+                        timer = setTimeout(() => { if (!cancelado) setFase("oculto") }, 1700)
+                        return
+                    }
+                    setErrorMsg(mpReturn === "mp_error"
+                        ? "La conexión no se completó. Tus servicios y horarios siguen guardados; podés volver a intentarlo."
+                        : "No pudimos confirmar la conexión con Mercado Pago. Volvé a intentarlo.")
+                    setPaso(!yaServicios ? 0 : isQuoteMode || yaHorarios ? (isQuoteMode ? 1 : 2) : 1)
+                    setFase("paso")
+                    return
+                }
                 if (yaServicios) {
                     console.log(
                         "[OnboardingNube] cuenta ya configurada → se oculta y no vuelve a mostrarse"
@@ -536,7 +558,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
             const authUrl = await MercadoPagoConexion_solicitarUrlOAuth(
                 api,
                 slug,
-                token
+                token,
+                false,
+                "onboarding"
             )
             window.location.href = authUrl
         } catch (e: any) {

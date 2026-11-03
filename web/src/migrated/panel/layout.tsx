@@ -79,9 +79,10 @@ function TurnitsPanel_Inner(props: any) {
     // ─── Preloader de arranque (logo → "Hola, Nombre" → se difumina) ──
 
     // ─── Estado de navegación (reemplaza las variantes de Framer) ─────────
-    const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() =>
-        searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
-    )
+    const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() => {
+        if (searchParams.get("onboarding") !== "mp" && (searchParams.get("seccion") === "pagos" || ["mp_success", "mp_error"].includes(searchParams.get("status") || ""))) return "pagos"
+        return searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
+    })
     const [agendaConsultaPermitida, setAgendaConsultaPermitida] = React.useState(false)
     const [mensajesSinLeer, setMensajesSinLeer] = React.useState(0)
     const [avisoMensaje, setAvisoMensaje] = React.useState<any>(null)

@@ -3176,7 +3176,8 @@ async function MercadoPagoConexion_solicitarUrlOAuth(
     api: string,
     slug: string,
     token: string,
-    employeeMode = false
+    employeeMode = false,
+    returnTo: "pagos" | "onboarding" = "pagos"
 ): Promise<string> {
     const res = await fetch(
         employeeMode
@@ -3184,7 +3185,8 @@ async function MercadoPagoConexion_solicitarUrlOAuth(
             : `${api.replace(/\/+$/, "")}/mp/connect/${encodeURIComponent(slug)}`,
         {
             method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ returnTo }),
         }
     )
     const data = await res.json().catch(() => ({}))
