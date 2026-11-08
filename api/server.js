@@ -84,16 +84,17 @@ const nombrePlan = plan => plan === "premium" ? "Premium" : plan === "basico" ? 
 const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 9000);
 const TURNITS_COMISION_MINIMA_ARS = 300;
 const TURNITS_COMISION_TASA = 0.02;
+const TURNITS_COMISION_UMBRAL_PAGOS_ARS = 15000;
 
 // Planes: gratis < basico < premium.
 //  · Gratis: funciones limitadas. Cobra comisión de Turnits.
 //  · Básico: herramientas para negocios chicos; titular + 2 miembros. Cobra comisión online.
-//  · Premium: equipo sin límite y sin comisión Turnits por cobros online.
+//  · Premium: equipo sin límite; comisión online igual a Básico.
 //    Suscripción mensual; los accesos otorgados sin vencimiento se conservan.
 const PLANES_VALIDOS = ["gratis", "basico", "premium"];
 const esPlanVip = (plan) => plan === "premium";
 const planTieneFuncionesPremium = (plan) => plan === "basico" || plan === "premium";
-const planCobraComision = (plan, estadoSuscripcion) => estadoSuscripcion === "trial" || !esPlanVip(plan);
+const planCobraComision = () => true;
 // Meta del logro "Facturaste $500 USD" (Tus logros, panel > Inicio). Se
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
 // cambio de referencia. Se compara contra la facturación histórica total
@@ -439,15 +440,15 @@ function fechaVencimientoComision(periodo) {
   return `${nextYear}-${String(nextMonth).padStart(2, "0")}-05`;
 }
 
-// Comisión de Turnits según el plan del negocio (aplica a cobros online y a
-// cobros online): se cobra la mayor entre el mínimo y el porcentaje.
-//  · Gratis:  mínimo $300 o 2%
-//  · Básico: mínimo $100 o 0,8%
-//  · Premium:     sin comisión Turnits (Mercado Pago cobra sus propias comisiones)
+// Comisión de Turnits por cobro online aprobado: se cobra la mayor entre el
+// mínimo y el porcentaje. En Básico y Premium, el porcentaje se calcula sólo
+// sobre la parte que excede $15.000 por operación.
+//  · Gratis/trial: mínimo $300 o 2% del importe completo.
+//  · Básico/Premium pago: mínimo $100 o 0,8% del excedente de $15.000.
 const COMISION_POR_PLAN = {
-  gratis:  { tasa: TURNITS_COMISION_TASA, minima: TURNITS_COMISION_MINIMA_ARS },
-  basico:  { tasa: 0.008,                 minima: 100 },
-  premium: { tasa: 0,                     minima: 0 },
+  gratis:  { tasa: TURNITS_COMISION_TASA, minima: TURNITS_COMISION_MINIMA_ARS, umbral: 0 },
+  basico:  { tasa: 0.008,                 minima: 100,                         umbral: TURNITS_COMISION_UMBRAL_PAGOS_ARS },
+  premium: { tasa: 0.008,                 minima: 100,                         umbral: TURNITS_COMISION_UMBRAL_PAGOS_ARS },
 };
 function configComisionPlan(plan, estadoSuscripcion) {
   return estadoSuscripcion === "trial" ? COMISION_POR_PLAN.gratis : COMISION_POR_PLAN[plan] || COMISION_POR_PLAN.gratis;
@@ -455,7 +456,8 @@ function configComisionPlan(plan, estadoSuscripcion) {
 function calcularComisionTurnits(base, plan = "gratis", estadoSuscripcion) {
   const cfg = configComisionPlan(plan, estadoSuscripcion);
   if (!(cfg.tasa > 0) && !(cfg.minima > 0)) return 0;
-  return Math.max(cfg.minima, Math.round(Number(base || 0) * cfg.tasa));
+  const basePorcentual = Math.max(0, Number(base || 0) - Number(cfg.umbral || 0));
+  return Math.max(cfg.minima, Math.round(basePorcentual * cfg.tasa));
 }
 
 async function obtenerEstadoComisionesTurnits(slug) {
@@ -1489,9 +1491,9 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 // POST /registro/iniciar
 // ══════════════════════════════════════════════════════════════
 app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:300,tasa:0.02}, planes:[
-  {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02,clientes_visibles:10,finanzas:true,temas:false,promociones:false,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
-  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,precio_anual:precioAnualPlan("basico"),descuento_anual:33,dias_anual:365,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
-  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,precio_anual:precioAnualPlan("premium"),descuento_anual:33,dias_anual:365,miembros_adicionales:null,comision_minima:0,comision_tasa:0,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:true,soporte:"prioritario"}
+  {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02,comision_umbral_ars:0,clientes_visibles:10,finanzas:true,temas:false,promociones:false,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
+  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,precio_anual:precioAnualPlan("basico"),descuento_anual:33,dias_anual:365,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008,comision_umbral_ars:TURNITS_COMISION_UMBRAL_PAGOS_ARS,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
+  {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,precio_anual:precioAnualPlan("premium"),descuento_anual:33,dias_anual:365,miembros_adicionales:null,comision_minima:100,comision_tasa:0.008,comision_umbral_ars:TURNITS_COMISION_UMBRAL_PAGOS_ARS,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:true,soporte:"prioritario"}
 ]}));
 
 app.post("/registro/iniciar", limiterAuth, async (req, res) => {
