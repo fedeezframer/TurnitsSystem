@@ -17,7 +17,7 @@ const rows = [
     ["Mercado Pago", "Tarjetas aceptadas y saldo", "Tarjetas aceptadas y saldo", "Tarjetas aceptadas y saldo"],
     ["Transferencia y efectivo", false, false, true],
     ["Cobro por reserva", "Total y seña", "Total y seña", "Total, seña y sin cobro"],
-    ["Comisión Turnits por cobro online", "$300 o 2%, el mayor", "$100 o 0,8%, el mayor", "Sin comisión Turnits"],
+    ["Comisión Turnits por cobro online", "$300 o 2%, el mayor", "Mín. $100 o 0,8% sobre excedente de $15.000", "Mín. $100 o 0,8% sobre excedente de $15.000"],
     ["Logo del negocio", true, true, true],
     ["Personalización de temas", false, true, true],
     ["Combos y promociones", false, true, true],
