@@ -116,14 +116,14 @@ export default function BrowseBusiness({
       {view === "offers" ? (
         <>
           <p>
-            Ofrecé horarios sin ocupar en la última hora antes del cierre de
-            reservas. Se respeta la antelación de cada profesional y sólo se
-            publica si Mercado Pago está conectado.
+            Ofrecé horarios sin ocupar durante los 30 minutos anteriores al
+            cierre de reservas. Se respeta la antelación de cada profesional y
+            sólo se publica si Mercado Pago está conectado.
           </p>
           <p>
-            El descuento usa el 20% de la diferencia con tu tarifa mínima;
-            cuando quedan 30 minutos usa el 60%, y en los últimos 15 llega al
-            mínimo. Nunca se combinan otras promociones.
+            Durante los primeros 15 minutos de la oferta se aplica el 60% de la
+            diferencia con tu tarifa mínima; en los últimos 15 llega al mínimo.
+            Nunca se combinan otras promociones.
           </p>
           {draft.offers.map((o: any, i: number) => (
             <fieldset key={o.id} disabled={busy}>

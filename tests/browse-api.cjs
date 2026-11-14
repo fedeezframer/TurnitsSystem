@@ -558,7 +558,7 @@ async function call(method, url, { body = {}, auth, params = {}, query = {} } = 
     200,
   );
   assert.equal(tables.consumidores[0].telefono, "543511111112");
-  assert.equal(offerPrice(15000, 10000, 60), 14000);
+  assert.equal(offerPrice(15000, 10000, 60), null);
   assert.equal(offerPrice(15000, 10000, 30), 12000);
   assert.equal(offerPrice(15000, 10000, 15), 10000);
   assert.equal(offerPrice(15000, 10000, 0), null);

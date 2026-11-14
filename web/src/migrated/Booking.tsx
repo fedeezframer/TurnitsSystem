@@ -1858,7 +1858,7 @@ export default function BookingFlow(props: any) {
                 if (!offerQuote) throw new Error("La oferta ya no está disponible.")
                 const res=await fetch(api+"/browse/ofertas/"+encodeURIComponent(browseOfferId)+"/checkout",{method:"POST",headers:{"Content-Type":"application/json",...consumerHeaders()},body:JSON.stringify({slug,servicio_id:servicioId,equipo_id:equipoIdParaEnviar,fecha,hora,precio:offerQuote.precio,nombre:nombreTrim,apellido:apellidoTrim,telefono:telefonoCompleto,email:emailTrim})})
                 const data=await res.json()
-                if(!res.ok){if(data.oferta)setOfferQuote(data.oferta);if(typeof data.agenda_url==="string" && data.agenda_url.startsWith("/agenda/"))setRecoveryUrl(data.agenda_url);throw new Error(data.error||"No pudimos iniciar el pago.")}
+                if(!res.ok){if(data.redirect_url==="/error"){window.location.assign(ERROR_URL);return}if(data.oferta)setOfferQuote(data.oferta);if(typeof data.agenda_url==="string" && data.agenda_url.startsWith("/agenda/"))setRecoveryUrl(data.agenda_url);throw new Error(data.error||"No pudimos iniciar el pago.")}
                 if(data.payment_url){window.location.assign(data.payment_url);return}
                 throw new Error("No recibimos el enlace de pago. Volvé a intentar.")
             }

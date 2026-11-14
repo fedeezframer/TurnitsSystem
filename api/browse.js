@@ -41,14 +41,14 @@ export function offerPrice(price, minimum, remaining) {
     minimum <= 0 ||
     minimum >= price ||
     remaining <= 0 ||
-    remaining > 60
+    remaining > 30
   )
     return null;
   return (
     Math.round(
       (price -
         (price - minimum) *
-          (remaining <= 15 ? 1 : remaining <= 30 ? 0.6 : 0.2)) *
+          (remaining <= 15 ? 1 : 0.6)) *
         100,
     ) / 100
   );
@@ -90,6 +90,7 @@ export function createBrowse({
         .status(e.status || (["P0001", "23505"].includes(e.code) ? 409 : 503))
         .json({
           success: false,
+          ...(e.redirectToError ? { redirect_url: "/error" } : {}),
           error:
             e.publicMessage ||
             (e.code === "P0001"
@@ -752,7 +753,7 @@ export function createBrowse({
                 : 30;
           for (const today of new Set([
             argentinaDate(new Date(Date.now() + lead * 60000)),
-            argentinaDate(new Date(Date.now() + (lead + 60) * 60000)),
+            argentinaDate(new Date(Date.now() + (lead + 30) * 60000)),
           ]))
             for (const [start, end] of intervals(
               ctx.config.horarios,
@@ -867,8 +868,17 @@ export function createBrowse({
       // The accepted amount is checked again in the database. URL prices are
       // never used, and the existing booking guard claims the slot atomically.
       if (Number(req.body.precio) !== quote.precio) return res.status(409).json({ success: false, error: "El descuento se actualizó. Revisá el nuevo importe antes de pagar.", oferta: quote });
-      await available(quote.slug, quote.fecha, quote.hora, { duracion: Number(ctx.service.duracion || 30), capacidad: 1 }, ctx.config, ctx.member, quote.servicio_id);
-      turno = result(await supabase.rpc("browse_reservar", { p_consumidor: req.consumer.id, p_slug: quote.slug, p_servicio: quote.servicio_id, p_equipo: quote.equipo_id, p_fecha: quote.fecha, p_hora: quote.hora, p_recompensa: null, p_offer: quote.id, p_precio: quote.precio, p_cierre: quote.cierre }));
+      try {
+        await available(quote.slug, quote.fecha, quote.hora, { duracion: Number(ctx.service.duracion || 30), capacidad: 1 }, ctx.config, ctx.member, quote.servicio_id);
+        turno = result(await supabase.rpc("browse_reservar", { p_consumidor: req.consumer.id, p_slug: quote.slug, p_servicio: quote.servicio_id, p_equipo: quote.equipo_id, p_fecha: quote.fecha, p_hora: quote.hora, p_recompensa: null, p_offer: quote.id, p_precio: quote.precio, p_cierre: quote.cierre }));
+      } catch (error) {
+        if (error.promoValidacion || error.code === "P0001") {
+          error.status = 409;
+          error.publicMessage = "Otra persona acaba de reservar este horario. No se realizó ningún cobro.";
+          error.redirectToError = true;
+        }
+        throw error;
+      }
     }
     result(await supabase.from("turnos").update(contact).eq("id", turno.id).eq("consumidor_id", req.consumer.id).eq("estado", "pendiente"));
     res.json(await createCheckout({...turno,...contact}, ctx, false));
