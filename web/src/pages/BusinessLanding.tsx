@@ -45,7 +45,7 @@ interface Promo {
   items?: { id: string; tipo: string; nombre: string; cantidad: number }[]
   imagenes?: { id: string; tipo: string; url: string }[]
 }
-interface Service { id: string; nombre: string; precio: number; duracion: number; descripcion?: string; imagen_url?: string | null }
+interface Service { id: string; nombre: string; precio: number; duracion: number; descripcion?: string; imagen_url?: string | null; reservas_90d?: number; orden?: number }
 interface Member { id: string; nombre: string; apellido?: string; color?: string; foto_url?: string | null }
 interface Review { id: string; nombre: string; comentario?: string; puntuacion: number; created_at?: string }
 
@@ -132,7 +132,11 @@ export default function BusinessLanding() {
         const byMember = await Promise.all(memberList.map((member: Member) => getJson(`/servicios/${s}?equipo_id=${encodeURIComponent(member.id)}`, controller.signal).catch(() => ({ servicios: [] }))))
         if (controller.signal.aborted) return
         const all = [...(srv.value.servicios || []), ...byMember.flatMap(data => data.servicios || [])]
-        setServices([...new Map(all.map((service: Service) => [service.id, service])).values()])
+        setServices([...new Map(all.map((service: Service) => [service.id, service])).values()].sort((a, b) =>
+          Number(b.reservas_90d || 0) - Number(a.reservas_90d || 0) ||
+          Number(a.orden || 0) - Number(b.orden || 0) ||
+          a.nombre.localeCompare(b.nombre, "es"),
+        ))
       }
       setState("ready")
     })
@@ -166,10 +170,15 @@ export default function BusinessLanding() {
       .then(data => {
         setOffset(Date.parse(data.server_time) - Date.now() || 0)
         // Defensa extra: si la API todavía no soporta ?slug=, nunca mostrar ofertas de otros negocios.
-        setOffers((data.ofertas || []).filter((o: Offer) => o.slug === slug).sort((a: Offer, b: Offer) => Date.parse(a.cierre) - Date.parse(b.cierre)))
+        const popularity = new Map(services.map(service => [service.id, Number(service.reservas_90d || 0)]))
+        setOffers((data.ofertas || []).filter((o: Offer) => o.slug === slug).sort((a: Offer, b: Offer) =>
+          Date.parse(a.cierre) - Date.parse(b.cierre) ||
+          (popularity.get(b.servicio_id) || 0) - (popularity.get(a.servicio_id) || 0) ||
+          a.nombre.localeCompare(b.nombre, "es"),
+        ))
       })
       .catch(() => setOffers([]))
-  }, [slug])
+  }, [slug, services])
   React.useEffect(() => {
     // Pagar una Offer requiere cuenta de cliente: sólo se muestra si esa experiencia está habilitada.
     if (state !== "ready" || !appConfig.customerExperienceEnabled) return

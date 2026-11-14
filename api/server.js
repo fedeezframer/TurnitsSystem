@@ -2743,6 +2743,38 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
 // SERVICIOS — PÚBLICOS
 // GET /servicios/:slug
 // ══════════════════════════════════════════════════════════════
+const serviciosPopularidadCache = new Map();
+async function popularidadServiciosPublicos(slug) {
+  const cached = serviciosPopularidadCache.get(slug);
+  if (cached && Date.now() - cached.at < 60_000) return cached.counts;
+  const desde = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  }).format(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+  const { data, error } = await supabase.from("turnos")
+    .select("servicio_id")
+    .eq("slug", slug)
+    .in("estado", ["confirmado", "completado"])
+    .gte("fecha", desde)
+    .limit(5000);
+  if (error) throw error;
+  const counts = new Map();
+  for (const turno of data || []) {
+    if (turno.servicio_id) counts.set(turno.servicio_id, (counts.get(turno.servicio_id) || 0) + 1);
+  }
+  serviciosPopularidadCache.set(slug, { at: Date.now(), counts });
+  return counts;
+}
+async function ordenarServiciosPorPopularidad(slug, servicios) {
+  const counts = await popularidadServiciosPublicos(slug);
+  return servicios.map((servicio) => ({
+    ...servicio,
+    reservas_90d: counts.get(servicio.id) || 0,
+  })).sort((a, b) =>
+    b.reservas_90d - a.reservas_90d ||
+    Number(a.orden || 0) - Number(b.orden || 0) ||
+    String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"),
+  );
+}
 app.get("/servicios/:slug", async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
@@ -2777,8 +2809,7 @@ app.get("/servicios/:slug", async (req, res) => {
           serviciosUnicos.set(servicio.id, servicio);
         }
       });
-      const servicios = Array.from(serviciosUnicos.values())
-        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+      const servicios = await ordenarServiciosPorPopularidad(slug, Array.from(serviciosUnicos.values()));
       return res.json({ success: true, servicios });
     }
 
@@ -2799,19 +2830,18 @@ app.get("/servicios/:slug", async (req, res) => {
           imagen_url: v.imagen_url_override || null,
           orden: v.orden_override !== null && v.orden_override !== undefined ? v.orden_override : v.servicios.orden,
         } : null)
-        .filter(Boolean)
-        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+        .filter(Boolean);
 
-      return res.json({ success: true, servicios });
+      return res.json({ success: true, servicios: await ordenarServiciosPorPopularidad(slug, servicios) });
     }
 
     // Sin filtro: comportamiento original
     const { data, error } = await supabase.from("servicios")
-      .select("id, nombre, descripcion, duracion, precio, capacidad")
+      .select("id, nombre, descripcion, duracion, precio, capacidad, orden")
       .eq("slug", slug).is("owner_equipo_id",null).eq("activo", "true")
       .order("orden", { ascending: true }).order("created_at", { ascending: true });
     if (error) throw error;
-    res.json({ success: true, servicios: data || [] });
+    res.json({ success: true, servicios: await ordenarServiciosPorPopularidad(slug, data || []) });
   } catch (e) {
     res.status(500).json({ success: false, error: "Error al obtener los servicios." });
   }
