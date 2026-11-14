@@ -110,10 +110,6 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
         "cargando" | "paso" | "listo" | "oculto"
     >("cargando")
 
-    // Si la verificación tarda (server despertando, red lenta) el overlay
-    // "Preparando tu agenda..." deja de tapar el panel y se sigue
-    // verificando en segundo plano.
-    const [verificacionLenta, setVerificacionLenta] = React.useState(false)
 
     const [paso, setPaso] = React.useState(0)
     const [guardando, setGuardando] = React.useState(false)
@@ -191,10 +187,6 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
         let intento = 0
         let cancelado = false
         let timer: any = null
-
-        const lentoTimer = setTimeout(() => {
-            if (!cancelado) setVerificacionLenta(true)
-        }, 3500)
 
         const abandonar = (motivo: string) => {
             if (cancelado) return
@@ -367,7 +359,6 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
         return () => {
             cancelado = true
             if (timer) clearTimeout(timer)
-            clearTimeout(lentoTimer)
         }
     }, [api])
 
@@ -608,10 +599,8 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
         setGuardando(false)
     }
 
-    if (fase === "oculto") return null
-
-    // Verificando en segundo plano: el panel queda usable (sin overlay).
-    if (fase === "cargando" && verificacionLenta) return null
+    // La verificación inicial corre detrás del panel, sin pantalla intermedia.
+    if (fase === "oculto" || fase === "cargando") return null
 
     return (
         <div
@@ -635,31 +624,6 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                 cortada arriba. "safe center" evita el corte del tope. */}
 
             <AnimatePresence mode="wait">
-                {fase === "cargando" && (
-                    <motion.div
-                        key="cargando"
-                        initial={{
-                            opacity: 0,
-                        }}
-                        animate={{
-                            opacity: 1,
-                        }}
-                        exit={{
-                            opacity: 0,
-                        }}
-                        style={{
-                            position: "relative",
-                            zIndex: 1,
-                            fontSize: 13.5,
-                            fontWeight: 700,
-                            color: OnboardingNube_ACCENT,
-                            fontFamily: OnboardingNube_FONT_BODY,
-                        }}
-                    >
-                        Preparando tu agenda...
-                    </motion.div>
-                )}
-
                 {fase === "paso" && (
                     <motion.div
                         key={`paso-${paso}`}

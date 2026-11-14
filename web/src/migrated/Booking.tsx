@@ -1660,7 +1660,8 @@ export default function BookingFlow(props: any) {
         if(loadingPromos)return
         const nuevo = servicioId === svc.id && promoElegida?.tipo !== "combo" ? null : svc.id
         if (nuevo !== servicioId) setExtrasSeleccionados([])
-        setPromocionId(nuevo ? descuentoServicio(nuevo)?.id || null : null)
+        const promoSolicitada = nuevo && requestedPromoId ? promociones.find(p => p.id === requestedPromoId && p.servicio_id === nuevo) : null
+        setPromocionId(nuevo ? promoSolicitada?.id || descuentoServicio(nuevo)?.id || null : null)
         setServicioId(nuevo)
         setFecha("")
         setHora("")

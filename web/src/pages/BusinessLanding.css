@@ -195,17 +195,18 @@
 .bl-promo-grid{display:grid;grid-template-columns:minmax(0,1fr);justify-content:center;gap:22px;margin-top:12px}
 .bl-promotions .bl-promo{display:flex;flex-direction:column;gap:12px;width:100%;max-width:420px;min-width:0;padding:16px;border:1px solid color-mix(in srgb,var(--bl-color) 38%,#fff);border-radius:18px;background:#fff;box-shadow:none}
 .bl-promotions .bl-promo:hover{border-color:var(--bl-color);box-shadow:none}
+.bl-promotions .bl-promo{height:100%}
 .bl-promotions .bl-promo-img{position:relative;width:100%;height:auto;aspect-ratio:1/1;border-radius:18px;background:#f1f1f1}
 .bl-promotions .bl-promo-img>img:first-child{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .bl-promotions .bl-promo-products{position:absolute;top:8px;right:8px;display:flex;justify-content:flex-end;gap:4px;max-width:55%}
 .bl-promotions .bl-promo-products img{position:relative;width:48%;height:auto;aspect-ratio:1/1;border:4px solid #fff;border-radius:50%;object-fit:cover;background:#fff}
 .bl-promotions .bl-promo-img>small{position:absolute;right:10px;bottom:10px;left:10px;width:max-content;max-width:calc(100% - 20px);padding:4px 8px;border-radius:6px;background:#fff;color:var(--bl-color);font-size:12px;font-weight:700;line-height:1.2}
-.bl-promotions .bl-promo-body{gap:12px;min-height:0;padding:0 2px}
-.bl-promotions .bl-promo-body strong{font-size:24px;line-height:1.2}
+.bl-promotions .bl-promo-body{display:flex;flex:1;flex-direction:column;align-items:flex-start;gap:12px;min-height:0;padding:0 2px}
+.bl-promotions .bl-promo-body strong{display:-webkit-box;min-height:2.4em;overflow:hidden;font-size:24px;line-height:1.2;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .bl-promotions .bl-promo-price{display:flex;align-items:baseline;gap:10px;margin-top:0;color:#111;font-size:28px}
 .bl-promotions .bl-promo-price b{color:#111;font-weight:750}
 .bl-promotions .bl-promo-price s{color:#777;font-size:14px}
-.bl-promotions .bl-promo-cta{display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;min-height:56px;margin-top:0;padding:5px 12px;border:2px solid var(--bl-color);border-radius:18px;color:var(--bl-color);font-size:26px;font-weight:600}
+.bl-promotions .bl-promo-cta{display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;min-height:56px;margin-top:auto;padding:5px 12px;border:2px solid var(--bl-color);border-radius:18px;color:var(--bl-color);font-size:26px;font-weight:600}
 @media(min-width:600px){.bl-promo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}}
 @media(min-width:960px){.bl-promo-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}.bl-promotions .bl-promo{padding:18px}}
 

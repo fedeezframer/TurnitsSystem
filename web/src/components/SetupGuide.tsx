@@ -45,6 +45,7 @@ export default function SetupGuide({ baseUrl, onNavigate }: {
     window.addEventListener("focus", load);
     return () => { controller.abort(); window.removeEventListener("focus", load); };
   }, [baseUrl, attempt]);
+  if (!snapshot && !error) return null;
   if (snapshot?.progress.ready) return null;
   const next = snapshot?.progress.steps.find(step => !step.done);
   const titles: Record<string, string> = { servicios: "Sumá tu primer servicio", horarios: "Definí tus horarios", pagos: "Configurá tus cobros" };
@@ -55,7 +56,7 @@ export default function SetupGuide({ baseUrl, onNavigate }: {
     <div className="setup-guide-surface">
     <div className="setup-guide-main">
       <div>
-        <h2 id="setup-guide-title">{error ? "No pudimos revisar tu agenda" : snapshot?.progress.paused ? "Revisá el estado de tu cuenta" : next ? titles[next.id] : "Preparando tu agenda"}</h2>
+        <h2 id="setup-guide-title">{error ? "No pudimos revisar tu agenda" : snapshot?.progress.paused ? "Revisá el estado de tu cuenta" : next ? titles[next.id] : "Tu agenda está lista"}</h2>
         <p className="setup-guide-description" role={error ? "alert" : !snapshot ? "status" : undefined}>
           {error ? "Intentá de nuevo para continuar." : snapshot?.progress.paused
             ? "Tu cuenta figura pausada o vencida. Revisala desde el menú de tu cuenta."

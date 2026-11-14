@@ -838,8 +838,9 @@ function AgendaPanel(props: any) {
                                 padding: isMobile
                                     ? "24px 20px 20px"
                                     : "28px 26px 24px",
-                                width: isMobile ? "100%" : 340,
-                                maxWidth: 360,
+                                width: isMobile ? "100%" : "95vw",
+                                maxWidth: isMobile ? 360 : "95vw",
+                                boxSizing: "border-box",
                                 // PC: 100vh andaba perfecto, se deja fijo.
                                 // Mobile: "svh" (small viewport height) en vez
                                 // de "dvh" — no se recalcula cuando la barra
