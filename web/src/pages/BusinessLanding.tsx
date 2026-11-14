@@ -242,16 +242,20 @@ export default function BusinessLanding() {
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60} min` : ""}`.trim()
   }
 
-  const promoCard = (p: Promo) => (
-    <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ servicio_id: p.servicio_id, promo_id: p.id })}`}>
-      <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{p.imagenes?.some(image => image.tipo === "producto") && <span className="bl-promo-products">{p.imagenes.filter(image => image.tipo === "producto").slice(0, 2).map(image => <img key={image.id} src={image.url} alt="" loading="lazy" />)}</span>}{p.dias_semana?.length ? <small>SOLO {promoDaysLabel(p.dias_semana).toLocaleUpperCase("es-AR")}</small> : null}</div>
-      <div className="bl-promo-body">
-        <strong>{p.nombre}</strong>
-        <span className="bl-promo-price"><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
-        <span className="bl-promo-cta">Reservar <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></span>
-      </div>
-    </Link>
-  )
+  const promoCard = (p: Promo) => {
+    const serviceQuantity = p.items?.filter(item => item.tipo === "servicio")
+      .reduce((total, item) => total + Math.max(0, Number(item.cantidad) || 0), 0) || 0
+    return (
+      <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ servicio_id: p.servicio_id, promo_id: p.id })}`}>
+        <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{p.imagenes?.some(image => image.tipo === "producto") && <span className="bl-promo-products">{p.imagenes.filter(image => image.tipo === "producto").slice(0, 2).map(image => <img key={image.id} src={image.url} alt="" loading="lazy" />)}</span>}{p.dias_semana?.length ? <small>SOLO {promoDaysLabel(p.dias_semana).toLocaleUpperCase("es-AR")}</small> : null}{serviceQuantity > 1 && <span className="bl-promo-quantity" aria-label={`${serviceQuantity} servicios incluidos`}>x{serviceQuantity}</span>}</div>
+        <div className="bl-promo-body">
+          <strong>{p.nombre}</strong>
+          <span className="bl-promo-price"><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
+          <span className="bl-promo-cta">Reservar <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></span>
+        </div>
+      </Link>
+    )
+  }
 
   return (
     <main className="bl-page" style={style}>

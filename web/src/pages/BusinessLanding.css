@@ -210,7 +210,8 @@
 .bl-promotions .bl-promo-img>img:first-child{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .bl-promotions .bl-promo-products{position:absolute;top:8px;right:8px;display:flex;justify-content:flex-end;gap:4px;max-width:55%}
 .bl-promotions .bl-promo-products img{position:relative;width:48%;height:auto;aspect-ratio:1/1;border:4px solid #fff;border-radius:50%;object-fit:cover;background:#fff}
-.bl-promotions .bl-promo-img>small{position:absolute;right:10px;bottom:10px;left:10px;width:max-content;max-width:calc(100% - 20px);padding:4px 8px;border-radius:6px;background:#fff;color:var(--bl-color);font-size:12px;font-weight:700;line-height:1.2}
+.bl-promotions .bl-promo-img>small{position:absolute;right:10px;bottom:10px;left:auto;width:max-content;max-width:calc(100% - 64px);padding:4px 8px;border-radius:6px;background:#fff;color:var(--bl-color);font-size:12px;font-weight:700;line-height:1.2}
+.bl-promotions .bl-promo-quantity{position:absolute;left:10px;bottom:10px;display:grid;place-items:center;min-width:38px;height:38px;padding:0 6px;border-radius:8px;background:var(--bl-color);color:#fff;font-size:14px;font-weight:800;line-height:1;box-shadow:0 2px 8px #0002}
 .bl-promotions .bl-promo-body{display:flex;flex:1;flex-direction:column;align-items:flex-start;gap:12px;min-height:0;padding:0 2px}
 .bl-promotions .bl-promo-body strong{display:-webkit-box;min-height:2.4em;overflow:hidden;font-size:24px;line-height:1.2;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .bl-promotions .bl-promo-price{display:flex;align-items:baseline;gap:10px;margin-top:0;color:#111;font-size:28px}
@@ -225,7 +226,8 @@
   .bl-promo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}
   .bl-promotions .bl-promo{gap:8px;padding:8px;border-radius:14px}
   .bl-promotions .bl-promo-img{border-radius:10px}
-  .bl-promotions .bl-promo-img>small{right:6px;bottom:6px;left:6px;max-width:calc(100% - 12px);padding:3px 5px;font-size:10px}
+  .bl-promotions .bl-promo-img>small{right:6px;bottom:6px;left:auto;max-width:calc(100% - 52px);padding:3px 5px;font-size:10px}
+  .bl-promotions .bl-promo-quantity{left:6px;bottom:6px;min-width:28px;height:28px;padding:0 4px;border-radius:6px;font-size:11px}
   .bl-promotions .bl-promo-products{top:5px;right:5px}
   .bl-promotions .bl-promo-products img{border-width:3px}
   .bl-promotions .bl-promo-body{gap:7px;padding:0 1px}

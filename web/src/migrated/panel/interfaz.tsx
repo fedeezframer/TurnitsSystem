@@ -318,7 +318,7 @@ function QrFlotante({
         return () => window.removeEventListener("keydown", onKey)
     }, [abierto])
 
-    const url = slug ? `${appConfig.siteUrl}/agenda/${slug}` : ""
+    const url = slug ? `${appConfig.siteUrl}/${encodeURIComponent(slug)}` : ""
     const matriz = React.useMemo(() => {
         if (!url) return null
         try {

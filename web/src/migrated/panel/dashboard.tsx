@@ -2627,7 +2627,7 @@ function TurnitsDashboard_CopyAgendaLink({ accentColor }: any) {
         if (copiado) return
         const slug = QrPanel_slug()
         if (!slug) return
-        const url = `${appConfig.siteUrl}/agenda/${slug}`
+        const url = `${appConfig.siteUrl}/${encodeURIComponent(slug)}`
         try {
             await navigator.clipboard.writeText(url)
         } catch {

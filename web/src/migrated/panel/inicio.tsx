@@ -37,7 +37,7 @@ function CopyTurnosLink(props) {
     const { customIcon, accentColor, successText, urlColor, linkLabel } = props
     const [copied, setCopied] = useState(false)
 
-    const baseUrl = `${appConfig.siteUrl}/agenda/`
+    const baseUrl = `${appConfig.siteUrl}/`
 
     const currentSlug = React.useMemo(() => {
         if (typeof window === "undefined") return "usuario"
@@ -156,7 +156,7 @@ function CopyTurnosButton(props) {
         props
     const [copied, setCopied] = useState(false)
 
-    const baseUrl = `${appConfig.siteUrl}/agenda/`
+    const baseUrl = `${appConfig.siteUrl}/`
 
     const currentSlug = React.useMemo(() => {
         if (typeof window === "undefined") return "usuario"
