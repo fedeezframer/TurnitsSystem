@@ -294,7 +294,7 @@ export default function BusinessLanding() {
         {members.length > 0 && services.length > 0 && <section className="bl-section bl-availability"><h2>Próximos turnos disponibles</h2><p>Encontrá el horario más cercano de nuestro equipo.</p><div className="bl-list">{members.slice(0, 8).map((member, index) => {
           const next = availability[member.id], initials = `${member.nombre?.[0] || ""}${member.apellido?.[0] || ""}`.toUpperCase()
           const memberColor = /^#[0-9a-f]{6}$/i.test(member.color || "") ? member.color : color
-          return <Link className="bl-member" key={member.id} to={`/agenda/${enc}${next ? `?equipo_id=${encodeURIComponent(member.id)}&fecha=${next.date}&hora=${next.time}` : `?equipo_id=${encodeURIComponent(member.id)}`}`}>
+          return <Link className="bl-member" key={member.id} to={`/agenda/${enc}?equipo_id=${encodeURIComponent(member.id)}`}>
             <span className="bl-avatar" style={{ "--member-color": memberColor } as React.CSSProperties}>{member.foto_url ? <img src={member.foto_url} alt="" /> : initials || member.nombre?.[0]}</span>
             <span className="bl-member-copy"><strong>{member.nombre} {member.apellido}</strong><small>{next ? <>Disponible en <b>{timeUntil(next.date, next.time) || "ahora"}</b></> : "Ver disponibilidad"}</small><span>Reservar con este profesional ↗</span></span>
             <span className="bl-member-rank">{index + 1}</span>

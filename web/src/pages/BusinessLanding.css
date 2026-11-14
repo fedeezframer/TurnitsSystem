@@ -167,6 +167,12 @@
   .bl-footer{margin-left:-48px;margin-right:-48px;margin-bottom:-48px;border-radius:0 0 24px 24px}
 }
 @media(max-width:420px){.bl-offer-body strong{font-size:19px}.bl-offer-timer{font-size:10px}.bl-offer-img{width:34%;height:114px}.bl-member-copy strong{font-size:15px}}
+@media(max-width:599px){
+  .bl-info{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
+  .bl-info-item{justify-content:center;text-align:center}
+  .bl-reviews{align-self:center}
+  .bl-socials{align-self:center;justify-content:center}
+}
 
 /* Full-bleed page: the business page itself is not a centered card. */
 .bl-page{width:100%;background:#fff}
