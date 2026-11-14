@@ -235,7 +235,7 @@ export default function BusinessLanding() {
       <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{p.imagenes?.some(image => image.tipo === "producto") && <span className="bl-promo-products">{p.imagenes.filter(image => image.tipo === "producto").slice(0, 2).map(image => <img key={image.id} src={image.url} alt="" loading="lazy" />)}</span>}{p.dias_semana != null && <small>{promoDaysLabel(p.dias_semana)}</small>}</div>
       <div className="bl-promo-body">
         <strong>{p.nombre}</strong>
-        <span className="bl-promo-price"><b>{money(p.precio_final)}</b></span>
+        <span className="bl-promo-price"><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
         <span className="bl-promo-cta">Reservar →</span>
       </div>
     </Link>
@@ -306,7 +306,7 @@ export default function BusinessLanding() {
           const discount = discountForService(service)
           return <article className="bl-service" key={service.id}>
             {(service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]) && <img src={service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]} alt="" loading="lazy" />}
-            <div><strong>{service.nombre}</strong><b>{discount?.dias_semana != null ? "Desde " : ""}{money(discount?.precio_final ?? service.precio)}</b></div><span>{service.duracion} min</span><Link to={`/agenda/${enc}?servicio_id=${encodeURIComponent(service.id)}`}>Reservar</Link>
+            <div><strong>{service.nombre}</strong><span className="bl-service-price"><b>{discount?.dias_semana != null ? "Desde " : ""}{money(discount?.precio_final ?? service.precio)}</b>{discount && <s>{money(service.precio)}</s>}</span></div><span>{service.duracion} min</span><Link to={`/agenda/${enc}?servicio_id=${encodeURIComponent(service.id)}`}>Reservar</Link>
           </article>
         })}</div></section>}
 

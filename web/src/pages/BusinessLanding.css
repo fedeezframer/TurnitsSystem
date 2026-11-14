@@ -135,6 +135,8 @@
 .bl-service>div{display:flex;flex:1;flex-direction:column;gap:3px;min-width:0}
 .bl-service>div strong{font-size:16px}
 .bl-service>div b{font-size:15px}
+.bl-service-price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.bl-service-price s{color:#777;opacity:.65;font-size:13px;font-weight:500}
 .bl-service>span{align-self:flex-start;color:#555;font-size:14px;white-space:nowrap}
 .bl-service>a{align-self:flex-end;padding:5px 10px;border:1px solid var(--bl-color);border-radius:10px;color:var(--bl-color);white-space:nowrap}
 .bl-contact>a{display:flex;align-items:center;justify-content:space-between;padding:10px;border:1px solid #aaa;border-radius:10px;font-size:20px}
