@@ -823,6 +823,7 @@ function AgendaPanel(props: any) {
                         }}
                     >
                         <motion.div
+                            className="agenda-turno-modal"
                             initial={{ opacity: 0, scale: 0.94, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.94, y: 10 }}
@@ -837,16 +838,16 @@ function AgendaPanel(props: any) {
                                 borderRadius: 22,
                                 padding: isMobile
                                     ? "24px 20px 20px"
-                                    : "28px 26px 24px",
-                                width: isMobile ? "100%" : "min(92vw, 980px)",
-                                maxWidth: isMobile ? 360 : 980,
+                                    : "22px 24px 20px",
+                                width: isMobile ? "100%" : "min(92vw, 820px)",
+                                maxWidth: isMobile ? 360 : 820,
                                 boxSizing: "border-box",
                                 // PC: 100vh andaba perfecto, se deja fijo.
                                 // Mobile: "svh" (small viewport height) en vez
                                 // de "dvh" — no se recalcula cuando la barra
                                 // de direcciones aparece/desaparece durante el
                                 // scroll, así no hay saltos de layout.
-                                maxHeight: isMobile ? "88svh" : "min(88vh, 820px)",
+                                maxHeight: isMobile ? "88svh" : "90vh",
                                 overflowY: "auto",
                                 boxShadow: "0 18px 50px rgba(18,19,26,0.14)",
                                 border: `1px solid ${AgendaPanel_HAIRLINE}`,
@@ -919,7 +920,7 @@ function AgendaPanel(props: any) {
                                     />
                                 </div>
                             ) : (
-                                <div className="agenda-turno-details-grid">
+                                <div className="agenda-turno-details">
                                     <div style={{ marginBottom: 16 }}>
                                         <div
                                             style={{

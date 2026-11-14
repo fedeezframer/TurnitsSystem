@@ -336,13 +336,13 @@
 }
 
 @media (min-width: 861px) {
-  .agenda-turno-details-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-    gap: 10px 20px;
+  .agenda-turno-modal {
+    scrollbar-width: thin;
+    scrollbar-color: #9fb59f #f4f7f4;
   }
-  .agenda-turno-details-grid > * { min-width: 0; }
-  .agenda-turno-details-grid > :first-child,
-  .agenda-turno-details-grid > :last-child { grid-column: 1 / -1; }
+  .agenda-turno-modal::-webkit-scrollbar { width: 9px; }
+  .agenda-turno-modal::-webkit-scrollbar-track { margin-block: 12px; border-radius: 8px; background: #f4f7f4; }
+  .agenda-turno-modal::-webkit-scrollbar-thumb { border: 2px solid #f4f7f4; border-radius: 8px; background: #9fb59f; }
+  .agenda-turno-modal::-webkit-scrollbar-thumb:hover { background: #718c71; }
 }
+.agenda-turno-details { display: flex; flex-direction: column; gap: 8px; }

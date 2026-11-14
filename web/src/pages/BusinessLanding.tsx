@@ -228,7 +228,7 @@ export default function BusinessLanding() {
   }
 
   const promoCard = (p: Promo) => (
-    <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ promo_id: p.id })}`}>
+    <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ servicio_id: p.servicio_id, promo_id: p.id })}`}>
       <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{p.imagenes?.some(image => image.tipo === "producto") && <span className="bl-promo-products">{p.imagenes.filter(image => image.tipo === "producto").slice(0, 2).map(image => <img key={image.id} src={image.url} alt="" loading="lazy" />)}</span>}{p.dias_semana != null && <small>{promoDaysLabel(p.dias_semana)}</small>}</div>
       <div className="bl-promo-body">
         <strong>{p.nombre}</strong>
