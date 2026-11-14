@@ -817,6 +817,7 @@ export default function BookingFlow(props: any) {
     function slugFromQueryKey(){ return window.location.pathname + window.location.search }
     const browseOfferId = bookingQuery.get("browse_offer_id") || ""
     const bookingServiceId = bookingQuery.get("servicio_id") || ""
+    const requestedPromoId = bookingQuery.get("promo_id") || ""
     const [offerQuote, setOfferQuote] = React.useState<any>(null)
     const [offerLoading, setOfferLoading] = React.useState(!!browseOfferId)
     const [offerError, setOfferError] = React.useState("")
@@ -1109,10 +1110,10 @@ export default function BookingFlow(props: any) {
                 }
                 return {...p,imagenes,precio_original:Number(p.precio_original),precio_final:Number(p.precio_final)}
             }))
-            if(alive)setPromociones(parsed)
+            if(alive){setPromociones(parsed);if(requestedPromoId && parsed.some((promo:any)=>promo.id===requestedPromoId))setPromocionId(requestedPromoId)}
         }).catch(e=>{if(alive)setErrorPromos(e.message)}).finally(()=>{if(alive)setLoadingPromos(false)})
         return()=>{alive=false}
-    },[api,slug,equipoId,isCanvas])
+    },[api,slug,equipoId,isCanvas,requestedPromoId])
 
     React.useEffect(() => {
         if (isCanvas || !listoParaServicios || !slug) return

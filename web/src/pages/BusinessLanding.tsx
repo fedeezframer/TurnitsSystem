@@ -4,7 +4,7 @@ import { appConfig } from "../config"
 import BrandPreloader from "../components/BrandPreloader"
 import { SocialIcon } from "../components/SocialIcon"
 import { enlacesPublicos } from "../shared/socials.js"
-import { promoDaysLabel } from "../shared/promotions.js"
+import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
 import "./BusinessLanding.css"
 
 // Página pública del negocio: turnits.com/{slug}
@@ -35,6 +35,8 @@ interface Promo {
   servicio_id: string
   precio_original: number
   precio_final: number
+  fecha_inicio: string
+  fecha_fin: string
   dias_semana?: number[] | null
   items?: { id: string; tipo: string; nombre: string; cantidad: number }[]
   imagenes?: { id: string; tipo: string; url: string }[]
@@ -157,27 +159,38 @@ export default function BusinessLanding() {
   if (state === "paused") return <NotFound message="Agenda no disponible por ahora" detail="Este negocio pausó temporalmente sus reservas." />
   if (state === "loading") return <BrandPreloader />
 
-  const color = /^#[0-9a-f]{6}$/i.test(negocio?.tema?.primario || "") ? negocio.tema.primario : DEFAULT_COLOR
+  const color = /^#[0-9a-f]{6}$/i.test(negocio?.tema?.acento || "") ? negocio.tema.acento : /^#[0-9a-f]{6}$/i.test(negocio?.tema?.primario || "") ? negocio.tema.primario : DEFAULT_COLOR
   const style = { "--bl-color": color, "--bl-on": readableOn(color) } as React.CSSProperties
   const name = title || "Negocio"
   const logo = !logoFailed && (negocio?.logo_url || perfil?.foto_perfil_url)
   const tagline = (perfil?.descripcion || perfil?.categoria || "").trim()
   const address = [perfil?.direccion, [perfil?.ciudad, perfil?.provincia].filter(Boolean).join(", ")].filter(Boolean)
   const socials = perfil ? enlacesPublicos(perfil) : []
-  const combos = promos.filter(p => p.tipo === "combo")
-  const discounts = promos.filter(p => p.tipo === "descuento")
+  const todayISO = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date())
+  const rankedPromos = promos.filter(p => {
+    for (let offset = 0; offset <= 30; offset++) {
+      const date = new Date(`${todayISO}T12:00:00Z`)
+      date.setUTCDate(date.getUTCDate() + offset)
+      const candidate = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(date)
+      if (promoAppliesOn(p, candidate)) return true
+    }
+    return false
+  }).sort((a, b) => ((b.precio_original - b.precio_final) / Math.max(b.precio_original, 1)) - ((a.precio_original - a.precio_final) / Math.max(a.precio_original, 1)))
+  const combos = rankedPromos.filter(p => p.tipo === "combo")
+  const discounts = rankedPromos.filter(p => p.tipo === "descuento")
   const enc = encodeURIComponent(slug)
   const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
   const today = new Date().toLocaleDateString("es-AR", { day: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
 
   const promoCard = (p: Promo) => (
-    <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ servicio_id: p.servicio_id })}`}>
+    <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ servicio_id: p.servicio_id, promo_id: p.id })}`}>
       <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}</div>
       <div className="bl-promo-body">
         <strong>{p.nombre}</strong>
         {p.tipo === "combo" && !!p.items?.length && <small>{p.items.map(i => `${i.cantidad > 1 ? `${i.cantidad} × ` : ""}${i.nombre}`).join(" + ")}</small>}
         {p.dias_semana != null && <small>{promoDaysLabel(p.dias_semana)}</small>}
         <span><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
+          <small className="bl-promo-cta">Reservar sin cuenta →</small>
       </div>
     </Link>
   )
@@ -186,7 +199,7 @@ export default function BusinessLanding() {
     <main className="bl-page" style={style}>
       <div className="bl-wrap">
         <nav className="bl-nav" aria-label="Secciones">
-          <Link to={`/perfil/${enc}`}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.5c1.5-2.5 3.2-3.5 5.5-3.5s4 1 5.5 3.5" /></svg>Perfil</Link>
+          {perfil && <Link to={`/perfil/${enc}`}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.5c1.5-2.5 3.2-3.5 5.5-3.5s4 1 5.5 3.5" /></svg>Perfil</Link>}
           {combos.length > 0 && <button type="button" onClick={() => goTo("bl-combos")}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="12" height="12" rx="2" /><path d="M9 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" /></svg>Combos</button>}
           {discounts.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2 1.6 2.6-.2.9 2.4 2.3 1.3-.6 2.5 1 2.4-1.8 1.9-.2 2.6-2.5.6L12 21l-2.2-1.6-2.5-.6-.2-2.6-1.8-1.9 1-2.4-.6-2.5 2.3-1.3.9-2.4 2.6.2z" /><path d="m9.5 14.5 5-5M9.7 9.7h.01M14.3 14.3h.01" /></svg>Promociones</button>}
         </nav>
@@ -237,15 +250,15 @@ export default function BusinessLanding() {
           <span>Ver Agenda</span>
           <i className="bl-icon-cal" aria-hidden="true"><b>{today}</b></i>
         </Link>
-        <Link className="bl-big" to={`/perfil/${enc}`}>
+        {perfil && <Link className="bl-big" to={`/perfil/${enc}`}>
           <span>Ver Perfil</span>
           <i className="bl-icon-doc" aria-hidden="true" />
-        </Link>
+        </Link>}
 
         {combos.length > 0 && <section id="bl-combos" className="bl-section"><h2>Combos</h2><div className="bl-list">{combos.map(promoCard)}</div></section>}
         {discounts.length > 0 && <section id="bl-promos" className="bl-section"><h2>Promociones</h2><div className="bl-list">{discounts.map(promoCard)}</div></section>}
 
-        <footer className="bl-footer"><Link to="/">Agenda online con <b>Turnits</b></Link></footer>
+        <footer className="bl-footer">Powered by <b>Turnits</b></footer>
       </div>
     </main>
   )
