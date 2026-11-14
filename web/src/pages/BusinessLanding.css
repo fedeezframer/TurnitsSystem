@@ -25,7 +25,7 @@
 .bl-info-item svg{flex:none;width:26px;height:26px;color:#444}
 .bl-reviews svg{fill:var(--bl-color);stroke:var(--bl-color);width:26px;height:26px}
 .bl-reviews{font-size:13px}
-.bl-reviews em{font-style:normal;font-weight:500;color:#666}
+.bl-reviews .bl-review-score{color:var(--bl-color);font-size:16px;font-weight:800;line-height:1}
 .bl-socials{grid-column:2;grid-row:1 / span 2;display:flex;flex-direction:column;justify-content:space-between;align-items:center;gap:22px;color:var(--bl-color)}
 .bl-socials a{display:grid;place-items:center;width:30px;height:30px}
 .bl-socials svg{width:28px;height:28px;stroke-width:2}

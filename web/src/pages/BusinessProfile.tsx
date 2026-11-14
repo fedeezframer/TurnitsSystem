@@ -46,6 +46,14 @@ function BusinessProfileContent({
     >
       <div className="perfil-page-inner">
         <Link
+          to={`/${encodeURIComponent(slug || "")}`}
+          className="perfil-back-business"
+          aria-label={`Volver a ${perfil?.nombre || "la página del negocio"}`}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h11" /></svg>
+          <span>Volver al negocio</span>
+        </Link>
+        <Link
           to="/"
           className="perfil-turnits-link"
           aria-label="Turnits — ir al inicio"

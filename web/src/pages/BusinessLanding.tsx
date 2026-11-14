@@ -269,9 +269,10 @@ export default function BusinessLanding() {
                 {socials.slice(0, 3).map((red: any) => <a key={red.key} href={red.url} target="_blank" rel="noopener noreferrer" aria-label={red.label}><SocialIcon name={red.key} /></a>)}
               </div>
             )}
-            <Link className="bl-info-item bl-reviews" to={`/perfil/${enc}`}>
+            <Link className="bl-info-item bl-reviews" to={`/perfil/${enc}`} aria-label={`${reviews.cantidad} reseñas${reviews.cantidad > 0 ? `, calificación ${reviews.promedio.toLocaleString("es-AR")} de 5` : ""}`}>
+              {reviews.cantidad > 0 && <strong className="bl-review-score">{reviews.promedio.toLocaleString("es-AR")}</strong>}
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.500 2.900 6 6.600.8-4.900 4.500 1.300 6.500L12 17l-5.900 3.300 1.300-6.500L2.500 9.300l6.600-.8z" /></svg>
-              <span>Reseñas ({reviews.cantidad}){reviews.cantidad > 0 && <em> · {reviews.promedio.toLocaleString("es-AR")}</em>}</span>
+              <span>Reseñas ({reviews.cantidad})</span>
             </Link>
           </div>
         </section>
