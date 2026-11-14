@@ -240,10 +240,10 @@ export default function BusinessLanding() {
   return (
     <main className="bl-page" style={style}>
       <div className="bl-wrap">
-        <nav className="bl-nav" aria-label="Secciones">
+        {(perfil || rankedPromos.length > 0) && <nav className="bl-nav" aria-label="Secciones">
           {perfil && <Link to={`/perfil/${enc}`}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.5c1.5-2.5 3.2-3.5 5.5-3.5s4 1 5.5 3.5" /></svg>Perfil</Link>}
           {rankedPromos.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2 1.6 2.6-.2.9 2.4 2.3 1.3-.6 2.5 1 2.4-1.8 1.9-.2 2.6-2.5.6L12 21l-2.2-1.6-2.5-.6-.2-2.6-1.8-1.9 1-2.4-.6-2.5 2.3-1.3.9-2.4 2.6.2z" /><path d="m9.5 14.5 5-5M9.7 9.7h.01M14.3 14.3h.01" /></svg>Promociones</button>}
-        </nav>
+        </nav>}
 
         <header className="bl-bar">
           <Link className="bl-reserve" to={`/agenda/${enc}`}>Reservar Ahora</Link>
@@ -251,7 +251,7 @@ export default function BusinessLanding() {
 
         <section className="bl-hero">
           <div className="bl-logo">{logo ? <img src={logo} alt={`Logo de ${name}`} onError={() => setLogoFailed(true)} /> : <span aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>}</div>
-          <h1>{name}</h1>
+          <h1 className={name.length > 22 ? "bl-name-long bl-name-extra-long" : name.length > 15 ? "bl-name-long" : undefined}>{name}</h1>
           {tagline && <p className="bl-tagline">{tagline}</p>}
           <div className="bl-info">
             {address.length > 0 && (

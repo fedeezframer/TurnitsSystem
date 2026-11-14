@@ -178,6 +178,11 @@
 .bl-page{width:100%;background:#fff}
 .bl-footer{border-radius:0}
 .bl-wrap{width:100%;max-width:none;margin:0;padding:0 20px 40px;border-radius:0;background:#fff;box-shadow:none;min-height:100dvh}
+.bl-wrap{display:flex;flex-direction:column}
+.bl-footer{margin-top:auto}
+.bl-hero h1{overflow-wrap:break-word;word-break:normal;text-wrap:balance}
+.bl-hero h1.bl-name-long{font-size:clamp(24px,8vw,42px);letter-spacing:-.035em;line-height:1.1}
+.bl-hero h1.bl-name-extra-long{font-size:clamp(20px,6vw,34px)}
 .bl-service{position:relative;min-height:94px;padding:8px 14px 8px 8px}
 .bl-service>div{padding:0 80px 20px 0}
 .bl-service>span{position:absolute;top:8px;right:14px;align-self:auto}
@@ -189,7 +194,7 @@
 .bl-signup>a{color:#fff!important}
 .bl-footer,.bl-footer b{color:#fff}
 @media(min-width:600px){.bl-page{background:#fff}.bl-wrap{width:100%;max-width:none;margin:0;min-height:100dvh;border-radius:0;box-shadow:none}}
-@media(min-width:960px){.bl-wrap{width:100%;max-width:none;margin:0;padding:0 48px 48px}.bl-footer{margin-left:-48px;margin-right:-48px;margin-bottom:-48px;border-radius:0}}
+@media(min-width:960px){.bl-wrap{display:grid;width:100%;max-width:none;margin:0;padding:0 48px 48px}.bl-footer{margin-left:-48px;margin-right:-48px;margin-bottom:-48px;border-radius:0}}
 
 /* Combos y descuentos comparten un solo catálogo visual. */
 .bl-promo-grid{display:grid;grid-template-columns:minmax(0,1fr);justify-content:center;gap:22px;margin-top:12px}

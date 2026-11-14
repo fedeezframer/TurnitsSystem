@@ -838,15 +838,15 @@ function AgendaPanel(props: any) {
                                 padding: isMobile
                                     ? "24px 20px 20px"
                                     : "28px 26px 24px",
-                                width: isMobile ? "100%" : "95vw",
-                                maxWidth: isMobile ? 360 : "95vw",
+                                width: isMobile ? "100%" : "min(92vw, 980px)",
+                                maxWidth: isMobile ? 360 : 980,
                                 boxSizing: "border-box",
                                 // PC: 100vh andaba perfecto, se deja fijo.
                                 // Mobile: "svh" (small viewport height) en vez
                                 // de "dvh" — no se recalcula cuando la barra
                                 // de direcciones aparece/desaparece durante el
                                 // scroll, así no hay saltos de layout.
-                                maxHeight: isMobile ? "88svh" : "86vh",
+                                maxHeight: isMobile ? "88svh" : "min(88vh, 820px)",
                                 overflowY: "auto",
                                 boxShadow: "0 18px 50px rgba(18,19,26,0.14)",
                                 border: `1px solid ${AgendaPanel_HAIRLINE}`,
@@ -919,7 +919,7 @@ function AgendaPanel(props: any) {
                                     />
                                 </div>
                             ) : (
-                                <>
+                                <div className="agenda-turno-details-grid">
                                     <div style={{ marginBottom: 16 }}>
                                         <div
                                             style={{
@@ -1799,7 +1799,7 @@ function AgendaPanel(props: any) {
                                             </button>
                                         </div>
                                     )}
-                                </>
+                                </div>
                             )}
                         </motion.div>
                     </motion.div>

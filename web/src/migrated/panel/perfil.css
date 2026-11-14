@@ -3,6 +3,7 @@
   font-family: "Inter Display", sans-serif;
   min-width: 0;
 }
+
 .negocio-editor * {
   box-sizing: border-box;
 }
@@ -332,4 +333,16 @@
     flex: 1;
     justify-content: center;
   }
+}
+
+@media (min-width: 861px) {
+  .agenda-turno-details-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 10px 20px;
+  }
+  .agenda-turno-details-grid > * { min-width: 0; }
+  .agenda-turno-details-grid > :first-child,
+  .agenda-turno-details-grid > :last-child { grid-column: 1 / -1; }
 }
