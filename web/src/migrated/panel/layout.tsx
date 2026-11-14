@@ -18,7 +18,6 @@ import { createPortal } from "react-dom"
 import { useSearchParams } from "react-router"
 import { SeccionId, Turnits_useElementWidth, TurnitsGlobalSaveManager_get, MenuFooter_getSlug, MenuFooter_getToken, NAV_ITEMS, SeccionHeader } from "./common"
 import { TurnitsBetaInstallPrompt, QrFlotante, TurnitsGlobalSaveBar } from "./interfaz"
-import { OnboardingNube } from "./onboarding"
 import { AmbientOrbs, BrandMark, NavButton, BottomNavIcon, BottomNavMore } from "./navigation"
 import { MenuFooter as OwnerMenuFooter, MenuCuentaPagoRetorno, NotificacionesFlotantes } from "./cuenta"
 import { SeccionInicio, TurnitsDashboardSidePanel } from "./dashboard"
@@ -27,6 +26,10 @@ import { PerfilNegocio } from "./profile-section"
 import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, PagosSettingsGuard, MercadoPagoConexion, ConfigPagos, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
 import Consultations from "../../pages/Consultations"
 import { ChatIcon } from "../../components/ChatChrome"
+import "./design-refresh.css"
+
+const SetupGuide = React.lazy(() => import("../../components/SetupGuide"))
+const OnboardingNube = React.lazy(() => import("./onboarding").then(module => ({ default: module.OnboardingNube })))
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
@@ -70,15 +73,16 @@ function TurnitsPanel_Inner(props: any) {
     const quoteMode = useQuoteMode(baseUrl)
     const [searchParams, setSearchParams] = useSearchParams()
 
-    // ─── Onboarding a pantalla completa: mientras el usuario no tenga
-    // servicio + horarios + método de cobro, no se muestra el panel.
+    // El tutorial habitual se resuelve primero. Si se omite o queda
+    // incompleto, Inicio ofrece el siguiente paso sin volver a bloquear.
     const [onboardingListo, setOnboardingListo] = React.useState(false)
     // ─── Preloader de arranque (logo → "Hola, Nombre" → se difumina) ──
 
     // ─── Estado de navegación (reemplaza las variantes de Framer) ─────────
-    const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() =>
-        searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
-    )
+    const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() => {
+        if (searchParams.get("onboarding") !== "mp" && (searchParams.get("seccion") === "pagos" || ["mp_success", "mp_error"].includes(searchParams.get("status") || ""))) return "pagos"
+        return searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
+    })
     const [agendaConsultaPermitida, setAgendaConsultaPermitida] = React.useState(false)
     const [mensajesSinLeer, setMensajesSinLeer] = React.useState(0)
     const [avisoMensaje, setAvisoMensaje] = React.useState<any>(null)
@@ -278,7 +282,7 @@ function TurnitsPanel_Inner(props: any) {
                 ...(isMobile
                     ? {
                           height: "auto",
-                          minHeight: 0,
+                          minHeight: "100dvh",
                           overflow: "visible",
                           position: "relative" as const,
                       }
@@ -317,17 +321,18 @@ function TurnitsPanel_Inner(props: any) {
             />
 
             {true && (
-                <OwnerOnly><OnboardingNube
+                <OwnerOnly><React.Suspense fallback={null}><OnboardingNube
                     baseUrl={baseUrl}
                     accentColor={accentColor}
                     mpClientId={mpClientId}
                     onFinish={() => setOnboardingListo(true)}
-                /></OwnerOnly>
+                /></React.Suspense></OwnerOnly>
             )}
 
             {/* ─────────────── SIDEBAR (desktop) ─────────────── */}
             {!isMobile && (
                 <div
+                    className="turnits-sidebar"
                     style={
                         {
                             width: 252,
@@ -353,6 +358,7 @@ function TurnitsPanel_Inner(props: any) {
                     <AmbientOrbs accentColor={accentColor} />
 
                     <div
+                        className="turnits-sidebar-brand"
                         style={{
                             position: "relative",
                             marginBottom: 30,
@@ -414,6 +420,7 @@ function TurnitsPanel_Inner(props: any) {
             {/* ─────────────── TOPBAR (mobile) ─────────────── */}
             {isMobile && (
                 <div
+                    className="turnits-mobile-topbar"
                     style={{
                         position: "sticky",
                         top: 0,
@@ -458,6 +465,7 @@ function TurnitsPanel_Inner(props: any) {
                         onClick={() => setMenuMobileAbierto(false)}
                     >
                         <motion.div
+                            className="turnits-mobile-menu-sheet"
                             initial={{ y: "100%" }}
                             animate={{ y: 0 }}
                             exit={{ y: "100%" }}
@@ -511,14 +519,20 @@ function TurnitsPanel_Inner(props: any) {
                                 />
                             </div>
                             <div
+                                className="turnits-mobile-sheet-nav"
                                 style={{
                                     position: "relative",
                                     display: "grid",
-                                    gridTemplateColumns: "1fr 1fr",
+                                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                                     gap: 4,
                                 }}
                             >
-                                {navItemsVisibles.map((item) => (
+                                {navItemsVisibles
+                                    .filter(
+                                        (item) =>
+                                            !["inicio", "servicios", "agenda"].includes(item.id)
+                                    )
+                                    .map((item) => (
                                     <NavButton
                                         key={item.id}
                                         item={item}
@@ -527,7 +541,7 @@ function TurnitsPanel_Inner(props: any) {
                                         onClick={() => irA(item.id)}
                                         navIconos={navIconos}
                                     />
-                                ))}
+                                    ))}
                             </div>
 
                             <div style={{ marginTop: 16 }}>
@@ -644,6 +658,8 @@ function TurnitsPanel_Inner(props: any) {
                 {branchAdmin && seccionActiva !== "consultas" && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
                 {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <Consultations embedded="panel" onInboxChange={actualizarBandejaMensajes} onExit={() => irA("inicio")} />}
                 {seccionActiva === "inicio" && (
+                    <>
+                    {onboardingListo && !quoteMode && <OwnerOnly><React.Suspense fallback={null}><SetupGuide baseUrl={baseUrl} onNavigate={irA} /></React.Suspense></OwnerOnly>}
                     <SectionLoadingBoundary>
                     <SeccionInicio
                         baseUrl={baseUrl}
@@ -672,6 +688,7 @@ function TurnitsPanel_Inner(props: any) {
                         }
                     />
                     </SectionLoadingBoundary>
+                    </>
                 )}
 
                 {seccionActiva === "servicios" && (
@@ -910,12 +927,14 @@ function TurnitsPanel_Inner(props: any) {
 
             {/* ─────────────── NAV FLOTANTE (mobile, estilo Instagram) ─── */}
             {isMobile && seccionActiva !== "consultas" && (
-                <div
+                <nav
+                    className="turnits-mobile-bottom-nav"
+                    aria-label="Navegación principal"
                     style={{
                         position: "fixed",
                         left: 0,
                         right: 0,
-                        bottom: "calc(14px + env(safe-area-inset-bottom, 0px))",
+                        bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
                         display: "flex",
                         justifyContent: "center",
                         zIndex: 60,
@@ -923,6 +942,7 @@ function TurnitsPanel_Inner(props: any) {
                     }}
                 >
                     <div
+                        className="turnits-mobile-bottom-nav-items"
                         style={{
                             pointerEvents: "auto",
                             display: "flex",
@@ -951,6 +971,7 @@ function TurnitsPanel_Inner(props: any) {
                             navIconos={navIconos}
                         />
                         <div
+                            className="turnits-mobile-copy-link"
                             style={{
                                 margin: "0 2px",
                                 display: "flex",
@@ -974,10 +995,14 @@ function TurnitsPanel_Inner(props: any) {
                             navIconos={navIconos}
                         />
                         <BottomNavMore
+                            active={
+                                menuMobileAbierto ||
+                                !["inicio", "servicios", "agenda"].includes(seccionActiva)
+                            }
                             onClick={() => setMenuMobileAbierto(true)}
                         />
                     </div>
-                </div>
+                </nav>
             )}
             {appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin && seccionActiva !== "consultas" && <>
                 {avisoMensaje && <div className="panel-message-notice" role="status">

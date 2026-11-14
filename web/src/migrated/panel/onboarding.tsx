@@ -1,5 +1,6 @@
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { appConfig } from "../../config"
+import { useSearchParams } from "react-router"
 import { loadQuoteMode } from "../../shared/agenda-mode"
 import * as React from "react"
 import {
@@ -12,7 +13,16 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
 import { OnboardingNube_ACCENT, OnboardingNube_HAIRLINE, OnboardingNube_INK, OnboardingNube_FONT_BODY, OnboardingNube_getSlug, safeLocalStorage, OnboardingNube_getToken, OnboardingNube_marcarVisto, safeLocalStorageSet, OnboardingNube_esperarToken, OnboardingNube_MSG_SIN_SESION, OnboardingNube_DIAS, MercadoPagoConexion_solicitarUrlOAuth, OnboardingNube_MUTED, OnboardingNube_FONT_DISPLAY, OnboardingNube_DURACIONES } from "./common"
-import { OnboardingNube_Fondo, OnboardingNube_Glass, OnboardingNube_Folio, OnboardingNube_Input } from "./cuenta"
+import { OnboardingNube_Input } from "./cuenta"
+import SetupArtwork, { type SetupStep } from "../../components/SetupArtwork"
+import "./onboarding.css"
+
+function OnboardingSetupCard({ step, children }: { step: SetupStep; children: React.ReactNode }) {
+    return <section className="tn-onb-card" data-step={step} aria-label="Configuración inicial">
+        <div className="tn-onb-art"><SetupArtwork step={step} /></div>
+        <div className="tn-onb-content">{children}</div>
+    </section>
+}
 
 function OnboardingNube_Chip({
     active,
@@ -69,7 +79,7 @@ function OnboardingNube_BotonPrincipal({
             style={{
                 width: "100%",
                 padding: "13px 16px",
-                borderRadius: 12,
+                borderRadius: 999,
                 border: "none",
                 background:
                     disabled || loading
@@ -77,13 +87,10 @@ function OnboardingNube_BotonPrincipal({
                         : OnboardingNube_ACCENT,
                 color: "#fff",
                 fontSize: 14.5,
-                fontWeight: 700,
+                fontWeight: 500,
                 cursor: disabled || loading ? "default" : "pointer",
                 fontFamily: OnboardingNube_FONT_BODY,
-                boxShadow:
-                    disabled || loading
-                        ? "none"
-                        : "0 8px 20px rgba(27,107,26,0.24)",
+                boxShadow: "none",
             }}
         >
             {loading ? "Guardando..." : children}
@@ -92,6 +99,8 @@ function OnboardingNube_BotonPrincipal({
 }
 
 function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
+    const [returnParams, setReturnParams] = useSearchParams()
+    const [mpReturn] = React.useState(() => returnParams.get("onboarding") === "mp" && ["mp_success", "mp_error"].includes(returnParams.get("status") || "") ? returnParams.get("status") : null)
     const api = (baseUrl || appConfig.apiUrl).replace(
         /\/+$/,
         ""
@@ -115,9 +124,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
     const [metodoListo, setMetodoListo] = React.useState(false)
     const [quoteMode, setQuoteMode] = React.useState(false)
 
-    const [plan, setPlan] = React.useState<"gratis" | "basico">("gratis")
+    const [plan, setPlan] = React.useState<"gratis" | "basico" | "premium">("gratis")
 
-    const esPremium = plan === "basico"
+    const esPremium = plan === "premium"
 
     const [svcNombre, setSvcNombre] = React.useState("")
     const [svcPrecio, setSvcPrecio] = React.useState("")
@@ -149,7 +158,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
             ? `onboarding_omitido_${slugParaFlag}`
             : "onboarding_omitido"
 
-        if (slugParaFlag && safeLocalStorage(claveOmitido) === "1") {
+        if (!mpReturn && slugParaFlag && safeLocalStorage(claveOmitido) === "1") {
             console.warn(
                 `[OnboardingNube] ⛔ localStorage['${claveOmitido}'] === '1' → ` +
                     "el tutorial se oculta sin más chequeos para esta cuenta. " +
@@ -304,7 +313,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                 setMetodoListo(yaMetodo)
                 setQuoteMode(isQuoteMode)
                 setPlan(
-                    ["basico", "premium"].includes(s.plan) ? "basico" : "gratis"
+                    ["basico", "premium"].includes(s.plan) ? s.plan : "gratis"
                 )
 
                 // El tutorial es SOLO para cuentas nuevas. La señal de "cuenta ya
@@ -316,6 +325,25 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                 // exigía también el método de pago, y una cuenta vieja que cobra
                 // por transferencia o sin seña (mp_status desconectado y
                 // acepta_efectivo vacío) veía el tutorial en cada carga.
+                if (mpReturn) {
+                    setReturnParams(previous => {
+                        const next = new URLSearchParams(previous)
+                        next.delete("onboarding"); next.delete("status"); next.delete("reason")
+                        return next
+                    }, { replace: true })
+                    if (mpReturn === "mp_success" && s.mp_status === "Conectado" && yaServicios && (isQuoteMode || yaHorarios)) {
+                        OnboardingNube_marcarVisto(slug)
+                        setFase("listo")
+                        timer = setTimeout(() => { if (!cancelado) setFase("oculto") }, 1700)
+                        return
+                    }
+                    setErrorMsg(mpReturn === "mp_error"
+                        ? "La conexión no se completó. Tus servicios y horarios siguen guardados; podés volver a intentarlo."
+                        : "No pudimos confirmar la conexión con Mercado Pago. Volvé a intentarlo.")
+                    setPaso(!yaServicios ? 0 : isQuoteMode || yaHorarios ? (isQuoteMode ? 1 : 2) : 1)
+                    setFase("paso")
+                    return
+                }
                 if (yaServicios) {
                     console.log(
                         "[OnboardingNube] cuenta ya configurada → se oculta y no vuelve a mostrarse"
@@ -435,6 +463,15 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
             setErrorMsg("Elegí al menos un día")
             return
         }
+        if (!horaInicio || !horaFin || horaInicio >= horaFin) {
+            setErrorMsg("La hora de cierre tiene que ser posterior a la de apertura.")
+            return
+        }
+        if (Boolean(descansoInicio) !== Boolean(descansoFin) ||
+            (descansoInicio && descansoFin && (descansoInicio >= descansoFin || descansoInicio < horaInicio || descansoFin > horaFin))) {
+            setErrorMsg("Completá el inicio y el fin del descanso dentro de tu horario de atención, o dejá ambos vacíos.")
+            return
+        }
 
         const slug = OnboardingNube_getSlug()
         setGuardando(true)
@@ -521,7 +558,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
             const authUrl = await MercadoPagoConexion_solicitarUrlOAuth(
                 api,
                 slug,
-                token
+                token,
+                false,
+                "onboarding"
             )
             window.location.href = authUrl
         } catch (e: any) {
@@ -594,18 +633,6 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
             {/* Si la tarjeta es más alta que la pantalla (teclado abierto,
                 celulares chicos) se puede scrollear en vez de quedar
                 cortada arriba. "safe center" evita el corte del tope. */}
-            <style>{`
-.tn-onb-root{overflow-y:auto}
-@supports (align-items:safe center){.tn-onb-root{align-items:safe center !important}}
-.tn-onb-time-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:14px;row-gap:10px;width:100%;min-width:0}
-.tn-onb-time-row>label{width:100%;max-width:100%;min-width:0}
-.tn-onb-time-row input[type=time]{display:block;width:calc(100% - 6px) !important;max-width:calc(100% - 6px) !important;min-width:0 !important;box-sizing:border-box;font-size:16px !important;padding:7px 4px !important;justify-self:start}
-@media (max-width:640px){
-.tn-onb-root{padding:20px 14px !important}
-.tn-onb-glass{padding:26px 20px !important}
-}
-`}</style>
-            <OnboardingNube_Fondo />
 
             <AnimatePresence mode="wait">
                 {fase === "cargando" && (
@@ -656,70 +683,36 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                             ease: "easeOut",
                         }}
                         style={{
-                            width: "min(100%, 460px)",
+                            width: "min(100%, 880px)",
                             boxSizing: "border-box",
                             margin: "0 auto",
                         }}
                     >
-                        <OnboardingNube_Glass>
+                        <OnboardingSetupCard step={paso === 0 ? "servicios" : paso === pasoPago ? "pagos" : "horarios"}>
                             <button
+                                className="tn-onb-skip"
                                 onClick={omitirTodo}
-                                style={{
-                                    display: "block",
-                                    margin: "-10px 0 14px auto",
-                                    background: "transparent",
-                                    border: "none",
-                                    padding: "4px 0",
-                                    fontSize: 12.5,
-                                    fontWeight: 700,
-                                    color: OnboardingNube_MUTED,
-                                    textDecoration: "underline",
-                                    textUnderlineOffset: "3px",
-                                    cursor: "pointer",
-                                    fontFamily: OnboardingNube_FONT_BODY,
-                                }}
                             >
-                                Saltear por ahora
+                                Seguir después desde Inicio
                             </button>
-                            <div
-                                style={{
-                                    textAlign: "center" as const,
-                                    marginBottom: 22,
-                                }}
-                            >
-                                <div style={{ display: "flex", justifyContent: "center" }}>
-                                    <OnboardingNube_Folio total={totalPasos} current={paso} />
+                            <div className="tn-onb-heading">
+                                <div className="tn-onb-progress" role="img" aria-label={`Paso ${paso + 1} de ${totalPasos}`}>
+                                    {Array.from({ length: totalPasos }, (_, index) => <span key={index} data-active={index <= paso} />)}
                                 </div>
 
-                                <div
-                                    style={{
-                                        fontFamily: OnboardingNube_FONT_DISPLAY,
-                                        fontSize: 22,
-                                        fontWeight: 700,
-                                        color: OnboardingNube_INK,
-                                        letterSpacing: "-0.01em",
-                                        marginTop: 10,
-                                        marginBottom: 6,
-                                    }}
-                                >
+                                <h2 className="tn-onb-title">
                                     {paso === 0 && (quoteMode ? "Mostrá qué trabajos realizás" : "Creá tu primer servicio")}
 
                                     {paso === 1 && !quoteMode && "Elegí tu disponibilidad"}
 
-                                    {paso === pasoPago && (quoteMode ? "¿Cómo querés cobrar después?" : "¿Cómo te van a pagar?")}
-                                </div>
+                                    {paso === pasoPago && (quoteMode ? "¿Cómo querés cobrar después?" : "Cómo confirman la reserva")}
+                                </h2>
 
-                                <div
-                                    style={{
-                                        fontSize: 13,
-                                        color: OnboardingNube_MUTED,
-                                        lineHeight: 1.45,
-                                    }}
-                                >
+                                <div className="tn-onb-description">
                                     {paso === 0 &&
                                         (quoteMode
                                             ? "Creá una opción para que te encuentren en Browse. Cuando publiques tu perfil, van a poder consultarte por chat. El precio, el tiempo y el alcance se acuerdan en cada consulta."
-                                            : "Lo básico para que tus clientes puedan reservar. Después podés sumar más y editarlo.")}
+                                            : "Es lo que tus clientes van a elegir al reservar. Empezá con uno; después podés agregar más.")}
 
                                     {paso === 1 && !quoteMode && "Marcá los días que atendés y un horario — lo podés afinar más adelante."}
 
@@ -728,7 +721,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                             ? "Configurá Mercado Pago para ofrecer una seña o el pago acordado una vez que definan el trabajo."
                                             : esPremium
                                                 ? "Conectá Mercado Pago o arrancá cobrando en efectivo, lo que prefieras ahora."
-                                                : "Conectá Mercado Pago para poder cobrarle a tus clientes al reservar.")}
+                                                : "Conectá Mercado Pago. Después, en Pagos, elegí si pedís una seña o el pago total al reservar.")}
                                 </div>
                             </div>
 
@@ -742,7 +735,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 >
                                     <OnboardingNube_Input
                                         label={quoteMode ? "Tipo de trabajo o servicio" : "Nombre del servicio"}
-                                        placeholder={quoteMode ? "Ej.: Tatuaje personalizado" : "Nombre del servicio"}
+                                        placeholder={quoteMode ? "Ej.: Tatuaje personalizado" : "Ej.: Corte de cabello"}
                                         value={svcNombre}
                                         onChange={(e: any) =>
                                             setSvcNombre(e.target.value)
@@ -756,7 +749,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     ) : (
                                         <>
                                             <OnboardingNube_Input
-                                                label="Precio"
+                                                label="Precio total del servicio"
                                                 type="number"
                                                 prefix="$"
                                                 placeholder="0"
@@ -774,7 +767,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                                 marginBottom: 6,
                                             }}
                                         >
-                                            Duración
+                                            Cuánto tiempo necesitás para atenderlo
                                         </span>
 
                                         <div
@@ -994,6 +987,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 >
                                     <OnboardingNube_BotonPrincipal
                                         onClick={conectarMercadoPago}
+                                        loading={guardando}
                                     >
                                         Conectar Mercado Pago
                                     </OnboardingNube_BotonPrincipal>
@@ -1048,7 +1042,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                         >
                                             Cobrar en efectivo o por
                                             transferencia está disponible en el
-                                            Plan Básico.
+                                            Plan Premium.
                                         </div>
                                     )}
 
@@ -1066,7 +1060,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     )}
                                 </div>
                             )}
-                        </OnboardingNube_Glass>
+                        </OnboardingSetupCard>
                     </motion.div>
                 )}
 
@@ -1090,12 +1084,12 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                             ease: "easeOut",
                         }}
                         style={{
-                            width: "min(100%, 460px)",
+                            width: "min(100%, 880px)",
                             boxSizing: "border-box",
                             margin: "0 auto",
                         }}
                     >
-                        <OnboardingNube_Glass>
+                        <OnboardingSetupCard step="horarios">
                             <div
                                 style={{
                                     textAlign: "center" as const,
@@ -1139,7 +1133,7 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                         marginBottom: 4,
                                     }}
                                 >
-                                    {quoteMode ? "¡Ya podés recibir consultas!" : "¡Tu agenda ya está lista!"}
+                                    {quoteMode ? "Configuración de consultas guardada" : "Configuración guardada"}
                                 </div>
 
                                 <div
@@ -1150,10 +1144,10 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 >
                                     {quoteMode
                                         ? "Tus clientes podrán contarte qué necesitan. Acordá el alcance, el precio, el tiempo y la fecha por chat."
-                                        : "Ya podés empezar a recibir turnos."}
+                                        : "En Inicio podés revisar lo que falta, abrir tu agenda y copiar el enlace para tus clientes."}
                                 </div>
                             </div>
-                        </OnboardingNube_Glass>
+                        </OnboardingSetupCard>
                     </motion.div>
                 )}
             </AnimatePresence>

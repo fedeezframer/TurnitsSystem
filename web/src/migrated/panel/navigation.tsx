@@ -162,12 +162,14 @@ function BottomNavIcon({
 }) {
   return (
     <motion.button
+      className="turnits-bottom-nav-button"
       onClick={onClick}
       whileTap={{ scale: 0.9 }}
       aria-label={id}
+      aria-current={active ? "page" : undefined}
       style={{
         border: "none",
-        background: "transparent",
+        background: active ? "#e3f2e1" : "transparent",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -189,15 +191,23 @@ function BottomNavIcon({
   );
 }
 
-function BottomNavMore({ onClick }: { onClick: () => void }) {
+function BottomNavMore({
+  onClick,
+  active = false,
+}: {
+  onClick: () => void;
+  active?: boolean;
+}) {
   return (
     <motion.button
+      className="turnits-bottom-nav-button"
       onClick={onClick}
       whileTap={{ scale: 0.9 }}
       aria-label="Más opciones"
+      aria-current={active ? "page" : undefined}
       style={{
         border: "none",
-        background: "transparent",
+        background: active ? "#e3f2e1" : "transparent",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -205,7 +215,7 @@ function BottomNavMore({ onClick }: { onClick: () => void }) {
         height: 44,
         borderRadius: 14,
         cursor: "pointer",
-        color: "#94a3b8",
+        color: active ? "#1a6b1a" : "#94a3b8",
         flexShrink: 0,
       }}
     >
@@ -354,9 +364,11 @@ function NavButton({
 }) {
   return (
     <motion.button
+      className="turnits-panel-nav-button"
       onClick={onClick}
       whileHover={{ x: active ? 0 : 2 }}
       whileTap={{ scale: 0.97 }}
+      aria-current={active ? "page" : undefined}
       style={{
         position: "relative",
         display: "flex",
@@ -378,6 +390,7 @@ function NavButton({
     >
       {active && (
         <motion.div
+          className="turnits-panel-nav-active-bg"
           layoutId="navActivePill"
           transition={{ type: "spring", stiffness: 420, damping: 34 }}
           style={{

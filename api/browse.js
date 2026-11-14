@@ -723,14 +723,17 @@ export function createBrowse({
     "/browse/ofertas",
     limiterRead,
     route(async (req, res) => {
-      const configs =
-          result(
-            await supabase
-              .from("turnits_offers")
-              .select("*")
-              .eq("activo", true)
-              .limit(150),
-          ) || [];
+      // Filtro opcional por negocio: la página pública /{slug} sólo necesita
+      // las ofertas de ese negocio y reutiliza las mismas reglas de Browse.
+      const onlySlug = typeof req.query.slug === "string" ? req.query.slug.trim().toLowerCase() : "";
+      if (req.query.slug !== undefined && !/^[a-z0-9_-]{1,100}$/.test(onlySlug))
+        fail("Negocio inválido.");
+      let offersQuery = supabase
+        .from("turnits_offers")
+        .select("*")
+        .eq("activo", true);
+      if (onlySlug) offersQuery = offersQuery.eq("slug", onlySlug);
+      const configs = result(await offersQuery.limit(150)) || [];
       const read = requestReads();
       const batches = await mapLimited(configs, 6, async (o) => {
         const offers = [];

@@ -1,0 +1,575 @@
+.turnits-root {
+  --turnits-ink: #18221a;
+  --turnits-muted: #68736a;
+  --turnits-line: #e3e9e1;
+  --turnits-canvas: #f4f6f2;
+  --turnits-surface: #fff;
+  --turnits-green: #1b6b1a;
+  --turnits-forest: #173e1c;
+  --turnits-soft: #edf4e9;
+  background: var(--turnits-canvas) !important;
+  color: var(--turnits-ink);
+}
+
+.turnits-panel-content {
+  background: transparent;
+  color: var(--turnits-ink);
+}
+
+.turnits-panel-content :focus-visible {
+  outline: 2px solid var(--turnits-green);
+  outline-offset: 3px;
+}
+
+.turnits-section-heading {
+  margin-bottom: 8px !important;
+}
+
+.turnits-section-heading-title {
+  color: var(--turnits-ink) !important;
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  letter-spacing: -1.15px;
+  line-height: 1.1;
+}
+
+.turnits-section-heading-subtitle {
+  color: var(--turnits-muted) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.5;
+}
+
+.turnits-home-dashboard {
+  max-width: 1320px !important;
+  gap: 18px !important;
+  color: var(--turnits-ink);
+}
+
+.turnits-home-dashboard > div:first-child h1 {
+  color: var(--turnits-ink) !important;
+  font-size: 32px !important;
+  letter-spacing: -1.3px !important;
+}
+
+.turnits-dashboard-metrics,
+.turnits-dashboard-main-grid,
+.turnits-dashboard-data-grid,
+.turnits-dashboard-extra-grid {
+  gap: 14px !important;
+}
+
+.turnits-dashboard-metric,
+.turnits-dashboard-chart,
+.turnits-dashboard-upcoming,
+.turnits-dashboard-services,
+.turnits-dashboard-business,
+.turnits-dashboard-clients,
+.turnits-dashboard-weekly {
+  background: var(--turnits-surface) !important;
+  border: 1px solid var(--turnits-line) !important;
+  border-radius: 19px !important;
+  box-shadow: 0 2px 8px rgba(26, 49, 25, 0.035) !important;
+  color: var(--turnits-ink);
+}
+
+.turnits-dashboard-metric {
+  min-height: 112px;
+  padding: 20px 21px !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease !important;
+}
+
+.turnits-dashboard-metric:hover {
+  border-color: #cbd9c8 !important;
+  box-shadow: 0 8px 22px rgba(26, 49, 25, 0.07) !important;
+}
+
+.turnits-dashboard-chart,
+.turnits-dashboard-upcoming,
+.turnits-dashboard-services,
+.turnits-dashboard-business,
+.turnits-dashboard-clients,
+.turnits-dashboard-weekly {
+  padding: 21px !important;
+}
+
+.turnits-dashboard-chart > div:first-child,
+.turnits-dashboard-upcoming > div:first-child,
+.turnits-dashboard-services > div:first-child,
+.turnits-dashboard-business > div:first-child,
+.turnits-dashboard-clients > div:first-child,
+.turnits-dashboard-weekly > div:first-child {
+  color: var(--turnits-ink) !important;
+}
+
+.turnits-dashboard-upcoming [style*="borderTop"],
+.turnits-dashboard-clients [style*="borderTop"] {
+  border-color: var(--turnits-line) !important;
+}
+
+.turnits-dashboard-main-grid,
+.turnits-dashboard-data-grid,
+.turnits-dashboard-extra-grid {
+  align-items: stretch;
+}
+
+.browse-card-grid {
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.browse-card {
+  border-color: #e3e9e1;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(26, 49, 25, 0.035);
+  transition: transform 180ms ease, box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.browse-card:hover {
+  transform: translateY(-3px);
+  border-color: #cbd9c8;
+  box-shadow: 0 12px 28px rgba(26, 49, 25, 0.1);
+}
+
+.browse-card-photo {
+  aspect-ratio: 1.62;
+  background: linear-gradient(135deg, #edf4e9, #f7f8f5);
+}
+
+.browse-card-content {
+  padding: 17px 18px 16px;
+}
+
+.browse-card-business {
+  color: var(--turnits-muted);
+  margin-bottom: 8px;
+}
+
+.browse-card-name {
+  color: var(--turnits-ink);
+  font-size: 17px;
+  font-weight: 650;
+  margin-bottom: 15px;
+}
+
+.browse-card-price {
+  color: var(--turnits-forest);
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.browse-card-actions .browse-pill {
+  min-height: 42px;
+  border-radius: 12px;
+  padding: 10px 17px;
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .turnits-section-heading-title {
+    font-size: 25px !important;
+  }
+
+  .turnits-home-dashboard > div:first-child h1 {
+    font-size: 27px !important;
+  }
+
+  .turnits-dashboard-metrics {
+    gap: 10px !important;
+  }
+
+  .turnits-dashboard-metric {
+    min-height: 104px;
+    padding: 17px !important;
+  }
+
+  .turnits-dashboard-chart,
+  .turnits-dashboard-upcoming,
+  .turnits-dashboard-services,
+  .turnits-dashboard-business,
+  .turnits-dashboard-clients,
+  .turnits-dashboard-weekly {
+    padding: 17px !important;
+  }
+
+  .browse-card-grid {
+    gap: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browse-card,
+  .turnits-dashboard-metric {
+    transition: none !important;
+  }
+}
+
+/* Turnits panel: Claude's information architecture, in the Turnits palette. */
+.turnits-sidebar {
+  width: 248px !important;
+  background: linear-gradient(180deg, #d3edd1 0%, #f3faf3 46%, #fff 100%) !important;
+  border-right: 1px solid #e8ece9 !important;
+  padding: 26px 14px 14px !important;
+}
+
+.turnits-sidebar > div:first-child {
+  display: none !important;
+}
+
+.turnits-sidebar-brand {
+  justify-content: flex-start !important;
+  padding-left: 10px;
+  margin-bottom: 26px !important;
+}
+
+.turnits-panel-nav-button {
+  width: 100%;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  min-height: 40px !important;
+  padding: 9px 13px !important;
+  border-radius: 14px !important;
+  color: var(--turnits-ink) !important;
+  font-size: 13px !important;
+  font-weight: 450 !important;
+  transition: background-color 150ms ease, color 150ms ease !important;
+}
+
+.turnits-panel-nav-button:hover {
+  background: rgba(255, 255, 255, .55) !important;
+}
+
+.turnits-panel-nav-button[aria-current="page"] {
+  background: rgba(255, 255, 255, .78) !important;
+  border-color: #fff !important;
+  color: var(--turnits-green) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(26, 49, 25, .045);
+}
+
+.turnits-panel-nav-button[aria-current="page"] > .turnits-panel-nav-active-bg {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.turnits-mobile-topbar {
+  background: linear-gradient(180deg, #e3f2e1, #f3faf3) !important;
+  border-bottom-color: #e8ece9 !important;
+}
+
+.turnits-mobile-topbar > div:first-child {
+  display: none !important;
+}
+
+.turnits-mobile-menu-sheet {
+  background: linear-gradient(180deg, #f3faf3 0%, #fff 38%) !important;
+  border: 1px solid var(--turnits-line);
+  box-shadow: 0 -18px 55px rgba(26, 49, 25, .14);
+}
+
+.turnits-mobile-menu-sheet > div:first-child {
+  display: none !important;
+}
+
+.turnits-mobile-sheet-nav .turnits-panel-nav-button {
+  min-height: 78px !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 12px 5px !important;
+  border: 1px solid transparent !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  box-shadow: none !important;
+}
+
+.turnits-mobile-sheet-nav .turnits-panel-nav-button[aria-current="page"] {
+  background: var(--turnits-soft) !important;
+  border-color: #d3e4cc !important;
+  color: var(--turnits-forest) !important;
+}
+
+.turnits-mobile-bottom-nav-items {
+  background: rgba(255, 255, 255, .97) !important;
+  border: 1px solid var(--turnits-line) !important;
+  border-radius: 999px !important;
+  padding: 7px 10px !important;
+  box-shadow: 0 8px 30px rgba(26, 49, 25, .15) !important;
+  backdrop-filter: blur(16px);
+}
+
+.turnits-bottom-nav-button {
+  transition: background-color 150ms ease, color 150ms ease !important;
+}
+
+.turnits-bottom-nav-button[aria-current="page"] {
+  color: var(--turnits-forest) !important;
+  background: var(--turnits-soft) !important;
+}
+
+.turnits-home-dashboard {
+  max-width: 1280px !important;
+  gap: 16px !important;
+}
+
+.turnits-home-dashboard > div:first-child h1 {
+  color: var(--turnits-ink) !important;
+  font-size: clamp(28px, 3vw, 36px) !important;
+  font-weight: 350 !important;
+  letter-spacing: -.04em !important;
+}
+
+.turnits-dashboard-revenue-overview {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.turnits-dashboard-chart {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.turnits-dashboard-chart-plot {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.turnits-dashboard-chart-plot:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.turnits-dashboard-revenue-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px 4px;
+  background: transparent;
+}
+
+.turnits-dashboard-revenue-label {
+  color: var(--turnits-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.turnits-dashboard-revenue-hero-value {
+  display: block;
+}
+
+.turnits-dashboard-revenue-value {
+  display: block;
+  margin: 4px 0 0;
+  color: #17231b;
+  font-size: clamp(70px, 11vw, 132px);
+  font-weight: 300;
+  letter-spacing: -.065em;
+  line-height: .95;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.turnits-dashboard-revenue-trend {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 14px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #e3f2e1;
+  color: var(--turnits-green);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.turnits-dashboard-revenue-trend-baja {
+  color: #a33b2e;
+  background: #fff0ed;
+}
+
+.turnits-dashboard-revenue-trend-igual {
+  color: #59635d;
+  background: #e8ece8;
+}
+
+.turnits-dashboard-chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 34px;
+  margin: 0 12px;
+}
+
+.turnits-dashboard-chart-toolbar-start {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.turnits-dashboard-copy-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--turnits-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.turnits-dashboard-copy-link:hover {
+  color: var(--turnits-green);
+}
+
+.turnits-dashboard-copy-link:focus-visible {
+  outline: 2px solid var(--turnits-green);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.turnits-dashboard-chart-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.turnits-dashboard-chart-range button {
+  min-height: 30px;
+  padding: 4px 1px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--turnits-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.turnits-dashboard-chart-range button.is-active {
+  border-bottom-color: var(--turnits-ink);
+  color: var(--turnits-ink);
+}
+
+.turnits-dashboard-chart-tooltip {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transform: translateX(-50%);
+  padding: 8px 11px;
+  border: 1px solid rgba(227, 233, 225, .92);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 7px 22px rgba(24, 34, 26, .12);
+  color: var(--turnits-ink);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.turnits-dashboard-chart-tooltip strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.turnits-dashboard-chart-tooltip span {
+  color: var(--turnits-muted);
+  font-size: 10px;
+}
+
+.turnits-dashboard-metrics {
+  gap: 12px !important;
+}
+
+.turnits-dashboard-metric,
+.turnits-dashboard-upcoming,
+.turnits-dashboard-services,
+.turnits-dashboard-business,
+.turnits-dashboard-clients,
+.turnits-dashboard-weekly {
+  border-radius: 22px !important;
+  border-color: var(--turnits-line) !important;
+  box-shadow: 0 3px 12px rgba(26, 49, 25, .04) !important;
+}
+
+.turnits-dashboard-metric {
+  min-height: 132px;
+  padding: 22px 22px 19px !important;
+}
+
+.turnits-dashboard-main-grid,
+.turnits-dashboard-data-grid,
+.turnits-dashboard-extra-grid {
+  gap: 14px !important;
+}
+
+@media (max-width: 900px) {
+  .turnits-dashboard-revenue-value {
+    font-size: clamp(64px, 12vw, 100px);
+  }
+}
+
+@media (max-width: 520px) {
+  .turnits-dashboard-revenue-hero {
+    padding: 0 8px 2px;
+  }
+
+  .turnits-dashboard-revenue-value {
+    font-size: clamp(54px, 14vw, 80px);
+  }
+
+  .turnits-dashboard-chart-range button {
+    font-size: 10.5px;
+  }
+
+  .turnits-dashboard-chart-range { gap: 15px; }
+
+  .turnits-dashboard-chart-toolbar { margin: 0 8px; gap: 8px; }
+
+  .turnits-dashboard-copy-link { gap: 6px; }
+
+  .turnits-dashboard-copy-link > div > span { font-size: 11.5px !important; }
+}
+
+@media (max-width: 520px) {
+  .turnits-mobile-menu-sheet {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .turnits-mobile-sheet-nav {
+    gap: 3px !important;
+  }
+
+  .turnits-mobile-sheet-nav .turnits-panel-nav-button {
+    min-height: 72px !important;
+    font-size: 11px !important;
+  }
+}

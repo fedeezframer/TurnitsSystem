@@ -1,4 +1,5 @@
-import { validNewPassword, PASSWORD_ERROR } from "../shared/password-policy.js";
+import { validNewPassword, PASSWORD_ERROR, PASSWORD_MIN_LENGTH } from "../shared/password-policy.js";
+import { PHONE_COUNTRIES, phoneLimit, validNationalPhone, parsePhoneInput, phoneHint } from "../shared/phone-policy.js";
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
@@ -25,26 +26,13 @@ const empty: Fields = {
   password: "",
 };
 const cleanEmail = (email: string) => email.trim().toLowerCase();
-const PHONE_COUNTRIES = [
-  { code: "AR", dial: "+54", name: "Argentina" },
-  { code: "UY", dial: "+598", name: "Uruguay" },
-  { code: "CL", dial: "+56", name: "Chile" },
-  { code: "PY", dial: "+595", name: "Paraguay" },
-  { code: "BO", dial: "+591", name: "Bolivia" },
-  { code: "BR", dial: "+55", name: "Brasil" },
-  { code: "PE", dial: "+51", name: "Perú" },
-  { code: "CO", dial: "+57", name: "Colombia" },
-  { code: "MX", dial: "+52", name: "México" },
-  { code: "US", dial: "+1", name: "Estados Unidos" },
-  { code: "ES", dial: "+34", name: "España" },
-];
 function internationalPhone(
   number: string,
   country: (typeof PHONE_COUNTRIES)[number],
 ) {
   if (!/^[\d\s()-]+$/.test(number)) return "";
   const national = number.replace(/\D/g, "");
-  return national.length >= 7 ? country.dial.slice(1) + national : "";
+  return validNationalPhone(national, country.code) ? country.dial.slice(1) + national : "";
 }
 function detailsError(fields: Fields, type: AccountType, phone: string) {
   if (!fields.nombre_persona.trim() || !fields.apellido.trim())
@@ -124,6 +112,7 @@ export default function Register({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const lock = useRef(false);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
@@ -261,7 +250,6 @@ export default function Register({
     setError("");
     if (type === "negocio") {
       setCategories([id]);
-      void start([id]);
     } else
       setCategories((values) =>
         values.includes(id)
@@ -383,21 +371,10 @@ export default function Register({
     }
   }
   function changePhone(value: string) {
-    let national = value;
-    if (/^\s*(\+|00)/.test(value)) {
-      const full = value
-        .trim()
-        .replace(/^00/, "+")
-        .replace(/[\s()-]/g, "");
-      const country = [...PHONE_COUNTRIES]
-        .sort((a, b) => b.dial.length - a.dial.length)
-        .find((item) => full.startsWith(item.dial));
-      if (country) {
-        setPhoneCountry(country.code);
-        national = full.slice(country.dial.length);
-      }
-    }
-    setFields((values) => ({ ...values, telefono: national }));
+    const parsed = parsePhoneInput(value, phoneCountry);
+    if (parsed.tooLong) { setError("El teléfono tiene demasiados dígitos para el país elegido."); return; }
+    setPhoneCountry(parsed.code);
+    setFields((values) => ({ ...values, telefono: parsed.digits }));
     setError("");
   }
   function field(
@@ -407,13 +384,16 @@ export default function Register({
     autoComplete?: string,
   ) {
     return (
-      <label className="registration-field">
-        {label}
+      <div className="registration-field">
+        <label htmlFor={`registration-${key}`}>{label}</label>
+        <div className={key === "password" ? "registration-password" : undefined}>
         <input
+          id={`registration-${key}`}
           name={key}
-          type={inputType}
+          type={key === "password" && showPassword ? "text" : inputType}
           autoComplete={autoComplete}
           required
+          minLength={key === "password" ? PASSWORD_MIN_LENGTH : undefined}
           maxLength={key === "email" ? 254 : key === "usuario" ? 60 : 80}
           value={fields[key]}
           onChange={(event) => {
@@ -426,12 +406,19 @@ export default function Register({
             }));
             setError("");
           }}
-          aria-describedby={error ? "registration-error" : undefined}
+          aria-describedby={[error ? "registration-error" : "", key === "usuario" ? "registration-link-help" : "", key === "password" ? "registration-password-help" : ""].filter(Boolean).join(" ") || undefined}
         />
+        {key === "password" && <button type="button" className="registration-password-toggle" aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>{showPassword && <path d="m3 3 18 18"/>}
+          </svg>
+        </button>}
+        </div>
         {key === "usuario" && (
-          <small>turnits.com/agenda/{fields.usuario || "tu-usuario"}</small>
+          <small id="registration-link-help">Tu enlace: turnits.com/agenda/{fields.usuario || "tu-negocio"}</small>
         )}
-      </label>
+        {key === "password" && <small id="registration-password-help">Usá al menos {PASSWORD_MIN_LENGTH} caracteres.</small>}
+      </div>
     );
   }
   return (
@@ -465,12 +452,12 @@ export default function Register({
             ? type === "usuario" ? "Crea tu cuenta" : "Registra tu negocio"
             : step === 3
               ? type === "usuario" ? "¿Qué servicios te interesan?" : "¿Qué rubro de negocio es?"
-              : type === "usuario" ? "Verifica tu cuenta" : "Verifica tu perfil"}
+              : "Verificá tu email"}
         </h1>
         {step !== 3 && (
           <p className="registration-subtitle">
             {step === 2 ? (
-              type === "usuario" ? "Encontrá servicios, descubrí negocios y reservá en Turnits." : "Tus datos aseguran el funcionamiento de la agenda"
+              type === "usuario" ? "Encontrá servicios, descubrí negocios y reservá en Turnits." : "Creá tu cuenta y empezá a preparar tu agenda."
             ) : (
               <>
                 Hemos enviado un código a {maskEmail(cleanEmail(fields.email))}
@@ -479,7 +466,7 @@ export default function Register({
           </p>
         )}
         {step === 2 && (
-          <form className={`registration-form ${type}`} onSubmit={nextDetails}>
+          <form className={`registration-form ${type}`} noValidate onSubmit={nextDetails}>
             {field("nombre_persona", "Nombre", "text", "given-name")}
             {field("apellido", "Apellido", "text", "family-name")}
             <div className="registration-field">
@@ -519,39 +506,39 @@ export default function Register({
                   autoComplete="tel-national"
                   inputMode="tel"
                   required
-                  maxLength={30}
+                  maxLength={phoneLimit(phoneCountry, fields.telefono)}
+                  placeholder={phoneCountry === "AR" ? "3515551234" : "Código de área y número"}
                   value={fields.telefono}
                   onChange={(event) => changePhone(event.target.value)}
-                  aria-describedby={error ? "registration-error" : undefined}
+                  onPaste={(event) => { event.preventDefault(); changePhone(event.clipboardData.getData("text")); }}
+                  aria-describedby={`registration-phone-help${error ? " registration-error" : ""}`}
                 />
               </div>
+              <small id="registration-phone-help">{phoneHint(phoneCountry)}</small>
             </div>
             {field("email", "Correo Electrónico", "email", "email")}
             {type === "negocio" &&
-              field("usuario", "Usuario", "text", "username")}
+              field("usuario", "Tu enlace", "text", "username")}
             {field("password", "Contraseña", "password", "new-password")}
             <div
-              className="registration-actions registration-reveal"
+              className="registration-actions"
               data-ready={detailsComplete}
-              aria-hidden={!detailsComplete}
             >
               <button
                 className="registration-next"
                 type="submit"
                 data-ready={detailsComplete}
-                disabled={!detailsComplete}
-                aria-hidden={!detailsComplete}
+                disabled={busy}
                 aria-describedby="registration-consent"
               >
-                Siguiente
+                Continuar
               </button>
               <p className="registration-consent" id="registration-consent">
-                Al presionar «Siguiente», aceptás los{" "}
+                Al presionar «Continuar», aceptás los{" "}
                 <a
                   href={termsUrl}
                   target="_blank"
                   rel="noreferrer"
-                  tabIndex={detailsComplete ? undefined : -1}
                 >
                   Términos y condiciones
                 </a>{" "}
@@ -560,7 +547,6 @@ export default function Register({
                   href={privacyUrl}
                   target="_blank"
                   rel="noreferrer"
-                  tabIndex={detailsComplete ? undefined : -1}
                 >
                   Política de privacidad
                 </a>
@@ -570,9 +556,10 @@ export default function Register({
           </form>
         )}
         {step === 2 && type === "usuario" && <p className="registration-business-link">¿Tenés un negocio? <Link to="/registro/negocio">Registralo desde acá</Link></p>}
-        {step === 2 && type === "negocio" && <p className="registration-business-link">¿Buscabas una cuenta para reservar? <Link to="/registro">Crear cuenta de usuario</Link></p>}
+        {step === 2 && type === "negocio" && <p className="registration-business-link">Tus clientes pueden reservar directamente desde el enlace de tu agenda.</p>}
         {step === 3 && (
           <>
+            {type === "negocio" && <p className="registration-subtitle">Elegí tu actividad.</p>}
             {type === "usuario" && <p className="registration-subtitle">Elegí algunos rubros para que Turnits empiece a mostrarte opciones relevantes.</p>}
             {type === "negocio" && appConfig.quoteBookingEnabled && <fieldset className="registration-agenda-mode"><legend>¿Cómo coordinás tus turnos?</legend><label><input type="radio" name="agenda-mode" checked={agendaMode === "normal"} onChange={() => setAgendaMode("normal")} /> Agenda normal: servicios con precio y horario</label><label><input type="radio" name="agenda-mode" checked={agendaMode === "presupuesto"} onChange={() => setAgendaMode("presupuesto")} /> Mediante presupuesto: consulta y referencias antes de reservar</label><p>El rubro describe tu actividad; el tipo de agenda define cómo reservan tus clientes.</p></fieldset>}
             <div
@@ -596,16 +583,15 @@ export default function Register({
                 </button>
               ))}
             </div>
-            {type === "usuario" && (
+            {(
               <button
-                className="registration-next registration-interests-next registration-reveal"
+                className="registration-next registration-interests-next"
                 type="button"
                 data-ready={categories.length > 0}
-                aria-hidden={categories.length === 0}
                 disabled={busy || !categories.length}
                 onClick={() => void start(categories)}
               >
-                {busy ? "Enviando código…" : "Crear cuenta"}
+                {busy ? "Enviando código…" : type === "negocio" ? "Enviar código a mi email" : "Crear cuenta"}
               </button>
             )}
             {type === "negocio" && busy && (

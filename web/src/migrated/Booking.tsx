@@ -1,4 +1,5 @@
 import { appConfig } from "../config"
+import { validNationalPhone, phoneLimit, parsePhoneInput, phoneHint, validInternationalPhone } from "../shared/phone-policy.js"
 import { useStartupLoading } from "../components/BrandPreloader"
 import { consumerHeaders } from "../shared/consumer-session"
 import { bookingSteps, resolveBookingStep } from "../shared/booking-flow"
@@ -15,8 +16,6 @@ const PENDIENTE_URL = `${appConfig.siteUrl}/pendiente`
 const ALERT_URL = `${appConfig.siteUrl}/alert`
 const ERROR_URL = `${appConfig.siteUrl}/error`
 
-const MIN_DIGITOS_TEL = 5
-const MIN_DIGITOS_TEL_BOTON = 7
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const TIPOS_ACEPTADOS = ["image/jpeg", "image/png", "image/webp"]
 const MAX_BYTES = 3 * 1024 * 1024 // 3MB
@@ -897,8 +896,7 @@ export default function BookingFlow(props: any) {
             const digits=String(c.telefono||"").replace(/\D/g,"");const country=[...PAISES].sort((a,b)=>b.dial.length-a.dial.length).find(p=>digits.startsWith(p.dial.slice(1)));
             if(country){setPais(country);setTelefono(v=>v||digits.slice(country.dial.length-1))}
             else if(digits){setPais({code:"OTHER",flag:"🌐",dial:"+",name:"Internacional"});setTelefono(v=>v||digits)}
-            const localDigits=country?digits.slice(country.dial.length-1):digits;
-            setCuentaConDatosCompletos(String(c.nombre_persona||"").trim().length>=2 && EMAIL_REGEX.test(String(c.email||"").trim()) && localDigits.length>=MIN_DIGITOS_TEL);
+            setCuentaConDatosCompletos(String(c.nombre_persona||"").trim().length>=2 && EMAIL_REGEX.test(String(c.email||"").trim()) && validInternationalPhone(digits));
         }).catch(()=>{}).finally(()=>{if(!controller.signal.aborted)setLoadingCuenta(false)});return ()=>controller.abort();
     },[api]);
     const browsePreselect=React.useRef(false)
@@ -1531,14 +1529,14 @@ export default function BookingFlow(props: any) {
         nombre.trim().length >= 2 &&
         apellido.trim().length >= 2 &&
         EMAIL_REGEX.test(email.trim()) &&
-        telefonoDigits.length >= MIN_DIGITOS_TEL &&
+        validNationalPhone(telefonoDigits, pais.code) &&
         !emailError &&
         !telError
 
     const datosPersonalesOkParaBoton =
         nombre.trim().length >= 2 &&
         EMAIL_REGEX.test(email.trim()) &&
-        telefonoDigits.length >= MIN_DIGITOS_TEL &&
+        validNationalPhone(telefonoDigits, pais.code) &&
         !emailError &&
         !telError
 
@@ -1791,9 +1789,9 @@ export default function BookingFlow(props: any) {
     }
     function onBlurTelefono() {
         if (!telefono) return
-        if (telefonoDigits.length < MIN_DIGITOS_TEL) {
+        if (!validNationalPhone(telefonoDigits, pais.code)) {
             setTelError(
-                `El teléfono debe tener al menos ${MIN_DIGITOS_TEL} números.`
+                phoneHint(pais.code)
             )
             return
         }
@@ -1824,9 +1822,9 @@ export default function BookingFlow(props: any) {
         if (!hora) return setSubmitError("Seleccioná un horario.")
         if (!nombre.trim() || nombre.trim().length < 2)
             return setSubmitError("El nombre es requerido (mín. 2 caracteres).")
-        if (telefonoDigits.length < MIN_DIGITOS_TEL)
+        if (!validNationalPhone(telefonoDigits, pais.code))
             return setSubmitError(
-                `El teléfono es requerido (mín. ${MIN_DIGITOS_TEL} dígitos).`
+                phoneHint(pais.code)
             )
         if (email && !EMAIL_REGEX.test(email.trim()))
             return setSubmitError("El email ingresado no es válido.")
@@ -4573,13 +4571,24 @@ function TelInput({
                     )}
                 </div>
                 <input
-                    type="text"
+                    type="tel"
                     inputMode="numeric"
-                    placeholder="Número de teléfono"
+                    autoComplete="tel-national"
+                    maxLength={phoneLimit(pais.code, value)}
+                    title={phoneHint(pais.code)}
+                    placeholder={pais.code === "AR" ? "3515551234" : "Código de área y número"}
                     value={value}
                     onChange={(e) =>
                         onChange(e.target.value.replace(/[^0-9]/g, ""))
                     }
+                    onPaste={event => {
+                        event.preventDefault();
+                        const parsed = parsePhoneInput(event.clipboardData.getData('text'), pais.code);
+                        if (parsed.tooLong) return;
+                        const country = PAISES.find(item => item.code === parsed.code);
+                        if (country) setPais(country);
+                        onChange(parsed.digits);
+                    }}
                     onFocus={() => setFocused(true)}
                     onBlur={() => {
                         setFocused(false)

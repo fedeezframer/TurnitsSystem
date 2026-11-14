@@ -94,7 +94,10 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
     )
     const [tab, setTab] = React.useState<
         "inicio" | "servicios" | "agenda" | "horarios" | "pagos" | "equipo"
-    >("inicio")
+    >(() => {
+        const params = new URLSearchParams(window.location.search)
+        return params.get("seccion") === "pagos" || ["mp_success", "mp_error"].includes(params.get("status") || "") ? "pagos" : "inicio"
+    })
     const [data, setData] = React.useState<any>(null)
     const [loading, setLoading] = React.useState(true)
     const [error, setError] = React.useState("")

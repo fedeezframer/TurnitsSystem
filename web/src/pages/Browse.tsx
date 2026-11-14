@@ -1,4 +1,5 @@
 import * as React from "react";
+import { PASSWORD_MIN_LENGTH } from "../shared/password-policy.js";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { appConfig } from "../config";
 import { useStartupLoading } from "../components/BrandPreloader";
@@ -14,6 +15,7 @@ import BrowseFlame from "./BrowseFlame";
 import { ChatIcon } from "../components/ChatChrome";
 import LoadingRunner from "../components/LoadingRunner";
 import "./Browse.css";
+import "../migrated/panel/design-refresh.css";
 
 type View = "inicio" | "ofertas" | "agenda" | "buscar" | "mensajes" | "coins" | "perfil";
 const NAV_LABELS = {
@@ -1536,9 +1538,12 @@ function BrowseContent() {
                       {["Nombre", "Apellido", "Teléfono internacional"][i]}
                       <input
                         required
+                        type={key === "telefono" ? "tel" : "text"}
+                        inputMode={key === "telefono" ? "tel" : undefined}
+                        maxLength={key === "telefono" ? 16 : 80}
                         value={form[key] || ""}
                         onChange={(e) =>
-                          setForm({ ...form, [key]: e.target.value })
+                          setForm({ ...form, [key]: key === "telefono" ? e.target.value.replace(/(?!^\+)\D/g, "") : e.target.value })
                         }
                       />
                     </label>
@@ -1613,7 +1618,7 @@ function BrowseContent() {
                       Nueva contraseña
                       <input
                         required
-                        minLength={12}
+                        minLength={PASSWORD_MIN_LENGTH}
                         type="password"
                         autoComplete="new-password"
                         value={form.nueva || ""}

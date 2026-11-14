@@ -36,7 +36,7 @@ function loadGoogleScript(): Promise<void> {
     if (googleScriptPromise) return googleScriptPromise
     googleScriptPromise = new Promise<void>((resolve, reject) => {
         const existing = document.querySelector<HTMLScriptElement>(
-            'script[src="https://accounts.google.com/gsi/client"]'
+            'script[src="https://accounts.google.com/gsi/client?hl=es"]'
         )
         const script = existing || document.createElement("script")
         const timer = window.setTimeout(
@@ -62,7 +62,7 @@ function loadGoogleScript(): Promise<void> {
         script.addEventListener("load", loaded)
         script.addEventListener("error", failed)
         if (!existing) {
-            script.src = "https://accounts.google.com/gsi/client"
+            script.src = "https://accounts.google.com/gsi/client?hl=es"
             script.async = true
             script.defer = true
             document.head.appendChild(script)
@@ -194,7 +194,7 @@ export default function LoginApp(props: Props) {
     const id = React.useId()
     const [email, setEmail] = React.useState("")
     const [accountType, setAccountType] = React.useState<"usuario" | "negocio">(() =>
-        typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tipo") === "usuario" ? "usuario" : "negocio"
+        appConfig.customerExperienceEnabled && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tipo") === "usuario" ? "usuario" : "negocio"
     )
     const registrationHref = React.useMemo(() => {
         const registrationParams = new URLSearchParams({ tipo: accountType })
@@ -622,7 +622,7 @@ export default function LoginApp(props: Props) {
                               : "Tu agenda, tu equipo y tu negocio en un lugar."}
                     </p>
                     <div className="tt-login-v2-divider" />
-                    <div className="tt-login-v2-account-types" role="group" aria-label="Tipo de cuenta">
+                    {appConfig.customerExperienceEnabled && <div className="tt-login-v2-account-types" role="group" aria-label="Tipo de cuenta">
                         {(["usuario", "negocio"] as const).map((type) => (
                             <button
                                 key={type}
@@ -640,7 +640,7 @@ export default function LoginApp(props: Props) {
                                 {type === "usuario" ? "Usuario" : "Negocio"}
                             </button>
                         ))}
-                    </div>
+                    </div>}
                     <label
                         className="tt-login-v2-field"
                         htmlFor={`${id}-email`}

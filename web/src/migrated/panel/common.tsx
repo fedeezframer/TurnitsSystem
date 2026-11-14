@@ -3176,7 +3176,8 @@ async function MercadoPagoConexion_solicitarUrlOAuth(
     api: string,
     slug: string,
     token: string,
-    employeeMode = false
+    employeeMode = false,
+    returnTo: "pagos" | "onboarding" = "pagos"
 ): Promise<string> {
     const res = await fetch(
         employeeMode
@@ -3184,7 +3185,8 @@ async function MercadoPagoConexion_solicitarUrlOAuth(
             : `${api.replace(/\/+$/, "")}/mp/connect/${encodeURIComponent(slug)}`,
         {
             method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ returnTo }),
         }
     )
     const data = await res.json().catch(() => ({}))
@@ -3754,8 +3756,8 @@ type SeccionId =
 const NAV_ITEMS: { id: SeccionId; label: string }[] = [
     { id: "inicio", label: "Inicio" },
     { id: "servicios", label: "Servicios" },
-    { id: "consultas", label: "Consultas" },
     { id: "clientes", label: "Clientes" },
+    { id: "consultas", label: "Consultas" },
     { id: "agenda", label: "Agenda" },
     { id: "horarios", label: "Horarios" },
     { id: "pagos", label: "Pagos" },
@@ -5002,8 +5004,9 @@ function SeccionHeader({
     isMobile?: boolean
 }) {
     return (
-        <div style={{ marginBottom: 4 }}>
+        <div className="turnits-section-heading" style={{ marginBottom: 4 }}>
             <h1
+                className="turnits-section-heading-title"
                 style={{
                     fontFamily: "'Inter Display', -apple-system, sans-serif",
                     fontSize: isMobile ? 22 : 28,
@@ -5016,6 +5019,7 @@ function SeccionHeader({
             </h1>
             {subtitle && (
                 <p
+                    className="turnits-section-heading-subtitle"
                     style={{
                         fontFamily:
                             "'Inter Display', -apple-system, sans-serif",
