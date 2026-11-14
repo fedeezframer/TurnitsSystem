@@ -121,7 +121,8 @@ export default function BusinessLanding() {
     getJson(`/browse/ofertas?slug=${encodeURIComponent(slug)}`)
       .then(data => {
         setOffset(Date.parse(data.server_time) - Date.now() || 0)
-        setOffers((data.ofertas || []).sort((a: Offer, b: Offer) => Date.parse(a.cierre) - Date.parse(b.cierre)))
+        // Defensa extra: si la API todavía no soporta ?slug=, nunca mostrar ofertas de otros negocios.
+        setOffers((data.ofertas || []).filter((o: Offer) => o.slug === slug).sort((a: Offer, b: Offer) => Date.parse(a.cierre) - Date.parse(b.cierre)))
       })
       .catch(() => setOffers([]))
   }, [slug])
