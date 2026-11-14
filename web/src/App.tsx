@@ -21,6 +21,7 @@ const Internal = lazy(() => import("./migrated/public/AdminStats"))
 const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))
 const BusinessProfile = lazy(() => import("./pages/BusinessProfile"))
+const BusinessLanding = lazy(() => import("./pages/BusinessLanding"))
 const QuoteAvailability = lazy(() => import("./pages/QuoteAvailability"))
 
 function PanelRoute() {
@@ -136,6 +137,8 @@ export default function App() {
     <Route path="/politica-de-privacidad" element={<Legal document="privacy" />} />
     <Route path="/cambiar-contraseña" element={<ResetPassword />} />
     <Route path="/cambiar-contrasena" element={<ResetPassword />} />
+    {/* turnits.com/{slug}: las rutas fijas de arriba tienen prioridad sobre este comodín. */}
+    <Route path="/:slug" element={<BusinessLanding />} />
     <Route path="*" element={<MissingPage />} />
   </Routes><StartupRouteReady /></Suspense>
 }
