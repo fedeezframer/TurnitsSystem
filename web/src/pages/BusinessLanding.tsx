@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router"
 import { appConfig } from "../config"
 import BrandPreloader from "../components/BrandPreloader"
 import { SocialIcon } from "../components/SocialIcon"
+import whatsappLogo from "../components/whatsapp-icon.svg"
 import { enlacesPublicos } from "../shared/socials.js"
 import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
 import "./BusinessLanding.css"
@@ -311,10 +312,10 @@ export default function BusinessLanding() {
         {combos.length > 0 && <section id="bl-combos" className="bl-section"><h2>Combos</h2><div className="bl-list">{combos.map(promoCard)}</div></section>}
         {discounts.length > 0 && <section id="bl-promos" className="bl-section"><h2>Promociones</h2><div className="bl-list">{discounts.map(promoCard)}</div></section>}
 
-        {whatsapp && <section className="bl-section bl-contact"><h2>¿Tenés alguna duda?</h2><p>Contactanos</p><a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">Consultas aquí <b aria-hidden="true">◉</b></a></section>}
+        {whatsapp && <section className="bl-section bl-contact"><h2>¿Tenés alguna duda?</h2><p>Contactanos</p><a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">Consultas aquí <img src={whatsappLogo} alt="WhatsApp" /></a></section>}
         <section className="bl-signup"><h2>Creá tu agenda ahora con Turnits</h2><Link to="/registro/negocio">Empezar ya</Link></section>
 
-        <footer className="bl-footer"><img src={appConfig.logoUrl} alt="Turnits" /><span>Powered by <b>Turnits</b></span></footer>
+        <footer className="bl-footer"><span>Powered by <b>Turnits</b></span></footer>
       </div>
     </main>
   )

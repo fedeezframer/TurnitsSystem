@@ -167,3 +167,16 @@
   .bl-footer{margin-left:-48px;margin-right:-48px;margin-bottom:-48px;border-radius:0 0 24px 24px}
 }
 @media(max-width:420px){.bl-offer-body strong{font-size:19px}.bl-offer-timer{font-size:10px}.bl-offer-img{width:34%;height:114px}.bl-member-copy strong{font-size:15px}}
+
+/* Full-bleed page: the business page itself is not a centered card. */
+.bl-page{width:100%;background:#fff}
+.bl-footer{border-radius:0}
+.bl-wrap{width:100%;max-width:none;margin:0;padding:0 20px 40px;border-radius:0;background:#fff;box-shadow:none;min-height:100dvh}
+.bl-service{position:relative;min-height:94px;padding:8px 14px 8px 8px}
+.bl-service>div{padding:0 80px 20px 0}
+.bl-service>span{position:absolute;top:8px;right:14px;align-self:auto}
+.bl-service>a{position:absolute;right:8px;bottom:8px;align-self:auto}
+.bl-contact>a{gap:16px}
+.bl-contact>a img{flex:none;width:28px;height:28px}
+@media(min-width:600px){.bl-page{background:#fff}.bl-wrap{width:100%;max-width:none;margin:0;min-height:100dvh;border-radius:0;box-shadow:none}}
+@media(min-width:960px){.bl-wrap{width:100%;max-width:none;margin:0;padding:0 48px 48px}.bl-footer{margin-left:-48px;margin-right:-48px;margin-bottom:-48px;border-radius:0}}

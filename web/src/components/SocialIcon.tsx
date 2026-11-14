@@ -1,5 +1,7 @@
 import * as React from "react";
+import whatsappLogo from "./whatsapp-icon.svg";
 export function SocialIcon({ name }: { name: string }) {
+  if (name === "whatsapp") return <img src={whatsappLogo} width="22" height="22" alt="" aria-hidden="true" />;
   return (
     <svg
       width="22"
@@ -37,11 +39,6 @@ export function SocialIcon({ name }: { name: string }) {
         <>
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <path d="M7 10v7m0-10v.1M11 17v-7m0 3c0-4 6-4 6 0v4" />
-        </>
-      ) : name === "whatsapp" ? (
-        <>
-          <path d="M20 11.5a8 8 0 0 1-12 7L3 20l1.5-5A8 8 0 1 1 20 11.5Z" />
-          <path d="M8 7.5c-.8 3.5 1.7 6.7 5.5 8l2-2-2-1.3-1 1c-1.8-.9-2.6-1.8-3.2-3l.8-.8Z" />
         </>
       ) : name === "phone" ? (
         <path d="m5 3 4 1 1 5-2 1a14 14 0 0 0 6 6l1-2 5 1 1 4c-8 5-22-9-16-16Z" />
