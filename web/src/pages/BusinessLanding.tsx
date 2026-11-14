@@ -216,6 +216,9 @@ export default function BusinessLanding() {
     }
     return false
   }).sort((a, b) => ((b.precio_original - b.precio_final) / Math.max(b.precio_original, 1)) - ((a.precio_original - a.precio_final) / Math.max(a.precio_original, 1)))
+  const discountForService = (service: Service) => rankedPromos
+    .filter(p => p.tipo === "descuento" && p.servicio_id === service.id && p.items?.length === 1 && p.items[0].tipo === "servicio" && p.items[0].cantidad === 1 && p.precio_final < p.precio_original)
+    .sort((a, b) => a.precio_final - b.precio_final)[0]
   const enc = encodeURIComponent(slug)
   const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
   const today = new Date().toLocaleDateString("es-AR", { day: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
@@ -232,7 +235,7 @@ export default function BusinessLanding() {
       <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{p.imagenes?.some(image => image.tipo === "producto") && <span className="bl-promo-products">{p.imagenes.filter(image => image.tipo === "producto").slice(0, 2).map(image => <img key={image.id} src={image.url} alt="" loading="lazy" />)}</span>}{p.dias_semana != null && <small>{promoDaysLabel(p.dias_semana)}</small>}</div>
       <div className="bl-promo-body">
         <strong>{p.nombre}</strong>
-        <span className="bl-promo-price"><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
+        <span className="bl-promo-price"><b>{money(p.precio_final)}</b></span>
         <span className="bl-promo-cta">Reservar →</span>
       </div>
     </Link>
@@ -299,10 +302,13 @@ export default function BusinessLanding() {
 
         {reviewItems.length > 0 && <section className="bl-section bl-reviews-section"><h2>Reseñas</h2><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div><strong>{review.nombre}</strong>{review.comentario && <p>“{review.comentario}”</p>}</article>)}</div></section>}
 
-        {services.length > 0 && <section id="bl-services" className="bl-section"><h2>Servicios</h2><p>Lo que ofrecemos en {name}</p><div className="bl-service-list">{services.map(service => <article className="bl-service" key={service.id}>
-          {(service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]) && <img src={service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]} alt="" loading="lazy" />}
-          <div><strong>{service.nombre}</strong><b>{money(service.precio)}</b></div><span>{service.duracion} min</span><Link to={`/agenda/${enc}?servicio_id=${encodeURIComponent(service.id)}`}>Reservar</Link>
-        </article>)}</div></section>}
+        {services.length > 0 && <section id="bl-services" className="bl-section"><h2>Servicios</h2><p>Lo que ofrecemos en {name}</p><div className="bl-service-list">{services.map(service => {
+          const discount = discountForService(service)
+          return <article className="bl-service" key={service.id}>
+            {(service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]) && <img src={service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]} alt="" loading="lazy" />}
+            <div><strong>{service.nombre}</strong><b>{discount?.dias_semana != null ? "Desde " : ""}{money(discount?.precio_final ?? service.precio)}</b></div><span>{service.duracion} min</span><Link to={`/agenda/${enc}?servicio_id=${encodeURIComponent(service.id)}`}>Reservar</Link>
+          </article>
+        })}</div></section>}
 
         {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><h2>Promociones</h2><p>Llevá una experiencia</p><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
 
