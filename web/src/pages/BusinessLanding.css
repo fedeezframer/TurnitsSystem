@@ -208,3 +208,17 @@
 .bl-promotions .bl-promo-cta{display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;min-height:56px;margin-top:0;padding:5px 12px;border:2px solid var(--bl-color);border-radius:18px;color:var(--bl-color);font-size:26px;font-weight:600}
 @media(min-width:600px){.bl-promo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}}
 @media(min-width:960px){.bl-promo-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}.bl-promotions .bl-promo{padding:18px}}
+
+@media(max-width:599px){
+  .bl-promo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}
+  .bl-promotions .bl-promo{gap:8px;padding:8px;border-radius:14px}
+  .bl-promotions .bl-promo-img{border-radius:10px}
+  .bl-promotions .bl-promo-img>small{right:6px;bottom:6px;left:6px;max-width:calc(100% - 12px);padding:3px 5px;font-size:10px}
+  .bl-promotions .bl-promo-products{top:5px;right:5px}
+  .bl-promotions .bl-promo-products img{border-width:3px}
+  .bl-promotions .bl-promo-body{gap:7px;padding:0 1px}
+  .bl-promotions .bl-promo-body strong{font-size:15px}
+  .bl-promotions .bl-promo-price{gap:6px;font-size:17px}
+  .bl-promotions .bl-promo-price s{font-size:11px}
+  .bl-promotions .bl-promo-cta{min-height:34px;padding:3px 8px;border-width:1px;border-radius:10px;font-size:15px}
+}
