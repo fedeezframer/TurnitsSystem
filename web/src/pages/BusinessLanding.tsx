@@ -41,6 +41,9 @@ interface Promo {
   items?: { id: string; tipo: string; nombre: string; cantidad: number }[]
   imagenes?: { id: string; tipo: string; url: string }[]
 }
+interface Service { id: string; nombre: string; precio: number; duracion: number; descripcion?: string; imagen_url?: string | null }
+interface Member { id: string; nombre: string; apellido?: string; color?: string; foto_url?: string | null }
+interface Review { id: string; nombre: string; comentario?: string; puntuacion: number; created_at?: string }
 
 async function getJson(path: string, signal?: AbortSignal) {
   const response = await fetch(`${appConfig.apiUrl}${path}`, { signal, cache: "no-store" })
@@ -89,7 +92,11 @@ export default function BusinessLanding() {
   const [negocio, setNegocio] = React.useState<any>(null)
   const [perfil, setPerfil] = React.useState<any>(null)
   const [reviews, setReviews] = React.useState({ promedio: 0, cantidad: 0 })
+  const [reviewItems, setReviewItems] = React.useState<Review[]>([])
   const [promos, setPromos] = React.useState<Promo[]>([])
+  const [services, setServices] = React.useState<Service[]>([])
+  const [members, setMembers] = React.useState<Member[]>([])
+  const [availability, setAvailability] = React.useState<Record<string, { date: string; time: string } | null>>({})
   const [offers, setOffers] = React.useState<Offer[]>([])
   const [offset, setOffset] = React.useState(0)
   const [now, setNow] = React.useState(() => Date.now())
@@ -98,25 +105,56 @@ export default function BusinessLanding() {
   React.useEffect(() => {
     if (!slug) return
     const controller = new AbortController()
-    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setOffers([]); setLogoFailed(false)
+    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setOffers([]); setLogoFailed(false); setServices([]); setMembers([]); setReviewItems([]); setAvailability({})
     const s = encodeURIComponent(slug)
     Promise.allSettled([
       getJson(`/negocio/${s}`, controller.signal),
       getJson(`/perfil/${s}`, controller.signal),
       getJson(`/perfil/${s}/resenas`, controller.signal),
       getJson(`/promociones/${s}`, controller.signal),
-    ]).then(([biz, profile, rev, promo]) => {
+      getJson(`/servicios/${s}`, controller.signal),
+      getJson(`/equipo/${s}`, controller.signal),
+    ]).then(async ([biz, profile, rev, promo, srv, team]) => {
       if (controller.signal.aborted) return
       if (biz.status !== "fulfilled" || !biz.value.negocio) return setState("missing")
       if (biz.value.suspendido) return setState("paused")
       setNegocio(biz.value.negocio)
       if (profile.status === "fulfilled") setPerfil(profile.value.perfil)
-      if (rev.status === "fulfilled") setReviews({ promedio: rev.value.promedio || 0, cantidad: rev.value.cantidad || 0 })
+      if (rev.status === "fulfilled") { setReviews({ promedio: rev.value.promedio || 0, cantidad: rev.value.cantidad || 0 }); setReviewItems(rev.value.resenas || []) }
       if (promo.status === "fulfilled") setPromos(promo.value.promociones || [])
+      if (team.status === "fulfilled") setMembers(team.value.equipo || [])
+      if (srv.status === "fulfilled") {
+        const memberList = team.status === "fulfilled" ? team.value.equipo || [] : []
+        const byMember = await Promise.all(memberList.map((member: Member) => getJson(`/servicios/${s}?equipo_id=${encodeURIComponent(member.id)}`, controller.signal).catch(() => ({ servicios: [] }))))
+        if (controller.signal.aborted) return
+        const all = [...(srv.value.servicios || []), ...byMember.flatMap(data => data.servicios || [])]
+        setServices([...new Map(all.map((service: Service) => [service.id, service])).values()])
+      }
       setState("ready")
     })
     return () => controller.abort()
   }, [slug])
+
+  React.useEffect(() => {
+    if (state !== "ready" || !members.length || !services.length) return
+    const controller = new AbortController()
+    const firstDate = new Date()
+    const dates = Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(firstDate); d.setDate(d.getDate() + i)
+      return new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(d)
+    })
+    Promise.all(members.slice(0, 8).map(async member => {
+      for (const date of dates) {
+        try {
+          const data = await getJson(`/slots-disponibles/${encodeURIComponent(slug)}?fecha=${date}&equipo_id=${encodeURIComponent(member.id)}`, controller.signal)
+          const slot = (data.slots || []).find((item: any) => !item.lleno)
+          if (slot) return [member.id, { date, time: String(slot.hora).slice(0, 5) }] as const
+        } catch { if (controller.signal.aborted) return [member.id, null] as const }
+      }
+      return [member.id, null] as const
+    })).then(rows => { if (!controller.signal.aborted) setAvailability(Object.fromEntries(rows)) })
+    return () => controller.abort()
+  }, [state, slug, members, services])
 
   const loadOffers = React.useCallback(() => {
     if (!slug) return
@@ -181,6 +219,13 @@ export default function BusinessLanding() {
   const enc = encodeURIComponent(slug)
   const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
   const today = new Date().toLocaleDateString("es-AR", { day: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
+  const whatsapp = String(perfil?.telefono_publico || "").replace(/\D/g, "")
+  const timeUntil = (date: string, time: string) => {
+    const [y, m, d] = date.split("-").map(Number), [h, min] = time.split(":").map(Number)
+    const target = new Date(y, m - 1, d, h, min).getTime()
+    const minutes = Math.max(0, Math.round((target - Date.now()) / 60000))
+    return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60} min` : ""}`.trim()
+  }
 
   const promoCard = (p: Promo) => (
     <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ servicio_id: p.servicio_id, promo_id: p.id })}`}>
@@ -200,6 +245,7 @@ export default function BusinessLanding() {
       <div className="bl-wrap">
         <nav className="bl-nav" aria-label="Secciones">
           {perfil && <Link to={`/perfil/${enc}`}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.5c1.5-2.5 3.2-3.5 5.5-3.5s4 1 5.5 3.5" /></svg>Perfil</Link>}
+          {services.length > 0 && <button type="button" onClick={() => goTo("bl-services")}>Servicios</button>}
           {combos.length > 0 && <button type="button" onClick={() => goTo("bl-combos")}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="12" height="12" rx="2" /><path d="M9 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" /></svg>Combos</button>}
           {discounts.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2 1.6 2.6-.2.9 2.4 2.3 1.3-.6 2.5 1 2.4-1.8 1.9-.2 2.6-2.5.6L12 21l-2.2-1.6-2.5-.6-.2-2.6-1.8-1.9 1-2.4-.6-2.5 2.3-1.3.9-2.4 2.6.2z" /><path d="m9.5 14.5 5-5M9.7 9.7h.01M14.3 14.3h.01" /></svg>Promociones</button>}
         </nav>
@@ -231,34 +277,44 @@ export default function BusinessLanding() {
           </div>
         </section>
 
-        {liveOffers.map(offer => (
+        {liveOffers.length > 0 && <section className="bl-section bl-last-minute"><h2>Oferta de último momento</h2><p>Aprovechá los horarios vacíos y reservá con descuento.</p>{liveOffers.slice(0, 1).map(offer => (
           <React.Fragment key={`${offer.id}-${offer.fecha}-${offer.hora}`}>
             <Link className="bl-offer" to={offerLink(slug, offer)}>
               <span className="bl-offer-timer">Disponible por: {countdown(Date.parse(offer.cierre) - serverNow)}</span>
               <div className="bl-offer-img">{offer.imagen && <img src={offer.imagen} alt="" />}</div>
               <div className="bl-offer-body">
+                <small className="bl-offer-time">HOY {offer.hora.slice(0, 5)} hs · Con {members.find(m => m.id === offer.equipo_id)?.nombre || "nuestro equipo"}</small>
                 <strong>{offer.nombre}</strong>
                 <span><b>{money(offer.precio)}</b><s>{money(offer.precio_original)}</s></span>
               </div>
             </Link>
           </React.Fragment>
-        ))}
-        {liveOffers.length > 0 && <p className="bl-note">Esta oferta es única y funciona por subasta, reserva antes que alguien más lo haga. El horario no es personalizable.</p>}
+        ))}</section>}
 
-        <hr className="bl-rule" />
-        <Link className="bl-big" to={`/agenda/${enc}`}>
-          <span>Ver Agenda</span>
-          <i className="bl-icon-cal" aria-hidden="true"><b>{today}</b></i>
-        </Link>
-        {perfil && <Link className="bl-big" to={`/perfil/${enc}`}>
-          <span>Ver Perfil</span>
-          <i className="bl-icon-doc" aria-hidden="true" />
-        </Link>}
+        {members.length > 0 && services.length > 0 && <section className="bl-section bl-availability"><h2>Próximos turnos disponibles</h2><p>Encontrá el horario más cercano de nuestro equipo.</p><div className="bl-list">{members.slice(0, 8).map((member, index) => {
+          const next = availability[member.id], initials = `${member.nombre?.[0] || ""}${member.apellido?.[0] || ""}`.toUpperCase()
+          const memberColor = /^#[0-9a-f]{6}$/i.test(member.color || "") ? member.color : color
+          return <Link className="bl-member" key={member.id} to={`/agenda/${enc}${next ? `?equipo_id=${encodeURIComponent(member.id)}&fecha=${next.date}&hora=${next.time}` : `?equipo_id=${encodeURIComponent(member.id)}`}`}>
+            <span className="bl-avatar" style={{ "--member-color": memberColor } as React.CSSProperties}>{member.foto_url ? <img src={member.foto_url} alt="" /> : initials || member.nombre?.[0]}</span>
+            <span className="bl-member-copy"><strong>{member.nombre} {member.apellido}</strong><small>{next ? <>Disponible en <b>{timeUntil(next.date, next.time) || "ahora"}</b></> : "Ver disponibilidad"}</small><span>Reservar con este profesional ↗</span></span>
+            <span className="bl-member-rank">{index + 1}</span>
+          </Link>
+        })}</div></section>}
+
+        {reviewItems.length > 0 && <section className="bl-section bl-reviews-section"><h2>Reseñas</h2><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div><strong>{review.nombre}</strong>{review.comentario && <p>“{review.comentario}”</p>}</article>)}</div></section>}
+
+        {services.length > 0 && <section id="bl-services" className="bl-section"><h2>Servicios</h2><p>Lo que ofrecemos en {name}</p><div className="bl-service-list">{services.map(service => <article className="bl-service" key={service.id}>
+          {(service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]) && <img src={service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]} alt="" loading="lazy" />}
+          <div><strong>{service.nombre}</strong><b>{money(service.precio)}</b></div><span>{service.duracion} min</span><Link to={`/agenda/${enc}?servicio_id=${encodeURIComponent(service.id)}`}>Reservar</Link>
+        </article>)}</div></section>}
 
         {combos.length > 0 && <section id="bl-combos" className="bl-section"><h2>Combos</h2><div className="bl-list">{combos.map(promoCard)}</div></section>}
         {discounts.length > 0 && <section id="bl-promos" className="bl-section"><h2>Promociones</h2><div className="bl-list">{discounts.map(promoCard)}</div></section>}
 
-        <footer className="bl-footer">Powered by <b>Turnits</b></footer>
+        {whatsapp && <section className="bl-section bl-contact"><h2>¿Tenés alguna duda?</h2><p>Contactanos</p><a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">Consultas aquí <b aria-hidden="true">◉</b></a></section>}
+        <section className="bl-signup"><h2>Creá tu agenda ahora con Turnits</h2><Link to="/registro/negocio">Empezar ya</Link></section>
+
+        <footer className="bl-footer"><img src={appConfig.logoUrl} alt="Turnits" /><span>Powered by <b>Turnits</b></span></footer>
       </div>
     </main>
   )
