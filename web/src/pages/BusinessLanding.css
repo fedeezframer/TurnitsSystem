@@ -3,10 +3,12 @@
 .bl-wrap{width:min(100%,440px);margin:0 auto;padding:0 20px 40px;overflow:hidden}
 .bl-page a{color:inherit;text-decoration:none}
 .bl-page svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.bl-mask-icon{display:inline-block;flex:none;width:16px;height:16px;background:currentColor;mask-repeat:no-repeat;mask-position:center;mask-size:contain;-webkit-mask-repeat:no-repeat;-webkit-mask-position:center;-webkit-mask-size:contain}
 
 .bl-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;height:40px;margin:0 -20px;padding:0 20px;font-size:15px;font-weight:600;color:#2a2a2a}
 .bl-nav a,.bl-nav button{display:inline-flex;align-items:center;gap:5px;padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer}
 .bl-nav svg{width:20px;height:20px}
+.bl-nav .bl-promo-nav-icon{width:20px;height:20px}
 .bl-nav a:first-child:last-child{margin:0 auto}
 
 .bl-bar{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;height:60px;margin:0 -20px;border-radius:0 0 18px 18px;background:var(--bl-color)}
@@ -123,6 +125,7 @@
 .bl-member-copy small{color:#555;font-size:14px}
 .bl-member-copy small b{color:var(--bl-color)}
 .bl-member-copy>span{margin-top:3px;font-size:14px;font-weight:650}
+.bl-member-copy>span .bl-mask-icon{width:16px;height:16px;margin-left:3px;vertical-align:-3px}
 .bl-member-rank{display:none}
 .bl-review-list{display:flex;gap:12px;overflow-x:auto;padding:10px 0 4px;scroll-snap-type:x mandatory}
 .bl-review{flex:0 0 min(84%,300px);padding:12px;border:1px solid #bbb;border-radius:12px;scroll-snap-align:start}
@@ -214,6 +217,7 @@
 .bl-promotions .bl-promo-price b{color:#111;font-weight:750}
 .bl-promotions .bl-promo-price s{color:#777;font-size:14px}
 .bl-promotions .bl-promo-cta{display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;min-height:56px;margin-top:auto;padding:5px 12px;border:2px solid var(--bl-color);border-radius:18px;color:var(--bl-color);font-size:26px;font-weight:600}
+.bl-promotions .bl-promo-cta .bl-mask-icon{width:21px;height:21px;margin-left:5px}
 @media(min-width:600px){.bl-promo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}}
 @media(min-width:960px){.bl-promo-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}.bl-promotions .bl-promo{padding:18px}}
 

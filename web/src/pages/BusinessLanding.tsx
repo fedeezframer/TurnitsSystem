@@ -4,6 +4,8 @@ import { appConfig } from "../config"
 import BrandPreloader from "../components/BrandPreloader"
 import { SocialIcon } from "../components/SocialIcon"
 import whatsappLogo from "../components/whatsapp-icon.svg"
+import promoIcon from "../components/griddy-icons-sale-alt.svg"
+import arrowUpRightIcon from "../components/akar-icons-arrow-up-right.svg"
 import { enlacesPublicos } from "../shared/socials.js"
 import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
 import "./BusinessLanding.css"
@@ -14,6 +16,7 @@ import "./BusinessLanding.css"
 
 const DEFAULT_COLOR = "#196b1f"
 const money = (value: number) => `$${Number(value || 0).toLocaleString("es-AR")}`
+const maskedIcon = (source: string): React.CSSProperties => ({ maskImage: `url("${source}")`, WebkitMaskImage: `url("${source}")` })
 
 interface Offer {
   id: string
@@ -232,11 +235,11 @@ export default function BusinessLanding() {
 
   const promoCard = (p: Promo) => (
     <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ servicio_id: p.servicio_id, promo_id: p.id })}`}>
-      <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{p.imagenes?.some(image => image.tipo === "producto") && <span className="bl-promo-products">{p.imagenes.filter(image => image.tipo === "producto").slice(0, 2).map(image => <img key={image.id} src={image.url} alt="" loading="lazy" />)}</span>}{p.dias_semana != null && <small>{promoDaysLabel(p.dias_semana)}</small>}</div>
+      <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{p.imagenes?.some(image => image.tipo === "producto") && <span className="bl-promo-products">{p.imagenes.filter(image => image.tipo === "producto").slice(0, 2).map(image => <img key={image.id} src={image.url} alt="" loading="lazy" />)}</span>}{p.dias_semana?.length ? <small>SOLO {promoDaysLabel(p.dias_semana).toLocaleUpperCase("es-AR")}</small> : null}</div>
       <div className="bl-promo-body">
         <strong>{p.nombre}</strong>
         <span className="bl-promo-price"><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
-        <span className="bl-promo-cta">Reservar →</span>
+        <span className="bl-promo-cta">Reservar <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></span>
       </div>
     </Link>
   )
@@ -246,7 +249,7 @@ export default function BusinessLanding() {
       <div className="bl-wrap">
         {(hasPublicProfile || rankedPromos.length > 0) && <nav className="bl-nav" aria-label="Secciones">
           {hasPublicProfile && <Link to={`/perfil/${enc}`}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.5c1.5-2.5 3.2-3.5 5.5-3.5" /></svg>Perfil</Link>}
-          {rankedPromos.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2 1.6 2.6-.2.9 2.4 2.3 1.3-.6 2.5 1 2.4-1.8 1.9-.2 2.6-2.5.6L12 21l-2.2-1.6-2.5-.6-.2-2.6-1.8-1.9 1-2.4-.6-2.5 2.3-1.3.9-2.4 2.6.2z" /><path d="m9.5 14.5 5-5M9.7 9.7h.01M14.3 14.3h.01" /></svg>Promociones</button>}
+          {rankedPromos.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><i className="bl-mask-icon bl-promo-nav-icon" style={maskedIcon(promoIcon)} aria-hidden="true" />Promociones</button>}
         </nav>}
 
         <header className="bl-bar">
@@ -296,7 +299,7 @@ export default function BusinessLanding() {
           const memberColor = /^#[0-9a-f]{6}$/i.test(member.color || "") ? member.color : color
           return <Link className="bl-member" key={member.id} to={`/agenda/${enc}?equipo_id=${encodeURIComponent(member.id)}`}>
             <span className="bl-avatar" style={{ "--member-color": memberColor } as React.CSSProperties}>{member.foto_url ? <img src={member.foto_url} alt="" /> : initials || member.nombre?.[0]}</span>
-            <span className="bl-member-copy"><strong>{member.nombre} {member.apellido}</strong><small>{next ? <>Disponible en <b>{timeUntil(next.date, next.time) || "ahora"}</b></> : "Ver disponibilidad"}</small><span>Reservar con este profesional ↗</span></span>
+            <span className="bl-member-copy"><strong>{member.nombre} {member.apellido}</strong><small>{next ? <>Disponible en <b>{timeUntil(next.date, next.time) || "ahora"}</b></> : "Ver disponibilidad"}</small><span>Reservar con este profesional <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></span></span>
             <span className="bl-member-rank">{index + 1}</span>
           </Link>
         })}</div></section>}
