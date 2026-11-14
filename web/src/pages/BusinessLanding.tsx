@@ -215,8 +215,6 @@ export default function BusinessLanding() {
     }
     return false
   }).sort((a, b) => ((b.precio_original - b.precio_final) / Math.max(b.precio_original, 1)) - ((a.precio_original - a.precio_final) / Math.max(a.precio_original, 1)))
-  const combos = rankedPromos.filter(p => p.tipo === "combo")
-  const discounts = rankedPromos.filter(p => p.tipo === "descuento")
   const enc = encodeURIComponent(slug)
   const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
   const today = new Date().toLocaleDateString("es-AR", { day: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
@@ -230,13 +228,12 @@ export default function BusinessLanding() {
 
   const promoCard = (p: Promo) => (
     <Link key={p.id} className="bl-promo" to={`/agenda/${enc}?${new URLSearchParams({ servicio_id: p.servicio_id, promo_id: p.id })}`}>
-      <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}</div>
+      <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{p.dias_semana != null && <small>{promoDaysLabel(p.dias_semana)}</small>}</div>
       <div className="bl-promo-body">
         <strong>{p.nombre}</strong>
-        {p.tipo === "combo" && !!p.items?.length && <small>{p.items.map(i => `${i.cantidad > 1 ? `${i.cantidad} × ` : ""}${i.nombre}`).join(" + ")}</small>}
-        {p.dias_semana != null && <small>{promoDaysLabel(p.dias_semana)}</small>}
-        <span><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
-          <small className="bl-promo-cta">Reservar sin cuenta →</small>
+        {p.tipo === "combo" && !!p.items?.length && <small className="bl-promo-detail">{p.items.map(i => i.nombre).join(" + ")}</small>}
+        <span className="bl-promo-price"><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
+        <span className="bl-promo-cta">Reservar →</span>
       </div>
     </Link>
   )
@@ -246,8 +243,7 @@ export default function BusinessLanding() {
       <div className="bl-wrap">
         <nav className="bl-nav" aria-label="Secciones">
           {perfil && <Link to={`/perfil/${enc}`}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.5c1.5-2.5 3.2-3.5 5.5-3.5s4 1 5.5 3.5" /></svg>Perfil</Link>}
-          {combos.length > 0 && <button type="button" onClick={() => goTo("bl-combos")}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="12" height="12" rx="2" /><path d="M9 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" /></svg>Combos</button>}
-          {discounts.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2 1.6 2.6-.2.9 2.4 2.3 1.3-.6 2.5 1 2.4-1.8 1.9-.2 2.6-2.5.6L12 21l-2.2-1.6-2.5-.6-.2-2.6-1.8-1.9 1-2.4-.6-2.5 2.3-1.3.9-2.4 2.6.2z" /><path d="m9.5 14.5 5-5M9.7 9.7h.01M14.3 14.3h.01" /></svg>Promociones</button>}
+          {rankedPromos.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2 1.6 2.6-.2.9 2.4 2.3 1.3-.6 2.5 1 2.4-1.8 1.9-.2 2.6-2.5.6L12 21l-2.2-1.6-2.5-.6-.2-2.6-1.8-1.9 1-2.4-.6-2.5 2.3-1.3.9-2.4 2.6.2z" /><path d="m9.5 14.5 5-5M9.7 9.7h.01M14.3 14.3h.01" /></svg>Promociones</button>}
         </nav>
 
         <header className="bl-bar">
@@ -308,8 +304,7 @@ export default function BusinessLanding() {
           <div><strong>{service.nombre}</strong><b>{money(service.precio)}</b></div><span>{service.duracion} min</span><Link to={`/agenda/${enc}?servicio_id=${encodeURIComponent(service.id)}`}>Reservar</Link>
         </article>)}</div></section>}
 
-        {combos.length > 0 && <section id="bl-combos" className="bl-section"><h2>Combos</h2><div className="bl-list">{combos.map(promoCard)}</div></section>}
-        {discounts.length > 0 && <section id="bl-promos" className="bl-section"><h2>Promociones</h2><div className="bl-list">{discounts.map(promoCard)}</div></section>}
+        {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><h2>Promociones</h2><p>Llevá una experiencia</p><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
 
         {whatsapp && <section className="bl-section bl-contact"><h2>¿Tenés alguna duda?</h2><p>Contactanos</p><a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">Consultas aquí <img src={whatsappLogo} alt="WhatsApp" /></a></section>}
         <section className="bl-signup"><h2>Creá tu agenda ahora con Turnits</h2><Link to="/registro/negocio">Empezar ya</Link></section>
