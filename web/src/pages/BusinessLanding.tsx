@@ -246,7 +246,6 @@ export default function BusinessLanding() {
       <div className="bl-wrap">
         <nav className="bl-nav" aria-label="Secciones">
           {perfil && <Link to={`/perfil/${enc}`}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.5c1.5-2.5 3.2-3.5 5.5-3.5s4 1 5.5 3.5" /></svg>Perfil</Link>}
-          {services.length > 0 && <button type="button" onClick={() => goTo("bl-services")}>Servicios</button>}
           {combos.length > 0 && <button type="button" onClick={() => goTo("bl-combos")}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="12" height="12" rx="2" /><path d="M9 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" /></svg>Combos</button>}
           {discounts.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2 1.6 2.6-.2.9 2.4 2.3 1.3-.6 2.5 1 2.4-1.8 1.9-.2 2.6-2.5.6L12 21l-2.2-1.6-2.5-.6-.2-2.6-1.8-1.9 1-2.4-.6-2.5 2.3-1.3.9-2.4 2.6.2z" /><path d="m9.5 14.5 5-5M9.7 9.7h.01M14.3 14.3h.01" /></svg>Promociones</button>}
         </nav>

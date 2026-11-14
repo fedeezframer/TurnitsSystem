@@ -178,5 +178,9 @@
 .bl-service>a{position:absolute;right:8px;bottom:8px;align-self:auto}
 .bl-contact>a{gap:16px}
 .bl-contact>a img{flex:none;width:28px;height:28px}
+.bl-bar{position:sticky;top:0;z-index:20}
+.bl-contact>a{justify-content:flex-start;gap:10px}
+.bl-signup>a{color:#fff!important}
+.bl-footer,.bl-footer b{color:#fff}
 @media(min-width:600px){.bl-page{background:#fff}.bl-wrap{width:100%;max-width:none;margin:0;min-height:100dvh;border-radius:0;box-shadow:none}}
 @media(min-width:960px){.bl-wrap{width:100%;max-width:none;margin:0;padding:0 48px 48px}.bl-footer{margin-left:-48px;margin-right:-48px;margin-bottom:-48px;border-radius:0}}
