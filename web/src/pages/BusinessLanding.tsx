@@ -102,6 +102,8 @@ export default function BusinessLanding() {
   const [members, setMembers] = React.useState<Member[]>([])
   const [availability, setAvailability] = React.useState<Record<string, { date: string; time: string } | null>>({})
   const [offers, setOffers] = React.useState<Offer[]>([])
+  const [offerIndex, setOfferIndex] = React.useState(0)
+  const [offerPaused, setOfferPaused] = React.useState(false)
   const [offset, setOffset] = React.useState(0)
   const [now, setNow] = React.useState(() => Date.now())
   const [logoFailed, setLogoFailed] = React.useState(false)
@@ -201,7 +203,15 @@ export default function BusinessLanding() {
   }, [title])
 
   const serverNow = now + offset
-  const liveOffers = offers.filter(o => Date.parse(o.cierre) > serverNow).slice(0, 3)
+  const liveOffers = offers.filter(o => Date.parse(o.cierre) > serverNow)
+  React.useEffect(() => {
+    if (offerIndex >= liveOffers.length) setOfferIndex(0)
+  }, [liveOffers.length, offerIndex])
+  React.useEffect(() => {
+    if (liveOffers.length < 2 || offerPaused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    const timer = window.setInterval(() => setOfferIndex(index => (index + 1) % liveOffers.length), 7000)
+    return () => window.clearInterval(timer)
+  }, [liveOffers.length, offerPaused, offerIndex])
   React.useEffect(() => {
     if (offers.length && offers.some(o => Date.parse(o.cierre) <= serverNow)) loadOffers()
   }, [serverNow > 0 && offers.some(o => Date.parse(o.cierre) <= serverNow), loadOffers])
@@ -240,6 +250,16 @@ export default function BusinessLanding() {
     const target = new Date(y, m - 1, d, h, min).getTime()
     const minutes = Math.max(0, Math.round((target - Date.now()) / 60000))
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60} min` : ""}`.trim()
+  }
+  const offerDateLabel = (date: string) => {
+    const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date())
+    if (date === today) return "HOY"
+    const tomorrowDate = new Date(`${today}T12:00:00Z`)
+    tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1)
+    if (date === tomorrowDate.toISOString().slice(0, 10)) return "MAÑANA"
+    return new Date(`${date}T12:00:00-03:00`).toLocaleDateString("es-AR", {
+      weekday: "short", day: "numeric", month: "short", timeZone: "America/Argentina/Buenos_Aires",
+    }).replaceAll(".", "").toLocaleUpperCase("es-AR")
   }
 
   const promoCard = (p: Promo) => {
@@ -293,19 +313,29 @@ export default function BusinessLanding() {
           </div>
         </section>
 
-        {liveOffers.length > 0 && <section className="bl-section bl-last-minute"><h2>Oferta de último momento</h2><p>Aprovechá los horarios vacíos y reservá con descuento.</p>{liveOffers.slice(0, 1).map(offer => (
-          <React.Fragment key={`${offer.id}-${offer.fecha}-${offer.hora}`}>
-            <Link className="bl-offer" to={offerLink(slug, offer)}>
-              <span className="bl-offer-timer">Disponible por: {countdown(Date.parse(offer.cierre) - serverNow)}</span>
-              <div className="bl-offer-img">{offer.imagen && <img src={offer.imagen} alt="" />}</div>
-              <div className="bl-offer-body">
-                <small className="bl-offer-time">HOY {offer.hora.slice(0, 5)} hs · Con {members.find(m => m.id === offer.equipo_id)?.nombre || "nuestro equipo"}</small>
-                <strong>{offer.nombre}</strong>
-                <span><b>{money(offer.precio)}</b><s>{money(offer.precio_original)}</s></span>
+        {liveOffers.length > 0 && <section className="bl-section bl-last-minute"><h2>Oferta de último momento</h2><p>Aprovechá los horarios vacíos y reservá con descuento.</p>
+          <div className="bl-offer-slider" onMouseEnter={() => setOfferPaused(true)} onMouseLeave={() => setOfferPaused(false)} onFocusCapture={() => setOfferPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOfferPaused(false) }}>
+            {(() => {
+              const offer = liveOffers[offerIndex] || liveOffers[0]
+              return <Link key={`${offer.id}-${offer.fecha}-${offer.hora}`} className="bl-offer" to={offerLink(slug, offer)} aria-label={`Reservar ${offer.nombre} a ${money(offer.precio)}, ${offerDateLabel(offer.fecha)} ${offer.hora.slice(0, 5)}`}>
+                <span className="bl-offer-timer">Disponible por: {countdown(Date.parse(offer.cierre) - serverNow)}</span>
+                <div className="bl-offer-img">{offer.imagen && <img src={offer.imagen} alt="" />}</div>
+                <div className="bl-offer-body">
+                  <small className="bl-offer-time">{offerDateLabel(offer.fecha)} {offer.hora.slice(0, 5)} hs · Con {members.find(m => m.id === offer.equipo_id)?.nombre || "nuestro equipo"}</small>
+                  <strong>{offer.nombre}</strong>
+                  <span><b>{money(offer.precio)}</b><s>{money(offer.precio_original)}</s></span>
+                </div>
+              </Link>
+            })()}
+            {liveOffers.length > 1 && <div className="bl-offer-controls" aria-label="Más ofertas disponibles">
+              <button type="button" aria-label="Oferta anterior" onClick={() => setOfferIndex(index => (index - 1 + liveOffers.length) % liveOffers.length)}>‹</button>
+              <div className="bl-offer-dots" role="group" aria-label="Elegir oferta">
+                {liveOffers.map((offer, index) => <button key={`${offer.id}-${offer.fecha}-${offer.hora}`} type="button" aria-label={`Ver oferta ${index + 1} de ${liveOffers.length}`} aria-pressed={index === offerIndex} onClick={() => setOfferIndex(index)} />)}
               </div>
-            </Link>
-          </React.Fragment>
-        ))}</section>}
+              <button type="button" aria-label="Oferta siguiente" onClick={() => setOfferIndex(index => (index + 1) % liveOffers.length)}>›</button>
+            </div>}
+          </div>
+        </section>}
 
         {members.length > 0 && services.length > 0 && <section className="bl-section bl-availability"><h2>Próximos turnos disponibles</h2><p>Encontrá el horario más cercano de nuestro equipo.</p><div className="bl-list">{members.slice(0, 8).map((member, index) => {
           const next = availability[member.id], initials = `${member.nombre?.[0] || ""}${member.apellido?.[0] || ""}`.toUpperCase()

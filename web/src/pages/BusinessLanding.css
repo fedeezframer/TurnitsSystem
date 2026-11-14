@@ -34,13 +34,24 @@
 .bl-info>.bl-info-item:first-child{grid-column:1}
 
 .bl-page .bl-offer{color:var(--bl-on)}
-.bl-offer{position:relative;display:flex;align-items:center;gap:16px;min-height:100px;margin-top:26px;padding:14px 16px;border-radius:20px;background:var(--bl-color);color:var(--bl-on);overflow:hidden;box-shadow:0 10px 24px color-mix(in srgb,var(--bl-color) 28%,transparent);transition:transform .15s ease}
+.bl-offer{position:relative;isolation:isolate;display:flex;align-items:center;gap:16px;min-height:100px;margin-top:0;padding:14px 16px;border-radius:20px;background:var(--bl-color);color:var(--bl-on);overflow:hidden;box-shadow:0 10px 24px color-mix(in srgb,var(--bl-color) 28%,transparent);transition:transform .15s ease;animation:bl-offer-enter .24s ease-out both}
+.bl-offer::before{position:absolute;z-index:-1;top:-115px;left:8%;width:210px;height:210px;border:1px solid color-mix(in srgb,var(--bl-on) 12%,transparent);border-radius:50%;box-shadow:0 0 0 18px color-mix(in srgb,var(--bl-on) 4%,transparent),0 0 0 38px color-mix(in srgb,var(--bl-on) 3%,transparent);content:"";pointer-events:none;animation:bl-offer-drift 16s ease-in-out infinite alternate}
+@keyframes bl-offer-enter{from{opacity:.75;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes bl-offer-drift{from{transform:translate3d(-8px,0,0) rotate(-8deg)}to{transform:translate3d(34px,18px,0) rotate(12deg)}}
+.bl-offer-slider{display:grid;gap:10px;margin-top:8px}
+.bl-offer-controls{display:flex;align-items:center;justify-content:center;gap:12px}
+.bl-offer-controls>button{display:grid;place-items:center;width:30px;height:30px;border:1px solid color-mix(in srgb,var(--bl-color) 28%,#fff);border-radius:50%;background:#fff;color:var(--bl-color);font:inherit;font-size:22px;line-height:1;cursor:pointer}
+.bl-offer-controls>button:focus-visible,.bl-offer-dots button:focus-visible{outline:2px solid var(--bl-color);outline-offset:3px}
+.bl-offer-dots{display:flex;align-items:center;gap:7px}
+.bl-offer-dots button{width:8px;height:8px;padding:0;border:0;border-radius:50%;background:color-mix(in srgb,var(--bl-color) 25%,#fff);cursor:pointer}
+.bl-offer-dots button[aria-pressed="true"]{background:var(--bl-color);transform:scale(1.2)}
 .bl-offer+.bl-offer,.bl-offer+a.bl-offer{margin-top:12px}
 .bl-offer:active{transform:scale(.985)}
 .bl-offer-timer{position:absolute;top:8px;right:14px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
 .bl-offer-img{flex:none;width:64px;height:78px;margin-top:10px;border-radius:4px;background:#edf1ed;overflow:hidden}
 .bl-offer-img img{display:block;width:100%;height:100%;object-fit:cover}
 .bl-offer-body{display:flex;flex-direction:column;gap:6px;min-width:0;margin-top:14px}
+.bl-offer-body>*{position:relative;z-index:1}
 .bl-offer-body strong{font-size:24px;line-height:1.1;font-weight:700;overflow-wrap:anywhere}
 .bl-offer-body span{display:flex;align-items:baseline;gap:14px;font-size:16px}
 .bl-offer-body b{font-weight:800}
@@ -85,7 +96,7 @@
   .bl-logo{width:220px;height:220px}
   .bl-hero h1{font-size:clamp(42px,4vw,58px)}
   .bl-tagline{max-width:420px}
-  .bl-offer{grid-column:2;align-self:center;width:100%;margin-top:0}
+  .bl-offer-slider{align-self:center;width:100%}
   .bl-note{grid-column:2}
   .bl-big{min-height:74px;font-size:25px}
   .bl-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
@@ -93,7 +104,7 @@
   .bl-promo-img{width:100%;height:150px}
   .bl-promo-body{flex:1}
 }
-@media (prefers-reduced-motion:reduce){.bl-offer,.bl-reserve,.bl-promo{transition:none}}
+@media (prefers-reduced-motion:reduce){.bl-offer,.bl-reserve,.bl-promo{transition:none;animation:none}.bl-offer::before{animation:none}}
 
 /* Catálogo público alineado al boceto Turnits. */
 .bl-wrap{overflow:visible}
@@ -110,8 +121,8 @@
 .bl-section{margin-top:34px}
 .bl-section h2{margin-bottom:2px}
 .bl-section>p{margin:0 0 10px;color:#606060;font-size:15px}
-.bl-last-minute .bl-offer{margin-top:8px}
-.bl-last-minute>.bl-offer{box-shadow:none}
+.bl-last-minute .bl-offer{box-shadow:none}
+.bl-last-minute .bl-offer-controls{margin-top:0}
 .bl-offer-time{font-size:13px;font-weight:700}
 .bl-offer{min-height:160px;padding:16px;gap:18px;border-radius:16px}
 .bl-offer-img{width:38%;height:136px;margin-top:8px;border-radius:8px}
