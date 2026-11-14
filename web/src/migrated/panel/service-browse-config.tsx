@@ -158,7 +158,7 @@ export default function ServiceBrowseConfig({
       </fieldset>
       {normalPrice > 0 ? <fieldset disabled={busy} aria-label="Turnits Offers de este servicio">
         <div className="service-browse-heading">
-          <div><h4><Icon />Turnits Offers</h4><p>Definí la tarifa mínima y quiénes ofrecen este beneficio.</p></div>
+          <div><h4><Icon />Turnits Offers</h4><p>Ofrecé horarios libres cerca del límite de reserva.</p></div>
           <label className="service-browse-toggle">
             <span>Habilitar</span>
             <input type="checkbox" role="switch" aria-label="Habilitar Turnits Offers"
@@ -176,6 +176,8 @@ export default function ServiceBrowseConfig({
               }} />
           </label>
         </div>
+        {data.agendaSinPagos && <p className="service-browse-notice" role="status">Para publicar Offers, activá los cobros online en Pagos. La agenda de este negocio está configurada sin pagos.</p>}
+        {!data.mercadoPagoConectado && <p className="service-browse-notice" role="status">Conectá Mercado Pago para cobrar las reservas de Turnits Offers.</p>}
         <fieldset className="service-browse-controls" disabled={!enableOffer}>
           <label className="service-browse-minimum-label">
             Tarifa mínima
@@ -201,7 +203,7 @@ export default function ServiceBrowseConfig({
               Elegí al menos un profesional y una tarifa mayor a $0, menor al precio de todos los seleccionados.
             </p>}
           <p className="service-browse-explanation">
-            Es el precio más bajo que aceptás por este servicio. El descuento aumenta automáticamente al acercarse el horario, sin bajar de esta tarifa. Solo participan los profesionales marcados.
+            La Offer aparece dentro de la última hora antes del límite de reserva. El descuento aumenta al acercarse ese límite y llega a la tarifa mínima en los últimos 15 minutos. Solo participan los profesionales marcados.
           </p>
           <p className="service-browse-hint">Se aplica con Guardar cambios del panel.</p>
         </fieldset>

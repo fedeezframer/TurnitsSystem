@@ -6152,8 +6152,10 @@ app.put('/admin/promociones/:slug/:id',requireAuth,requirePromocionesPlan,promoc
 async function promocionesEstado(req,res) {
   const slug=cleanSlug(req.params.slug),activo=req.body?.activo;
   if(!UUID_REGEX.test(String(req.params.id)) || typeof activo !== 'boolean')return res.status(400).json({success:false,error:'Revisá la promoción y el estado elegido.'});
-  // Only switch visibility: preserve dates, weekday rules, prices and assignments.
-  let query=supabase.from('promociones').update({activo,updated_at:new Date().toISOString()}).eq('slug',slug).eq('id',req.params.id);
+  // New activation starts immediately and stays active until paused. Keep legacy
+  // date columns populated because public booking flows still read them.
+  const changes={activo,updated_at:new Date().toISOString(),...(activo ? {fecha_inicio:promoHoyArgentina(),fecha_fin:'2099-12-31'} : {})};
+  let query=supabase.from('promociones').update(changes).eq('slug',slug).eq('id',req.params.id);
   if(req.empleado)query=query.eq('owner_equipo_id',req.empleado.id);
   const {data,error}=await query.select('*').maybeSingle();if(error)throw error;
   if(!data)return res.status(404).json({success:false,error:'No encontramos esa promoción en tu catálogo.'});

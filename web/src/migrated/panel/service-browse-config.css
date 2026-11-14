@@ -376,6 +376,16 @@
   color: #c24141;
   font-size: 11px;
 }
+.service-browse-notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #f0d49b;
+  border-radius: 10px;
+  background: #fff9eb;
+  color: #755313;
+  font-size: 12px;
+  line-height: 1.45;
+}
 @media (prefers-reduced-motion: reduce) {
   .service-browse-modes button {
     transition: none;

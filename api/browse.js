@@ -1003,7 +1003,7 @@ export function createBrowse({
     owner,
     route(async (req, res) => {
       const slug = req.params.slug;
-      const [o, r, s, e, x] = await Promise.all([
+      const [o, r, s, e, x, paymentConfig] = await Promise.all([
         supabase.from("turnits_offers").select("*").eq("slug", slug),
         supabase.from("turnits_recompensas").select("*").eq("slug", slug),
         supabase
@@ -1018,7 +1018,13 @@ export function createBrowse({
           .from("extras")
           .select("id,nombre,precio,activo")
           .eq("slug", slug),
+        supabase
+          .from("usuarios")
+          .select("agenda_sin_pagos,mp_access_token")
+          .eq("slug", slug)
+          .maybeSingle(),
       ]);
+      const paymentSettings = result(paymentConfig);
       res.json({
         success: true,
         offers: result(o) || [],
@@ -1026,6 +1032,8 @@ export function createBrowse({
         servicios: result(s) || [],
         equipo: result(e) || [],
         productos: result(x) || [],
+        agendaSinPagos: paymentSettings?.agenda_sin_pagos === true,
+        mercadoPagoConectado: Boolean(paymentSettings?.mp_access_token),
       });
     }),
   );
