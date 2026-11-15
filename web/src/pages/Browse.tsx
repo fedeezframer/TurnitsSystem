@@ -1061,7 +1061,7 @@ function BrowseContent() {
                 {!offerLoading && !offerError && !offers.length && (
                   <Empty>
                     No hay ofertas activas ahora. Los descuentos aparecen en la
-                    última hora antes del cierre de reservas de cada horario.
+                    media hora anterior al cierre de reservas de cada horario.
                   </Empty>
                 )}
               </>
