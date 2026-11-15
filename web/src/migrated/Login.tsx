@@ -194,7 +194,7 @@ export default function LoginApp(props: Props) {
     const id = React.useId()
     const [email, setEmail] = React.useState("")
     const [accountType, setAccountType] = React.useState<"usuario" | "negocio">(() =>
-        appConfig.customerExperienceEnabled && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tipo") === "usuario" ? "usuario" : "negocio"
+        appConfig.consumerAccountsEnabled && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tipo") === "usuario" ? "usuario" : "negocio"
     )
     const registrationHref = React.useMemo(() => {
         const registrationParams = new URLSearchParams({ tipo: accountType })
@@ -622,7 +622,7 @@ export default function LoginApp(props: Props) {
                               : "Tu agenda, tu equipo y tu negocio en un lugar."}
                     </p>
                     <div className="tt-login-v2-divider" />
-                    {appConfig.customerExperienceEnabled && <div className="tt-login-v2-account-types" role="group" aria-label="Tipo de cuenta">
+                    {appConfig.consumerAccountsEnabled && <div className="tt-login-v2-account-types" role="group" aria-label="Tipo de cuenta">
                         {(["usuario", "negocio"] as const).map((type) => (
                             <button
                                 key={type}

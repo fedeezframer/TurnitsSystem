@@ -23,7 +23,7 @@ function MemberAvatar({ member }: { member: any }) {
 export default function ServiceBrowseConfig({
   api,
   serviceId,
-  name,
+  name: _name,
   price,
 }: {
   api: string;
@@ -32,10 +32,9 @@ export default function ServiceBrowseConfig({
   price: number;
 }) {
   const { data, draft, error, busy, update, retry } = useBrowseBusiness(api);
-  const [coinsEnabled, setCoinsEnabled] = React.useState<boolean | null>(null);
   const [offerEnabled, setOfferEnabled] = React.useState<boolean | null>(null);
   React.useEffect(() => {
-    const reset = () => { setOfferEnabled(null); setCoinsEnabled(null); };
+    const reset = () => setOfferEnabled(null);
     window.addEventListener("turnits_global_discarded", reset);
     return () => window.removeEventListener("turnits_global_discarded", reset);
   }, []);
@@ -50,12 +49,8 @@ export default function ServiceBrowseConfig({
     );
   if (!data)
     return (
-      <InlineLoading label="Cargando T-Coins y Offers…" />
+      <InlineLoading label="Cargando Offers…" />
     );
-  const serviceRewards = draft.recompensas.filter(
-    (r: any) => r.servicio_id === serviceId,
-  );
-  const rewards = serviceRewards.filter((r: any) => r.tipo === "servicio");
   const offers = draft.offers.filter((o: any) => o.servicio_id === serviceId);
   const service = data.servicios.find((s: any) => s.id === serviceId);
   const assignments = service?.servicio_equipo || [];
@@ -64,42 +59,11 @@ export default function ServiceBrowseConfig({
     (!service?.owner_equipo_id || service.owner_equipo_id === m.id),
   );
   const minimum = offers[0]?.precio_minimo ?? "";
-  const enableCoins = coinsEnabled ?? serviceRewards.some((r: any) => r.activo);
   const enableOffer = offerEnabled ?? offers.some((o: any) => o.activo === true);
+  const normalPrice = Math.max(0, Math.min(price, Number(data.servicios.find((s: any) => s.id === serviceId)?.precio ?? price)));
   const memberPrice = (member: any) => Number(assignments.find((a: any) => a.equipo_id === member.id)?.precio_override ?? price);
   const selectedMembers = members.filter((member: any) => offers.some((o: any) => o.equipo_id === member.id));
   const maximumMinimum = Math.min(...(selectedMembers.length ? selectedMembers : members).map(memberPrice));
-  const normalPrice = Math.max(
-    0,
-    Math.min(
-      price,
-      Number(
-        data.servicios.find((s: any) => s.id === serviceId)?.precio ?? price,
-      ),
-    ),
-  );
-  const saveReward = (row: any, values: any) => {
-    setCoinsEnabled(true);
-    update((d) => ({
-      ...d,
-      recompensas: row
-        ? d.recompensas.map((r: any) =>
-            r.id === row.id ? { ...r, ...values } : r,
-          )
-        : [
-            ...d.recompensas,
-            {
-              id: crypto.randomUUID(),
-              nombre: name.trim() || "Premio por este servicio",
-              tipo: "servicio",
-              objeto_id: serviceId,
-              servicio_id: serviceId,
-              stock: null,
-              ...values,
-            },
-          ],
-    }));
-  };
   const setMinimum = (value: string) => {
     update(d => ({ ...d, offers: d.offers.map((o: any) => o.servicio_id === serviceId ? { ...o, precio_minimo: Number(value) } : o) }));
   };
@@ -110,52 +74,6 @@ export default function ServiceBrowseConfig({
   };
   return (
     <div className="service-browse-config">
-      <fieldset disabled={busy} aria-label="T-Coins de este servicio">
-        <div className="service-browse-heading">
-          <div>
-            <h4>
-              <Icon coin />
-              T-Coins
-            </h4>
-            <p>Ofrece premios a los usuarios que más consumen.</p>
-          </div>
-          <span className="service-browse-rate">
-            1 <Icon coin /> = $10.000 gastados en Turnits
-          </span>
-          <label className="service-browse-toggle">
-            <span>Habilitar</span>
-            <input
-              type="checkbox"
-              role="switch"
-              aria-label="Habilitar T-Coins"
-              checked={enableCoins}
-              onChange={(e) => {
-                const enabled = e.target.checked;
-                setCoinsEnabled(enabled);
-                if (serviceRewards.length)
-                  update((d) => ({
-                    ...d,
-                    recompensas: d.recompensas.map((r: any) =>
-                      r.servicio_id === serviceId
-                        ? { ...r, activo: enabled }
-                        : r,
-                    ),
-                  }));
-              }}
-            />
-          </label>
-        </div>
-        <fieldset className="service-browse-controls" disabled={!enableCoins}>
-          {(rewards.length ? rewards : [null]).map((r: any, index: number) => (
-            <Reward
-              key={index}
-              row={r}
-              price={normalPrice}
-              save={(values) => saveReward(r, values)}
-            />
-          ))}
-        </fieldset>
-      </fieldset>
       {normalPrice > 0 ? <fieldset disabled={busy} aria-label="Turnits Offers de este servicio">
         <div className="service-browse-heading">
           <div><h4><Icon />Turnits Offers</h4><p>Ofrecé horarios libres cerca del límite de reserva.</p></div>

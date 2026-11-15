@@ -29,6 +29,7 @@ function PanelRoute() {
 }
 function LegacyConsultationsRoute() {
   const location = useLocation()
+  if (!appConfig.consumerAccountsEnabled && !isBusinessSession()) return <Navigate to="/" replace />
   if (!appConfig.quoteBookingEnabled) return <Navigate to="/browse" replace />
   const business = isBusinessSession()
   if (!storedSessionToken()) {
@@ -88,7 +89,7 @@ function CustomerExperiencePaused() {
 }
 function RegisterPage({ accountType = "usuario" }: { accountType?: "usuario" | "negocio" }) {
   const location = useLocation()
-  if (accountType === "usuario" && !appConfig.customerExperienceEnabled) return <Navigate to={`/registro/negocio${location.search}`} replace />
+  if (accountType === "usuario" && !appConfig.consumerAccountsEnabled) return <Navigate to={`/registro/negocio${location.search}`} replace />
   if (accountType === "usuario" && new URLSearchParams(location.search).get("tipo") === "negocio") return <Navigate to={`/registro/negocio${location.search}`} replace />
   return <Register {...appConfig.register} baseUrl={appConfig.apiUrl} logoUrl={appConfig.registerLogoUrl} termsUrl="/terminos" privacyUrl="/privacidad" accountType={accountType} />
 }
@@ -100,14 +101,15 @@ function BusinessRegisterRedirect() {
 }
 export default function App() {
   const location = useLocation()
+  const loginType = new URLSearchParams(location.search).get("tipo")
   return <Suspense fallback={<BrandPreloader />}>{appConfig.staging && location.pathname !== "/consultas" && <div role="status" style={{position:"relative",zIndex:10000,padding:"8px 16px",textAlign:"center",background:"#fff0b3",color:"#604700",font:"600 13px Arial,sans-serif"}}>TURNITS TEST · Datos de prueba · Sin cobros reales · Funciones en desarrollo</div>}<Routes>
     <Route path="/" element={<Home />} />
-    <Route path="/login" element={<Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
+    <Route path="/login" element={!appConfig.consumerAccountsEnabled && loginType === "usuario" ? <Navigate to="/" replace /> : <Login {...appConfig.login} apiUrl={appConfig.apiUrl} registerUrl="/registro" logoUrl={appConfig.loginLogoUrl} accentColor={appConfig.accentColor} />} />
     <Route path="/registro" element={<BusinessRegisterRedirect />} />
     <Route path="/registro/negocio" element={<RegisterPage accountType="negocio" />} />
     <Route path="/registro/negocios" element={<Navigate to={`/registro/negocio${window.location.search}`} replace />} />
     <Route path="/register" element={<Navigate to={`/registro/negocio${window.location.search}`} replace />} />
-    <Route path="/browse" element={appConfig.customerExperienceEnabled ? <Browse /> : <CustomerExperiencePaused />} />
+    <Route path="/browse" element={appConfig.customerExperienceEnabled && appConfig.consumerAccountsEnabled ? <Browse /> : <Navigate to="/" replace />} />
     <Route path="/consultas" element={<LegacyConsultationsRoute />} />
     <Route path="/panel" element={<PanelRoute />} />
     <Route path="/panel/:slug" element={<PanelRoute />} />

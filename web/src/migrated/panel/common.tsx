@@ -552,12 +552,12 @@ function TurnitsGlobalSaveManager_get() {
                                 body: JSON.stringify(current.browse),
                             })
                             const data=await res.json().catch(()=>({}))
-                            if(!res.ok || !data.success)throw new Error(data.error || "No se pudo guardar Offers y T-Coins.")
+                            if(!res.ok || !data.success)throw new Error(data.error || "No se pudo guardar Offers.")
                             results.browse=true
                             savedData.browse={offers:data.offers,recompensas:data.recompensas}
                         } catch(e:any) {
                             results.browse=false
-                            errors.browse=e.message || "No se pudo guardar Offers y T-Coins."
+                            errors.browse=e.message || "No se pudo guardar Offers."
                         }
                     })())
                 }

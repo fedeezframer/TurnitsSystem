@@ -32,7 +32,7 @@ export function bookingReceipt(turno) {
   const due = amount(total - paid);
   const state = ({ confirmado: "Confirmado", completado: "Completado", cancelado: "Cancelado", pendiente: "Pendiente de confirmación" })[turno.estado] || "Pendiente de confirmación";
   const payment = ({ aprobado: "Aprobado", pendiente: "Pendiente de verificación", rechazado: "Rechazado", reembolsado: "Reembolsado", sin_pago: "Sin pago registrado" })[turno.pago_estado] || "Sin pago registrado";
-  const method = ({ mercadopago: "Mercado Pago", transferencia: "Transferencia bancaria", efectivo: "Efectivo", canje: "Canje de T-Coins", none: "Sin pago online" })[turno.metodo_pago] || "No informado";
+  const method = ({ mercadopago: "Mercado Pago", transferencia: "Transferencia bancaria", efectivo: "Efectivo", canje: "No informado", none: "Sin pago online" })[turno.metodo_pago] || "No informado";
   const rows = [
     ["Negocio", turno.business_name || turno.negocio_nombre || turno.slug],
     ["Reservó", [turno.nombre, turno.apellido].filter(Boolean).join(" ") || turno.cliente],
@@ -49,7 +49,6 @@ export function bookingReceipt(turno) {
     ["Abonado registrado", receiptMoney(paid)],
     ["Saldo pendiente", receiptMoney(due)],
     ["Método de pago", method], ["Estado del pago", payment],
-    ...(Number(turno.tc_gastados) > 0 ? [["T-Coins canjeados", String(turno.tc_gastados)]] : []),
   ];
   const note = turno.estado === "cancelado" ? "Reserva cancelada. Los reintegros y cualquier saldo deben coordinarse con el negocio."
     : turno.pago_estado === "reembolsado" ? "Pago reembolsado. Consultá al negocio antes de realizar un nuevo pago."

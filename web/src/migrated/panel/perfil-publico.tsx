@@ -404,7 +404,7 @@ export function PerfilContenido({
           {reviewSummary.cantidad > 0 && <div className="perfil-reviews-score"><Stars rating={reviewSummary.promedio} label={`${reviewSummary.promedio} de 5 estrellas`} /><strong>{reviewSummary.promedio}</strong><span>({reviewSummary.cantidad})</span></div>}
         </div>
         {reviewLoading ? <p role="status">Cargando reseñas…</p> : reviews.length ? <div className="perfil-review-list">{reviews.map(review => <article className="perfil-review-card" key={review.id}><div className="perfil-review-card-heading"><strong>{review.nombre}</strong><time dateTime={review.created_at}>{new Intl.DateTimeFormat("es-AR", { dateStyle: "medium" }).format(new Date(review.created_at))}</time></div><Stars rating={Number(review.puntuacion)} label={`${review.puntuacion} de 5 estrellas`} /><p>{review.comentario || "Sin comentario escrito."}</p></article>)}</div> : reviewError ? <p className="perfil-review-error" role="alert">{reviewError}</p> : <p>Todavía no hay reseñas. Si ya completaste un turno, podés dejar la primera.</p>}
-        <div className="perfil-review-action">
+        {appConfig.consumerAccountsEnabled && <div className="perfil-review-action">
           {!signedInConsumer ? <p><Link to={`/login?${new URLSearchParams({ tipo: "usuario", volver: `/perfil/${slug || ""}#perfil-reviews` })}`}>Iniciá sesión como usuario para dejar una reseña.</Link></p> : myReview && !reviewEditing ? <button className="perfil-review-secondary" type="button" onClick={() => { setReviewRating(Number(myReview.puntuacion) || 5); setReviewComment(myReview.comentario || ""); setReviewEditing(true); setReviewError(""); setReviewNotice(""); }}>Editar mi reseña</button> : reviewEligible || myReview ? <form className="perfil-review-form" onSubmit={async event => {
             event.preventDefault();
             setReviewBusy(true); setReviewError(""); setReviewNotice("");
@@ -426,7 +426,7 @@ export function PerfilContenido({
           </form> : <p>{reviewEligible ? "Podés compartir tu experiencia." : "Vas a poder reseñar este negocio después de completar un turno."}</p>}
           {reviewError && !reviewLoading && <p className="perfil-review-error" role="alert">{reviewError}</p>}
           {reviewNotice && <p className="perfil-review-notice" role="status">{reviewNotice}</p>}
-        </div>
+        </div>}
       </section>
     </div>
   );

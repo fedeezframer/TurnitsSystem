@@ -40,7 +40,7 @@ function TurnitsGlobalSaveBar({
                 ["pagos", "Pagos"],
                 ["tema", "Tema"],
                 ["perfil", "Perfil"],
-                ["browse", "Offers y T-Coins"],
+                ["browse", "Offers"],
             ]
                 .filter(([key]) =>
                     manager?.isDirty(key as TurnitsGlobalSaveSection)
