@@ -344,12 +344,16 @@ function NavButton({
   accentColor,
   onClick,
   navIconos,
+  showChevron = false,
+  chevronDown = false,
 }: {
   item: { id: SeccionId; label: string };
   active: boolean;
   accentColor: string;
   onClick: () => void;
   navIconos?: Record<string, string>;
+  showChevron?: boolean;
+  chevronDown?: boolean;
 }) {
   return (
     <motion.button
