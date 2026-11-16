@@ -45,6 +45,7 @@ function Turnits_ImageAdjustDialog({
         300,
         typeof window !== "undefined" ? window.innerWidth - 48 : 300
     )
+    React.useEffect(() => { setVista(initialView) }, [initialView])
     const cropAspect = aspect || imageAspect
     const viewportH = viewportW / cropAspect
     const baseScale =
@@ -2570,6 +2571,7 @@ function ServiciosManager(props: any) {
         iconoEliminar = "",
         employeeMode = false,
         employeeCanCreate = false,
+        initialView = "servicios",
         style,
     } = props
 
@@ -2581,7 +2583,7 @@ function ServiciosManager(props: any) {
 
     const [puedePromociones, setPuedePromociones] = React.useState(false)
     const [vista, setVista] = React.useState<"servicios" | "extras" | "promociones">(
-        "servicios"
+        initialView
     )
 
     // ── Estado: Servicios ──
