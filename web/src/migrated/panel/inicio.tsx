@@ -415,6 +415,7 @@ function PlanEstado(props: any) {
         textColor = "#0f172a",
         mutedColor = "#64748b",
         warningColor = "#dc2626",
+        menuStyle = false,
         style,
     } = props
 
@@ -564,8 +565,7 @@ function PlanEstado(props: any) {
                 style={{
                     height: 42,
                     borderRadius: 14,
-                    background:
-                        "linear-gradient(90deg, #f1f5f9 25%, #e8edf3 50%, #f1f5f9 75%)",
+                    background: menuStyle ? "#ffffff" : "linear-gradient(90deg, #f1f5f9 25%, #e8edf3 50%, #f1f5f9 75%)",
                     backgroundSize: "200% 100%",
                     animation: "planEstadoShimmer 1.4s infinite",
                     ...style,
@@ -627,7 +627,7 @@ function PlanEstado(props: any) {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 6,
-                        fontSize: 13,
+                        fontSize: menuStyle ? 21 : 13,
                         fontWeight: 600,
                         color: textColor,
                         whiteSpace: "nowrap",
@@ -652,10 +652,13 @@ function PlanEstado(props: any) {
                                     : `Te quedan ${dias} ${dias === 1 ? "día" : "días"}`
                             }
                             style={{
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color: enAlerta ? warningColor : accentColor,
+                                fontSize: menuStyle ? 15 : 13,
+                                fontWeight: menuStyle ? 500 : 700,
+                                color: menuStyle ? "#5f625f" : enAlerta ? warningColor : accentColor,
                                 whiteSpace: "nowrap",
+                                border: menuStyle ? "1px solid #747874" : "none",
+                                borderRadius: menuStyle ? 99 : undefined,
+                                padding: menuStyle ? "8px 12px" : undefined,
                             }}
                         >
                             {etiquetaDias}
@@ -667,7 +670,7 @@ function PlanEstado(props: any) {
                         disabled={redirigiendo}
                         title={`Mejorar a Básico${precioTxt}/mes`}
                         style={{
-                            padding: "5px 14px",
+                            padding: menuStyle ? "8px 14px" : "5px 14px",
                             borderRadius: 99,
                             border: "none",
                             background: accentColor,
