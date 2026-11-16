@@ -90,6 +90,8 @@ function TurnitsPanel_Inner(props: any) {
     const [mostrarNotificaciones, setMostrarNotificaciones] =
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
+    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>("servicios")
+    const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
     // Arranca oculta y solo se muestra si confirmamos que el plan es
     // premium, así el plan gratis nunca llega a verla en el menú.
@@ -185,7 +187,24 @@ function TurnitsPanel_Inner(props: any) {
 
     const navItemsVisibles = NAV_ITEMS.filter(
         (item) => item.id !== "consultas" && (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible)
-    )
+    ).sort((a, b) => ["inicio", "servicios", "agenda", "clientes", "horarios", "pagos", "finanzas", "temas", "equipo", "perfil"].indexOf(a.id) - ["inicio", "servicios", "agenda", "clientes", "horarios", "pagos", "finanzas", "temas", "equipo", "perfil"].indexOf(b.id))
+
+    const abrirCatalogo = (vista: "servicios" | "extras" | "promociones") => {
+        setServiciosVistaInicial(vista)
+        setMenuExpandido("servicios")
+        irA("servicios")
+    }
+
+    const renderNavItems = () => navItemsVisibles.map((item) => item.id === "servicios" ? (
+        <div key={item.id} style={{border:"1px solid #b8c0b9",borderRadius:48,padding:"3px 12px 10px",margin:"0 -14px",background:"rgba(255,255,255,.7)"}}>
+            <NavButton item={item} active={seccionActiva === "servicios" || menuExpandido === "servicios"} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === "servicios" ? null : "servicios");irA("servicios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
+            {menuExpandido === "servicios" && <div style={{display:"flex",flexDirection:"column",gap:1,padding:"2px 0 0 16px"}}>
+                <button type="button" onClick={() => abrirCatalogo("servicios")} style={{display:"flex",alignItems:"center",gap:10,padding:"15px 8px",border:0,background:"transparent",color:"#111",fontFamily:"inherit",fontSize:18,fontWeight:500,lineHeight:1.2,textAlign:"left",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>Mis Servicios</button>
+                <button type="button" onClick={() => abrirCatalogo("extras")} style={{display:"flex",alignItems:"center",gap:10,padding:"15px 8px",border:0,background:"transparent",color:"#111",fontFamily:"inherit",fontSize:18,fontWeight:500,lineHeight:1.2,textAlign:"left",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="m3 8 9-5 9 5v10l-9 5-9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v10M7.5 5.5l9 5"/></svg>Productos</button>
+                <button type="button" onClick={() => abrirCatalogo("promociones")} style={{display:"flex",alignItems:"center",gap:10,padding:"15px 8px",border:0,background:"transparent",color:"#111",fontFamily:"inherit",fontSize:18,fontWeight:500,lineHeight:1.2,textAlign:"left",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M20.5 13.5 13 21l-9-9V4h8l8.5 9.5Z"/><circle cx="8" cy="8" r="1.2"/><path d="m10 14 4-4 2 2-4 4-2 .5.5-2.5Z"/></svg>Promociones</button>
+            </div>}
+        </div>
+    ) : <NavButton key={item.id} item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => irA(item.id)} navIconos={navIconos} showChevron={["horarios","pagos","equipo","perfil"].includes(item.id)} />)
 
     const actualizarBandejaMensajes = React.useCallback((items: any[]) => {
         const next = Object.fromEntries(items.map(item => [item.id, Number(item.no_leidos) || 0])) as Record<string, number>
@@ -335,7 +354,7 @@ function TurnitsPanel_Inner(props: any) {
                     className="turnits-sidebar"
                     style={
                         {
-                            width: 252,
+                            width: 400,
                             flexShrink: 0,
                             // Sticky: el menú nunca se mueve con el scroll del
                             // contenido, queda fijo a la altura del viewport.
@@ -344,30 +363,29 @@ function TurnitsPanel_Inner(props: any) {
                             alignSelf: "flex-start",
                             height: "100vh",
                             overflow: "hidden",
-                            background:
-                                "linear-gradient(180deg, #fbfcff 0%, #f6f7fb 100%)",
-                            borderRight: "1px solid #eef1f6",
+                            background: "linear-gradient(180deg, #f4fff6 0%, #ffffff 58%)",
+                            borderRight: "1px solid #e5ece6",
                             display: "flex",
                             flexDirection: "column",
-                            padding: "26px 18px",
+                            padding: "26px 24px 22px",
                             boxSizing: "border-box",
                             "--accent": accentColor,
                         } as React.CSSProperties
                     }
                 >
-                    <AmbientOrbs accentColor={accentColor} />
-
                     <div
                         className="turnits-sidebar-brand"
                         style={{
                             position: "relative",
-                            marginBottom: 30,
+                            marginBottom: 20,
                             display: "flex",
-                            justifyContent: "center",
+                            justifyContent: "flex-start",
                         }}
                     >
-                        <BrandMark logoImage={logoImage} logoText={logoText} />
+                        <BrandMark logoImage={logoImage} logoText={logoText} width={190} height={50} />
                     </div>
+
+                    <div aria-hidden="true" style={{height:2,background:"#176b24",margin:"0 16px 20px"}} />
 
                     <nav
                         className="turnits-nav-scroll"
@@ -379,24 +397,15 @@ function TurnitsPanel_Inner(props: any) {
                             position: "relative",
                             display: "flex",
                             flexDirection: "column",
-                            gap: 3,
+                            gap: 6,
                             flex: 1,
                             minHeight: 0,
                             overflowY: "auto",
                             overflowX: "hidden",
                         }}
                     >
-                        <style>{`.turnits-nav-scroll{scrollbar-width:none;-ms-overflow-style:none}.turnits-nav-scroll::-webkit-scrollbar{display:none}.turnits-nav-scroll>*{min-height:34px}`}</style>
-                        {navItemsVisibles.map((item) => (
-                            <NavButton
-                                key={item.id}
-                                item={item}
-                                active={seccionActiva === item.id}
-                                accentColor={accentColor}
-                                onClick={() => irA(item.id)}
-                                navIconos={navIconos}
-                            />
-                        ))}
+                        <style>{`.turnits-nav-scroll{scrollbar-width:none;-ms-overflow-style:none}.turnits-nav-scroll::-webkit-scrollbar{display:none}.turnits-nav-scroll>*{min-height:40px}`}</style>
+                        {renderNavItems()}
                     </nav>
 
                     {/* Footer: usuario, soporte y cerrar sesión */}
@@ -482,8 +491,7 @@ function TurnitsPanel_Inner(props: any) {
                                     width: "100%",
                                     maxHeight: "78svh",
                                     overflowY: "auto",
-                                    background:
-                                        "linear-gradient(180deg, #fbfcff 0%, #f6f7fb 100%)",
+                                    background: "linear-gradient(180deg, #f4fff6 0%, #ffffff 58%)",
                                     borderTopLeftRadius: 24,
                                     borderTopRightRadius: 24,
                                     padding:
@@ -511,38 +519,11 @@ function TurnitsPanel_Inner(props: any) {
                                     paddingLeft: 4,
                                 }}
                             >
-                                <BrandMark
-                                    logoImage={logoImage}
-                                    logoText={logoText}
-                                    width={104}
-                                    height={52}
-                                />
+                                    <BrandMark logoImage={logoImage} logoText={logoText} width={190} height={50} />
                             </div>
-                            <div
-                                className="turnits-mobile-sheet-nav"
-                                style={{
-                                    position: "relative",
-                                    display: "grid",
-                                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                                    gap: 4,
-                                }}
-                            >
-                                {navItemsVisibles
-                                    .filter(
-                                        (item) =>
-                                            !["inicio", "servicios", "agenda"].includes(item.id)
-                                    )
-                                    .map((item) => (
-                                    <NavButton
-                                        key={item.id}
-                                        item={item}
-                                        active={seccionActiva === item.id}
-                                        accentColor={accentColor}
-                                        onClick={() => irA(item.id)}
-                                        navIconos={navIconos}
-                                    />
-                                    ))}
-                            </div>
+                            <div aria-hidden="true" style={{height:2,background:"#176b24",margin:"0 16px 20px"}} />
+                            <div aria-hidden="true" style={{height:2,background:"#176b24",margin:"0 16px 20px"}} />
+                            <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr",gap:6}}>{renderNavItems()}</div>
 
                             <div style={{ marginTop: 16 }}>
                                 <MenuFooter
@@ -587,6 +568,7 @@ function TurnitsPanel_Inner(props: any) {
                         <QrFlotante
                             baseUrl={baseUrl}
                             accentColor={accentColor}
+                            initialView={serviciosVistaInicial}
                             isMobile={isMobile}
                             inline
                             mostrarToggle={seccionActiva === "pagos"}
@@ -624,6 +606,7 @@ function TurnitsPanel_Inner(props: any) {
                 style={
                     {
                         flex: isMobile ? "0 0 auto" : 1,
+                        background: "#fff",
                         background: "#fff",
                         animation: "panel-section-in .24s cubic-bezier(.2,.75,.25,1) both",
                         minWidth: 0,
