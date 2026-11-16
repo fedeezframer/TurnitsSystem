@@ -1262,13 +1262,6 @@ function MenuCuenta({
                         fontSize={20}
                         color="#0f172a"
                     />
-                    <MenuFooterIconButton
-                        icon={iconos?.soporte}
-                        defaultIcon={MenuFooterSoporteIcon}
-                        ariaLabel={soporte.prioritario ? "Soporte prioritario" : "Soporte: lista de espera"}
-                        size={48}
-                        onClick={() => window.open(soporte.url, "_blank", "noopener,noreferrer")}
-                    />
                 </div>
                 <MenuCuentaSvg
                     size={15}
@@ -1707,6 +1700,13 @@ function MenuFooter({
                         ariaLabel="Cerrar sesión"
                         size={48}
                         onClick={() => MenuFooter_cerrarSesion(logoutUrl)}
+                    />
+                    <MenuFooterIconButton
+                        icon={iconos?.soporte}
+                        defaultIcon={MenuFooterSoporteIcon}
+                        ariaLabel={soporte.prioritario ? "Soporte prioritario" : "Soporte: lista de espera"}
+                        size={48}
+                        onClick={() => window.open(soporte.url, "_blank", "noopener,noreferrer")}
                     />
                 </div>
             </div>
