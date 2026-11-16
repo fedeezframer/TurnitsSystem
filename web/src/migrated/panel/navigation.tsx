@@ -15,9 +15,8 @@ const NAV_ICONS: Record<SeccionId, React.ReactElement> = {
   ),
   servicios: (
     <>
-      <circle cx="7" cy="7" r="3" />
-      <circle cx="7" cy="17" r="3" />
-      <path d="M9.5 8.8 20 20M20 4 9.5 15.2" />
+      <rect x="4" y="4" width="10" height="10" rx="1.5" />
+      <rect x="10" y="10" width="10" height="10" rx="1.5" />
     </>
   ),
   consultas: (
@@ -28,10 +27,9 @@ const NAV_ICONS: Record<SeccionId, React.ReactElement> = {
   ),
   clientes: (
     <>
-      <circle cx="9" cy="8" r="3.2" />
-      <path d="M3.5 20c0-3.3 2.5-5.8 5.5-5.8s5.5 2.5 5.5 5.8" />
-      <path d="M15.5 5.5a3.2 3.2 0 0 1 0 6.2" />
-      <path d="M17.5 14.5c2.4.5 3.9 2.6 3.9 5.5" />
+      <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+      <circle cx="12" cy="9" r="2.7" />
+      <path d="M7.5 18c.4-2.4 2-3.7 4.5-3.7s4.1 1.3 4.5 3.7" />
     </>
   ),
   agenda: (
@@ -51,27 +49,19 @@ const NAV_ICONS: Record<SeccionId, React.ReactElement> = {
   ),
   pagos: (
     <>
-      <rect x="3" y="6" width="18" height="13" rx="2.5" />
-      <path d="M3 10.3h18" />
-      <path d="M7 14.7h4" />
+      <path d="m12 3 9 5-9 5-9-5 9-5Z" />
+      <path d="m3 12 9 5 9-5M3 16l9 5 9-5" />
     </>
   ),
   finanzas: (
     <>
-      <path d="M4 19V5M4 19h17" />
-      <path d="m7 15 4-4 3 2 6-7" />
-      <circle cx="7" cy="15" r="1" />
-      <circle cx="11" cy="11" r="1" />
-      <circle cx="14" cy="13" r="1" />
-      <circle cx="20" cy="6" r="1" />
+      <path d="M4 20V10h3v10M10.5 20V4h3v16M17 20V7h3v13" />
     </>
   ),
   temas: (
     <>
-      <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.1 0 1.8-1 1.2-1.9-.3-.5-.2-1.1.3-1.4.4-.3.9-.2 1.4.1.9.6 2 .1 2-.9 0-.5.4-.9 1-1 1.5-.1 2.6-1.3 2.1-2.8A8.5 8.5 0 0 0 12 3.5Z" />
-      <circle cx="8" cy="10.5" r="1" />
-      <circle cx="11.5" cy="7.8" r="1" />
-      <circle cx="15.5" cy="9.2" r="1" />
+      <path d="m4 19 9.7-9.7M3 21l4.2-1 10.5-10.5a2.8 2.8 0 0 0-4-4L3.2 16Z" />
+      <path d="m16.5 4.5 3 3" />
     </>
   ),
   equipo: (
@@ -153,12 +143,16 @@ function BottomNavIcon({
   accentColor,
   onClick,
   navIconos,
+  showChevron = false,
+  chevronDown = false,
 }: {
   id: SeccionId;
   active: boolean;
   accentColor: string;
   onClick: () => void;
   navIconos?: Record<string, string>;
+  showChevron?: boolean;
+  chevronDown?: boolean;
 }) {
   return (
     <motion.button
@@ -246,20 +240,14 @@ function BrandMark({
       style={{
         width,
         height,
-        borderRadius: 12,
+        borderRadius: 0,
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "flex-start",
         overflow: "hidden",
-        background: logoImage
-          ? "transparent"
-          : light
-            ? "rgba(255,255,255,0.08)"
-            : "#f1f5f9",
-        border: logoImage
-          ? "none"
-          : `1px dashed ${light ? "rgba(255,255,255,0.35)" : "#cbd5e1"}`,
+        background: "transparent",
+        border: "none",
         boxSizing: "border-box",
       }}
     >
@@ -271,17 +259,18 @@ function BrandMark({
             width: "100%",
             height: "100%",
             objectFit: "contain",
+            objectPosition: "left center",
           }}
         />
       ) : (
         <span
           style={{
             fontFamily: "'Inter Display', -apple-system, sans-serif",
-            fontWeight: 500,
-            fontSize: 13,
-            color: light ? "#f8fafc" : "#94a3b8",
-            letterSpacing: "-0.2px",
-            textAlign: "center",
+            fontWeight: 750,
+            fontSize: 28,
+            color: light ? "#ffffff" : "#111111",
+            letterSpacing: "-1px",
+            textAlign: "left",
             padding: "0 6px",
           }}
         >
@@ -373,37 +362,24 @@ function NavButton({
         position: "relative",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        gap: 11,
-        padding: "10px 12px",
+        justifyContent: "flex-start",
+        gap: 10,
+        padding: "11px 14px",
         borderRadius: 12,
         border: "none",
         background: "transparent",
-        color: active ? accentColor : "#475569",
-        fontSize: 14,
-        fontWeight: active ? 700 : 500,
+        color: active ? "#176b24" : "#111111",
+        fontSize: 18,
+        fontWeight: active ? 600 : 500,
         cursor: "pointer",
-        textAlign: "center",
+        textAlign: "left",
         overflow: "hidden",
         fontFamily: "inherit",
       }}
     >
-      {active && (
-        <motion.div
-          className="turnits-panel-nav-active-bg"
-          layoutId="navActivePill"
-          transition={{ type: "spring", stiffness: 420, damping: 34 }}
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: 12,
-            background: `linear-gradient(90deg, ${accentColor}22, ${accentColor}08)`,
-            border: `1px solid ${accentColor}2e`,
-          }}
-        />
-      )}
-      <NavGlyph id={item.id} navIconos={navIconos} size={18} />
-      <span style={{ position: "relative" }}>{item.label}</span>
+      <NavGlyph id={item.id} navIconos={navIconos} size={22} strokeWidth={1.8} />
+      <span style={{ position: "relative", flex: 1 }}>{item.label}</span>
+      {showChevron && <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d={chevronDown ? "m2 4 4 4 4-4" : "m3 2 4 4-4 4"} /></svg>}
     </motion.button>
   );
 }
