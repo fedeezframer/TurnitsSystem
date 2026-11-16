@@ -263,28 +263,15 @@ function BrandMark({
         boxSizing: "border-box",
       }}
     >
-      {logoImage ? (
-        <img
-          src={logoImage}
-          alt={logoText || "Logo"}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            objectPosition: "left center",
-          }}
-        />
-      ) : (
-        <>
-          <svg aria-hidden="true" width="42" height="36" viewBox="0 0 48 40" fill="none" style={{ flexShrink: 0 }}>
-            <path d="M6 25c5 7 19 9 29 2 6-4 9-10 8-16-4 6-10 10-18 11-7 1-13-1-19-5 1 3 1 5 0 8Z" stroke={light ? "#fff" : "#111"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M14 22c4-5 8-8 13-10M20 25l5-5" stroke={light ? "#fff" : "#111"} strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          <span style={{fontFamily:"'Inter Display', -apple-system, sans-serif",fontWeight:750,fontSize:28,color:light?"#fff":"#111",letterSpacing:"-1px",paddingLeft:8}}>
-            {logoText || "turnits"}
-          </span>
-        </>
-      )}
+      <div style={{display:"flex",alignItems:"center",height:"100%",minWidth:0}}>
+        <svg aria-hidden="true" width="42" height="36" viewBox="0 0 48 40" fill="none" style={{flexShrink:0}}>
+          <path d="M6 25c5 7 19 9 29 2 6-4 9-10 8-16-4 6-10 10-18 11-7 1-13-1-19-5 1 3 1 5 0 8Z" stroke={light?"#fff":"#111"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M14 22c4-5 8-8 13-10M20 25l5-5" stroke={light?"#fff":"#111"} strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+        <span style={{fontFamily:"'Inter Display', -apple-system, sans-serif",fontWeight:750,fontSize:28,color:light?"#fff":"#111",letterSpacing:"-1px",paddingLeft:8}}>
+          turnits
+        </span>
+      </div>
     </div>
   );
 }
