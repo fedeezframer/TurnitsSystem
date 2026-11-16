@@ -568,7 +568,6 @@ function TurnitsPanel_Inner(props: any) {
                         <QrFlotante
                             baseUrl={baseUrl}
                             accentColor={accentColor}
-                            initialView={serviciosVistaInicial}
                             isMobile={isMobile}
                             inline
                             mostrarToggle={seccionActiva === "pagos"}
@@ -606,7 +605,6 @@ function TurnitsPanel_Inner(props: any) {
                 style={
                     {
                         flex: isMobile ? "0 0 auto" : 1,
-                        background: "#fff",
                         background: "#fff",
                         animation: "panel-section-in .24s cubic-bezier(.2,.75,.25,1) both",
                         minWidth: 0,
@@ -692,6 +690,7 @@ function TurnitsPanel_Inner(props: any) {
                         <ServiciosManager
                             baseUrl={baseUrl}
                             accentColor={accentColor}
+                            initialView={serviciosVistaInicial}
                             iconoPlaceholderUrl={iconos.servicioPlaceholder}
                             iconoFormUrl={iconos.servicioForm}
                             iconoVacioUrl={iconos.servicioVacio}
