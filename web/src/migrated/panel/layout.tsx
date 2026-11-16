@@ -263,7 +263,7 @@ function TurnitsPanel_Inner(props: any) {
                 // sin fijarlo al viewport, así el navegador hace un solo scroll natural.
                 height: isMobile ? "auto" : "100vh",
                 minHeight: isMobile ? 0 : "100vh",
-                background: "#f8fafc",
+                background: "#fff",
                 fontFamily: "'Inter Display', -apple-system, sans-serif",
                 boxSizing: "border-box",
                 overflow: isMobile ? "visible" : "hidden",
@@ -610,6 +610,7 @@ function TurnitsPanel_Inner(props: any) {
                 style={
                     {
                         flex: isMobile ? "0 0 auto" : 1,
+                        background: "#fff",
                         animation: "panel-section-in .24s cubic-bezier(.2,.75,.25,1) both",
                         minWidth: 0,
                         minHeight: isMobile ? "auto" : 0,
