@@ -1252,15 +1252,22 @@ function MenuCuenta({
                     transition: "background 0.15s ease",
                 }}
             >
-                <MenuUserAvatar logoImage={logoImage} size={34} />
+                <MenuUserAvatar logoImage={logoImage} size={44} />
                 <div
                     className="tn-cuenta-name"
                     style={{ minWidth: 0, overflow: "hidden" }}
                 >
                     <UserGreeting
                         baseUrl={baseUrl}
-                        fontSize={14}
+                        fontSize={20}
                         color="#0f172a"
+                    />
+                    <MenuFooterIconButton
+                        icon={iconos?.soporte}
+                        defaultIcon={MenuFooterSoporteIcon}
+                        ariaLabel={soporte.prioritario ? "Soporte prioritario" : "Soporte: lista de espera"}
+                        size={48}
+                        onClick={() => window.open(soporte.url, "_blank", "noopener,noreferrer")}
                     />
                 </div>
                 <MenuCuentaSvg
@@ -1660,23 +1667,14 @@ function MenuFooter({
                 position: "relative",
                 display: "flex",
                 flexDirection: "column",
-                gap: 12,
+                gap: 16,
+                paddingTop: 18,
+                borderTop: "1px solid #9aa09b",
             }}
         >
-            {/* Banner de referidos: siempre visible, arriba del estado del
-                plan. Lleva al mismo panel "crecer" que la card de Inicio. */}
-            <MenuFooterReferidosBanner
-                accentColor={accentColor}
-                onOpenPanel={onOpenPanel}
-                backgroundImage={referidosCardBg}
-                colorDesde={referidosCardBgDesde}
-                colorHasta={referidosCardBgHasta}
-                icono={referidosCardIcono}
-            />
-
             {/* Plan: gratis → "Mejorar"; premium → días restantes (26d) y,
                 con 3 días o menos, botón "Renovar". */}
-            <PlanEstado baseUrl={baseUrl} accentColor={accentColor} />
+            <PlanEstado baseUrl={baseUrl} accentColor={accentColor} textColor="#176b24" menuStyle />
             <div
                 style={{
                     position: "relative",
@@ -1684,8 +1682,7 @@ function MenuFooter({
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: 8,
-                    paddingTop: 14,
-                    borderTop: "1px solid #eef1f6",
+                    paddingTop: 0,
                 }}
             >
                 {/* Avatar + nombre + flechita: abre el menú de la cuenta
@@ -1705,15 +1702,10 @@ function MenuFooter({
                     }}
                 >
                     <MenuFooterIconButton
-                        icon={iconos?.soporte}
-                        defaultIcon={MenuFooterSoporteIcon}
-                        ariaLabel={soporte.prioritario ? "Soporte prioritario" : "Soporte: lista de espera"}
-                        onClick={() => window.open(soporte.url, "_blank", "noopener,noreferrer")}
-                    />
-                    <MenuFooterIconButton
                         icon={iconos?.logout}
                         defaultIcon={MenuFooterLogoutIcon}
                         ariaLabel="Cerrar sesión"
+                        size={48}
                         onClick={() => MenuFooter_cerrarSesion(logoutUrl)}
                     />
                 </div>
