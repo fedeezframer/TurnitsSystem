@@ -1252,14 +1252,14 @@ function MenuCuenta({
                     transition: "background 0.15s ease",
                 }}
             >
-                <MenuUserAvatar logoImage={logoImage} size={44} />
+                <MenuUserAvatar logoImage={logoImage} size={38} />
                 <div
                     className="tn-cuenta-name"
                     style={{ minWidth: 0, overflow: "hidden" }}
                 >
                     <UserGreeting
                         baseUrl={baseUrl}
-                        fontSize={20}
+                        fontSize={16}
                         color="#0f172a"
                     />
                 </div>
@@ -1698,7 +1698,7 @@ function MenuFooter({
                         icon={iconos?.logout}
                         defaultIcon={MenuFooterLogoutIcon}
                         ariaLabel="Cerrar sesión"
-                        size={48}
+                        size={40}
                         onClick={() => MenuFooter_cerrarSesion(logoutUrl)}
                     />
                     <MenuFooterIconButton
