@@ -387,7 +387,7 @@ function TurnitsPanel_Inner(props: any) {
                             alignSelf: "flex-start",
                             height: "100vh",
                             overflow: "hidden",
-                            background: "linear-gradient(180deg, #f9fff9 0%, #ffffff 58%)",
+                            background: "#fcfffc",
                             borderRight: "1px solid #e5ece6",
                             display: "flex",
                             flexDirection: "column",
