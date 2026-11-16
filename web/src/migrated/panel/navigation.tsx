@@ -173,7 +173,6 @@ function BottomNavIcon({
       onClick={onClick}
       whileTap={{ scale: 0.9 }}
       aria-label={id}
-      aria-current={active ? "page" : undefined}
       style={{
         border: "none",
         background: active ? "#e3f2e1" : "transparent",
@@ -276,19 +275,15 @@ function BrandMark({
           }}
         />
       ) : (
-        <span
-          style={{
-            fontFamily: "'Inter Display', -apple-system, sans-serif",
-            fontWeight: 750,
-            fontSize: 28,
-            color: light ? "#ffffff" : "#111111",
-            letterSpacing: "-1px",
-            textAlign: "left",
-            padding: "0 6px",
-          }}
-        >
-          {logoText || "Logo"}
-        </span>
+        <>
+          <svg aria-hidden="true" width="42" height="36" viewBox="0 0 48 40" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M6 25c5 7 19 9 29 2 6-4 9-10 8-16-4 6-10 10-18 11-7 1-13-1-19-5 1 3 1 5 0 8Z" stroke={light ? "#fff" : "#111"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M14 22c4-5 8-8 13-10M20 25l5-5" stroke={light ? "#fff" : "#111"} strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          <span style={{fontFamily:"'Inter Display', -apple-system, sans-serif",fontWeight:750,fontSize:28,color:light?"#fff":"#111",letterSpacing:"-1px",paddingLeft:8}}>
+            {logoText || "turnits"}
+          </span>
+        </>
       )}
     </div>
   );
@@ -370,7 +365,6 @@ function NavButton({
 }) {
   return (
     <motion.button
-      className="turnits-panel-nav-button"
       onClick={onClick}
       whileHover={{ x: active ? 0 : 2 }}
       whileTap={{ scale: 0.97 }}
