@@ -196,11 +196,11 @@ function TurnitsPanel_Inner(props: any) {
     }
 
     const renderNavItems = () => navItemsVisibles.map((item) => item.id === "servicios" ? (
-        <div key={item.id} style={{border:"1px solid #b8c0b9",borderRadius:34,padding:"2px 8px 7px",margin:"0 -6px",background:"transparent"}}>
+        <div key={item.id} style={{border:"1px solid #b8c0b9",borderRadius:48,padding:"5px 12px 12px",margin:"0 -8px",background:"#fff"}}>
             <NavButton item={item} active={seccionActiva === "servicios" || menuExpandido === "servicios"} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === "servicios" ? null : "servicios");irA("servicios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
-            {menuExpandido === "servicios" && <div style={{display:"flex",flexDirection:"column",gap:1,padding:"2px 0 0 16px"}}>
-                <button type="button" onClick={() => abrirCatalogo("servicios")} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",border:0,background:"transparent",color:"#111",fontFamily:"inherit",fontSize:16,fontWeight:500,lineHeight:1.2,textAlign:"left",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>Mis Servicios</button>
-                <button type="button" onClick={() => abrirCatalogo("extras")} style={{display:"flex",alignItems:"center",gap:10,padding:"15px 8px",border:0,background:"transparent",color:"#111",fontFamily:"inherit",fontSize:16,fontWeight:500,lineHeight:1.2,textAlign:"left",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="m3 8 9-5 9 5v10l-9 5-9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v10M7.5 5.5l9 5"/></svg>Productos</button>
+            {menuExpandido === "servicios" && <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
+                <button type="button" onClick={() => abrirCatalogo("servicios")} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 8px",border:0,background:"transparent",color:"#111",fontFamily:"inherit",fontSize:16,fontWeight:500,lineHeight:1.2,textAlign:"left",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>Mis Servicios</button>
+                <button type="button" onClick={() => abrirCatalogo("extras")} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 8px",border:0,background:"transparent",color:"#111",fontFamily:"inherit",fontSize:16,fontWeight:500,lineHeight:1.2,textAlign:"left",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="m3 8 9-5 9 5v10l-9 5-9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v10M7.5 5.5l9 5"/></svg>Productos</button>
                 <button type="button" onClick={() => abrirCatalogo("promociones")} style={{display:"flex",alignItems:"center",gap:10,padding:"15px 8px",border:0,background:"transparent",color:"#111",fontFamily:"inherit",fontSize:16,fontWeight:500,lineHeight:1.2,textAlign:"left",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M20.5 13.5 13 21l-9-9V4h8l8.5 9.5Z"/><circle cx="8" cy="8" r="1.2"/><path d="m10 14 4-4 2 2-4 4-2 .5.5-2.5Z"/></svg>Promociones</button>
             </div>}
         </div>
@@ -491,7 +491,7 @@ function TurnitsPanel_Inner(props: any) {
                                     width: "100%",
                                     maxHeight: "78svh",
                                     overflowY: "auto",
-                                    background: "linear-gradient(180deg, #f4fff6 0%, #ffffff 58%)",
+                                    background: "linear-gradient(180deg, #fbfffb 0%, #ffffff 58%)",
                                     borderTopLeftRadius: 24,
                                     borderTopRightRadius: 24,
                                     padding:
@@ -501,7 +501,6 @@ function TurnitsPanel_Inner(props: any) {
                                 } as React.CSSProperties
                             }
                         >
-                            <AmbientOrbs accentColor={accentColor} />
                             <div
                                 style={{
                                     position: "relative",
@@ -521,7 +520,6 @@ function TurnitsPanel_Inner(props: any) {
                             >
                                     <BrandMark logoImage={logoImage} logoText={logoText} width={190} height={50} />
                             </div>
-                            <div aria-hidden="true" style={{height:2,background:"#176b24",margin:"0 16px 20px"}} />
                             <div aria-hidden="true" style={{height:2,background:"#176b24",margin:"0 16px 20px"}} />
                             <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr",gap:6}}>{renderNavItems()}</div>
 
