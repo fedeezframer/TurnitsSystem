@@ -5,8 +5,8 @@
 .promotions button:disabled {opacity:.52;cursor:default}
 .promo-primary {background:var(--green);color:white;border:0;border-radius:12px;padding:15px 20px;font-weight:700!important}
 .promo-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(16px,4cqw,64px)}
-.promo-card {border:1px solid #aaa;border-radius:clamp(20px,3cqw,44px);min-width:0;background:white}
-.promo-cover {position:relative;display:grid;place-items:center;aspect-ratio:5/4;overflow:hidden;border-radius:inherit;border-bottom-left-radius:0;border-bottom-right-radius:0;background:#f2f3f0;color:#718071}
+.promo-card {display:flex;flex-direction:column;border:1px solid #aaa;border-radius:clamp(20px,3cqw,44px);min-width:0;background:white}
+.promo-cover {flex:none;position:relative;display:grid;place-items:center;aspect-ratio:5/4;overflow:hidden;border-radius:inherit;border-bottom-left-radius:0;border-bottom-right-radius:0;background:#f2f3f0;color:#718071}
 .promo-cover>img {width:100%;height:100%;object-fit:cover}
 .promo-badges {position:absolute;top:5%;right:4%;display:grid;justify-items:end;gap:4px;font-size:clamp(12px,1.25cqw,17px)}
 .promo-badges>b,.promo-badges>span,.promo-multiple {background:white;color:#111;border-radius:25px;padding:6px 10px;font-weight:700}
@@ -14,7 +14,8 @@
 .promo-badges>div {display:flex;flex-wrap:wrap;gap:4px;justify-content:end}
 .promo-badges img {width:clamp(28px,3cqw,46px);aspect-ratio:1;border-radius:50%;background:white;object-fit:contain}
 .promo-multiple {position:absolute;bottom:4%;left:4%;border-radius:8px}
-.promo-foot {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 6px;padding:12px clamp(10px,1.2cqw,18px);align-items:center}
+.promo-foot {flex:1;display:grid;grid-template-rows:1fr auto;grid-template-columns:minmax(0,1fr) auto;gap:12px 6px;padding:12px clamp(10px,1.2cqw,18px);align-items:center}
+.promo-foot>strong,.promo-cost {align-self:start}
 .promo-foot>strong {overflow-wrap:anywhere;line-height:1.15;font-size:clamp(16px,1.55cqw,23px)}
 .promo-cost {text-align:right;font-weight:700;font-size:clamp(12px,1.27cqw,18px)}
 .promo-cost del {color:#595959}
@@ -63,7 +64,7 @@
   .promotions {font-size:15px}
   .promo-grid {grid-template-columns:repeat(auto-fill,minmax(min(100%,256px),1fr));gap:20px}
   .promo-card {border-color:#c9cdc9;border-radius:16px}
-  .promo-cover {aspect-ratio:4/3;max-height:248px}
+  .promo-cover {aspect-ratio:5/4;max-height:268px}
   .promo-badges {font-size:13px}
   .promo-badges>b,.promo-badges>span {padding:4px 8px}
   .promo-badges img {width:32px}
@@ -86,7 +87,7 @@
 }
 @container (max-width:560px) {
   .promo-cover {aspect-ratio:1}
-  .promo-foot {grid-template-columns:minmax(0,1fr);gap:5px;padding:9px}
+  .promo-foot {grid-template-columns:minmax(0,1fr);grid-template-rows:1fr auto auto auto;gap:5px;padding:9px}
   .promo-foot>strong {font-size:15px}
   .promo-cost {font-size:13px;text-align:left;overflow-wrap:anywhere}
   .promo-status {font-size:12px}
