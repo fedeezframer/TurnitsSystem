@@ -1146,6 +1146,7 @@ function ServiciosManager_ServicioForm({
     const [unidadDuracion, setUnidadDuracion] = React.useState<"min" | "h">("min")
     const [profesionales, setProfesionales] = React.useState<CatalogoProfesional[]>([])
     const [avisoProfesional, setAvisoProfesional] = React.useState("")
+    const avisoTimer = React.useRef<number | undefined>(undefined)
 
     React.useEffect(() => {
         if (employeeMode || employeeVariant || branch) return
@@ -1178,8 +1179,10 @@ function ServiciosManager_ServicioForm({
                 : [...(previous.profesionalesIds || initial.profesionalesIds || []), profesional.id],
         }))
         setAvisoProfesional(`${selected ? "Quitaste a" : "Agregaste a"} ${nombre}`)
-        window.setTimeout(() => setAvisoProfesional(""), 1900)
+        if (avisoTimer.current) window.clearTimeout(avisoTimer.current)
+        avisoTimer.current = window.setTimeout(() => setAvisoProfesional(""), 1500)
     }
+    React.useEffect(() => () => { if (avisoTimer.current) window.clearTimeout(avisoTimer.current) }, [])
 
     React.useEffect(() => {
         if (!globalEdit || !servicioId) return
@@ -1361,9 +1364,14 @@ function ServiciosManager_ServicioForm({
                 <button type="button" onClick={handleSubmit} disabled={guardando || !form.nombre.trim()} style={{ height: 44, padding: "0 20px", borderRadius: 10, border: 0, background: guardando || !form.nombre.trim() ? "#cbd5e1" : accentColor, color: "white", fontSize: 14, fontWeight: 700, cursor: guardando || !form.nombre.trim() ? "not-allowed" : "pointer" }}>{guardando ? "Guardando…" : modoEdicion ? "Guardar cambios" : "Crear servicio"}</button>
             </div>}
 
-            <AnimatePresence>
-                {avisoProfesional && <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} role="status" style={{ position: "fixed", zIndex: 9999, right: 24, bottom: 24, padding: "12px 18px", borderRadius: 12, background: "#fff", border: "1px solid #d6e3d6", boxShadow: "0 8px 28px #0002", color: "#166534", fontSize: 14, fontWeight: 600 }}>{avisoProfesional}</motion.div>}
-            </AnimatePresence>
+            {typeof document !== "undefined" && createPortal(
+                <AnimatePresence>
+                    {avisoProfesional && <div key="aviso-profesional" style={{ position: "fixed", inset: 0, zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, pointerEvents: "none" }}>
+                        <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18 }} role="status" style={{ maxWidth: "min(420px, 100%)", padding: "16px 26px", borderRadius: 14, background: "#fff", border: "1px solid #d6e3d6", boxShadow: "0 14px 44px rgba(15,23,42,.22)", color: "#166534", fontSize: 15, fontWeight: 650, textAlign: "center" }}>{avisoProfesional}</motion.div>
+                    </div>}
+                </AnimatePresence>,
+                document.body
+            )}
         </motion.div>
     )
 }
@@ -1711,6 +1719,7 @@ function ServiciosManager_ServicioCard({
     const branch = useBranchAdmin()
     const [confirmDelete, setConfirmDelete] = React.useState(false)
     const [imgError, setImgError] = React.useState(false)
+    const moreButtonRef = React.useRef<HTMLButtonElement>(null)
 
     const thumbSize = 30
 
@@ -1782,9 +1791,9 @@ function ServiciosManager_ServicioCard({
                     {iconoEditar ? <img src={iconoEditar} alt="" /> : <span aria-hidden="true">✎</span>} Editar
                 </button>}
                 {!branch && employeeCanEdit && <div style={{position:"relative"}}>
-                    <button type="button" className="svc-more-button" aria-label={`Más opciones para ${svc.nombre}`} aria-expanded={menuAbierto} onClick={() => {onToggleMenu();setConfirmDelete(false)}}>•••</button>
+                    <button ref={moreButtonRef} type="button" className="svc-more-button" aria-label={`Más opciones para ${svc.nombre}`} aria-expanded={menuAbierto} onClick={() => {onToggleMenu();setConfirmDelete(false)}}>•••</button>
                     <AnimatePresence>
-                        {menuAbierto && <motion.div className="svc-row-menu" initial={{opacity:0,y:-4,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-4,scale:.98}} transition={{duration:.14}}>
+                        {menuAbierto && <ServiciosManager_RowMenu key="row-menu" anchor={moreButtonRef}>
                             {confirmDelete ? <>
                                 <button type="button" className="is-danger" onClick={() => {onDelete();setConfirmDelete(false);onToggleMenu()}}>Confirmar eliminación</button>
                                 <button type="button" onClick={() => setConfirmDelete(false)}>Cancelar</button>
@@ -1792,12 +1801,56 @@ function ServiciosManager_ServicioCard({
                                 {!employeeMode && <button type="button" onClick={() => {onToggle();onToggleMenu()}}>{svc.activo ? "Pausar" : "Activar"}</button>}
                                 <button type="button" className="is-danger" onClick={() => setConfirmDelete(true)}>Eliminar</button>
                             </>}
-                        </motion.div>}
+                        </ServiciosManager_RowMenu>}
                     </AnimatePresence>
                 </div>}
             </div>
             {!quoteMode && <strong className="svc-row-price">{`$${Number(svc.precio || 0).toLocaleString("es-AR")}`}</strong>}
         </motion.div>
+    )
+}
+
+// Menú "..." de cada fila. Se dibuja en un portal con posición fija, así no lo
+// recortan los contenedores de la lista ni lo tapa la barra inferior, y se abre
+// hacia arriba cuando abajo no hay lugar (últimas filas).
+function ServiciosManager_RowMenu({ anchor, children }: { anchor: React.RefObject<HTMLElement | null>; children: React.ReactNode }) {
+    const ref = React.useRef<HTMLDivElement>(null)
+    const [pos, setPos] = React.useState<{ top: number; right: number } | null>(null)
+    const place = React.useCallback(() => {
+        const trigger = anchor.current
+        if (!trigger) return
+        const rect = trigger.getBoundingClientRect()
+        const height = ref.current?.offsetHeight || 84
+        const below = window.innerHeight - rect.bottom
+        const top = below >= height + 12 || below >= rect.top
+            ? rect.bottom + 4
+            : Math.max(8, rect.top - height - 4)
+        const right = Math.max(8, window.innerWidth - rect.right)
+        setPos((previous) => previous && previous.top === top && previous.right === right ? previous : { top, right })
+    }, [anchor])
+    React.useLayoutEffect(() => { place() })
+    React.useEffect(() => {
+        window.addEventListener("scroll", place, true)
+        window.addEventListener("resize", place)
+        return () => {
+            window.removeEventListener("scroll", place, true)
+            window.removeEventListener("resize", place)
+        }
+    }, [place])
+    if (typeof document === "undefined") return null
+    return createPortal(
+        <motion.div
+            ref={ref}
+            className="svc-row-menu"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.14 }}
+            style={{ position: "fixed", top: pos ? pos.top : 0, right: pos ? pos.right : 0, zIndex: 10000, visibility: pos ? "visible" : "hidden" }}
+        >
+            {children}
+        </motion.div>,
+        document.body
     )
 }
 
@@ -1834,6 +1887,7 @@ function ServiciosManager_ExtraCard({
     const [confirmDelete, setConfirmDelete] = React.useState(false)
     const [menuAbierto, setMenuAbierto] = React.useState(false)
     const [imgError, setImgError] = React.useState(false)
+    const moreButtonRef = React.useRef<HTMLButtonElement>(null)
     return (
         <motion.div layout initial={{opacity:0,y:6}} animate={{opacity:!employeeMode && extra.owner_equipo_id ? (extra.activo ? .8 : .5) : (extra.activo ? 1 : .55),y:0}} exit={{opacity:0,scale:.96}} transition={{duration:.18}} className="svc-card" style={{display:"flex",alignItems:"center",flexWrap:"nowrap",gap:10,padding:"7px 9px",borderRadius:11,background:"#fff",border:"1px solid #bfc3bf",opacity:extra.activo?1:.55,transition:"background .15s, opacity .2s",...(!employeeMode?ServiciosManager_EmployeeCardStyle(extra):{})}}>
             <div style={{width:40,height:40,borderRadius:5,flexShrink:0,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1849,10 +1903,10 @@ function ServiciosManager_ExtraCard({
             {canEdit && <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
                 <button className="svc-edit-button" type="button" onClick={onEdit} title="Editar">{iconoEditar?<img src={iconoEditar} alt=""/>:<span aria-hidden="true">✎</span>} Editar</button>
                 <div className="svc-row-menu-anchor">
-                    <button className="svc-more-button" type="button" aria-label={menuAbierto?"Cerrar opciones":"Más opciones"} aria-expanded={menuAbierto} onClick={()=>{setMenuAbierto(value=>!value);setConfirmDelete(false)}}>···</button>
-                    <AnimatePresence>{menuAbierto && <motion.div className="svc-row-menu" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-4}} transition={{duration:.14}}>
+                    <button ref={moreButtonRef} className="svc-more-button" type="button" aria-label={menuAbierto?"Cerrar opciones":"Más opciones"} aria-expanded={menuAbierto} onClick={()=>{setMenuAbierto(value=>!value);setConfirmDelete(false)}}>···</button>
+                    <AnimatePresence>{menuAbierto && <ServiciosManager_RowMenu key="row-menu" anchor={moreButtonRef}>
                         {confirmDelete ? <><span className="svc-delete-confirm-label">¿Eliminar producto?</span><button type="button" className="is-danger" onClick={()=>{onDelete();setMenuAbierto(false);setConfirmDelete(false)}}>Sí, eliminar</button><button type="button" onClick={()=>setConfirmDelete(false)}>Cancelar</button></> : <><button type="button" onClick={()=>{onToggle();setMenuAbierto(false)}}>{extra.activo?"Pausar":"Reactivar"}</button><button type="button" className="is-danger" onClick={()=>setConfirmDelete(true)}>Eliminar</button></>}
-                    </motion.div>}</AnimatePresence>
+                    </ServiciosManager_RowMenu>}</AnimatePresence>
                 </div>
             </div>}
             <strong className="svc-row-price">{"$"+extra.precio.toLocaleString("es-AR")}</strong>

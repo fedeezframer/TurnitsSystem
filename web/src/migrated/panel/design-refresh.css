@@ -488,8 +488,10 @@
   pointer-events: none;
   max-width: calc(100% - 16px);
   box-sizing: border-box;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  /* Sin esto, cerca del borde derecho el tooltip se angosta y parte el texto. */
+  width: max-content;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .turnits-dashboard-chart-tooltip strong {
@@ -604,8 +606,6 @@
   .svc-search { flex:1 1 140px; width:auto; }
 }
 
-.turnits-panel-content > div:has(.svc-toolbar) .turnits-section-heading-title { font-size:20px !important; line-height:1.2 !important; letter-spacing:-.35px !important; }
-.turnits-panel-content > div:has(.svc-toolbar) .turnits-section-heading-subtitle { display:none !important; }
 .svc-toolbar { gap:8px; }
 .svc-filter-button { padding-left:8px; padding-right:8px; }
 .svc-create-button { padding-left:11px; padding-right:11px; }
