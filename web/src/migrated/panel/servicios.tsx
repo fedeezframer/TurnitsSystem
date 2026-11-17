@@ -2585,6 +2585,45 @@ function ServiciosManager(props: any) {
         initialView
     )
     React.useEffect(() => { setVista(initialView) }, [initialView])
+    const [serviciosMasPedidos, setServiciosMasPedidos] = React.useState<any[]>([])
+    React.useEffect(() => {
+        if (filtroServicios !== "pedidos") return
+        let cancelled = false
+        let retryTimer: ReturnType<typeof setTimeout> | undefined
+        let pollTimer: ReturnType<typeof setInterval> | undefined
+        let retries = 0
+        const loadPopularity = async () => {
+            const slug = ServiciosManager_getSlug()
+            const token = ServiciosManager_getToken()
+            if (!slug || !token) {
+                if (retries++ < 12) retryTimer = setTimeout(loadPopularity, 300)
+                return
+            }
+            try {
+                const response = await fetch(`${api}/admin-stats/${encodeURIComponent(slug)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                    cache: "no-cache",
+                })
+                if (!response.ok) return
+                const data = await response.json()
+                if (!cancelled) setServiciosMasPedidos(Array.isArray(data?.serviciosMasPedidos) ? data.serviciosMasPedidos : [])
+            } catch {}
+        }
+        const refresh = () => { if (document.visibilityState !== "hidden") loadPopularity() }
+        loadPopularity()
+        pollTimer = setInterval(loadPopularity, 30000)
+        window.addEventListener("turno_actualizado", refresh)
+        window.addEventListener("turno_cancelado", refresh)
+        window.addEventListener("focus", refresh)
+        return () => {
+            cancelled = true
+            if (retryTimer) clearTimeout(retryTimer)
+            if (pollTimer) clearInterval(pollTimer)
+            window.removeEventListener("turno_actualizado", refresh)
+            window.removeEventListener("turno_cancelado", refresh)
+            window.removeEventListener("focus", refresh)
+        }
+    }, [api, filtroServicios])
     const [filtroServicios, setFiltroServicios] = React.useState<"todos" | "pausados" | "pedidos">("todos")
     const [busquedaServicio, setBusquedaServicio] = React.useState("")
 
@@ -3112,12 +3151,13 @@ function ServiciosManager(props: any) {
     const inactivos = servicios.filter((s) => !s.activo)
     const extrasActivos = extras.filter((e) => e.activo)
     const extrasInactivos = extras.filter((e) => !e.activo)
+    const popularidad = new Map(serviciosMasPedidos.map((item: any) => [String(item.nombre || "").trim().toLocaleLowerCase("es"), Number(item.cantidad || 0)]))
     const serviciosVisibles = servicios
         .filter((item) => filtroServicios !== "pausados" || !item.activo)
         .filter((item) => item.nombre.toLocaleLowerCase("es").includes(busquedaServicio.trim().toLocaleLowerCase("es")))
-        .sort((a: any, b: any) => filtroServicios !== "pedidos"
-            ? a.orden - b.orden
-            : Number(b.reservas ?? b.turnos ?? b.total_turnos ?? b.pedidos ?? 0) - Number(a.reservas ?? a.turnos ?? a.total_turnos ?? a.pedidos ?? 0))
+        .sort((a, b) => filtroServicios === "pedidos"
+            ? (popularidad.get(b.nombre.trim().toLocaleLowerCase("es")) || 0) - (popularidad.get(a.nombre.trim().toLocaleLowerCase("es")) || 0) || a.orden - b.orden
+            : a.orden - b.orden)
 
     return (
         <div
@@ -3136,7 +3176,8 @@ function ServiciosManager(props: any) {
                         <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
                             {(["todos","pausados","pedidos"] as const).map((filter) => (
                                 <button key={filter} type="button" className={`svc-filter-button${filtroServicios === filter ? " is-active" : ""}`} aria-pressed={filtroServicios === filter} onClick={() => setFiltroServicios(filter)}>
-                                    {filter === "todos" ? "Todos" : filter === "pausados" ? "Pausados" : "Más pedidos"}
+                                    {filter === "pedidos" && <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></svg>}
+                                    {filter === "todos" ? "Todos" : filter === "pausados" ? "Pausados" : "Más Pedidos"}
                                 </button>
                             ))}
                         </div>
