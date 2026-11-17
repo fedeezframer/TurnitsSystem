@@ -56,14 +56,14 @@
 .promo-editor .promo-primary {justify-self:end}
 .promo-error {color:#9c2222}
 @container(max-width:850px){.promo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@container(max-width:560px){.promo-grid,.promo-intro{grid-template-columns:1fr}.promo-intro{gap:18px}.promo-toolbar{justify-content:flex-start}.promo-editor{padding:48px 12px 18px}.promo-line{padding:8px;gap:4px}.promo-prices{gap:10px}.promo-foot{padding:14px}.promo-cost{font-size:15px}}
+@container(max-width:560px){.promo-intro{grid-template-columns:1fr}.promo-intro{gap:18px}.promo-toolbar{justify-content:flex-start}.promo-editor{padding:48px 12px 18px}.promo-line{padding:8px;gap:4px}.promo-prices{gap:10px}}
 .promo-editor .svc-upload-zone:not(:hover)>img+div {opacity:0!important}
 
 @media (min-width:860px) {
   .promotions {font-size:15px}
   .promo-grid {grid-template-columns:repeat(auto-fill,minmax(min(100%,256px),1fr));gap:20px}
   .promo-card {border-color:#c9cdc9;border-radius:16px}
-  .promo-cover {aspect-ratio:16/10;max-height:200px}
+  .promo-cover {aspect-ratio:4/3;max-height:248px}
   .promo-badges {font-size:13px}
   .promo-badges>b,.promo-badges>span {padding:4px 8px}
   .promo-badges img {width:32px}
@@ -79,4 +79,20 @@
   .promo-check {width:28px}
   .promo-line {padding:8px 12px;border-radius:10px}
   .promo-people button {width:36px;height:36px}
+}
+
+@media (max-width:859px) {
+  .promo-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+}
+@container (max-width:560px) {
+  .promo-cover {aspect-ratio:1}
+  .promo-foot {grid-template-columns:minmax(0,1fr);gap:5px;padding:9px}
+  .promo-foot>strong {font-size:15px}
+  .promo-cost {font-size:13px;text-align:left;overflow-wrap:anywhere}
+  .promo-status {font-size:12px}
+  .promo-actions {justify-content:space-between;gap:2px}
+  .promo-actions>button {padding:4px 8px;font-size:13px}
+  .promo-badges {max-width:92%;font-size:11px;text-align:right}
+  .promo-badges>b,.promo-badges>span {padding:3px 6px}
+  .promo-badges img {width:22px}
 }
