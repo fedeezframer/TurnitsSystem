@@ -2952,12 +2952,24 @@ function ServiciosManager(props: any) {
             ? (popularidad.get(b.nombre.trim().toLocaleLowerCase("es")) || 0) - (popularidad.get(a.nombre.trim().toLocaleLowerCase("es")) || 0) || a.orden - b.orden
             : a.orden - b.orden)
 
-    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, h{vista === "servicios"
+    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, puedePromociones, filtroServicios, setFiltroServicios, busquedaServicio, setBusquedaServicio, servicios, error, formError, guardando, mostrarForm, editando, extras, errorExtras, formErrorExtra, guardandoExtra, mostrarFormExtra, editandoExtra }
+
+    return (
+        <div
+            ref={containerRef}
+            style={{
+                ...ServiciosManager_cardBase,
+                padding: isMobile ? "16px" : "22px",
+                ...style,
+            }}
+        >
+            <style>{ServiciosManager_shimmerCSS}</style>
+
+            {vista === "servicios"
                 ? <ServiciosManager_ServiciosSection {...sectionProps} />
                 : vista === "extras"
                     ? <ServiciosManager_ProductosSection {...sectionProps} />
-                    : <ServiciosManager_PromocionesSection {...sectionProps} />}              <>{puedePromociones ? <ServiciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Ofrecé descuentos y combinaciones para tu catálogo.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>
-            )}
+                    : <ServiciosManager_PromocionesSection {...sectionProps} />}
         </div>
     )
 }
