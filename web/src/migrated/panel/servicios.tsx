@@ -2995,16 +2995,36 @@ function ServiciosManager(props: any) {
 
 
 function ServiciosManager_ServiciosSection(props: any) {
+    const opcionesOrden = [
+        {id:"pedidos",label:"Más Pedidos"},
+        {id:"az",label:"A-Z"},
+        {id:"za",label:"Z-A"},
+        {id:"precio-desc",label:"Mayor precio"},
+        {id:"precio-asc",label:"Menor precio"},
+    ] as const
+    const etiquetaOrden = opcionesOrden.find(option => option.id === ordenServicios)?.label || "Más Pedidos"
+
     const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,ordenServicios,setOrdenServicios,menuOrdenServicios,setMenuOrdenServicios,busquedaServicio,setBusquedaServicio}=props
     return (<>
                     <div className="svc-toolbar">
                         <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
-                            {(["todos","pausados","pedidos"] as const).map((filter) => (
+                            {(["todos","pausados"] as const).map(filter => (
                                 <button key={filter} type="button" className={`svc-filter-button${filtroServicios === filter ? " is-active" : ""}`} aria-pressed={filtroServicios === filter} onClick={() => setFiltroServicios(filter)}>
-                                    {filter === "pedidos" && <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></svg>}
-                                    {filter === "todos" ? "Todos" : filter === "pausados" ? "Pausados" : "Más Pedidos"}
+                                    {filter === "todos" ? "Todos" : "Pausados"}
                                 </button>
                             ))}
+                        </div>
+                        <div className="svc-sort-control">
+                            <button type="button" className="svc-sort-button" aria-haspopup="menu" aria-expanded={menuOrdenServicios} onClick={() => setMenuOrdenServicios(open => !open)}>
+                                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></svg>
+                                {etiquetaOrden}
+                                <svg aria-hidden="true" className="svc-sort-chevron" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="m2 4 4 4 4-4"/></svg>
+                            </button>
+                            <AnimatePresence>
+                                {menuOrdenServicios && <motion.div className="svc-sort-menu" role="menu" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-4}} transition={{duration:.14}}>
+                                    {opcionesOrden.map(option => <button key={option.id} type="button" role="menuitemradio" aria-checked={ordenServicios === option.id} onClick={() => {setOrdenServicios(option.id);setMenuOrdenServicios(false)}}>{option.label}{ordenServicios === option.id && <span aria-hidden="true">✓</span>}</button>)}
+                                </motion.div>}
+                            </AnimatePresence>
                         </div>
                         <label className="svc-search">
                             <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
