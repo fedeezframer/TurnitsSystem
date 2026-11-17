@@ -724,7 +724,7 @@ function TurnitsPanel_Inner(props: any) {
                     >
                         <SeccionHeader
                             title={serviciosVistaInicial === "servicios" ? "Servicios" : serviciosVistaInicial === "extras" ? "Productos" : "Promociones"}
-                            subtitle={serviciosVistaInicial === "servicios" ? "Administrá los servicios que ofrecés a tus clientes" : serviciosVistaInicial === "extras" ? "Administrá los productos adicionales de tu catálogo" : "Creá y organizá tus promociones"}
+                            subtitle={serviciosVistaInicial === "servicios" ? "" : serviciosVistaInicial === "extras" ? "Administrá los productos adicionales de tu catálogo" : "Creá y organizá tus promociones"}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
