@@ -2,7 +2,6 @@ import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import { useQuoteMode } from "../../shared/agenda-mode"
-import ServiceBrowseConfig from "./service-browse-config"
 import { TurnitsGlobalSaveManager_get } from "./common"
 import * as React from "react"
 import {
@@ -457,7 +456,7 @@ function ServiciosManager_ImageUploader({
             )}
             <div
                 style={{
-                    display: "flex",
+                    display: size > 100 ? "block" : "flex",
                     gap: 14,
                     alignItems: "flex-start",
                     ...accentVars,
@@ -473,8 +472,9 @@ function ServiciosManager_ImageUploader({
                     onDragLeave={() => setDragOver(false)}
                     onDrop={handleDrop}
                     style={{
-                        width: size,
-                        height: size,
+                        width: size > 100 ? "100%" : size,
+                        height: size > 100 ? "auto" : size,
+                        aspectRatio: size > 100 ? "1 / 1" : undefined,
                         borderRadius: size > 100 ? 20 : 16,
                         flexShrink: 0,
                         border: preview
@@ -579,25 +579,24 @@ function ServiciosManager_ImageUploader({
                         >
                             <ServiciosManager_PlaceholderIcon
                                 src={iconoFormUrl}
-                                size={28}
+                                size={size > 100 ? 52 : 28}
                             />
                             <span
                                 style={{
-                                    fontSize: 9,
+                                    fontSize: size > 100 ? 14 : 9,
                                     color: "#94a3b8",
                                     textAlign: "center",
                                     lineHeight: 1.3,
+                                    fontWeight: size > 100 ? 600 : 400,
                                 }}
                             >
-                                Subir
-                                <br />
-                                foto
+                                {size > 100 ? "Agregar imagen" : <>Subir<br />foto</>}
                             </span>
                         </div>
                     )}
                 </div>
 
-                <div
+                {size <= 100 && <div
                     style={{
                         flex: 1,
                         display: "flex",
@@ -677,7 +676,7 @@ function ServiciosManager_ImageUploader({
                             </button>
                         )}
                     </div>
-                </div>
+                </div>}
 
                 <input
                     ref={inputRef}
@@ -1146,25 +1145,41 @@ function ServiciosManager_ServicioForm({
     const [precioError, setPrecioError] = React.useState("")
     const [profesionales, setProfesionales] = React.useState<CatalogoProfesional[]>([])
     const [avisoProfesional, setAvisoProfesional] = React.useState("")
+
     React.useEffect(() => {
         if (employeeMode || employeeVariant || branch) return
         let activo = true
         const token = ServiciosManager_getToken()
         const slug = ServiciosManager_getSlug()
-        fetch(`${apiUrl.replace(/\/+$/, "")}/admin/equipo/${encodeURIComponent(slug)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-cache" })
-            .then(r => r.ok ? r.json() : Promise.reject())
-            .then(d => { if (activo) setProfesionales(Array.isArray(d.equipo) ? d.equipo.filter((p: any) => p && (p.activo === true || p.activo === "true")) : []) })
+        fetch(`${apiUrl.replace(/\/+$/, "")}/admin/equipo/${encodeURIComponent(slug)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-cache",
+        })
+            .then((response) => response.ok ? response.json() : Promise.reject())
+            .then((data) => {
+                if (activo) setProfesionales(Array.isArray(data.equipo)
+                    ? data.equipo.filter((person: any) => person && (person.activo === true || person.activo === "true"))
+                    : [])
+            })
             .catch(() => { if (activo) setProfesionales([]) })
         return () => { activo = false }
     }, [apiUrl, employeeMode, employeeVariant, branch])
+
     const selectedProfesionales = form.profesionalesIds || initial.profesionalesIds || []
-    const toggleProfesional = (prof: CatalogoProfesional) => {
-        const selected = selectedProfesionales.includes(prof.id)
-        const nombre = [prof.nombre, prof.apellido].filter(Boolean).join(" ")
-        setForm(p => ({ ...p, profesionalesInicialesIds: p.profesionalesInicialesIds || initial.profesionalesInicialesIds || [], profesionalesIds: selected ? (p.profesionalesIds || initial.profesionalesIds || []).filter(id => id !== prof.id) : [...(p.profesionalesIds || initial.profesionalesIds || []), prof.id] }))
+    const toggleProfesional = (profesional: CatalogoProfesional) => {
+        const selected = selectedProfesionales.includes(profesional.id)
+        const nombre = [profesional.nombre, profesional.apellido].filter(Boolean).join(" ")
+        setForm((previous) => ({
+            ...previous,
+            profesionalesInicialesIds: previous.profesionalesInicialesIds || initial.profesionalesInicialesIds || [],
+            profesionalesIds: selected
+                ? (previous.profesionalesIds || initial.profesionalesIds || []).filter((id) => id !== profesional.id)
+                : [...(previous.profesionalesIds || initial.profesionalesIds || []), profesional.id],
+        }))
         setAvisoProfesional(`${selected ? "Quitaste a" : "Agregaste a"} ${nombre}`)
         window.setTimeout(() => setAvisoProfesional(""), 1900)
     }
+
     React.useEffect(() => {
         if (!globalEdit || !servicioId) return
         const manager = TurnitsGlobalSaveManager_get()
@@ -1176,464 +1191,166 @@ function ServiciosManager_ServicioForm({
         else manager?.clear("servicios")
     }, [form, globalEdit, servicioId, apiUrl])
 
-    const set = (key: keyof ServiciosManager_FormData) => (val: string) =>
-        setForm((p) => ({ ...p, [key]: val }))
+    const set = (key: keyof ServiciosManager_FormData) => (value: string) =>
+        setForm((previous) => ({ ...previous, [key]: value }))
 
-    const accentVars = {
-        "--accent": accentColor,
-        "--accent-10": accentColor + "18",
-        "--accent-05": accentColor + "0d",
-        "--accent-30": accentColor + "44",
-    } as React.CSSProperties
-
+    const inputStyle: React.CSSProperties = {
+        width: "100%", minWidth: 0, height: isMobile ? 50 : 60,
+        boxSizing: "border-box", border: "1px solid #aaa", borderRadius: 999,
+        padding: isMobile ? "0 17px" : "0 24px", background: "#fff",
+        color: "#111", fontFamily: "inherit", fontSize: isMobile ? 16 : 23,
+        outlineColor: accentColor,
+    }
+    const labelStyle: React.CSSProperties = {
+        display: "block", marginBottom: isMobile ? 9 : 12,
+        color: "#111", fontSize: isMobile ? 16 : 23,
+        fontWeight: 450, lineHeight: 1.2,
+    }
+    const fieldStyle: React.CSSProperties = { minWidth: 0 }
     const handleSubmit = () => {
         if (!quoteMode && Number(form.precio) < ServiciosManager_PRECIO_MINIMO) {
-            setPrecioError(
-                `El precio mínimo es $${ServiciosManager_PRECIO_MINIMO.toLocaleString("es-AR")}.`
-            )
+            setPrecioError(`El precio mínimo es $${ServiciosManager_PRECIO_MINIMO.toLocaleString("es-AR")}.`)
             return
         }
         setPrecioError("")
         onSubmit(quoteMode ? { ...form, precio: "0" } : form)
     }
+    const durationValue = String(form.duracion || 30)
+    const customDuration = !ServiciosManager_DURACIONES.includes(Number(durationValue))
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.2 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.2 }}
             style={{
-                ...accentVars,
-                background: "#fff",
-                borderRadius: 16,
-                border: "1px solid #eef2f7",
-                boxShadow: "0 2px 10px rgba(15,23,42,0.05)",
-                overflow: "hidden",
+                background: "#fff", borderRadius: isMobile ? 24 : 48,
+                border: "1px solid #b6b6b6", boxShadow: "none",
+                padding: isMobile ? 20 : "clamp(28px, 5.2vw, 80px)",
+                boxSizing: "border-box", overflow: "hidden", position: "relative",
+                fontFamily: "'Inter Display', -apple-system, sans-serif",
             }}
         >
             <style>{ServiciosManager_shimmerCSS}</style>
-
-            {/* Header plano, sin franja de color ni ilustraciones decorativas */}
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    padding: isMobile ? "16px 16px 0" : "20px 20px 0",
-                    flexShrink: 0,
-                }}
-            >
-                <div>
-                    <div
-                        style={{
-                            fontSize: isMobile ? 18 : 20,
-                            fontWeight: 800,
-                            color: "#111827",
-                            letterSpacing: "-0.4px",
-                            lineHeight: 1.25,
-                        }}
-                    >
-                        {quoteMode
-                            ? modoEdicion ? "Editar servicio para cotizar" : "Crear servicio para cotizar"
-                            : modoEdicion ? "Editar servicio" : "Crear un servicio"}
-                    </div>
-                    <div
-                        style={{
-                            fontSize: 12.5,
-                            color: "#64748b",
-                            marginTop: 4,
-                            lineHeight: 1.45,
-                            maxWidth: 460,
-                        }}
-                    >
-                        {quoteMode
-                            ? "Mostralo en Browse. El alcance, el precio y el tiempo se definen con cada cliente por chat."
-                            : modoEdicion
-                                ? "Los cambios se reflejan al instante en tu link de reservas."
-                                : "Agregá los detalles de tu servicio para que tus clientes puedan reservarlo fácilmente."}
-                    </div>
-                </div>
-                <button
-                    onClick={onCancel}
-                    style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#94a3b8",
-                        fontSize: 20,
-                        lineHeight: 1,
-                        padding: "0 2px",
-                        flexShrink: 0,
-                    }}
-                >
-                    ×
-                </button>
-            </div>
-
-            <div
-                style={{
-                    padding: isMobile ? "16px" : "20px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: isMobile ? 18 : 20,
-                }}
-            >
-                {/* Foto del servicio: se deja arriba de la grilla, es funcional
-                    (no decorativa) así que no sigue el layout del mockup. */}
-                <ServiciosManager_ImageUploader
-                    value={form.imagen}
-                    onChange={set("imagen")}
-                    accentColor={accentColor}
-                    apiUrl={apiUrl}
-                    iconoFormUrl={iconoFormUrl}
-                    size={isMobile ? 150 : 280}
-                    uploadPath={uploadPath}
+            <div style={{ ...fieldStyle, marginBottom: isMobile ? 22 : 28 }}>
+                <label style={labelStyle} htmlFor="servicio-nombre">Nombre del Servicio</label>
+                <input
+                    id="servicio-nombre" className="svc-input" value={form.nombre}
+                    onChange={(event) => set("nombre")(event.target.value)}
+                    placeholder="Nombre del servicio" maxLength={80}
+                    style={{ ...inputStyle, fontWeight: 700 }}
                 />
+            </div>
 
-                {/* Nombre + Descripción lado a lado, sin título de sección,
-                    igual que el mockup. La descripción arranca del mismo
-                    alto que el input de nombre y crece con el contenido. */}
-                {!employeeVariant && (
-                    <div
-                        style={{
-                            display: "grid",
-                            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                            gap: isMobile ? 18 : 20,
-                            alignItems: "start",
-                        }}
-                    >
-                        <ServiciosManager_Field
-                            label={quoteMode ? "Tipo de trabajo o servicio" : "Nombre del servicio"}
-                            icon="tag"
-                        >
-                            <ServiciosManager_Input
-                                value={form.nombre}
-                                onChange={set("nombre")}
-                                placeholder={quoteMode ? "Ej.: Tatuaje personalizado" : "Ej: Corte de pelo"}
-                            />
-                        </ServiciosManager_Field>
-
-                        <ServiciosManager_Field
-                            label="Descripción"
-                            icon="align-left"
-                        >
-                            <ServiciosManager_AutoTextarea
-                                value={form.descripcion}
-                                onChange={set("descripcion")}
-                                placeholder={quoteMode ? "Contá qué trabajos realizás o qué debería saber el cliente…" : "Contá brevemente qué incluye el servicio…"}
-                            />
-                        </ServiciosManager_Field>
-                    </div>
-                )}
-
-                {/* Precio, capacidad y orden en una fila, sin selector de
-                    moneda (el precio siempre es en la moneda de la cuenta). */}
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile
-                            ? quoteMode ? "1fr" : "1fr 1fr"
-                            : quoteMode ? "1fr" : "1fr 1fr 1fr",
-                        gap: isMobile ? 14 : 20,
-                    }}
-                >
-                    <div hidden={quoteMode} style={{ gridColumn: isMobile ? "1 / -1" : "auto" }}>
-                        <ServiciosManager_Field
-                            label="Precio"
-                            icon="dollar"
-                            hint={`Mínimo $${ServiciosManager_PRECIO_MINIMO.toLocaleString("es-AR")}`}
-                        >
-                            <ServiciosManager_PrecioInput
-                                value={form.precio}
-                                onChange={(val: string) => {
-                                    set("precio")(val)
-                                    if (
-                                        Number(val) >=
-                                        ServiciosManager_PRECIO_MINIMO
-                                    )
-                                        setPrecioError("")
-                                }}
-                                placeholder={String(
-                                    ServiciosManager_PRECIO_MINIMO
-                                )}
-                                accentColor={accentColor}
-                            />
-                            {precioError && (
-                                <span
-                                    style={{
-                                        fontSize: 11,
-                                        color: "#ef4444",
-                                        fontWeight: 500,
-                                        marginTop: 2,
-                                        display: "block",
-                                    }}
-                                >
-                                    {precioError}
-                                </span>
-                            )}
-                        </ServiciosManager_Field>
-                    </div>
-                    {!employeeVariant && !quoteMode && (
-                        <ServiciosManager_Field
-                            label="Capacidad"
-                            icon="users"
-                            hint="Personas por turno"
-                        >
-                            <ServiciosManager_Input
-                                value={form.capacidad}
-                                onChange={set("capacidad")}
-                                type="number"
-                                placeholder="1"
-                            />
-                        </ServiciosManager_Field>
-                    )}
-                    <ServiciosManager_Field
-                        label="Orden"
-                        icon="list"
-                        hint="Posición en la lista"
-                    >
-                        <ServiciosManager_Input
-                            value={form.orden}
-                            onChange={set("orden")}
-                            type="number"
-                            placeholder="0"
-                        />
-                    </ServiciosManager_Field>
+            <div style={{
+                display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, .82fr) minmax(0, 1fr)",
+                gap: isMobile ? 22 : "clamp(24px, 6.7vw, 102px)", alignItems: "start",
+            }}>
+                <div style={fieldStyle}>
+                    <label style={labelStyle}>Imagen del Servicio</label>
+                    <ServiciosManager_ImageUploader
+                        value={form.imagen} onChange={set("imagen")} accentColor={accentColor}
+                        apiUrl={apiUrl} iconoFormUrl={iconoFormUrl}
+                        size={isMobile ? 300 : 450} uploadPath={uploadPath}
+                    />
                 </div>
 
-                {/* Duración */}
-                {!employeeVariant && !quoteMode && (
-                    <ServiciosManager_Field
-                        label="Duración"
-                        icon="clock"
-                        hint="Cuánto tiempo dura cada turno de este servicio."
-                    >
-                        <div
+                <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 20 : 26, minWidth: 0 }}>
+                    <div style={fieldStyle}>
+                        <label style={labelStyle} htmlFor="servicio-descripcion">Descripción</label>
+                        <textarea
+                            id="servicio-descripcion" className="svc-input" value={form.descripcion}
+                            onChange={(event) => set("descripcion")(event.target.value)}
+                            placeholder="Descripción del servicio"
                             style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: 7,
+                                ...inputStyle, height: isMobile ? 150 : 204, minHeight: isMobile ? 120 : 180,
+                                borderRadius: 28, padding: isMobile ? 15 : 22, resize: "vertical",
+                                fontSize: isMobile ? 15 : 18, lineHeight: 1.45,
                             }}
-                        >
-                            {ServiciosManager_DURACIONES.map((min) => {
-                                const sel =
-                                    String(form.duracion) === String(min)
-                                return (
-                                    <button
-                                        key={min}
-                                        className={`svc-dur${sel ? " active" : ""}`}
-                                        onClick={() =>
-                                            set("duracion")(String(min))
-                                        }
-                                        style={{
-                                            padding: isMobile
-                                                ? "7px 12px"
-                                                : "6px 13px",
-                                            borderRadius: 9,
-                                            border: `1.5px solid ${sel ? accentColor : "#e2e8f0"}`,
-                                            background: sel
-                                                ? accentColor
-                                                : "#fff",
-                                            color: sel ? "#fff" : "#475569",
-                                            fontSize: isMobile ? 13 : 12,
-                                            fontWeight: 700,
-                                            cursor: "pointer",
-                                            fontFamily:
-                                                "'Inter Display', -apple-system, sans-serif",
-                                            transition: "all 0.12s",
-                                            minHeight: isMobile ? 36 : "auto",
-                                        }}
-                                    >
-                                        {ServiciosManager_formatDuracion(min)}
-                                    </button>
-                                )
-                            })}
-                            {!ServiciosManager_DURACIONES.includes(
-                                Number(form.duracion)
-                            ) && (
-                                <span
-                                    style={{
-                                        fontSize: 12,
-                                        color: accentColor,
-                                        padding: "6px 4px",
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    {form.duracion} min
-                                </span>
-                            )}
-                            <input
-                                type="number"
-                                value={
-                                    ServiciosManager_DURACIONES.includes(
-                                        Number(form.duracion)
-                                    )
-                                        ? ""
-                                        : form.duracion
-                                }
-                                onChange={(e) =>
-                                    set("duracion")(e.target.value)
-                                }
-                                placeholder="otro (min)"
-                                style={{
-                                    width: 84,
-                                    padding: "6px 10px",
-                                    borderRadius: 9,
-                                    border: "1.5px dashed #dde3ea",
-                                    fontSize: 12,
-                                    color: "#64748b",
-                                    fontFamily:
-                                        "'Inter Display', -apple-system, sans-serif",
-                                    background: "transparent",
-                                }}
-                                title="Duración personalizada"
-                            />
-                        </div>
-                    </ServiciosManager_Field>
-                )}
-
-                {/* Productos relacionados. La vinculación necesita el id del
-                    servicio, así que solo se puede elegir editando; al crear
-                    se deja el aviso de siempre en el mismo estilo de campo. */}
-                {!employeeVariant && !employeeMode && (
-                    <ServiciosManager_Field
-                        label="Productos relacionados"
-                        icon="package"
-                        hint="Elegí qué productos extra ofrecer junto con este servicio."
-                    >
-                        {modoEdicion && servicioId ? (
-                            <ServiciosManager_ExtrasVinculados
-                                servicioId={servicioId}
-                                accentColor={accentColor}
-                                apiUrl={apiUrl}
-                                isMobile={isMobile}
-                            />
-                        ) : (
-                            <div
-                                style={{
-                                    padding: "12px 14px",
-                                    borderRadius: 10,
-                                    background: accentColor + "0a",
-                                    border: `1px solid ${accentColor}22`,
-                                    fontSize: 12,
-                                    color: "#64748b",
-                                    lineHeight: 1.5,
-                                }}
-                            >
-                                Podés crear productos extra en la pestaña
-                                «Productos extra». Una vez creado este servicio,
-                                vas a poder vincularlos desde "Editar".
-                            </div>
-                        )}
-                    </ServiciosManager_Field>
-                )}
-
-                {!quoteMode && !employeeVariant && !employeeMode && !branch && modoEdicion && servicioId && (
-                    <ServiceBrowseConfig key={servicioId} api={apiUrl.replace(/\/+$/, "")} serviceId={servicioId} name={form.nombre} price={Number(form.precio)} />
-                )}
-
-                {!employeeVariant && !employeeMode && !branch && profesionales.length > 0 && (
-                    <ServiciosManager_Field label="Profesionales que lo ofrecen" icon="users">
-                        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                            {profesionales.map(prof => {
-                                const selected = selectedProfesionales.includes(prof.id)
-                                return <button key={prof.id} type="button" aria-pressed={selected} title={`${[prof.nombre,prof.apellido].filter(Boolean).join(" ")}${selected ? " · asignado" : " · agregar"}`} onClick={() => toggleProfesional(prof)} style={{position:"relative",width:42,height:42,borderRadius:"50%",padding:0,border:`2px solid ${selected ? accentColor : "transparent"}`,background:prof.color || "#e2e8f0",cursor:"pointer",boxShadow:selected ? `0 0 0 2px ${accentColor}25` : "none"}}>
-                                    {prof.foto_url ? <img src={prof.foto_url} alt="" style={{width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none"}}/> : <span style={{color:"white",fontSize:15,fontWeight:700}}>{[prof.nombre,prof.apellido].filter(Boolean).map(v=>v?.trim()[0]).join("").slice(0,2).toUpperCase()}</span>}
-                                    {selected && <span aria-hidden="true" style={{position:"absolute",right:-3,bottom:-3,width:17,height:17,borderRadius:"50%",background:"white",border:`1px solid ${accentColor}`,color:accentColor,fontSize:11,fontWeight:800,display:"grid",placeItems:"center"}}>✓</span>}
-                                </button>
-                            })}
-                            {avisoProfesional && <motion.span initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}} style={{fontSize:12,color:"#166534",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9,padding:"7px 10px"}}>{avisoProfesional}</motion.span>}
-                        </div>
-                    </ServiciosManager_Field>
-                )}
-
-                {error && (
-                    <div
-                        style={{
-                            padding: "9px 12px",
-                            borderRadius: 9,
-                            background: "#fff5f5",
-                            border: "1px solid #fee2e2",
-                        }}
-                    >
-                        <span
-                            style={{
-                                fontSize: 12,
-                                color: "#ef4444",
-                                fontWeight: 500,
-                            }}
-                        >
-                            {error}
-                        </span>
+                        />
                     </div>
-                )}
 
-                {!globalEdit && <div
-                    style={{
-                        display: "flex",
-                        gap: 8,
-                        justifyContent: isMobile ? "stretch" : "flex-end",
-                        flexDirection: isMobile ? "column-reverse" : "row",
-                        paddingTop: 2,
-                    }}
-                >
-                    <button
-                        onClick={onCancel}
-                        style={{
-                            padding: isMobile ? "11px 16px" : "9px 16px",
-                            borderRadius: 10,
-                            border: "1px solid #e2e8f0",
-                            background: "none",
-                            fontSize: 13,
-                            cursor: "pointer",
-                            color: "#64748b",
-                            fontFamily:
-                                "'Inter Display', -apple-system, sans-serif",
-                            width: isMobile ? "100%" : "auto",
-                        }}
-                    >
-                        Cancelar
-                    </button>
-                    <motion.button
-                        className="svc-save-btn"
-                        whileTap={{ scale: 0.97 }}
-                        onClick={handleSubmit}
-                        disabled={guardando || !form.nombre.trim()}
-                        style={{
-                            padding: isMobile ? "11px 20px" : "9px 22px",
-                            borderRadius: 10,
-                            border: "none",
-                            background:
-                                guardando || !form.nombre.trim()
-                                    ? "#cbd5e1"
-                                    : accentColor,
-                            color: "#fff",
-                            fontSize: 13,
-                            fontWeight: 700,
-                            cursor:
-                                guardando || !form.nombre.trim()
-                                    ? "not-allowed"
-                                    : "pointer",
-                            fontFamily:
-                                "'Inter Display', -apple-system, sans-serif",
-                            letterSpacing: "-0.2px",
-                            transition: "background 0.15s, filter 0.15s",
-                            boxShadow:
-                                guardando || !form.nombre.trim()
-                                    ? "none"
-                                    : `0 4px 14px ${accentColor}40`,
-                            width: isMobile ? "100%" : "auto",
-                        }}
-                    >
-                        {guardando
-                            ? "Guardando…"
-                            : modoEdicion
-                              ? "Guardar cambios"
-                              : "Guardar servicio"}
-                    </motion.button>
-                </div>}
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: isMobile ? 18 : 24 }}>
+                        <div style={fieldStyle}>
+                            <label style={labelStyle} htmlFor="servicio-precio">Precio</label>
+                            <div style={{ position: "relative" }}>
+                                <span aria-hidden="true" style={{ position: "absolute", left: 17, top: "50%", transform: "translateY(-50%)", fontSize: 22, color: "#666" }}>$</span>
+                                <input
+                                    id="servicio-precio" className="svc-input" type="number" min={quoteMode ? 0 : ServiciosManager_PRECIO_MINIMO}
+                                    value={form.precio} onChange={(event) => { set("precio")(event.target.value); if (Number(event.target.value) >= ServiciosManager_PRECIO_MINIMO) setPrecioError("") }}
+                                    placeholder="0" style={{ ...inputStyle, paddingLeft: 42 }}
+                                />
+                            </div>
+                            {precioError && <span style={{ display: "block", marginTop: 5, color: "#b42318", fontSize: 12 }}>{precioError}</span>}
+                        </div>
+                        <div style={fieldStyle}>
+                            <label style={labelStyle} htmlFor="servicio-duracion">Duración</label>
+                            <div style={{ position: "relative" }}>
+                                <select
+                                    id="servicio-duracion" className="svc-input" value={customDuration ? "custom" : durationValue}
+                                    onChange={(event) => event.target.value !== "custom" && set("duracion")(event.target.value)}
+                                    style={{ ...inputStyle, appearance: "none", paddingRight: 72, color: "#555" }}
+                                >
+                                    {customDuration && <option value="custom">{durationValue} min</option>}
+                                    {ServiciosManager_DURACIONES.map((minutes) => <option key={minutes} value={minutes}>{minutes} min</option>)}
+                                </select>
+                                <span aria-hidden="true" style={{ position: "absolute", right: 23, top: "50%", transform: "translateY(-50%)", color: "#666", pointerEvents: "none", fontSize: isMobile ? 15 : 21 }}>min⌄</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(2, minmax(0, 1fr))", gap: isMobile ? 12 : 24 }}>
+                        <div style={fieldStyle}>
+                            <label style={{ ...labelStyle, fontSize: isMobile ? 14 : 17, marginBottom: 7 }} htmlFor="servicio-capacidad">Capacidad</label>
+                            <input id="servicio-capacidad" className="svc-input" type="number" min={1} value={form.capacidad} onChange={(event) => set("capacidad")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 44 : 50, fontSize: isMobile ? 15 : 18, paddingLeft: 18 }} />
+                        </div>
+                        <div style={fieldStyle}>
+                            <label style={{ ...labelStyle, fontSize: isMobile ? 14 : 17, marginBottom: 7 }} htmlFor="servicio-orden">Orden</label>
+                            <input id="servicio-orden" className="svc-input" type="number" min={0} value={form.orden} onChange={(event) => set("orden")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 44 : 50, fontSize: isMobile ? 15 : 18, paddingLeft: 18 }} />
+                        </div>
+                    </div>
+
+                    {!employeeVariant && !employeeMode && !branch && profesionales.length > 0 && (
+                        <div style={fieldStyle}>
+                            <div style={labelStyle}>Profesionales que lo ofrecen</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minHeight: 52 }}>
+                                {profesionales.map((profesional) => {
+                                    const selected = selectedProfesionales.includes(profesional.id)
+                                    const initials = [profesional.nombre, profesional.apellido].filter(Boolean).map((value) => value?.trim()[0]).join("").toUpperCase().slice(0, 2)
+                                    const fullName = [profesional.nombre, profesional.apellido].filter(Boolean).join(" ")
+                                    return (
+                                        <button
+                                            key={profesional.id} type="button" aria-label={`${selected ? "Quitar" : "Agregar"} a ${fullName}`}
+                                            aria-pressed={selected} title={`${fullName}${selected ? " · asignado" : " · agregar"}`}
+                                            onClick={() => toggleProfesional(profesional)}
+                                            style={{
+                                                position: "relative", width: isMobile ? 44 : 50, height: isMobile ? 44 : 50,
+                                                padding: 0, borderRadius: "50%", border: `2px solid ${selected ? accentColor : "transparent"}`,
+                                                background: profesional.color || "#94a3b8", color: "white", cursor: "pointer",
+                                                display: "grid", placeItems: "center", boxShadow: selected ? `0 0 0 2px ${accentColor}25` : "none",
+                                            }}
+                                        >
+                                            <span aria-hidden="true" style={{ fontSize: isMobile ? 15 : 18, position: "relative" }}>{initials || "P"}</span>
+                                            {profesional.foto_url && <img src={profesional.foto_url} alt="" onError={(event) => { event.currentTarget.style.display = "none" }} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />}
+                                            {selected && <span aria-hidden="true" style={{ position: "absolute", right: -4, bottom: -4, width: 18, height: 18, borderRadius: "50%", display: "grid", placeItems: "center", border: `1px solid ${accentColor}`, color: accentColor, background: "white", fontSize: 12, fontWeight: 800 }}>✓</span>}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
+
+            {error && <div role="alert" style={{ marginTop: 22, padding: "10px 14px", borderRadius: 10, background: "#fff5f5", border: "1px solid #fee2e2", color: "#b42318", fontSize: 13 }}>{error}</div>}
+
+            {!globalEdit && <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexDirection: isMobile ? "column-reverse" : "row", paddingTop: 22 }}>
+                <button type="button" onClick={onCancel} style={{ height: 44, padding: "0 18px", borderRadius: 10, border: "1px solid #aeb3af", background: "white", color: "#344054", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+                <button type="button" onClick={handleSubmit} disabled={guardando || !form.nombre.trim()} style={{ height: 44, padding: "0 20px", borderRadius: 10, border: 0, background: guardando || !form.nombre.trim() ? "#cbd5e1" : accentColor, color: "white", fontSize: 14, fontWeight: 700, cursor: guardando || !form.nombre.trim() ? "not-allowed" : "pointer" }}>{guardando ? "Guardando…" : modoEdicion ? "Guardar cambios" : "Crear servicio"}</button>
+            </div>}
+
+            <AnimatePresence>
+                {avisoProfesional && <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} role="status" style={{ position: "fixed", zIndex: 9999, right: 24, bottom: 24, padding: "12px 18px", borderRadius: 12, background: "#fff", border: "1px solid #d6e3d6", boxShadow: "0 8px 28px #0002", color: "#166534", fontSize: 14, fontWeight: 600 }}>{avisoProfesional}</motion.div>}
+            </AnimatePresence>
         </motion.div>
     )
 }
