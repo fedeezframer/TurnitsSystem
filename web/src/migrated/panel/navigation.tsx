@@ -373,7 +373,19 @@ function NavButton({
     >
       <NavGlyph id={item.id} navIconos={navIconos} size={22} strokeWidth={1.8} />
       <span style={{ position: "relative", flex: 1 }}>{item.label}</span>
-      {showChevron && <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d={chevronDown ? "m2 4 4 4 4-4" : "m3 2 4 4-4 4"} /></svg>}
+      {showChevron && (
+        <motion.svg
+          aria-hidden="true"
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="currentColor"
+          animate={{rotate:chevronDown ? 0 : item.id === "servicios" ? -90 : 0}}
+          transition={{duration:.2,ease:[.22,1,.36,1]}}
+        >
+          <path d="m2 4 4 4 4-4" />
+        </motion.svg>
+      )}
     </motion.button>
   );
 }
