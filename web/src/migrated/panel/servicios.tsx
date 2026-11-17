@@ -1934,9 +1934,10 @@ function ServiciosManager_ServicioCard({
     const quoteMode = useQuoteMode()
     const branch = useBranchAdmin()
     const [confirmDelete, setConfirmDelete] = React.useState(false)
+    const [menuAbierto, setMenuAbierto] = React.useState(false)
     const [imgError, setImgError] = React.useState(false)
 
-    const thumbSize = isMobile ? 46 : 52
+    const thumbSize = 30
 
     return (
         <motion.div
@@ -1952,11 +1953,11 @@ function ServiciosManager_ServicioCard({
                 // Mobile: si no entra todo en una línea, los botones
                 // bajan en vez de apretar/cortar el nombre.
                 flexWrap: isMobile ? "wrap" : "nowrap",
-                gap: isMobile ? 10 : 12,
-                padding: isMobile ? "12px" : "12px",
-                borderRadius: 12,
-                background: svc.activo ? "#fff" : "#f8fafc",
-                border: "1px solid #f1f5f9",
+                gap: isMobile ? 8 : 11,
+                padding: "5px 9px",
+                borderRadius: 11,
+                background: "#fff",
+                border: "1px solid #bfc3bf",
                 opacity: svc.activo ? 1 : 0.55,
                 transition: "background 0.15s, opacity 0.2s",
                 ...(!employeeMode ? ServiciosManager_EmployeeCardStyle(svc) : {}),
@@ -1994,239 +1995,32 @@ function ServiciosManager_ServicioCard({
                 )}
             </div>
 
-            <div style={{ flex: isMobile ? "1 1 150px" : 1, minWidth: 0 }}>
-                <div
-                    style={{
-                        fontSize: isMobile ? 13.5 : 13,
-                        fontWeight: 700,
-                        color: "#1e293b",
-                        whiteSpace: isMobile ? "normal" : "nowrap",
-                        overflowWrap: "anywhere",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        letterSpacing: "-0.2px",
-                    }}
-                >
-                    {svc.nombre}
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        gap: 6,
-                        marginTop: 3,
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                    }}
-                >
-                    <span
-                        style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: accentColor,
-                            fontVariantNumeric: "tabular-nums",
-                        }}
-                    >
-                        {quoteMode ? "A presupuestar" : `$${svc.precio.toLocaleString("es-AR")}`}
-                    </span>
-                    <span style={{ fontSize: 11, color: "#cbd5e1" }}>·</span>
-                    <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                        {quoteMode ? "Tiempo a coordinar" : ServiciosManager_formatDuracion(svc.duracion)}
-                    </span>
-                    {svc.capacidad > 1 && !isMobile && !quoteMode && (
-                        <>
-                            <span style={{ fontSize: 11, color: "#cbd5e1" }}>
-                                ·
-                            </span>
-                            <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                                {svc.capacidad} personas
-                            </span>
-                        </>
-                    )}
-                </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{fontSize:12,fontWeight:650,color:"#111",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{svc.nombre}</div>
+                <div style={{fontSize:9.5,color:"#5f665f",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{svc.descripcion || "Sin descripción"}</div>
                 {!employeeMode && <ServiciosManager_Creador item={svc} />}
                 {!employeeMode && <ServiciosManager_Profesionales profesionales={svc.profesionales} />}
-                {svc.descripcion && (
-                    <div
-                        style={{
-                            fontSize: 11.5,
-                            color: "#94a3b8",
-                            marginTop: 4,
-                            lineHeight: 1.4,
-                            ...(isMobile
-                                ? {
-                                      display: "-webkit-box",
-                                      WebkitLineClamp: 2,
-                                      WebkitBoxOrient: "vertical" as any,
-                                      overflow: "hidden",
-                                  }
-                                : {
-                                      whiteSpace: "nowrap" as any,
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                  }),
-                        }}
-                    >
-                        {svc.descripcion}
-                    </div>
-                )}
             </div>
 
-            <div
-                style={{
-                    display: "flex",
-                    gap: isMobile ? 6 : 4,
-                    alignItems: "center",
-                    flexShrink: 0,
-                    marginLeft: isMobile ? "auto" : 0,
-                }}
-            >
-                {!branch && !employeeMode && (
-                    <button
-                        className="svc-btn-icon"
-                        title={svc.activo ? "Desactivar" : "Activar"}
-                        onClick={onToggle}
-                        style={{
-                            width: isMobile ? 36 : 30,
-                            height: isMobile ? 36 : 30,
-                            borderRadius: 8,
-                            border: "1px solid #e2e8f0",
-                            background: svc.activo
-                                ? accentColor + "12"
-                                : "#f1f5f9",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: isMobile ? 12 : 13,
-                            transition: "opacity 0.15s",
-                        }}
-                    >
-                        {iconoCheck ? (
-                            <img
-                                src={iconoCheck}
-                                alt=""
-                                style={{
-                                    width: isMobile ? 14 : 16,
-                                    height: isMobile ? 14 : 16,
-                                    objectFit: "contain",
-                                    opacity: svc.activo ? 1 : 0.4,
-                                }}
-                            />
-                        ) : svc.activo ? (
-                            ""
-                        ) : (
-                            "○"
-                        )}
-                    </button>
-                )}
-                {employeeCanEdit && (
-                    <button
-                        className="svc-btn-icon"
-                        title="Editar"
-                        onClick={onEdit}
-                        style={{
-                            width: isMobile ? 36 : 30,
-                            height: isMobile ? 36 : 30,
-                            borderRadius: 8,
-                            border: "1px solid #e2e8f0",
-                            background: "#f8fafc",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: isMobile ? 12 : 13,
-                            transition: "opacity 0.15s",
-                        }}
-                    >
-                        {iconoEditar ? (
-                            <img
-                                src={iconoEditar}
-                                alt=""
-                                style={{
-                                    width: isMobile ? 14 : 16,
-                                    height: isMobile ? 14 : 16,
-                                    objectFit: "contain",
-                                }}
-                            />
-                        ) : (
-                            "✎"
-                        )}
-                    </button>
-                )}
-                {!branch && (employeeMode || employeeCanEdit) &&
-                    (confirmDelete ? (
-                        <div style={{ display: "flex", gap: 3 }}>
-                            <button
-                                onClick={() => {
-                                    onDelete()
-                                    setConfirmDelete(false)
-                                }}
-                                style={{
-                                    padding: isMobile ? "4px 6px" : "4px 8px",
-                                    borderRadius: 6,
-                                    border: "none",
-                                    background: "#ef4444",
-                                    color: "#fff",
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    fontFamily:
-                                        "'Inter Display', -apple-system, sans-serif",
-                                }}
-                            >
-                                Sí
-                            </button>
-                            <button
-                                onClick={() => setConfirmDelete(false)}
-                                style={{
-                                    padding: isMobile ? "4px 6px" : "4px 8px",
-                                    borderRadius: 6,
-                                    border: "1px solid #e2e8f0",
-                                    background: "none",
-                                    fontSize: 11,
-                                    cursor: "pointer",
-                                    fontFamily:
-                                        "'Inter Display', -apple-system, sans-serif",
-                                }}
-                            >
-                                No
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            className="svc-btn-icon"
-                            title="Eliminar"
-                            onClick={() => setConfirmDelete(true)}
-                            style={{
-                                width: isMobile ? 36 : 30,
-                                height: isMobile ? 36 : 30,
-                                borderRadius: 8,
-                                border: "1px solid #fee2e2",
-                                background: "#fff5f5",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: isMobile ? 12 : 13,
-                                color: "#ef4444",
-                                transition: "opacity 0.15s",
-                            }}
-                        >
-                            {iconoEliminar ? (
-                                <img
-                                    src={iconoEliminar}
-                                    alt=""
-                                    style={{
-                                        width: isMobile ? 14 : 16,
-                                        height: isMobile ? 14 : 16,
-                                        objectFit: "contain",
-                                    }}
-                                />
-                            ) : (
-                                "×"
-                            )}
-                        </button>
-                    ))}
+            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,marginLeft:"auto"}}>
+                {employeeCanEdit && <button type="button" onClick={onEdit} className="svc-edit-button" aria-label={`Editar ${svc.nombre}`}>
+                    {iconoEditar ? <img src={iconoEditar} alt="" /> : <span aria-hidden="true">✎</span>} Editar
+                </button>}
+                {!quoteMode && <strong className="svc-row-price">{`$${Number(svc.precio || 0).toLocaleString("es-AR")}`}</strong>}
+                {!branch && employeeCanEdit && <div style={{position:"relative"}}>
+                    <button type="button" className="svc-more-button" aria-label={`Más opciones para ${svc.nombre}`} aria-expanded={menuAbierto} onClick={() => {setMenuAbierto(value => !value);setConfirmDelete(false)}}>•••</button>
+                    <AnimatePresence>
+                        {menuAbierto && <motion.div className="svc-row-menu" initial={{opacity:0,y:-4,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-4,scale:.98}} transition={{duration:.14}}>
+                            {confirmDelete ? <>
+                                <button type="button" className="is-danger" onClick={() => {onDelete();setConfirmDelete(false);setMenuAbierto(false)}}>Confirmar eliminación</button>
+                                <button type="button" onClick={() => setConfirmDelete(false)}>Cancelar</button>
+                            </> : <>
+                                {!employeeMode && <button type="button" onClick={() => {onToggle();setMenuAbierto(false)}}>{svc.activo ? "Pausar" : "Activar"}</button>}
+                                <button type="button" className="is-danger" onClick={() => setConfirmDelete(true)}>Eliminar</button>
+                            </>}
+                        </motion.div>}
+                    </AnimatePresence>
+                </div>}
             </div>
         </motion.div>
     )
