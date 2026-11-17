@@ -1,3 +1,4 @@
+import "./promociones.css"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin"
@@ -360,6 +361,7 @@ function ServiciosManager_ImageUploader({
     accentColor,
     apiUrl,
     iconoFormUrl,
+    onUploadingChange,
     size = 86,
     uploadPath = "/admin/servicios/upload-imagen",
 }: ServiciosManager_ImageUploaderProps) {
@@ -387,6 +389,7 @@ function ServiciosManager_ImageUploader({
             return
         }
 
+        onUploadingChange?.(true)
         setUploading(true)
         setImgError(false)
 
@@ -415,6 +418,7 @@ function ServiciosManager_ImageUploader({
             alert("Error al subir: " + e.message)
         }
         setUploading(false)
+        onUploadingChange?.(false)
     }
 
     const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2876,7 +2880,7 @@ function ServiciosManager_PromocionesSection(props: any) {
 function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMobile,employeeMode=false}:{api:string;servicios:any[];productos:any[];accentColor:string;isMobile:boolean;employeeMode?:boolean}) {
     const branch = useBranchAdmin();
     const hoy = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
-    const initial = () => ({nombre:"",tipo:"combo",items:[] as {tipo:string;id:string;cantidad:number}[],descuento_tipo:"precio_final",valor:"",fecha_inicio:hoy(),fecha_fin:"2099-12-31",dias_semana:null as number[] | null,activo:true})
+    const initial = () => ({nombre:"",descripcion:"",imagen_url:"",owner_equipo_id:null as string|null,tipo:"combo",items:[] as {tipo:string;id:string;cantidad:number}[],descuento_tipo:"precio_final",valor:"",fecha_inicio:hoy(),fecha_fin:"2099-12-31",dias_semana:null as number[] | null,activo:true})
     const [form,setForm]=React.useState(initial)
     const [lista,setLista]=React.useState<any[]>([])
     const [diasHabilitados,setDiasHabilitados]=React.useState(false)
@@ -2886,7 +2890,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const [mostrar,setMostrar]=React.useState(false)
     const [editando,setEditando]=React.useState<string|null>(null)
     const slug=ServiciosManager_getSlug(),token=ServiciosManager_getToken()
-    const money=(n:number)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2}).format(n)
+    const money=(n:number)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:0,maximumFractionDigits:2}).format(n)
     const request=async(path:string,method="GET",body?:any)=>{
         const response=await fetch(employeeMode ? `${api}/empleado/${encodeURIComponent(slug)}/promociones${path}` : `${api}/admin/promociones/${encodeURIComponent(slug)}${path}`,{method,headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},...(body ? {body:JSON.stringify(body)} : {}),cache:"no-store"})
         const result=await response.json()
@@ -2895,87 +2899,123 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     }
     React.useEffect(()=>{let active=true;request("").then(r=>{if(active){setLista(r.promociones);setDiasHabilitados(r.dias_semana_habilitado===true)}}).catch(e=>{if(active)setError(e.message)}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[api,slug,token])
     const catalogo=[...servicios.filter(s=>s.activo).map(s=>({...s,tipo:"servicio"})),...productos.filter(p=>p.activo === true || p.activo === "true").map(p=>({...p,tipo:"producto"}))]
+    const [equipo,setEquipo]=React.useState<CatalogoProfesional[]>([])
+    const [uploadingCover,setUploadingCover]=React.useState(false)
+    const [assigned,setAssigned]=React.useState<string[]>([])
+    React.useEffect(()=>{
+        if (employeeMode || branch || !mostrar) return
+        const controller = new AbortController()
+        fetch(`${api}/admin/equipo/${encodeURIComponent(slug)}`,{signal:controller.signal,headers:{Authorization:`Bearer ${token}`}})
+            .then(async r=>{if(!r.ok) throw new Error(); return r.json()})
+            .then(r=>setEquipo((r.equipo || []).filter((p:any)=>p.activo===true || p.activo==="true")))
+            .catch(()=>{if(!controller.signal.aborted)setError("No se pudo cargar el equipo.")})
+        return ()=>controller.abort()
+    },[api,slug,token,employeeMode,branch,mostrar])
     const selected=form.items.map(item=>({...item,source:catalogo.find(c=>c.tipo===item.tipo && c.id===item.id)}))
     const original=selected.reduce((sum,item)=>sum+Number(item.source?.precio || 0)*item.cantidad,0)
     const valor=Number(form.valor)
     const final=Math.round((form.descuento_tipo === "porcentaje" ? original*(1-valor/100) : valor)*100)/100
     const validPrice=Number.isFinite(final)&&valor>0&&final>0&&final<original
-    const toggle=(item:any)=>setForm(prev=>({...prev,items:prev.items.some(i=>i.id===item.id&&i.tipo===item.tipo) ? prev.items.filter(i=>!(i.id===item.id&&i.tipo===item.tipo)) : prev.tipo === "descuento" ? [{tipo:item.tipo,id:item.id,cantidad:1}] : [...prev.items,{tipo:item.tipo,id:item.id,cantidad:1}]}))
+    const toggle=(item:any)=>setForm(prev=>({...prev,items:prev.items.some(i=>i.id===item.id&&i.tipo===item.tipo) ? prev.items.filter(i=>!(i.id===item.id&&i.tipo===item.tipo)) : [...prev.items,{tipo:item.tipo,id:item.id,cantidad:1}]}))
     const guardar=async(e:React.FormEvent)=>{
         e.preventDefault();setError("")
+        if(uploadingCover || busy) return
         if(form.dias_semana !== null && !diasHabilitados) {setError("La programación por días todavía no está disponible. Volvé a cargar las promociones.");return}
         if(form.dias_semana !== null && !form.dias_semana.length) {setError("Elegí al menos un día para esta promo.");return}
-        if(!form.nombre.trim() || !form.items.length || selected.some(i=>!i.source) || !validPrice || (form.tipo === "combo" && form.items.reduce((sum,i)=>sum+i.cantidad,0)<2)) {setError("Completá el nombre, los elementos y un precio menor al original. Una oferta combinada necesita al menos dos unidades.");return}
+        const tipo=form.items.length===1 && form.items[0].tipo==="servicio" && form.items[0].cantidad===1 ? "descuento" : "combo"
+        if(!form.nombre.trim() || !form.items.length || selected.some(i=>!i.source) || !validPrice || (tipo === "combo" && form.items.reduce((sum,i)=>sum+i.cantidad,0)<2)) {setError("Completá el nombre, los elementos y un precio menor al original. Una oferta combinada necesita al menos dos unidades.");return}
         setBusy(true)
-        try {const result=await request(editando ? `/${editando}` : "",editando ? "PUT" : "POST",{...form,fecha_inicio:hoy(),fecha_fin:"2099-12-31",valor});setLista(prev=>[result.promocion,...prev.filter(p=>p.id!==result.promocion.id)]);setMostrar(false);setEditando(null);setForm(initial())}catch(e:any){setError(e.message)}finally{setBusy(false)}
+        try {
+            const result=await request(editando ? `/${editando}` : "",editando ? "PUT" : "POST",{...form,tipo,valor})
+            const promo=result.promocion
+            setEditando(promo.id)
+            setLista(prev=>[promo,...prev.filter(p=>p.id!==promo.id)])
+            if (!employeeMode && !branch && !promo.owner_equipo_id) {
+                for (const person of equipo) {
+                    const want=assigned.includes(person.id) && isEligible(person.id)
+                    const had=(promo.profesionales || []).some((p:any)=>p.id===person.id)
+                    if (want===had) continue
+                    const path=`${api}/admin/equipo/${person.id}/promociones`
+                    const response=await fetch(want ? path : `${path}/${promo.id}`,{
+                        method:want ? "POST" : "DELETE",
+                        headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
+                        body:JSON.stringify({slug,promocion_id:promo.id})
+                    })
+                    if(!response.ok) throw new Error((await response.json()).error || "Revisá los profesionales y volvé a guardar.")
+                }
+                if(equipo.length) setLista(prev=>prev.map(p=>p.id===promo.id?{...p,profesionales:equipo.filter(person=>assigned.includes(person.id) && isEligible(person.id))}:p))
+            }
+            setMostrar(false);setEditando(null);setForm(initial())
+        }catch(e:any){setError(e.message)}finally{setBusy(false)}
     }
-    const editar=(promo:any)=>{setForm({...promo,dias_semana:promo.dias_semana ?? null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))});setEditando(promo.id);setMostrar(true);setError("")}
+    const editar=(promo:any)=>{setAssigned((promo.profesionales || []).map((p:any)=>p.id));setForm({...promo,descripcion:promo.descripcion || "",imagen_url:promo.imagen_url || "",dias_semana:promo.dias_semana ?? null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))});setEditando(promo.id);setMostrar(true);setError("")}
     const promoActiva=(promo:any)=>promo.activo===true && hoy()>=promo.fecha_inicio && hoy()<=promo.fecha_fin
     const cambiarEstado=async(promo:any)=>{setBusy(true);setError("");try{const result=await request(`/${promo.id}/estado`,"PUT",{activo:!promoActiva(promo)});setLista(prev=>prev.map(p=>p.id===promo.id ? result.promocion : p));if(editando===promo.id)setForm(prev=>({...prev,activo:result.promocion.activo}))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
     const eliminar=async(id:string)=>{if(!window.confirm("¿Eliminar esta promoción?"))return;setBusy(true);setError("");try{await request(`/${id}`,"DELETE");setLista(prev=>prev.filter(p=>p.id!==id))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
-    const input:React.CSSProperties={width:"100%",minWidth:0,boxSizing:"border-box",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"9px 11px",font:"inherit",fontSize:13,background:"white",color:"#1e293b",transition:"border-color .15s, box-shadow .15s"}
-    const button:React.CSSProperties={border:0,borderRadius:10,padding:"10px 14px",background:accentColor,color:"white",font:"inherit",fontWeight:650,cursor:busy ? "wait" : "pointer"}
-    const label:React.CSSProperties={display:"grid",gap:7,fontSize:13,fontWeight:700,color:"#1e293b"}
-    return <div className="svc-promos" style={{fontSize:13,"--promo-accent":accentColor} as React.CSSProperties}>
-        <style>{` .svc-promos .promo-input:focus {outline:none;border-color:var(--promo-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--promo-accent) 12%,transparent)} .svc-promos button:focus-visible,.svc-promos .promo-check:focus-visible + span,.svc-promos .promo-switch:focus-visible {outline:2px solid var(--promo-accent);outline-offset:3px} .svc-promos .promo-check {position:absolute;opacity:0;width:20px;height:20px;margin:0} .svc-promos .promo-switch {appearance:none;-webkit-appearance:none;width:36px;height:21px;border:0;border-radius:99px;background:#cbd5e1;position:relative;flex-shrink:0;cursor:pointer;margin:0;transition:background .18s} .svc-promos .promo-switch:checked {background:var(--promo-accent)} .svc-promos .promo-switch:after {content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:white;box-shadow:0 1px 3px #0002;transition:transform .18s} .svc-promos .promo-switch:checked:after {transform:translateX(15px)} .svc-promos .promo-input::-webkit-inner-spin-button {appearance:none} .svc-promos button:disabled {opacity:.55;cursor:wait} `}</style>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-            <div><div style={{display:"flex",alignItems:"center",gap:8,fontSize:16,fontWeight:700}}>Promociones</div><p style={{margin:"6px 0",color:"#64748b",fontSize:12}}>Elegí qué ofrecer y el precio. La promo sigue activa hasta que la pauses.</p></div>
-            {!branch && !mostrar && <button type="button" style={button} onClick={()=>{setForm(initial());setEditando(null);setError("");setMostrar(true)}}>+ Crear promo</button>}
-        </div>
-        {error && <div role="alert" style={{padding:12,marginTop:12,borderRadius:10,background:"#fff1f2",color:"#b91c1c"}}>{error}</div>}
-        {mostrar && <form noValidate onSubmit={guardar} style={{marginTop:18,padding:isMobile ? 14 : 22,border:"1px solid #e2e8f0",borderRadius:16,display:"grid",gap:18}}>
-            <div style={{fontWeight:700}}>{editando ? "Editar promoción" : "Nueva promoción"}</div>
-            <fieldset disabled={busy} style={{border:0,padding:0,margin:0,minWidth:0,display:"grid",gap:18}}>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{[["combo","Oferta combinada"],["descuento","Descuento en servicio"]].map(([key,title])=><button type="button" key={key} aria-pressed={form.tipo===key} onClick={()=>setForm(prev=>({...prev,tipo:key,items:[]}))} style={{...button,background:form.tipo===key ? accentColor : "#f1f5f9",color:form.tipo===key ? "white" : "#475569"}}>{title}</button>)}</div>
-                <label style={label}><span style={{display:"flex",alignItems:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="promociones" size={15}/>Nombre de la promo</span><input className="promo-input" style={input} value={form.nombre} maxLength={100} placeholder="Ej. Corte + polvo texturizante" onChange={e=>setForm({...form,nombre:e.target.value})}/></label>
-                <div><div style={{fontWeight:650,marginBottom:9}}>{form.tipo === "combo" ? "Elegí servicios y productos" : "Elegí el servicio"}</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,230px),1fr))",gap:8,maxHeight:300,overflowY:"auto",padding:2}}>
-                    {catalogo.filter(c=>form.tipo === "combo" || c.tipo === "servicio").map(item=>{const included=form.items.find(i=>i.id===item.id&&i.tipo===item.tipo);return <div key={item.tipo+item.id} style={{border:included ? `1px solid ${accentColor}` : "1px solid #e2e8f0",borderRadius:11,padding:12,background:included ? "#f1f8f2" : "white"}}>
-                        <label style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}><span style={{position:"relative",display:"inline-flex",flexShrink:0}}><input className="promo-check" type={form.tipo === "descuento" ? "radio" : "checkbox"} name="promo-elemento" checked={!!included} onChange={()=>toggle(item)}/><span aria-hidden="true" style={{width:19,height:19,boxSizing:"border-box",border:included ? `1.5px solid ${accentColor}` : "1.5px solid #cbd5e1",borderRadius:form.tipo === "descuento" ? "50%" : 5,background:included ? accentColor : "white",display:"grid",placeItems:"center",color:"white",transition:"background .15s,border-color .15s"}}>{included && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6"/></svg>}</span></span><ServiciosManager_SeccionIcon tipo={item.tipo === "servicio" ? "servicios" : "extras"}/><span style={{flex:1,minWidth:0}}>{item.nombre}<small style={{display:"block",color:"#64748b",marginTop:4}}>{money(Number(item.precio))} · {item.tipo === "servicio" ? "Servicio" : "Producto"}</small></span></label>
-                        {included && form.tipo === "combo" && <label style={{...label,gridTemplateColumns:"1fr 65px",alignItems:"center",marginTop:10}}>Cantidad<input className="promo-input" type="number" min={1} max={99} step={1} value={included.cantidad} style={{...input,padding:6}} onChange={e=>setForm(prev=>({...prev,items:prev.items.map(i=>i.id===item.id&&i.tipo===item.tipo ? {...i,cantidad:Math.max(1,Math.min(99,Math.trunc(Number(e.target.value)||1)))} : i)}))}/></label>}
-                    </div>})}
-                    {!catalogo.filter(c=>form.tipo === "combo" || c.tipo === "servicio").length && <p style={{color:"#64748b"}}>Primero agregá servicios o productos activos a tu catálogo.</p>}
+    const photo = (item:any) => item?.imagen_url || item?.imagen || ServiciosManager_parseDesc(item?.descripcion || "").imagen
+    const lookup = (item:any) => (item.tipo === "servicio" ? servicios : productos).find(s => s.id === item.id)
+    const fallbackCover = (items:any[]) => items.map(lookup).map(photo).find(Boolean) || ""
+    const close = () => { setMostrar(false); setEditando(null); setError("") }
+    const openNew = () => { setUploadingCover(false); setForm(initial()); setAssigned([]); setEditando(null); setMostrar(true); setError("") }
+    const isEligible = (id:string) => selected.every(i => i.tipo !== "servicio" || i.source?.profesionales?.some((p:any) => p.id === id))
+    return <section className="promotions">
+        <header className="promotions-head"><div><h2>Promociones</h2><p>Ofrece promociones a tus clientes, descuentos y combos para mejorar su experiencia</p></div>
+            {!mostrar && !branch && <button className="promo-primary" onClick={openNew}>Crear Promoción</button>}
+        </header>
+        {error && <p role="alert" className="promo-error">{error}</p>}
+        {mostrar ? <form className="promo-editor" onSubmit={guardar}>
+            <BackButton floating onClick={close} disabled={busy || uploadingCover}/>
+            <fieldset disabled={busy}>
+                <label>Nombre de la promoción<input required maxLength={100} value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label>
+                <div className="promo-intro">
+                    <div>Imagen de la promoción<ServiciosManager_ImageUploader size={450} onUploadingChange={setUploadingCover} value={form.imagen_url || fallbackCover(form.items)} onChange={imagen_url=>setForm(prev=>({...prev,imagen_url}))} apiUrl={api} accentColor={accentColor} uploadPath={employeeMode ? `/empleado/${encodeURIComponent(slug)}/extras/upload-imagen` : undefined}/></div>
+                    <div className="promo-details"><label>Descripción<textarea aria-label="Descripción" maxLength={2000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>
+                        <div className="promo-prices"><div>Precio Original<output>{money(original)}</output></div>
+                            <label>{form.descuento_tipo==="porcentaje" ? "Descuento (%)" : "Precio Promo"}<input required type="number" min="0.01" step="0.01" value={form.valor} onChange={e=>setForm({...form,valor:e.target.value})}/></label></div>
+                        {form.descuento_tipo==="porcentaje" && <output>Precio promo {money(final)}</output>}
+                        {!branch && !employeeMode && !form.owner_equipo_id && equipo.length>0 && <div>Profesionales que lo ofrecen<div className="promo-people">{equipo.map(person=>{
+                            const active=assigned.includes(person.id) && isEligible(person.id)
+                            const name=[person.nombre,person.apellido].filter(Boolean).join(" ")
+                            return <button type="button" key={person.id} aria-label={name} title={isEligible(person.id)?name:`${name} debe ofrecer todos los servicios elegidos`} aria-pressed={active} disabled={!isEligible(person.id)} style={{background:person.color || "#704dad"}} onClick={()=>setAssigned(ids=>active?ids.filter(id=>id!==person.id):[...ids,person.id])}>{person.foto_url?<img src={person.foto_url} alt=""/>:name.charAt(0)}{active && <small>✓</small>}</button>
+                        })}</div></div>}
                     </div>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:isMobile ? "1fr" : "1fr 1fr",gap:12}}>
-                    <div style={label}><span style={{display:"flex",alignItems:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="promociones" size={15}/>Cómo aplicar el descuento</span><div role="group" aria-label="Cómo aplicar el descuento" style={{display:"flex",gap:4,padding:4,borderRadius:10,background:"#f1f5f9"}}>{[["precio_final","Precio final"],["porcentaje","Porcentaje"]].map(([key,title])=><button key={key} type="button" aria-pressed={form.descuento_tipo===key} onClick={()=>setForm({...form,descuento_tipo:key,valor:""})} style={{flex:1,minWidth:0,padding:"7px 8px",border:0,borderRadius:7,background:form.descuento_tipo===key ? "white" : "transparent",boxShadow:form.descuento_tipo===key ? "0 1px 3px #0f172a14" : "none",color:form.descuento_tipo===key ? "#1e293b" : "#64748b",font:"inherit",fontSize:12,fontWeight:600,cursor:"pointer"}}>{title}</button>)}</div></div>
-                    <label style={label}>{form.descuento_tipo === "porcentaje" ? "Descuento (%)" : "Precio final ($)"}<div style={{position:"relative"}}><span aria-hidden="true" style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}>{form.descuento_tipo === "porcentaje" ? "%" : "$"}</span><input className="promo-input" style={{...input,paddingLeft:32}} type="number" min="0.01" step="0.01" value={form.valor} onChange={e=>setForm({...form,valor:e.target.value})} placeholder="0"/></div></label>
-                </div>
-                <div style={{padding:14,borderRadius:12,background:"#f1f8f2",lineHeight:1.7}}><div>Precio original: <strong>{money(original)}</strong></div><div>Precio de la promo: <strong>{validPrice ? money(final) : "—"}</strong></div><div>Ahorro: <strong>{validPrice ? `${money(original-final)} (${((original-final)/original*100).toFixed(1)}%)` : "—"}</strong></div></div>
-                <div style={{display:"grid",gap:10}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}><span style={{fontWeight:700}}>Días de la promo <small style={{fontWeight:400,color:"#64748b"}}>· opcional</small></span><label style={{display:"flex",alignItems:"center",gap:8,cursor:diasHabilitados ? "pointer" : "default",fontWeight:400}}><input className="promo-switch" role="switch" type="checkbox" disabled={!diasHabilitados} checked={form.dias_semana !== null} onChange={e=>setForm({...form,dias_semana:e.target.checked ? [] : null})}/>Elegir días específicos</label></div>
-                    <div className="promo-days-grid" role="group" aria-label="Días de la semana de la promoción" aria-disabled={busy || !diasHabilitados || form.dias_semana === null} style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:5,opacity:form.dias_semana === null || !diasHabilitados ? 0.45 : 1,transition:"opacity .18s"}}>{PROMO_DAYS.map(day=><button disabled={busy || !diasHabilitados || form.dias_semana === null} type="button" key={day.id} aria-label={day.label} aria-pressed={form.dias_semana?.includes(day.id) || false} style={{...button,padding:"10px 2px",fontSize:12,background:form.dias_semana?.includes(day.id) ? accentColor : "#f1f5f9",color:form.dias_semana?.includes(day.id) ? "white" : "#475569",opacity:1,cursor:busy || !diasHabilitados || form.dias_semana === null ? "default" : "pointer"}} onClick={()=>setForm(prev=>({...prev,dias_semana:prev.dias_semana!.includes(day.id) ? prev.dias_semana!.filter(id=>id!==day.id) : [...prev.dias_semana!,day.id]}))}>{day.short}</button>)}</div>
-                    <p style={{margin:0,fontSize:12,color:"#64748b",lineHeight:1.5}}>{form.dias_semana === null ? "Se aplica todos los días mientras esté activa." : form.dias_semana.length ? `Se repite los ${promoDaysLabel(form.dias_semana)} mientras esté activa.` : "Elegí al menos un día para esta promo."}</p>
-                </div>
+                {["servicio","producto"].map(tipo=><section className="promo-items" key={tipo}><h3>{tipo==="servicio"?"Servicios":"Productos"} que incluye la promoción</h3>
+                    {catalogo.filter(i=>i.tipo===tipo).map(item=>{
+                        const entry=form.items.find(i=>i.id===item.id && i.tipo===tipo)
+                        const quantity=(delta:number)=>setForm(prev=>({...prev,items:prev.items.map(i=>i.id===item.id && i.tipo===tipo?{...i,cantidad:i.cantidad+delta}:i)}))
+                        return <div className="promo-line" key={item.id} data-selected={!!entry}>
+                            <button className="promo-choice" type="button" aria-pressed={!!entry} onClick={()=>toggle(item)}><span className="promo-check">{entry?"✓":""}</span>
+                                {photo(item)?<img src={photo(item)} alt=""/>:<span className="promo-thumb"><ServiciosManager_SeccionIcon tipo={tipo==="servicio"?"servicios":"extras"}/></span>}
+                                <span><strong>{item.nombre}</strong><small>{ServiciosManager_parseDesc(item.descripcion || "").descripcion || "Sin descripción"}</small></span></button>
+                            <div className="promo-count"><b>{money(Number(item.precio))}</b>{entry && <div><button aria-label={`Aumentar cantidad de ${item.nombre}`} type="button" disabled={entry.cantidad>=99} onClick={()=>quantity(1)}>+</button> {entry.cantidad} <button aria-label={`Reducir cantidad de ${item.nombre}`} type="button" disabled={entry.cantidad<=1} onClick={()=>quantity(-1)}>−</button></div>}</div>
+                        </div>
+                    })}
+                    {!catalogo.some(i=>i.tipo===tipo) && <p>No hay {tipo==="servicio"?"servicios":"productos"} activos.</p>}
+                </section>)}
+                <details className="promo-settings"><summary>Descuento y días de vigencia</summary>
+                    <label>Calcular el descuento por<select value={form.descuento_tipo} onChange={e=>setForm({...form,descuento_tipo:e.target.value,valor:""})}><option value="precio_final">Precio promo</option><option value="porcentaje">Porcentaje</option></select></label>
+                    {diasHabilitados && <div className="promo-days"><label><input type="checkbox" checked={form.dias_semana!==null} onChange={e=>setForm({...form,dias_semana:e.target.checked?[]:null})}/> Elegir días específicos</label>
+                    {form.dias_semana!==null && PROMO_DAYS.map(d=><button type="button" key={d.id} aria-pressed={form.dias_semana?.includes(d.id)} onClick={()=>setForm(prev=>({...prev,dias_semana:prev.dias_semana?.includes(d.id)?prev.dias_semana.filter(id=>id!==d.id):[...(prev.dias_semana || []),d.id]}))}>{d.short}</button>)}</div>}
+                </details>
+                <button className="promo-primary" type="submit" disabled={uploadingCover}>{busy?"Guardando…":"Guardar promoción"}</button>
             </fieldset>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button disabled={busy} type="submit" style={button}>{busy ? "Guardando…" : "Guardar promo"}</button><button disabled={busy} type="button" style={{...button,background:"#f1f5f9",color:"#475569"}} onClick={()=>{setMostrar(false);setError("")}}>Cancelar</button></div>
-        </form>}
-        {loading ? <InlineLoading label="Cargando promociones…" /> : !lista.length && !mostrar ? <div style={{padding:30,textAlign:"center",border:"1px dashed #dbe2ea",borderRadius:16,marginTop:18,color:"#64748b"}}>Todavía no hay promociones. Creá una oferta de servicio o una combinación para empezar.</div> : <div style={{display:"grid",gridTemplateColumns:isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))",gap:12,marginTop:18}}>{lista.map(p=>{
-            const activa=promoActiva(p)
-            const status=activa ? "Activa" : "Pausada"
-            const imagenes=p.items.map((item:any)=>{
-                const source=(item.tipo === "servicio" ? servicios : productos).find((c:any)=>c.id===item.id)
-                const url=item.tipo === "servicio" ? source?.imagen || source?.imagen_url || ServiciosManager_parseDesc(source?.descripcion || "").imagen : source?.imagen_url
-                return {url,nombre:item.nombre,tipo:item.tipo,id:item.id,cantidad:item.cantidad}
-            })
-            return <div key={p.id} style={{position:"relative",border:"1px solid #e2e8f0",padding:isMobile ? 14 : 16,borderRadius:15,display:"flex",alignItems:"center",gap:isMobile ? 12 : 18,minWidth:0,background:"white",opacity:activa ? 1 : 0.65,...(!employeeMode ? ServiciosManager_EmployeeCardStyle(p) : {})}}>
-                <span style={{position:"absolute",right:16,top:16,fontSize:10,padding:"3px 7px",borderRadius:5,background:activa ? "#eaf4ec" : "#f1f5f9",color:activa ? "#18732a" : "#64748b"}}>{status}</span>
-                {!!imagenes.length && <div aria-label="Elementos del combo" style={{display:"grid",gridTemplateColumns:imagenes.length===1 ? "minmax(0,1fr)" : imagenes.length>4 && !isMobile ? "repeat(3,minmax(0,1fr))" : "repeat(2,minmax(0,1fr))",width:isMobile ? (imagenes.length===1 ? 64 : 104) : (imagenes.length===1 ? 100 : 164),gap:isMobile ? 6 : 8,flexShrink:0,alignSelf:"center"}}>{imagenes.map((image:any)=><span key={image.tipo+image.id} title={`${image.cantidad} × ${image.nombre}`} style={{position:"relative",width:"100%",aspectRatio:"1",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8,overflow:"hidden",background:"#f8fafc",border:"1px solid #eef2f6",boxSizing:"border-box"}}>
-                    {image.url ? <img src={image.url} alt={image.nombre} style={{display:"block",width:image.tipo === "producto" ? "auto" : "100%",height:image.tipo === "producto" ? "auto" : "100%",maxWidth:"100%",maxHeight:"100%",objectFit:image.tipo === "producto" ? "contain" : "cover",borderRadius:8}}/> : <span role="img" aria-label={image.nombre} style={{display:"grid",justifyItems:"center",gap:3,padding:4,textAlign:"center",color:"#64748b",maxWidth:"100%",boxSizing:"border-box"}}><ServiciosManager_SeccionIcon tipo={image.tipo === "servicio" ? "servicios" : "extras"} size={16}/><span style={{fontSize:9,lineHeight:1.2,overflowWrap:"anywhere",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{image.nombre}</span></span>}
-                    {image.cantidad>1 && <span style={{position:"absolute",right:3,bottom:3,borderRadius:5,padding:"2px 4px",fontSize:9,fontWeight:700,lineHeight:1.2,background:"#fff",color:"#1e293b",boxShadow:"0 1px 4px #0f172a1a"}}>×{image.cantidad}</span>}
-                </span>)}</div>}
-                <div style={{minWidth:0,flex:1,paddingTop:isMobile ? 22 : 4,paddingBottom:4}}>
-                    <strong style={{display:"block",fontSize:13,lineHeight:1.4,paddingRight:isMobile ? 0 : 72,overflowWrap:"anywhere"}}>{p.nombre}</strong>
-                    <div style={{fontSize:12,color:"#64748b",lineHeight:1.5,marginTop:2,overflowWrap:"anywhere"}}>{p.items.map((i:any)=>`${i.cantidad} × ${i.nombre}`).join(" + ")}</div>
-                    <div style={{display:"flex",alignItems:"baseline",gap:5,flexWrap:"wrap",marginTop:1}}><del style={{color:"#94a3b8",fontSize:12}}>{money(Number(p.precio_original))}</del><strong style={{fontSize:20,lineHeight:1.25,color:accentColor}}>{money(Number(p.precio_final))}</strong></div>
-                    {!employeeMode && <ServiciosManager_Creador item={p} />}
-                    {!employeeMode && <ServiciosManager_Profesionales profesionales={p.profesionales} />}
-                    {p.dias_semana != null && <div style={{fontSize:11,color:accentColor,lineHeight:1.5}}>Sólo {promoDaysLabel(p.dias_semana)}</div>}
-                    <div style={{display:branch ? "none" : "flex",gap:7,marginTop:3,flexWrap:"wrap"}}><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#f1f5f9",color:"#475569",fontSize:12}} onClick={()=>editar(p)}>Editar</button><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#f1f5f9",color:activa ? "#475569" : accentColor,fontSize:12}} onClick={()=>cambiarEstado(p)}>{activa ? "Pausar" : "Activar"}</button><button disabled={busy} type="button" style={{...button,padding:"8px 13px",borderRadius:9,background:"#fff1f2",color:"#b91c1c",fontSize:12}} onClick={()=>eliminar(p.id)}>Eliminar</button></div>
-                </div>
-            </div>
+        </form> : loading ? <InlineLoading label="Cargando promociones…"/> : lista.length===0 ? <p>Todavía no hay promociones.</p> :
+        <div className="promo-grid">{lista.map(p=>{
+            const active=promoActiva(p),cover=p.imagen_url || fallbackCover(p.items)
+            const repeated=p.items.length===1 && p.items[0].cantidad>1
+            return <article className="promo-card" key={p.id}><div className="promo-cover">
+                {cover ? <img src={cover} alt={p.nombre}/> : <ServiciosManager_SeccionIcon tipo="promociones" size={48}/>}
+                <div className="promo-badges"><b>{p.tipo==="combo" && !repeated?"Combo":"Descuento"}</b>
+                    {p.dias_semana!=null && <span>Solo los {promoDaysLabel(p.dias_semana)}</span>}
+                    <div>{p.items.filter((i:any)=>i.tipo==="producto" && photo(lookup(i))).map((i:any)=><img key={i.id} src={photo(lookup(i))} alt={i.nombre}/>)}</div>
+                </div>{repeated && <b className="promo-multiple">x{p.items[0].cantidad}</b>}
+                </div><div className="promo-foot"><strong>{p.nombre}</strong><div className="promo-cost">{money(Number(p.precio_final))} <del>{money(Number(p.precio_original))}</del></div>
+                    <span className="promo-status" data-active={active}>● {active?"Activa":"Pausada"}</span>
+                    {!branch && <div className="promo-actions"><button disabled={busy} onClick={()=>editar(p)}>✎ Editar</button><details><summary aria-label={`Opciones de ${p.nombre}`}>•••</summary><div><button disabled={busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");cambiarEstado(p)}}>{active?"Pausar":"Activar"}</button><button disabled={busy} onClick={()=>eliminar(p.id)}>Eliminar</button></div></details></div>}
+                </div></article>
         })}</div>}
-    </div>
+    </section>
 }
 
 function ServiciosManager_SeccionIcon({tipo,size=17}:{tipo:"servicios"|"extras"|"promociones";size?:number}) {

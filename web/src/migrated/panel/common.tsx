@@ -2481,6 +2481,7 @@ const ServiciosManager_shimmerCSS = `
 `
 
 interface ServiciosManager_ImageUploaderProps {
+    onUploadingChange?: (uploading: boolean) => void
     value: string
     onChange: (url: string) => void
     accentColor: string
