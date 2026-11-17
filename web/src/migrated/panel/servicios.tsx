@@ -1671,6 +1671,8 @@ function ServiciosManager_ExtraForm({
     )
 }
 
+const CATALOG_THUMB_SIZE = 52
+
 function ServiciosManager_ServicioCard({
     svc,
     accentColor,
@@ -1708,7 +1710,6 @@ function ServiciosManager_ServicioCard({
     const [imgError, setImgError] = React.useState(false)
     const moreButtonRef = React.useRef<HTMLButtonElement>(null)
 
-    const thumbSize = 30
 
     return (
         <motion.div
@@ -1736,8 +1737,8 @@ function ServiciosManager_ServicioCard({
         >
             <div
                 style={{
-                    width: thumbSize,
-                    height: thumbSize,
+                    width: CATALOG_THUMB_SIZE,
+                    height: CATALOG_THUMB_SIZE,
                     borderRadius: 10,
                     flexShrink: 0,
                     overflow: "hidden",
@@ -1877,14 +1878,13 @@ function ServiciosManager_ExtraCard({
     const moreButtonRef = React.useRef<HTMLButtonElement>(null)
     return (
         <motion.div layout initial={{opacity:0,y:6}} animate={{opacity:!employeeMode && extra.owner_equipo_id ? (extra.activo ? .8 : .5) : (extra.activo ? 1 : .55),y:0}} exit={{opacity:0,scale:.96}} transition={{duration:.18}} className="svc-card" style={{display:"flex",alignItems:"center",flexWrap:"nowrap",gap:10,padding:"7px 9px",borderRadius:11,background:"#fff",border:"1px solid #bfc3bf",opacity:extra.activo?1:.55,transition:"background .15s, opacity .2s",...(!employeeMode?ServiciosManager_EmployeeCardStyle(extra):{})}}>
-            <div style={{width:40,height:40,borderRadius:5,flexShrink:0,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:CATALOG_THUMB_SIZE,height:CATALOG_THUMB_SIZE,borderRadius:5,flexShrink:0,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 {extra.imagen_url && !imgError ? <img src={extra.imagen_url} alt={extra.nombre} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={()=>setImgError(true)}/> : <ServiciosManager_PlaceholderIcon src={iconoPlaceholderUrl} size={22}/>}
             </div>
             <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:700,color:"#171b18",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{extra.nombre}</div>
                 <div style={{fontSize:10,color:"#69716a",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{extra.descripcion || "Sin descripción"}</div>
                 {!employeeMode && <ServiciosManager_Creador item={extra}/>}
-                {!employeeMode && <ServiciosManager_Profesionales profesionales={extra.profesionales}/>}
                 {extra.compartido && <div style={{fontSize:10,color:"#64716b",marginTop:2}}>Producto del negocio · lo administra el titular</div>}
             </div>
             {canEdit && <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>

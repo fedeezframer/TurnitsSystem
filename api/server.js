@@ -93,7 +93,7 @@ const TURNITS_COMISION_TASA = 0.02;
 const PLANES_VALIDOS = ["gratis", "basico", "premium"];
 const esPlanVip = (plan) => plan === "premium";
 const planTieneFuncionesPremium = (plan) => plan === "basico" || plan === "premium";
-const planCobraComision = (plan, estadoSuscripcion) => estadoSuscripcion === "trial" || !esPlanVip(plan);
+const planCobraComision = plan => !esPlanVip(plan);
 // Meta del logro "Facturaste $500 USD" (Tus logros, panel > Inicio). Se
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
 // cambio de referencia. Se compara contra la facturación histórica total
@@ -450,6 +450,7 @@ const COMISION_POR_PLAN = {
   premium: { tasa: 0,                     minima: 0 },
 };
 function configComisionPlan(plan, estadoSuscripcion) {
+  if (esPlanVip(plan)) return COMISION_POR_PLAN.premium;
   return estadoSuscripcion === "trial" ? COMISION_POR_PLAN.gratis : COMISION_POR_PLAN[plan] || COMISION_POR_PLAN.gratis;
 }
 function calcularComisionTurnits(base, plan = "gratis", estadoSuscripcion) {
@@ -1488,7 +1489,7 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 // REGISTRO — PASO 1
 // POST /registro/iniciar
 // ══════════════════════════════════════════════════════════════
-app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:300,tasa:0.02}, planes:[
+app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:300,tasa:0.02}, comision_trial_por_plan:{basico:configComisionPlan("basico","trial"),premium:configComisionPlan("premium","trial")}, planes:[
   {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02,clientes_visibles:10,finanzas:true,temas:false,promociones:false,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
   {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,precio_anual:precioAnualPlan("basico"),descuento_anual:33,dias_anual:365,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
   {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,precio_anual:precioAnualPlan("premium"),descuento_anual:33,dias_anual:365,miembros_adicionales:null,comision_minima:0,comision_tasa:0,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:true,soporte:"prioritario"}
