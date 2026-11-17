@@ -262,6 +262,28 @@ function FinanzasPanel({
     const [error, setError] = React.useState("")
     const [guardando, setGuardando] = React.useState(false)
     const [modal, setModal] = React.useState(false)
+    const overlayRef = React.useRef<HTMLDivElement>(null)
+    useLayoutEffect(() => {
+        const viewport = window.visualViewport
+        const overlay = overlayRef.current
+        if (!modal || !viewport || !overlay) return
+
+        const ajustarAlViewport = () => {
+            Object.assign(overlay.style, {
+                top: `${viewport.offsetTop}px`,
+                left: `${viewport.offsetLeft}px`,
+                width: `${viewport.width}px`,
+                height: `${viewport.height}px`,
+            })
+        }
+        ajustarAlViewport()
+        viewport.addEventListener("resize", ajustarAlViewport)
+        viewport.addEventListener("scroll", ajustarAlViewport)
+        return () => {
+            viewport.removeEventListener("resize", ajustarAlViewport)
+            viewport.removeEventListener("scroll", ajustarAlViewport)
+        }
+    }, [modal])
     const [editando, setEditando] = React.useState<string | null>(null)
     const [form, setForm] = React.useState({
         descripcion: "",
@@ -575,7 +597,9 @@ function FinanzasPanel({
                                     background:
                                         ingresos <= 0 ? "#edf1f5" : balance < 0 ? "#b73535" : conic ? `conic-gradient(${conic})` : "#edf1f5",
                                     display: "grid",
-                                    placeItems: "center",
+                                    boxSizing: "border-box",
+                        gridTemplateRows: "minmax(0, 1fr)",
+                        placeItems: "center",
                                     flexShrink: 0,
                                 }}
                             >
@@ -811,8 +835,9 @@ function FinanzasPanel({
                     </div>
                 </>
             )}
-            {modal && (
+            {modal && createPortal(
                 <div
+                    ref={overlayRef}
                     role="dialog"
                     aria-modal="true"
                     style={{
@@ -821,6 +846,8 @@ function FinanzasPanel({
                         zIndex: 10000,
                         background: "rgba(15,23,42,.45)",
                         display: "grid",
+                        boxSizing: "border-box",
+                        gridTemplateRows: "minmax(0, 1fr)",
                         placeItems: "center",
                         padding: 16,
                     }}
@@ -829,7 +856,8 @@ function FinanzasPanel({
                         style={{
                             ...card,
                             width: "min(100%,520px)",
-                            maxHeight: "90vh",
+                            maxHeight: "100%",
+                            overscrollBehavior: "contain",
                             overflow: "auto",
                             boxSizing: "border-box",
                         }}
@@ -1011,7 +1039,8 @@ function FinanzasPanel({
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     )

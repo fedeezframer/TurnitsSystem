@@ -1,12 +1,14 @@
 button.turnits-back-button {
+  --button-size: 48px;
+  --icon-size: 24px;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 48px;
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
+  flex: 0 0 var(--button-size);
+  width: var(--button-size);
+  height: var(--button-size);
+  min-width: var(--button-size);
   padding: 0;
   border: 1px solid #c9cfc9;
   border-radius: 24px;
@@ -20,8 +22,8 @@ button.turnits-back-button {
 
 button.turnits-back-button svg {
   display: block;
-  width: 24px;
-  height: 24px;
+  width: var(--icon-size);
+  height: var(--icon-size);
 }
 
 button.turnits-back-button:hover {
@@ -49,4 +51,11 @@ button.turnits-back-button.is-floating {
   top: 16px;
   right: 16px;
   z-index: 5;
+}
+
+@media (width < 860px) {
+  button.turnits-back-button {
+    --button-size: 24px;
+    --icon-size: 12px;
+  }
 }
