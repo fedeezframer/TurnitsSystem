@@ -440,11 +440,7 @@ function fechaVencimientoComision(periodo) {
   return `${nextYear}-${String(nextMonth).padStart(2, "0")}-05`;
 }
 
-// Comisión de Turnits por cobro online aprobado: se cobra la mayor entre el
-// mínimo y el porcentaje. En Básico pago, el porcentaje se calcula sólo
-// sobre la parte que excede $15.000 por operación.
-//  · Gratis/prueba de Básico: mínimo $300 o 2% del importe completo.
-//  · Básico pago: mínimo $100 o 0,8% del excedente de $15.000.
+// Básico pago: $100 hasta $15.000 inclusive, luego 0,8% del total cobrado.
 const COMISION_POR_PLAN = {
   gratis:  { tasa: TURNITS_COMISION_TASA, minima: TURNITS_COMISION_MINIMA_ARS, umbral: 0 },
   basico:  { tasa: 0.008,                 minima: 100,                         umbral: TURNITS_COMISION_UMBRAL_PAGOS_ARS },
@@ -456,9 +452,9 @@ function configComisionPlan(plan, estadoSuscripcion) {
 }
 function calcularComisionTurnits(base, plan = "gratis", estadoSuscripcion) {
   const cfg = configComisionPlan(plan, estadoSuscripcion);
-  if (!(cfg.tasa > 0) && !(cfg.minima > 0)) return 0;
-  const basePorcentual = Math.max(0, Number(base || 0) - Number(cfg.umbral || 0));
-  return Math.max(cfg.minima, Math.round(basePorcentual * cfg.tasa));
+  const importe = Number(base || 0);
+  if (cfg.umbral && importe <= cfg.umbral) return cfg.minima;
+  return Math.max(cfg.minima, Math.round(importe * cfg.tasa));
 }
 
 async function obtenerEstadoComisionesTurnits(slug) {
