@@ -80,6 +80,10 @@ class PanelErrorBoundary extends React.Component<
                         Probá recargar la página. Si el problema sigue, avisale
                         a soporte.
                     </div>
+                    <details style={{ maxWidth: 460, textAlign: "left", fontSize: 12, color: "#64748b" }}>
+                        <summary style={{ cursor: "pointer", padding: "6px 0" }}>Ver detalle del error</summary>
+                        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #e2e8f0", color: "#334155", font: "12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace" }}>{this.state.error.name}: {this.state.error.message}</pre>
+                    </details>
                     <button
                         onClick={() => window.location.reload()}
                         style={{
