@@ -571,3 +571,35 @@
     font-size: 11px !important;
   }
 }
+
+/* Catalog layout refined to match the Turnits reference. */
+.svc-toolbar {
+  display:flex; align-items:center; gap:10px; padding:0 0 13px;
+  border-bottom:1px solid #cfd3cf; margin-bottom:16px;
+}
+.svc-toolbar-filters { display:flex; align-items:center; gap:4px; flex:0 0 auto; }
+.svc-filter-button {
+  min-height:34px; padding:6px 10px; border:1px solid transparent; border-radius:6px;
+  background:transparent; color:#525852; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;
+  transition:color .16s ease, background .16s ease, border-color .16s ease;
+}
+.svc-filter-button.is-active { color:#176b24; }
+.svc-filter-button:nth-child(3) { border-color:#aeb4ae; color:#111; }
+.svc-filter-button:hover { background:#f5f8f4; }
+.svc-search {
+  min-width:130px; width:min(220px,30%); height:34px; display:flex; align-items:center; gap:8px;
+  padding:0 11px; border:1px solid #b9beb9; border-radius:999px; color:#667066; box-sizing:border-box;
+}
+.svc-search input { min-width:0; width:100%; border:0; outline:0; background:transparent; color:#18221a; font:inherit; font-size:12px; }
+.svc-create-button {
+  min-height:34px; margin-left:auto; padding:0 14px; display:inline-flex; align-items:center; gap:5px;
+  border:0; border-radius:7px; background:#176b24; color:#fff; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;
+}
+.svc-create-button span { font-size:16px; line-height:1; }
+.svc-card { padding:7px 9px !important; gap:10px !important; border:1px solid #bfc3bf !important; border-radius:11px !important; }
+.svc-card > div:first-child { width:40px !important; height:40px !important; border-radius:5px !important; }
+@media (max-width: 700px) {
+  .svc-toolbar { flex-wrap:wrap; gap:8px; }
+  .svc-toolbar-filters { flex:1 1 100%; }
+  .svc-search { flex:1 1 140px; width:auto; }
+}
