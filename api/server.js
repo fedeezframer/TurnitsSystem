@@ -6125,7 +6125,17 @@ function promocionesValidar(body) {
   if(!['porcentaje','precio_final'].includes(descuento_tipo) || typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0 || valor > 100000000000 || (descuento_tipo === 'porcentaje' && valor >= 100)) throw new Error('Ingresá un porcentaje entre 0 y 100 o un precio final válido.');
   const dias_semana=normalizePromoDays(body.dias_semana);
   if(!promoHasMatchingDate({fecha_inicio,fecha_fin,dias_semana}))throw new Error('No hay ningún día seleccionado dentro de la vigencia. Revisá los días o las fechas.');
-  return {nombre:nombre.trim(),tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin,dias_semana,activo:body.activo !== false};
+  const presentacion = {};
+  if (Object.hasOwn(body, "descripcion")) {
+    if (typeof body.descripcion !== "string" || body.descripcion.length > 2000) throw new Error("La descripción admite hasta 2000 caracteres.");
+    presentacion.descripcion = body.descripcion.trim();
+  }
+  if (Object.hasOwn(body, "imagen_url")) {
+    const url = body.imagen_url;
+    if (typeof url !== "string" || url.length > 2048 || (url && !/^https:\/\//i.test(url))) throw new Error("La imagen debe tener una URL HTTPS válida.");
+    presentacion.imagen_url = url || null;
+  }
+  return {...presentacion,nombre:nombre.trim(),tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin,dias_semana,activo:body.activo !== false};
 }
 async function promocionesPreparar(slug,body,equipoId=null) {
   let datos;try{datos=promocionesValidar(body);}catch(e){e.promoValidacion=true;throw e;}const items=[];
