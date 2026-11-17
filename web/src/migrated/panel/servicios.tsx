@@ -2006,7 +2006,6 @@ function ServiciosManager_ServicioCard({
                 {employeeCanEdit && <button type="button" onClick={onEdit} className="svc-edit-button" aria-label={`Editar ${svc.nombre}`}>
                     {iconoEditar ? <img src={iconoEditar} alt="" /> : <span aria-hidden="true">✎</span>} Editar
                 </button>}
-                {!quoteMode && <strong className="svc-row-price">{`$${Number(svc.precio || 0).toLocaleString("es-AR")}`}</strong>}
                 {!branch && employeeCanEdit && <div style={{position:"relative"}}>
                     <button type="button" className="svc-more-button" aria-label={`Más opciones para ${svc.nombre}`} aria-expanded={menuAbierto} onClick={() => {setMenuAbierto(value => !value);setConfirmDelete(false)}}>•••</button>
                     <AnimatePresence>
@@ -2022,6 +2021,7 @@ function ServiciosManager_ServicioCard({
                     </AnimatePresence>
                 </div>}
             </div>
+            {!quoteMode && <strong className="svc-row-price">{`$${Number(svc.precio || 0).toLocaleString("es-AR")}`}</strong>}
         </motion.div>
     )
 }
