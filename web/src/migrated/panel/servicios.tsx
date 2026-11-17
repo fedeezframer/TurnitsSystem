@@ -2585,6 +2585,8 @@ function ServiciosManager(props: any) {
         initialView
     )
     React.useEffect(() => { setVista(initialView) }, [initialView])
+    const [filtroServicios, setFiltroServicios] = React.useState<"todos" | "pausados" | "pedidos">("todos")
+    const [busquedaServicio, setBusquedaServicio] = React.useState("")
 
     // ── Estado: Servicios ──
     const [loading, setLoading] = React.useState(true)
@@ -3110,6 +3112,12 @@ function ServiciosManager(props: any) {
     const inactivos = servicios.filter((s) => !s.activo)
     const extrasActivos = extras.filter((e) => e.activo)
     const extrasInactivos = extras.filter((e) => !e.activo)
+    const serviciosVisibles = servicios
+        .filter((item) => filtroServicios !== "pausados" || !item.activo)
+        .filter((item) => item.nombre.toLocaleLowerCase("es").includes(busquedaServicio.trim().toLocaleLowerCase("es")))
+        .sort((a: any, b: any) => filtroServicios !== "pedidos"
+            ? a.orden - b.orden
+            : Number(b.reservas ?? b.turnos ?? b.total_turnos ?? b.pedidos ?? 0) - Number(a.reservas ?? a.turnos ?? a.total_turnos ?? a.pedidos ?? 0))
 
     return (
         <div
@@ -3122,82 +3130,26 @@ function ServiciosManager(props: any) {
         >
             <style>{ServiciosManager_shimmerCSS}</style>
 
-            {/* Secciones del catálogo */}
-            <div role="group" aria-label="Secciones del catálogo" className="svc-catalog-tabs" style={{display:isMobile ? "grid" : "flex",gridTemplateColumns:isMobile ? ((!employeeMode || employeeCanCreate) ? "repeat(3,minmax(0,1fr))" : "repeat(2,minmax(0,1fr))") : undefined,flexWrap:"nowrap",gap:4,padding:4,borderRadius:12,background:"#f1f5f9",marginBottom:isMobile ? 12 : 16,width:isMobile ? "100%" : "fit-content",maxWidth:"100%",boxSizing:"border-box"}}>
-                <button type="button" className={`svc-tab${vista === "servicios" ? " active" : ""}`} aria-pressed={vista === "servicios"} onClick={() => setVista("servicios")} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="servicios" />Servicios</button>
-                {<><button type="button" className={`svc-tab${vista === "extras" ? " active" : ""}`} aria-pressed={vista === "extras"} onClick={() => setVista("extras")} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="extras" />Productos</button>{(!employeeMode || employeeCanCreate) && <button type="button" className={`svc-tab${vista === "promociones" ? " active" : ""}`} aria-pressed={vista === "promociones"} onClick={() => setVista("promociones")} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><ServiciosManager_SeccionIcon tipo="promociones" />{isMobile ? "Promos" : "Promociones"}</button>}</>}
-            </div>
-
             {vista === "servicios" ? (
                 <>
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            marginBottom: isMobile ? 12 : 16,
-                        }}
-                    >
-                        <div>
-                            <div
-                                style={{
-                                    fontSize: isMobile ? 15 : 16,
-                                    fontWeight: 700,
-                                    color: "#1e293b",
-                                    letterSpacing: "-0.3px",
-                                }}
-                            >
-                                Servicios
-                            </div>
-                            <div
-                                style={{
-                                    fontSize: 12,
-                                    color: "#94a3b8",
-                                    marginTop: 2,
-                                }}
-                            >
-                                {servicios.length === 0
-                                    ? "Sin servicios aún"
-                                    : `${activos.length} activo${activos.length !== 1 ? "s" : ""}${inactivos.length > 0 ? `, ${inactivos.length} inactivo${inactivos.length !== 1 ? "s" : ""}` : ""}`}
-                            </div>
+                    <div className="svc-toolbar">
+                        <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
+                            {(["todos","pausados","pedidos"] as const).map((filter) => (
+                                <button key={filter} type="button" className={`svc-filter-button${filtroServicios === filter ? " is-active" : ""}`} aria-pressed={filtroServicios === filter} onClick={() => setFiltroServicios(filter)}>
+                                    {filter === "todos" ? "Todos" : filter === "pausados" ? "Pausados" : "Más pedidos"}
+                                </button>
+                            ))}
                         </div>
-                        {!mostrarForm &&
-                            !editando &&
-                            (!branch && (!employeeMode || employeeCanCreate)) && (
-                                <motion.button
-                                    whileHover={{ scale: 1.04 }}
-                                    whileTap={{ scale: 0.96 }}
-                                    onClick={() => setMostrarForm(true)}
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 6,
-                                        padding: isMobile
-                                            ? "9px 12px"
-                                            : "8px 14px",
-                                        borderRadius: 10,
-                                        border: "none",
-                                        background: accentColor,
-                                        color: "#fff",
-                                        fontSize: isMobile ? 12 : 13,
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                        fontFamily:
-                                            "'Inter Display', -apple-system, sans-serif",
-                                        letterSpacing: "-0.2px",
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    <span
-                                        style={{ fontSize: 16, lineHeight: 1 }}
-                                    >
-                                        +
-                                    </span>
-                                    {isMobile ? "" : " Nuevo"}
-                                </motion.button>
-                            )}
+                        <label className="svc-search">
+                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+                            <input value={busquedaServicio} onChange={event => setBusquedaServicio(event.target.value)} placeholder="Buscar" aria-label="Buscar servicios" />
+                        </label>
+                        {!mostrarForm && !editando && (!branch && (!employeeMode || employeeCanCreate)) && (
+                            <motion.button className="svc-create-button" whileHover={{y:-1}} whileTap={{scale:.98}} onClick={() => setMostrarForm(true)}>
+                                <span aria-hidden="true">+</span> Crear Servicio
+                            </motion.button>
+                        )}
                     </div>
-
                     {error && (
                         <div
                             style={{
@@ -3246,7 +3198,7 @@ function ServiciosManager(props: any) {
                             gap: isMobile ? 5 : 6,
                         }}
                     >
-                        {servicios.length === 0 && !mostrarForm && (
+                        {serviciosVisibles.length === 0 && !mostrarForm && (
                             <div
                                 style={{
                                     flex: 1,
@@ -3266,12 +3218,12 @@ function ServiciosManager(props: any) {
                                 <span
                                     style={{ fontSize: 13, color: "#94a3b8" }}
                                 >
-                                    Todavía no hay servicios
+                                    {busquedaServicio || filtroServicios === "pausados" ? "No hay servicios que coincidan con este filtro" : "Todavía no hay servicios"}
                                 </span>
                             </div>
                         )}
                         <AnimatePresence mode="popLayout">
-                            {servicios.map((svc) =>
+                            {serviciosVisibles.map((svc) =>
                                 editando?.id === svc.id ? (
                                     <motion.div
                                         key={svc.id + "-edit"}
@@ -3877,4 +3829,14 @@ function ServiciosManager_CanvasPreview({
     )
 }
 
-export { Turnits_ImageAdjustDialog, ServiciosManager_ImageUploader, ServiciosManager_SkeletonLista, ServiciosManager_FormSection, ServiciosManager_FieldIcon, ServiciosManager_Field, ServiciosManager_AutoTextarea, ServiciosManager_Input, ServiciosManager_PrecioInput, ServiciosManager_ExtrasVinculados, ServiciosManager_ServicioForm, ServiciosManager_ExtraForm, ServiciosManager_ServicioCard, ServiciosManager_Creador, ServiciosManager_ProfesionalAvatar, ServiciosManager_Profesionales, ServiciosManager_ExtraCard, ServiciosManager, ServiciosManager_Promociones, ServiciosManager_SeccionIcon, ServiciosManager_CanvasPreview }
+function MisServiciosPanel(props: any) {
+    return <ServiciosManager {...props} initialView="servicios" />
+}
+function ProductosPanel(props: any) {
+    return <ServiciosManager {...props} initialView="extras" />
+}
+function PromocionesPanel(props: any) {
+    return <ServiciosManager {...props} initialView="promociones" />
+}
+
+export { Turnits_ImageAdjustDialog, ServiciosManager_ImageUploader, ServiciosManager_SkeletonLista, ServiciosManager_FormSection, ServiciosManager_FieldIcon, ServiciosManager_Field, ServiciosManager_AutoTextarea, ServiciosManager_Input, ServiciosManager_PrecioInput, ServiciosManager_ExtrasVinculados, ServiciosManager_ServicioForm, ServiciosManager_ExtraForm, ServiciosManager_ServicioCard, ServiciosManager_Creador, ServiciosManager_ProfesionalAvatar, ServiciosManager_Profesionales, ServiciosManager_ExtraCard, ServiciosManager, MisServiciosPanel, ProductosPanel, PromocionesPanel, ServiciosManager_Promociones, ServiciosManager_SeccionIcon, ServiciosManager_CanvasPreview }
