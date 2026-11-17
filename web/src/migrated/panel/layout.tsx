@@ -204,14 +204,14 @@ function TurnitsPanel_Inner(props: any) {
             aria-current={selected ? "page" : undefined}
             style={{
                 display: "flex", alignItems: "center", gap: 10, width: "100%",
-                padding: "16px 8px", border: 0, borderRadius: 8,
-                background: "transparent", color: selected ? "#176b24" : "#111",
-                fontFamily: "inherit", fontSize: 16, fontWeight: selected ? 600 : 500,
+                padding: "11px 8px", border: 0, borderRadius: 8,
+                background: "transparent", color: selected ? "#176b24" : "#2b342d",
+                fontFamily: "inherit", fontSize: 14, fontWeight: selected ? 600 : 450,
                 lineHeight: 1.2, textAlign: "left", cursor: "pointer",
             }}
         >
             <span aria-hidden="true" style={{
-                width: 20, height: 20, flexShrink: 0, backgroundColor: "currentColor",
+                width: 18, height: 18, flexShrink: 0, backgroundColor: "currentColor",
                 WebkitMask: `url(${icon}) center / contain no-repeat`,
                 mask: `url(${icon}) center / contain no-repeat`,
             }} />
@@ -440,7 +440,7 @@ function TurnitsPanel_Inner(props: any) {
                             position: "relative",
                             display: "flex",
                             flexDirection: "column",
-                            gap: 6,
+                            gap: 2,
                             flex: 1,
                             minHeight: 0,
                             overflowY: "auto",
@@ -532,13 +532,14 @@ function TurnitsPanel_Inner(props: any) {
                                     position: "relative",
                                     overflow: "hidden",
                                     width: "100%",
-                                    maxHeight: "78svh",
+                                    height: "100dvh",
+                                    maxHeight: "100dvh",
                                     overflowY: "auto",
+                                    overscrollBehavior: "contain",
                                     background: "linear-gradient(180deg, #fbfffb 0%, #ffffff 58%)",
-                                    borderTopLeftRadius: 24,
-                                    borderTopRightRadius: 24,
+                                    borderRadius: 0,
                                     padding:
-                                        "10px 18px calc(28px + env(safe-area-inset-bottom, 0px))",
+                                        "calc(14px + env(safe-area-inset-top, 0px)) 18px calc(28px + env(safe-area-inset-bottom, 0px))",
                                     boxSizing: "border-box",
                                     "--accent": accentColor,
                                 } as React.CSSProperties
@@ -559,12 +560,27 @@ function TurnitsPanel_Inner(props: any) {
                                     position: "relative",
                                     marginBottom: 16,
                                     paddingLeft: 4,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
                                 }}
                             >
                                     <BrandMark logoImage={logoImage} logoText={logoText} width={260} height={68} />
+                                    <button
+                                        type="button"
+                                        aria-label="Cerrar menú"
+                                        onClick={() => setMenuMobileAbierto(false)}
+                                        style={{
+                                            flexShrink: 0, width: 40, height: 40, border: 0, borderRadius: 999,
+                                            background: "#f0f4f0", color: "#2b342d", cursor: "pointer",
+                                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                        }}
+                                    >
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" /></svg>
+                                    </button>
                             </div>
                             
-                            <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr",gap:6}}>{renderNavItems()}</div>
+                            <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr",gap:2}}>{renderNavItems()}</div>
 
                             <div style={{ marginTop: 16 }}>
                                 <MenuFooter

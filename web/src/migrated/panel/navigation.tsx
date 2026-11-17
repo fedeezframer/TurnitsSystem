@@ -357,29 +357,31 @@ function NavButton({
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-start",
-        gap: 9,
+        gap: 11,
         padding: "9px 12px",
-        borderRadius: 12,
+        borderRadius: 10,
         border: "none",
         background: "transparent",
-        color: active && item.id === "servicios" ? "#176b24" : "#111111",
-        fontSize: 16,
-        fontWeight: active && item.id === "servicios" ? 600 : 500,
+        color: active && item.id === "servicios" ? "#176b24" : "#2b342d",
+        fontSize: 14,
+        fontWeight: active && item.id === "servicios" ? 600 : 450,
+        letterSpacing: "-0.005em",
         cursor: "pointer",
         textAlign: "left",
         overflow: "hidden",
         fontFamily: "inherit",
       }}
     >
-      <NavGlyph id={item.id} navIconos={navIconos} size={22} strokeWidth={1.8} />
+      <NavGlyph id={item.id} navIconos={navIconos} size={19} strokeWidth={1.6} />
       <span style={{ position: "relative", flex: 1 }}>{item.label}</span>
       {showChevron && (
         <motion.svg
           aria-hidden="true"
-          width="12"
-          height="12"
+          width="11"
+          height="11"
           viewBox="0 0 12 12"
           fill="currentColor"
+          style={{ opacity: 0.55 }}
           animate={{rotate:chevronDown ? 0 : item.id === "servicios" ? -90 : 0}}
           transition={{duration:.2,ease:[.22,1,.36,1]}}
         >
