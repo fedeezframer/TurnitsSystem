@@ -2944,7 +2944,7 @@ function ServiciosManager(props: any) {
     const inactivos = servicios.filter((s) => !s.activo)
     const extrasActivos = extras.filter((e) => e.activo)
     const extrasInactivos = extras.filter((e) => !e.activo)
-    const popularidad = new Map(serviciosMasPedidos.map((item: any) => [String(item.nombre || "").trim().toLocaleLowerCase("es"), Number(item.cantidad || 0)]))
+    const popularidad = new Map<string, number>(serviciosMasPedidos.map((item: any): [string, number] => [String(item.nombre || "").trim().toLocaleLowerCase("es"), Number(item.cantidad || 0)]))
     const serviciosVisibles = servicios
         .filter((item) => filtroServicios !== "pausados" || !item.activo)
         .filter((item) => item.nombre.toLocaleLowerCase("es").includes(busquedaServicio.trim().toLocaleLowerCase("es")))
