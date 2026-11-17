@@ -204,7 +204,7 @@ function TurnitsPanel_Inner(props: any) {
             aria-current={selected ? "page" : undefined}
             style={{
                 display: "flex", alignItems: "center", gap: 10, width: "100%",
-                padding: "14px 8px", border: 0, borderRadius: 8,
+                padding: "16px 8px", border: 0, borderRadius: 8,
                 background: "transparent", color: selected ? "#176b24" : "#111",
                 fontFamily: "inherit", fontSize: 16, fontWeight: selected ? 600 : 500,
                 lineHeight: 1.2, textAlign: "left", cursor: "pointer",
@@ -220,7 +220,7 @@ function TurnitsPanel_Inner(props: any) {
     }
 
     const renderNavItems = () => navItemsVisibles.map((item) => item.id === "servicios" ? (
-        <div key={item.id} style={{border:"1px solid #b8c0b9",borderRadius:48,padding:"5px 12px 12px",margin:"0 -8px",background:"#fff"}}>
+        <div key={item.id} style={{border:"1px solid #b8c0b9",borderRadius:48,padding:"5px 12px 12px",margin:"0 -14px",background:"#fff"}}>
             <NavButton item={item} active={seccionActiva === "servicios" || menuExpandido === "servicios"} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === "servicios" ? null : "servicios");irA("servicios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
             {menuExpandido === "servicios" && <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
                 {renderServiceSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg")}
