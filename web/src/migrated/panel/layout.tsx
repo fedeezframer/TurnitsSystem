@@ -425,7 +425,7 @@ function TurnitsPanel_Inner(props: any) {
                             justifyContent: "flex-start",
                         }}
                     >
-                        <BrandMark logoImage={logoImage} logoText={logoText} width={220} height={58} />
+                        <BrandMark logoImage={logoImage} logoText={logoText} width={260} height={68} />
                     </div>
 
                     
@@ -561,7 +561,7 @@ function TurnitsPanel_Inner(props: any) {
                                     paddingLeft: 4,
                                 }}
                             >
-                                    <BrandMark logoImage={logoImage} logoText={logoText} width={220} height={58} />
+                                    <BrandMark logoImage={logoImage} logoText={logoText} width={260} height={68} />
                             </div>
                             
                             <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr",gap:6}}>{renderNavItems()}</div>
