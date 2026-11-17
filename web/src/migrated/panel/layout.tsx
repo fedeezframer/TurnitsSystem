@@ -90,7 +90,7 @@ function TurnitsPanel_Inner(props: any) {
     const [mostrarNotificaciones, setMostrarNotificaciones] =
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
-    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>("servicios")
+    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(null)
     const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
     // Arranca oculta y solo se muestra si confirmamos que el plan es
@@ -220,15 +220,15 @@ function TurnitsPanel_Inner(props: any) {
     }
 
     const renderNavItems = () => navItemsVisibles.map((item) => item.id === "servicios" ? (
-        <div key={item.id} style={{border:"1px solid #b8c0b9",borderRadius:48,padding:"5px 12px 12px",margin:"0 -14px",background:"#fff"}}>
-            <NavButton item={item} active={seccionActiva === "servicios" || menuExpandido === "servicios"} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === "servicios" ? null : "servicios");irA("servicios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
+        <div key={item.id} style={{border:seccionActiva === "servicios" ? "1px solid #b8c0b9" : "1px solid transparent",borderRadius:48,padding:"5px 12px 12px",margin:"0 -14px",background:seccionActiva === "servicios" ? "#fff" : "transparent"}}>
+            <NavButton item={item} active={seccionActiva === "servicios"} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === "servicios" ? null : "servicios");irA("servicios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
             {menuExpandido === "servicios" && <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
                 {renderServiceSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg")}
                 {renderServiceSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg")}
                 {renderServiceSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg")}
             </div>}
         </div>
-    ) : <NavButton key={item.id} item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => irA(item.id)} navIconos={navIconos} showChevron={["horarios","pagos","equipo","perfil"].includes(item.id)} />)
+    ) : <NavButton key={item.id} item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => {setMenuExpandido(null);irA(item.id)}} navIconos={navIconos} showChevron={["horarios","pagos","equipo","perfil"].includes(item.id)} />)
 
     const actualizarBandejaMensajes = React.useCallback((items: any[]) => {
         const next = Object.fromEntries(items.map(item => [item.id, Number(item.no_leidos) || 0])) as Record<string, number>
