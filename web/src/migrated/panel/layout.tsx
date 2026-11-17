@@ -561,9 +561,9 @@ function TurnitsPanel_Inner(props: any) {
                                     paddingLeft: 4,
                                 }}
                             >
-                                    <BrandMark logoImage={logoImage} logoText={logoText} width={190} height={50} />
+                                    <BrandMark logoImage={logoImage} logoText={logoText} width={220} height={58} />
                             </div>
-                            <div aria-hidden="true" style={{height:2,background:"#176b24",margin:"0 16px 20px"}} />
+                            
                             <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr",gap:6}}>{renderNavItems()}</div>
 
                             <div style={{ marginTop: 16 }}>
