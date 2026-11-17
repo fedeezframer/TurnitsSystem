@@ -23,7 +23,7 @@ import { MenuFooter as OwnerMenuFooter, MenuCuentaPagoRetorno, NotificacionesFlo
 import { SeccionInicio, TurnitsDashboardSidePanel } from "./dashboard"
 import { CopyTurnosButton } from "./inicio"
 import { PerfilNegocio } from "./profile-section"
-import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, PagosSettingsGuard, MercadoPagoConexion, ConfigPagos, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
+import { MisServiciosPanel, ProductosPanel, PromocionesPanel, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, PagosSettingsGuard, MercadoPagoConexion, ConfigPagos, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
 import Consultations from "../../pages/Consultations"
 import { ChatIcon } from "../../components/ChatChrome"
 import "./design-refresh.css"
@@ -221,7 +221,7 @@ function TurnitsPanel_Inner(props: any) {
 
     const renderNavItems = () => navItemsVisibles.map((item) => item.id === "servicios" ? (
         <div key={item.id} style={{width:"100%",padding:0,margin:0,background:"transparent"}}>
-            <NavButton item={item} active={seccionActiva === "servicios"} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === "servicios" ? null : "servicios");irA("servicios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
+            <NavButton item={item} active={seccionActiva === "servicios"} accentColor={accentColor} onClick={() => setMenuExpandido(menuExpandido === "servicios" ? null : "servicios")} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
             <AnimatePresence initial={false}>
                 {menuExpandido === "servicios" && <motion.div
                     key="servicios-submenu"
@@ -425,10 +425,10 @@ function TurnitsPanel_Inner(props: any) {
                             justifyContent: "flex-start",
                         }}
                     >
-                        <BrandMark logoImage={logoImage} logoText={logoText} width={190} height={50} />
+                        <BrandMark logoImage={logoImage} logoText={logoText} width={220} height={58} />
                     </div>
 
-                    <div aria-hidden="true" style={{height:2,background:"#176b24",margin:"0 16px 20px"}} />
+                    
 
                     <nav
                         className="turnits-nav-scroll"
@@ -723,22 +723,21 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title={quoteMode ? "Servicios" : "Mis Servicios"}
-                            subtitle={quoteMode ? "Mantené tu perfil publicado para aparecer en Browse; el precio y la fecha se coordinan por chat." : "Los servicios que ofrecés a tus clientes"}
+                            title={serviciosVistaInicial === "servicios" ? "Servicios" : serviciosVistaInicial === "extras" ? "Productos" : "Promociones"}
+                            subtitle={serviciosVistaInicial === "servicios" ? "Administrá los servicios que ofrecés a tus clientes" : serviciosVistaInicial === "extras" ? "Administrá los productos adicionales de tu catálogo" : "Creá y organizá tus promociones"}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
-                        <ServiciosManager
-                            baseUrl={baseUrl}
-                            accentColor={accentColor}
-                            initialView={serviciosVistaInicial}
-                            iconoPlaceholderUrl={iconos.servicioPlaceholder}
-                            iconoFormUrl={iconos.servicioForm}
-                            iconoVacioUrl={iconos.servicioVacio}
-                            iconoCheck={iconos.check}
-                            iconoEditar={iconos.editar}
-                            iconoEliminar={iconos.eliminar}
-                        />
+                        {React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
+                            baseUrl,
+                            accentColor,
+                            iconoPlaceholderUrl: iconos.servicioPlaceholder,
+                            iconoFormUrl: iconos.servicioForm,
+                            iconoVacioUrl: iconos.servicioVacio,
+                            iconoCheck: iconos.check,
+                            iconoEditar: iconos.editar,
+                            iconoEliminar: iconos.eliminar,
+                        })}
                         </SectionLoadingBoundary>
                     </div>
                 )}
