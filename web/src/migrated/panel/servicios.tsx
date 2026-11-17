@@ -472,7 +472,7 @@ function ServiciosManager_ImageUploader({
                     onDragLeave={() => setDragOver(false)}
                     onDrop={handleDrop}
                     style={{
-                        width: size > 100 ? "100%" : size,
+                        width: size > 100 ? "min(100%, 450px)" : size,
                         height: size > 100 ? "auto" : size,
                         aspectRatio: size > 100 ? "1 / 1" : undefined,
                         borderRadius: size > 100 ? 20 : 16,
@@ -1143,6 +1143,7 @@ function ServiciosManager_ServicioForm({
     const globalEdit = !!(modoEdicion && servicioId && !employeeVariant && !employeeMode && !branch)
     const [form, setForm] = React.useState<ServiciosManager_FormData>(() => globalEdit ? TurnitsGlobalSaveManager_get()?.getPending("servicios")?.[servicioId!] || initial : initial)
     const [precioError, setPrecioError] = React.useState("")
+    const [unidadDuracion, setUnidadDuracion] = React.useState<"min" | "h">("min")
     const [profesionales, setProfesionales] = React.useState<CatalogoProfesional[]>([])
     const [avisoProfesional, setAvisoProfesional] = React.useState("")
 
@@ -1195,15 +1196,15 @@ function ServiciosManager_ServicioForm({
         setForm((previous) => ({ ...previous, [key]: value }))
 
     const inputStyle: React.CSSProperties = {
-        width: "100%", minWidth: 0, height: isMobile ? 50 : 60,
+        width: "100%", minWidth: 0, height: isMobile ? 44 : 52,
         boxSizing: "border-box", border: "1px solid #aaa", borderRadius: 999,
-        padding: isMobile ? "0 17px" : "0 24px", background: "#fff",
-        color: "#111", fontFamily: "inherit", fontSize: isMobile ? 16 : 23,
+        padding: isMobile ? "0 15px" : "0 18px", background: "#fff",
+        color: "#111", fontFamily: "inherit", fontSize: isMobile ? 15 : 19,
         outlineColor: accentColor,
     }
     const labelStyle: React.CSSProperties = {
-        display: "block", marginBottom: isMobile ? 9 : 12,
-        color: "#111", fontSize: isMobile ? 16 : 23,
+        display: "block", marginBottom: isMobile ? 6 : 8,
+        color: "#111", fontSize: isMobile ? 15 : 19,
         fontWeight: 450, lineHeight: 1.2,
     }
     const fieldStyle: React.CSSProperties = { minWidth: 0 }
@@ -1215,8 +1216,10 @@ function ServiciosManager_ServicioForm({
         setPrecioError("")
         onSubmit(quoteMode ? { ...form, precio: "0" } : form)
     }
-    const durationValue = String(form.duracion || 30)
-    const customDuration = !ServiciosManager_DURACIONES.includes(Number(durationValue))
+    const durationMinutes = Number(form.duracion) || 30
+    const durationValue = unidadDuracion === "h"
+        ? String(Number((durationMinutes / 60).toFixed(2)))
+        : String(durationMinutes)
 
     return (
         <motion.div
@@ -1225,13 +1228,13 @@ function ServiciosManager_ServicioForm({
             style={{
                 background: "#fff", borderRadius: isMobile ? 24 : 48,
                 border: "1px solid #b6b6b6", boxShadow: "none",
-                padding: isMobile ? 20 : "clamp(28px, 5.2vw, 80px)",
+                padding: isMobile ? 18 : "clamp(22px, 3.8vw, 56px)",
                 boxSizing: "border-box", overflow: "hidden", position: "relative",
                 fontFamily: "'Inter Display', -apple-system, sans-serif",
             }}
         >
             <style>{ServiciosManager_shimmerCSS}</style>
-            <div style={{ ...fieldStyle, marginBottom: isMobile ? 22 : 28 }}>
+            <div style={{ ...fieldStyle, marginBottom: isMobile ? 16 : 20 }}>
                 <label style={labelStyle} htmlFor="servicio-nombre">Nombre del Servicio</label>
                 <input
                     id="servicio-nombre" className="svc-input" value={form.nombre}
@@ -1243,9 +1246,9 @@ function ServiciosManager_ServicioForm({
 
             <div style={{
                 display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, .82fr) minmax(0, 1fr)",
-                gap: isMobile ? 22 : "clamp(24px, 6.7vw, 102px)", alignItems: "start",
+                gap: isMobile ? 16 : "clamp(22px, 4vw, 60px)", alignItems: "stretch",
             }}>
-                <div style={fieldStyle}>
+                <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
                     <label style={labelStyle}>Imagen del Servicio</label>
                     <ServiciosManager_ImageUploader
                         value={form.imagen} onChange={set("imagen")} accentColor={accentColor}
@@ -1254,7 +1257,7 @@ function ServiciosManager_ServicioForm({
                     />
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 20 : 26, minWidth: 0 }}>
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: isMobile ? 14 : 16, minWidth: 0 }}>
                     <div style={fieldStyle}>
                         <label style={labelStyle} htmlFor="servicio-descripcion">Descripción</label>
                         <textarea
@@ -1262,57 +1265,67 @@ function ServiciosManager_ServicioForm({
                             onChange={(event) => set("descripcion")(event.target.value)}
                             placeholder="Descripción del servicio"
                             style={{
-                                ...inputStyle, height: isMobile ? 150 : 204, minHeight: isMobile ? 120 : 180,
-                                borderRadius: 28, padding: isMobile ? 15 : 22, resize: "vertical",
-                                fontSize: isMobile ? 15 : 18, lineHeight: 1.45,
+                                ...inputStyle, height: isMobile ? 110 : 144, minHeight: isMobile ? 90 : 120,
+                                borderRadius: 18, padding: isMobile ? 11 : 15, resize: "vertical",
+                                fontSize: isMobile ? 14 : 16, lineHeight: 1.4,
                             }}
                         />
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: isMobile ? 18 : 24 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 14 }}>
                         <div style={fieldStyle}>
                             <label style={labelStyle} htmlFor="servicio-precio">Precio</label>
                             <div style={{ position: "relative" }}>
-                                <span aria-hidden="true" style={{ position: "absolute", left: 17, top: "50%", transform: "translateY(-50%)", fontSize: 22, color: "#666" }}>$</span>
+                                <span aria-hidden="true" style={{ position: "absolute", left: 15, top: "50%", transform: "translateY(-50%)", fontSize: 18, color: "#666" }}>$</span>
                                 <input
                                     id="servicio-precio" className="svc-input" type="number" min={quoteMode ? 0 : ServiciosManager_PRECIO_MINIMO}
                                     value={form.precio} onChange={(event) => { set("precio")(event.target.value); if (Number(event.target.value) >= ServiciosManager_PRECIO_MINIMO) setPrecioError("") }}
-                                    placeholder="0" style={{ ...inputStyle, paddingLeft: 42 }}
+                                    placeholder="0" style={{ ...inputStyle, paddingLeft: 36 }}
                                 />
                             </div>
                             {precioError && <span style={{ display: "block", marginTop: 5, color: "#b42318", fontSize: 12 }}>{precioError}</span>}
                         </div>
                         <div style={fieldStyle}>
                             <label style={labelStyle} htmlFor="servicio-duracion">Duración</label>
-                            <div style={{ position: "relative" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 82px", gap: 8 }}>
+                                <input
+                                    id="servicio-duracion" className="svc-input" type="number"
+                                    min={unidadDuracion === "h" ? 0.25 : 1}
+                                    step={unidadDuracion === "h" ? 0.25 : 1}
+                                    value={durationValue}
+                                    onChange={(event) => {
+                                        const value = Number(event.target.value)
+                                        set("duracion")(String(unidadDuracion === "h" ? Math.round(value * 60) : Math.round(value)))
+                                    }}
+                                    style={inputStyle}
+                                />
                                 <select
-                                    id="servicio-duracion" className="svc-input" value={customDuration ? "custom" : durationValue}
-                                    onChange={(event) => event.target.value !== "custom" && set("duracion")(event.target.value)}
-                                    style={{ ...inputStyle, appearance: "none", paddingRight: 72, color: "#555" }}
+                                    aria-label="Unidad de duración" value={unidadDuracion}
+                                    onChange={(event) => setUnidadDuracion(event.target.value as "min" | "h")}
+                                    style={{ ...inputStyle, padding: "0 12px", textAlign: "center", cursor: "pointer" }}
                                 >
-                                    {customDuration && <option value="custom">{durationValue} min</option>}
-                                    {ServiciosManager_DURACIONES.map((minutes) => <option key={minutes} value={minutes}>{minutes} min</option>)}
+                                    <option value="min">min</option>
+                                    <option value="h">h</option>
                                 </select>
-                                <span aria-hidden="true" style={{ position: "absolute", right: 23, top: "50%", transform: "translateY(-50%)", color: "#666", pointerEvents: "none", fontSize: isMobile ? 15 : 21 }}>min⌄</span>
                             </div>
                         </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(2, minmax(0, 1fr))", gap: isMobile ? 12 : 24 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 14 }}>
                         <div style={fieldStyle}>
-                            <label style={{ ...labelStyle, fontSize: isMobile ? 14 : 17, marginBottom: 7 }} htmlFor="servicio-capacidad">Capacidad</label>
-                            <input id="servicio-capacidad" className="svc-input" type="number" min={1} value={form.capacidad} onChange={(event) => set("capacidad")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 44 : 50, fontSize: isMobile ? 15 : 18, paddingLeft: 18 }} />
+                            <label style={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} htmlFor="servicio-capacidad">Capacidad</label>
+                            <input id="servicio-capacidad" className="svc-input" type="number" min={1} value={form.capacidad} onChange={(event) => set("capacidad")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 38 : 40, fontSize: isMobile ? 14 : 15, paddingLeft: 14 }} />
                         </div>
                         <div style={fieldStyle}>
-                            <label style={{ ...labelStyle, fontSize: isMobile ? 14 : 17, marginBottom: 7 }} htmlFor="servicio-orden">Orden</label>
-                            <input id="servicio-orden" className="svc-input" type="number" min={0} value={form.orden} onChange={(event) => set("orden")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 44 : 50, fontSize: isMobile ? 15 : 18, paddingLeft: 18 }} />
+                            <label style={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} htmlFor="servicio-orden">Orden</label>
+                            <input id="servicio-orden" className="svc-input" type="number" min={0} value={form.orden} onChange={(event) => set("orden")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 38 : 40, fontSize: isMobile ? 14 : 15, paddingLeft: 14 }} />
                         </div>
                     </div>
 
                     {!employeeVariant && !employeeMode && !branch && profesionales.length > 0 && (
                         <div style={fieldStyle}>
-                            <div style={labelStyle}>Profesionales que lo ofrecen</div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minHeight: 52 }}>
+                            <div style={{ ...labelStyle, marginBottom: isMobile ? 7 : 8 }}>Profesionales que lo ofrecen</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minHeight: 46 }}>
                                 {profesionales.map((profesional) => {
                                     const selected = selectedProfesionales.includes(profesional.id)
                                     const initials = [profesional.nombre, profesional.apellido].filter(Boolean).map((value) => value?.trim()[0]).join("").toUpperCase().slice(0, 2)
@@ -1323,7 +1336,7 @@ function ServiciosManager_ServicioForm({
                                             aria-pressed={selected} title={`${fullName}${selected ? " · asignado" : " · agregar"}`}
                                             onClick={() => toggleProfesional(profesional)}
                                             style={{
-                                                position: "relative", width: isMobile ? 44 : 50, height: isMobile ? 44 : 50,
+                                                position: "relative", width: isMobile ? 38 : 42, height: isMobile ? 38 : 42,
                                                 padding: 0, borderRadius: "50%", border: `2px solid ${selected ? accentColor : "transparent"}`,
                                                 background: profesional.color || "#94a3b8", color: "white", cursor: "pointer",
                                                 display: "grid", placeItems: "center", boxShadow: selected ? `0 0 0 2px ${accentColor}25` : "none",
@@ -1331,7 +1344,7 @@ function ServiciosManager_ServicioForm({
                                         >
                                             <span aria-hidden="true" style={{ fontSize: isMobile ? 15 : 18, position: "relative" }}>{initials || "P"}</span>
                                             {profesional.foto_url && <img src={profesional.foto_url} alt="" onError={(event) => { event.currentTarget.style.display = "none" }} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />}
-                                            {selected && <span aria-hidden="true" style={{ position: "absolute", right: -4, bottom: -4, width: 18, height: 18, borderRadius: "50%", display: "grid", placeItems: "center", border: `1px solid ${accentColor}`, color: accentColor, background: "white", fontSize: 12, fontWeight: 800 }}>✓</span>}
+                                            {selected && <span aria-hidden="true" style={{ position: "absolute", right: -4, bottom: -4, width: 18, height: 18, borderRadius: "50%", display: "grid", placeItems: "center", border: `1px solid ${accentColor}`, background: "white" }}><img src="/assets/panel-nav/akar-icons_check.svg" alt="" width="12" height="12" /></span>}
                                         </button>
                                     )
                                 })}
