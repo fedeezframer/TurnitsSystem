@@ -1085,7 +1085,7 @@ function ServiciosManager_ExtrasVinculados({
 
     return (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {extras.map((extra) => {
+            {extrasVisibles.map((extra) => {
                 const sel = extra.vinculado
                 const pending = pendingIds.has(extra.id)
                 return (
@@ -3177,70 +3177,46 @@ function ServiciosManager_ServiciosSection(props: any) {
                 </>)
 }
 function ServiciosManager_ProductosSection(props: any) {
+    const opcionesOrden = [
+        {id:"az",label:"A-Z"},
+        {id:"za",label:"Z-A"},
+        {id:"precio-desc",label:"Mayor precio"},
+        {id:"precio-asc",label:"Menor precio"},
+    ] as const
+    const etiquetaOrden = opcionesOrden.find(option => option.id === ordenProductos)?.label || "A-Z"
+
     const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,setMostrarFormExtra,editandoExtra,setEditandoExtra,extrasVisibles,extras,errorExtras,formErrorExtra,setFormErrorExtra,guardandoExtra,filtroProductos,setFiltroProductos,ordenProductos,setOrdenProductos,menuOrdenProductos,setMenuOrdenProductos,busquedaProducto,setBusquedaProducto}=props
     return (<>
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            marginBottom: isMobile ? 12 : 16,
-                        }}
-                    >
-                        <div>
-                            <div
-                                style={{
-                                    fontSize: isMobile ? 15 : 16,
-                                    fontWeight: 700,
-                                    color: "#1e293b",
-                                    letterSpacing: "-0.3px",
-                                }}
-                            >
-                                Productos extra
-                            </div>
-                            <div
-                                style={{
-                                    fontSize: 12,
-                                    color: "#94a3b8",
-                                    marginTop: 2,
-                                }}
-                            >
-                                {extras.length === 0
-                                    ? "Sin productos aún"
-                                    : `${extrasActivos.length} activo${extrasActivos.length !== 1 ? "s" : ""}${extrasInactivos.length > 0 ? `, ${extrasInactivos.length} inactivo${extrasInactivos.length !== 1 ? "s" : ""}` : ""}`}
-                            </div>
+                    <div className="svc-toolbar">
+                        <div className="svc-toolbar-filters" role="group" aria-label="Filtrar productos">
+                            {(["todos","pausados"] as const).map(filter => (
+                                <button key={filter} type="button" className={`svc-filter-button${filtroProductos === filter ? " is-active" : ""}`} aria-pressed={filtroProductos === filter} onClick={() => setFiltroProductos(filter)}>
+                                    {filter === "todos" ? "Todos" : "Pausados"}
+                                </button>
+                            ))}
                         </div>
+                        <div className="svc-sort-control">
+                            <button type="button" className="svc-sort-button" aria-haspopup="menu" aria-expanded={menuOrdenProductos} onClick={() => setMenuOrdenProductos(open => !open)}>
+                                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></svg>
+                                {etiquetaOrden}
+                                <svg aria-hidden="true" className="svc-sort-chevron" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="m2 4 4 4 4-4"/></svg>
+                            </button>
+                            <AnimatePresence>
+                                {menuOrdenProductos && <motion.div className="svc-sort-menu" role="menu" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-4}} transition={{duration:.14}}>
+                                    {opcionesOrden.map(option => <button key={option.id} type="button" role="menuitemradio" aria-checked={ordenProductos === option.id} onClick={() => {setOrdenProductos(option.id);setMenuOrdenProductos(false)}}>{option.label}{ordenProductos === option.id && <span aria-hidden="true">✓</span>}</button>)}
+                                </motion.div>}
+                            </AnimatePresence>
+                        </div>
+                        <label className="svc-search">
+                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+                            <input value={busquedaProducto} onChange={event => setBusquedaProducto(event.target.value)} placeholder="Buscar" aria-label="Buscar productos" />
+                        </label>
                         {(!employeeMode || employeeCanCreate) && !mostrarFormExtra && !editandoExtra && (
-                            <motion.button
-                                whileHover={{ scale: 1.04 }}
-                                whileTap={{ scale: 0.96 }}
-                                onClick={() => setMostrarFormExtra(true)}
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    padding: isMobile ? "9px 12px" : "8px 14px",
-                                    borderRadius: 10,
-                                    border: "none",
-                                    background: accentColor,
-                                    color: "#fff",
-                                    fontSize: isMobile ? 12 : 13,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    fontFamily:
-                                        "'Inter Display', -apple-system, sans-serif",
-                                    letterSpacing: "-0.2px",
-                                    flexShrink: 0,
-                                }}
-                            >
-                                <span style={{ fontSize: 16, lineHeight: 1 }}>
-                                    +
-                                </span>
-                                {isMobile ? "" : " Nuevo"}
+                            <motion.button className="svc-create-button" whileHover={{y:-1}} whileTap={{scale:.98}} onClick={() => setMostrarFormExtra(true)}>
+                                <span aria-hidden="true">+</span> Crear Producto
                             </motion.button>
                         )}
                     </div>
-
                     {errorExtras && (
                         <div
                             style={{
@@ -3284,7 +3260,7 @@ function ServiciosManager_ProductosSection(props: any) {
                             gap: isMobile ? 5 : 6,
                         }}
                     >
-                        {extras.length === 0 && !mostrarFormExtra && (
+                        {extrasVisibles.length === 0 && !mostrarFormExtra && (
                             <div
                                 style={{
                                     flex: 1,
@@ -3304,7 +3280,7 @@ function ServiciosManager_ProductosSection(props: any) {
                                 <span
                                     style={{ fontSize: 13, color: "#94a3b8" }}
                                 >
-                                    Todavía no hay productos extra
+                                    {busquedaProducto || filtroProductos === "pausados" ? "No hay productos que coincidan con este filtro" : "Todavía no hay productos extra"}
                                 </span>
                             </div>
                         )}
