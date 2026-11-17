@@ -220,13 +220,32 @@ function TurnitsPanel_Inner(props: any) {
     }
 
     const renderNavItems = () => navItemsVisibles.map((item) => item.id === "servicios" ? (
-        <div key={item.id} style={{border:seccionActiva === "servicios" ? "1px solid #b8c0b9" : "1px solid transparent",borderRadius:48,padding:"5px 12px 12px",margin:"0 -14px",background:seccionActiva === "servicios" ? "#fff" : "transparent"}}>
+        <div key={item.id} style={{width:"100%",padding:0,margin:0,background:"transparent"}}>
             <NavButton item={item} active={seccionActiva === "servicios"} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === "servicios" ? null : "servicios");irA("servicios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
-            {menuExpandido === "servicios" && <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
-                {renderServiceSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg")}
-                {renderServiceSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg")}
-                {renderServiceSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg")}
-            </div>}
+            <AnimatePresence initial={false}>
+                {menuExpandido === "servicios" && <motion.div
+                    key="servicios-submenu"
+                    initial={{height:0,opacity:0,y:-7}}
+                    animate={{height:"auto",opacity:1,y:0}}
+                    exit={{height:0,opacity:0,y:-5}}
+                    transition={{height:{duration:.28,ease:[.22,1,.36,1]},opacity:{duration:.18},y:{duration:.22,ease:[.22,1,.36,1]}}}
+                    style={{overflow:"hidden"}}
+                >
+                    <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
+                        {renderServiceSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg")}
+                        {renderServiceSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg")}
+                        {renderServiceSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg")}
+                    </div>
+                    <motion.div
+                        aria-hidden="true"
+                        initial={{scaleX:0,opacity:0}}
+                        animate={{scaleX:1,opacity:1}}
+                        exit={{scaleX:0,opacity:0}}
+                        transition={{duration:.24,ease:[.22,1,.36,1],delay:.05}}
+                        style={{height:1,margin:"0 12px 6px 8px",background:"#8e9690",transformOrigin:"left center"}}
+                    />
+                </motion.div>}
+            </AnimatePresence>
         </div>
     ) : <NavButton key={item.id} item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => {setMenuExpandido(null);irA(item.id)}} navIconos={navIconos} showChevron={["horarios","pagos","equipo","perfil"].includes(item.id)} />)
 
