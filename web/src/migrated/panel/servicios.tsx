@@ -1204,15 +1204,15 @@ function ServiciosManager_ServicioForm({
         setForm((previous) => ({ ...previous, [key]: value }))
 
     const inputStyle: React.CSSProperties = {
-        width: "100%", minWidth: 0, height: isMobile ? 44 : 40,
+        width: "100%", minWidth: 0, height: 44,
         boxSizing: "border-box", border: "1px solid #aaa", borderRadius: 999,
         padding: isMobile ? "0 15px" : "0 18px", background: "#fff",
-        color: "#111", fontFamily: "inherit", fontSize: isMobile ? 15 : 14,
+        color: "#111", fontFamily: "inherit", fontSize: isMobile ? 15 : 16,
         outlineColor: accentColor,
     }
     const labelStyle: React.CSSProperties = {
         display: "block", marginBottom: isMobile ? 6 : 8,
-        color: "#111", fontSize: isMobile ? 15 : 14,
+        color: "#111", fontSize: isMobile ? 15 : 16,
         fontWeight: 450, lineHeight: 1.2,
     }
     const fieldStyle: React.CSSProperties = { minWidth: 0 }
@@ -1253,7 +1253,7 @@ function ServiciosManager_ServicioForm({
             </div>
 
             <div style={{
-                display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(200px, 280px) minmax(0, 1fr)",
+                display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(200px, 320px) minmax(0, 1fr)",
                 gap: isMobile ? 16 : 24, alignItems: "stretch",
             }}>
                 <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
@@ -1273,7 +1273,7 @@ function ServiciosManager_ServicioForm({
                             onChange={(event) => set("descripcion")(event.target.value)}
                             placeholder="Descripción del servicio"
                             style={{
-                                ...inputStyle, height: isMobile ? 110 : 96, minHeight: 90,
+                                ...inputStyle, height: isMobile ? 110 : 112, minHeight: 90,
                                 borderRadius: 18, padding: isMobile ? 11 : 15, resize: "vertical",
                                 fontSize: isMobile ? 14 : 16, lineHeight: 1.4,
                             }}
@@ -1675,7 +1675,7 @@ function ServiciosManager_ExtraForm({
     )
 }
 
-const catalogThumbSize = (mobile: boolean) => mobile ? 52 : 44
+const catalogThumbSize = (mobile: boolean) => mobile ? 52 : 48
 
 function ServiciosManager_ServicioCard({
     svc,

@@ -60,23 +60,23 @@
 .promo-editor .svc-upload-zone:not(:hover)>img+div {opacity:0!important}
 
 @media (min-width:860px) {
-  .promotions {font-size:14px}
-  .promo-grid {grid-template-columns:repeat(auto-fill,minmax(min(100%,228px),1fr));gap:16px}
+  .promotions {font-size:15px}
+  .promo-grid {grid-template-columns:repeat(auto-fill,minmax(min(100%,256px),1fr));gap:20px}
   .promo-card {border-color:#c9cdc9;border-radius:16px}
-  .promo-cover {aspect-ratio:16/9;max-height:176px}
-  .promo-badges {font-size:12px}
+  .promo-cover {aspect-ratio:16/10;max-height:200px}
+  .promo-badges {font-size:13px}
   .promo-badges>b,.promo-badges>span {padding:4px 8px}
-  .promo-badges img {width:28px}
-  .promo-foot {padding:10px 12px;gap:8px}
-  .promo-foot>strong {font-size:15px}
-  .promo-cost {font-size:13px}
-  .promo-primary {padding:9px 14px;border-radius:8px}
-  .promo-editor {max-width:960px;padding:48px 24px 20px;border-radius:18px}
-  .promo-editor fieldset {gap:16px}
-  .promo-intro {grid-template-columns:minmax(0,280px) minmax(0,1fr);gap:24px}
-  .promo-details textarea {min-height:96px;border-radius:12px}
-  .promo-choice>img,.promo-thumb {width:44px}
-  .promo-check {width:24px}
-  .promo-line {padding:6px 10px;border-radius:10px}
-  .promo-people button {width:32px;height:32px}
+  .promo-badges img {width:32px}
+  .promo-foot {padding:12px 14px;gap:8px}
+  .promo-foot>strong {font-size:17px}
+  .promo-cost {font-size:15px}
+  .promo-primary {padding:10px 16px;border-radius:8px}
+  .promo-editor {max-width:1024px;padding:48px 24px 20px;border-radius:18px}
+  .promo-editor fieldset {gap:20px}
+  .promo-intro {grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:24px}
+  .promo-details textarea {min-height:112px;border-radius:12px}
+  .promo-choice>img,.promo-thumb {width:48px}
+  .promo-check {width:28px}
+  .promo-line {padding:8px 12px;border-radius:10px}
+  .promo-people button {width:36px;height:36px}
 }
