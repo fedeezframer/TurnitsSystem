@@ -2380,10 +2380,16 @@ function ServiciosManager(props: any) {
     )
     React.useEffect(() => { setVista(initialView) }, [initialView])
     const [serviciosMasPedidos, setServiciosMasPedidos] = React.useState<any[]>([])
-    const [filtroServicios, setFiltroServicios] = React.useState<"todos" | "pausados" | "pedidos">("todos")
+    const [filtroServicios, setFiltroServicios] = React.useState<"todos" | "pausados">("todos")
+    const [ordenServicios, setOrdenServicios] = React.useState<"pedidos" | "az" | "za" | "precio-desc" | "precio-asc">("pedidos")
+    const [menuOrdenServicios, setMenuOrdenServicios] = React.useState(false)
     const [busquedaServicio, setBusquedaServicio] = React.useState("")
+    const [filtroProductos, setFiltroProductos] = React.useState<"todos" | "pausados">("todos")
+    const [ordenProductos, setOrdenProductos] = React.useState<"az" | "za" | "precio-desc" | "precio-asc">("az")
+    const [menuOrdenProductos, setMenuOrdenProductos] = React.useState(false)
+    const [busquedaProducto, setBusquedaProducto] = React.useState("")
     React.useEffect(() => {
-        if (filtroServicios !== "pedidos") return
+        if (ordenServicios !== "pedidos") return
         let cancelled = false
         let retryTimer: ReturnType<typeof setTimeout> | undefined
         let pollTimer: ReturnType<typeof setInterval> | undefined
@@ -2419,7 +2425,7 @@ function ServiciosManager(props: any) {
             window.removeEventListener("turno_cancelado", refresh)
             window.removeEventListener("focus", refresh)
         }
-    }, [api, filtroServicios])
+    }, [api, ordenServicios])
     // ── Estado: Servicios ──
     const [loading, setLoading] = React.useState(true)
     const [servicios, setServicios] = React.useState<
@@ -2948,11 +2954,24 @@ function ServiciosManager(props: any) {
     const serviciosVisibles = servicios
         .filter((item) => filtroServicios !== "pausados" || !item.activo)
         .filter((item) => item.nombre.toLocaleLowerCase("es").includes(busquedaServicio.trim().toLocaleLowerCase("es")))
-        .sort((a, b) => filtroServicios === "pedidos"
-            ? (popularidad.get(b.nombre.trim().toLocaleLowerCase("es")) || 0) - (popularidad.get(a.nombre.trim().toLocaleLowerCase("es")) || 0) || a.orden - b.orden
-            : a.orden - b.orden)
+        .sort((a, b) => {
+            if (ordenServicios === "pedidos") return (popularidad.get(b.nombre.trim().toLocaleLowerCase("es")) || 0) - (popularidad.get(a.nombre.trim().toLocaleLowerCase("es")) || 0) || a.orden - b.orden
+            if (ordenServicios === "az") return a.nombre.localeCompare(b.nombre, "es", {sensitivity:"base"})
+            if (ordenServicios === "za") return b.nombre.localeCompare(a.nombre, "es", {sensitivity:"base"})
+            if (ordenServicios === "precio-desc") return Number(b.precio) - Number(a.precio) || a.orden - b.orden
+            return Number(a.precio) - Number(b.precio) || a.orden - b.orden
+        })
+    const extrasVisibles = extras
+        .filter((item) => filtroProductos !== "pausados" || !item.activo)
+        .filter((item) => item.nombre.toLocaleLowerCase("es").includes(busquedaProducto.trim().toLocaleLowerCase("es")))
+        .sort((a, b) => {
+            if (ordenProductos === "az") return a.nombre.localeCompare(b.nombre, "es", {sensitivity:"base"})
+            if (ordenProductos === "za") return b.nombre.localeCompare(a.nombre, "es", {sensitivity:"base"})
+            if (ordenProductos === "precio-desc") return Number(b.precio) - Number(a.precio) || a.orden - b.orden
+            return Number(a.precio) - Number(b.precio) || a.orden - b.orden
+        })
 
-    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, puedePromociones, filtroServicios, setFiltroServicios, busquedaServicio, setBusquedaServicio, servicios, error, formError, guardando, mostrarForm, setMostrarForm, editando, setEditando, setFormError, extras, errorExtras, formErrorExtra, setFormErrorExtra, guardandoExtra, mostrarFormExtra, setMostrarFormExtra, editandoExtra, setEditandoExtra }
+    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, extrasVisibles, puedePromociones, filtroServicios, setFiltroServicios, ordenServicios, setOrdenServicios, menuOrdenServicios, setMenuOrdenServicios, busquedaServicio, setBusquedaServicio, filtroProductos, setFiltroProductos, ordenProductos, setOrdenProductos, menuOrdenProductos, setMenuOrdenProductos, busquedaProducto, setBusquedaProducto, servicios, error, formError, guardando, mostrarForm, setMostrarForm, editando, setEditando, setFormError, extras, errorExtras, formErrorExtra, setFormErrorExtra, guardandoExtra, mostrarFormExtra, setMostrarFormExtra, editandoExtra, setEditandoExtra }
 
     return (
         <div
@@ -2976,7 +2995,7 @@ function ServiciosManager(props: any) {
 
 
 function ServiciosManager_ServiciosSection(props: any) {
-    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,busquedaServicio,setBusquedaServicio}=props
+    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,ordenServicios,setOrdenServicios,menuOrdenServicios,setMenuOrdenServicios,busquedaServicio,setBusquedaServicio}=props
     return (<>
                     <div className="svc-toolbar">
                         <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
@@ -3138,7 +3157,7 @@ function ServiciosManager_ServiciosSection(props: any) {
                 </>)
 }
 function ServiciosManager_ProductosSection(props: any) {
-    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,setMostrarFormExtra,editandoExtra,setEditandoExtra,extras,errorExtras,formErrorExtra,setFormErrorExtra,guardandoExtra}=props
+    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,setMostrarFormExtra,editandoExtra,setEditandoExtra,extrasVisibles,extras,errorExtras,formErrorExtra,setFormErrorExtra,guardandoExtra,filtroProductos,setFiltroProductos,ordenProductos,setOrdenProductos,menuOrdenProductos,setMenuOrdenProductos,busquedaProducto,setBusquedaProducto}=props
     return (<>
                     <div
                         style={{
