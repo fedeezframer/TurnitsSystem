@@ -34,17 +34,18 @@ function TurnitsPlanRequirement({ premiumOnly = false, color = "#64748b" }: { pr
 
 class PanelErrorBoundary extends React.Component<
     { children: React.ReactNode },
-    { error: Error | null }
+    { error: Error | null; componentStack: string }
 > {
     constructor(props: { children: React.ReactNode }) {
         super(props)
-        this.state = { error: null }
+        this.state = { error: null, componentStack: "" }
     }
     static getDerivedStateFromError(error: Error) {
         return { error }
     }
     componentDidCatch(error: Error, info: any) {
         console.error("[TurnitsPanel] Error no controlado:", error, info)
+        this.setState({ componentStack: info?.componentStack || "" })
     }
     render() {
         if (this.state.error) {
@@ -82,7 +83,7 @@ class PanelErrorBoundary extends React.Component<
                     </div>
                     <details style={{ maxWidth: 460, textAlign: "left", fontSize: 12, color: "#64748b" }}>
                         <summary style={{ cursor: "pointer", padding: "6px 0" }}>Ver detalle del error</summary>
-                        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #e2e8f0", color: "#334155", font: "12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace" }}>{this.state.error.name}: {this.state.error.message}</pre>
+                        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 240, overflow: "auto", margin: 0, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #e2e8f0", color: "#334155", font: "12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace" }}>{this.state.error.stack}{this.state.componentStack ? `\n\nComponentes React:${this.state.componentStack}` : ""}</pre>
                     </details>
                     <button
                         onClick={() => window.location.reload()}
