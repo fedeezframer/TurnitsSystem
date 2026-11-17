@@ -1689,6 +1689,8 @@ function ServiciosManager_ServicioCard({
     isMobile,
     employeeMode = false,
     employeeCanEdit = true,
+    menuAbierto,
+    onToggleMenu,
 }: {
     svc: ServiciosManager_Servicio
     accentColor: string
@@ -1702,11 +1704,12 @@ function ServiciosManager_ServicioCard({
     isMobile: boolean
     employeeMode?: boolean
     employeeCanEdit?: boolean
+    menuAbierto: boolean
+    onToggleMenu: () => void
 }) {
     const quoteMode = useQuoteMode()
     const branch = useBranchAdmin()
     const [confirmDelete, setConfirmDelete] = React.useState(false)
-    const [menuAbierto, setMenuAbierto] = React.useState(false)
     const [imgError, setImgError] = React.useState(false)
 
     const thumbSize = 30
@@ -1779,14 +1782,14 @@ function ServiciosManager_ServicioCard({
                     {iconoEditar ? <img src={iconoEditar} alt="" /> : <span aria-hidden="true">✎</span>} Editar
                 </button>}
                 {!branch && employeeCanEdit && <div style={{position:"relative"}}>
-                    <button type="button" className="svc-more-button" aria-label={`Más opciones para ${svc.nombre}`} aria-expanded={menuAbierto} onClick={() => {setMenuAbierto(value => !value);setConfirmDelete(false)}}>•••</button>
+                    <button type="button" className="svc-more-button" aria-label={`Más opciones para ${svc.nombre}`} aria-expanded={menuAbierto} onClick={() => {onToggleMenu();setConfirmDelete(false)}}>•••</button>
                     <AnimatePresence>
                         {menuAbierto && <motion.div className="svc-row-menu" initial={{opacity:0,y:-4,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-4,scale:.98}} transition={{duration:.14}}>
                             {confirmDelete ? <>
-                                <button type="button" className="is-danger" onClick={() => {onDelete();setConfirmDelete(false);setMenuAbierto(false)}}>Confirmar eliminación</button>
+                                <button type="button" className="is-danger" onClick={() => {onDelete();setConfirmDelete(false);onToggleMenu()}}>Confirmar eliminación</button>
                                 <button type="button" onClick={() => setConfirmDelete(false)}>Cancelar</button>
                             </> : <>
-                                {!employeeMode && <button type="button" onClick={() => {onToggle();setMenuAbierto(false)}}>{svc.activo ? "Pausar" : "Activar"}</button>}
+                                {!employeeMode && <button type="button" onClick={() => {onToggle();onToggleMenu()}}>{svc.activo ? "Pausar" : "Activar"}</button>}
                                 <button type="button" className="is-danger" onClick={() => setConfirmDelete(true)}>Eliminar</button>
                             </>}
                         </motion.div>}
@@ -1888,6 +1891,7 @@ function ServiciosManager(props: any) {
     const [filtroServicios, setFiltroServicios] = React.useState<"todos" | "pausados">("todos")
     const [ordenServicios, setOrdenServicios] = React.useState<"pedidos" | "az" | "za" | "precio-desc" | "precio-asc">("pedidos")
     const [menuOrdenServicios, setMenuOrdenServicios] = React.useState(false)
+    const [menuServicioAbierto, setMenuServicioAbierto] = React.useState<string | null>(null)
     const [busquedaServicio, setBusquedaServicio] = React.useState("")
     const [filtroProductos, setFiltroProductos] = React.useState<"todos" | "pausados">("todos")
     const [ordenProductos, setOrdenProductos] = React.useState<"az" | "za" | "precio-desc" | "precio-asc">("az")
@@ -2494,7 +2498,7 @@ function ServiciosManager(props: any) {
             return Number(a.precio) - Number(b.precio) || a.orden - b.orden
         })
 
-    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, extrasVisibles, puedePromociones, filtroServicios, setFiltroServicios, ordenServicios, setOrdenServicios, menuOrdenServicios, setMenuOrdenServicios, busquedaServicio, setBusquedaServicio, filtroProductos, setFiltroProductos, ordenProductos, setOrdenProductos, menuOrdenProductos, setMenuOrdenProductos, busquedaProducto, setBusquedaProducto, servicios, error, formError, guardando, mostrarForm, setMostrarForm, editando, setEditando, setFormError, extras, errorExtras, formErrorExtra, setFormErrorExtra, guardandoExtra, mostrarFormExtra, setMostrarFormExtra, editandoExtra, setEditandoExtra }
+    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, extrasVisibles, puedePromociones, filtroServicios, setFiltroServicios, ordenServicios, setOrdenServicios, menuOrdenServicios, setMenuOrdenServicios, busquedaServicio, setBusquedaServicio, filtroProductos, setFiltroProductos, ordenProductos, setOrdenProductos, menuOrdenProductos, setMenuOrdenProductos, busquedaProducto, setBusquedaProducto, servicios, error, formError, guardando, mostrarForm, setMostrarForm, editando, setEditando, setFormError, menuServicioAbierto, setMenuServicioAbierto, extras, errorExtras, formErrorExtra, setFormErrorExtra, guardandoExtra, mostrarFormExtra, setMostrarFormExtra, editandoExtra, setEditandoExtra }
 
     return (
         <div
@@ -2525,12 +2529,75 @@ function ServiciosManager_ServiciosSection(props: any) {
         {id:"precio-desc",label:"Mayor precio"},
         {id:"precio-asc",label:"Menor precio"},
     ] as const
-    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,ordenServicios,setOrdenServicios,menuOrdenServicios,setMenuOrdenServicios,busquedaServicio,setBusquedaServicio}=props
+    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,ordenServicios,setOrdenServicios,menuOrdenServicios,setMenuOrdenServicios,busquedaServicio,setBusquedaServicio,menuServicioAbierto,setMenuServicioAbierto}=props
     const etiquetaOrden = opcionesOrden.find(option => option.id === ordenServicios)?.label || "Más Pedidos"
-    return (<>
+    const mostrarFormulario = mostrarForm || !!editando
+    const volverALista = () => {
+        setMostrarForm(false)
+        setEditando(null)
+        setFormError("")
+        setMenuServicioAbierto(null)
+    }
+    const abrirCreacion = () => {
+        setMenuServicioAbierto(null)
+        setFormError("")
+        setMostrarForm(true)
+    }
+    const uploadPath = employeeMode
+        ? `/empleado/${encodeURIComponent(ServiciosManager_getSlug())}/servicios/upload-imagen`
+        : undefined
+
+    return (
+        <AnimatePresence mode="wait" initial={false}>
+            {mostrarFormulario ? (
+                <motion.div
+                    key={editando ? `service-edit-${editando.id}` : "service-create"}
+                    initial={{ opacity: 0, x: 18 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -14 }}
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ width: "100%" }}
+                >
+                    <button
+                        type="button"
+                        className="svc-back-button"
+                        onClick={volverALista}
+                        aria-label="Volver a la lista de servicios"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 8, margin: "0 0 14px", padding: "7px 0", border: 0, background: "transparent", color: "#26352a", font: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                    >
+                        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6M9 12h11" /></svg>
+                        Volver a servicios
+                    </button>
+                    <ServiciosManager_ServicioForm
+                        key={editando ? `service-form-${editando.id}` : "service-form-new"}
+                        employeeMode={employeeMode}
+                        initial={editando ? initialEditar : ServiciosManager_FORM_EMPTY}
+                        accentColor={accentColor}
+                        apiUrl={api}
+                        iconoFormUrl={iconoFormUrl || undefined}
+                        uploadPath={uploadPath}
+                        onSubmit={editando ? handleEditar : handleCrear}
+                        onCancel={volverALista}
+                        guardando={guardando}
+                        error={formError}
+                        modoEdicion={!!editando}
+                        isMobile={isMobile}
+                        servicioId={editando?.id}
+                        employeeVariant={!!(employeeMode && editando && !(editando as any)?.perfil_propio)}
+                    />
+                </motion.div>
+            ) : (
+                <motion.div
+                    key="service-list"
+                    initial={{ opacity: 0, x: -14 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 14 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ width: "100%" }}
+                >
                     <div className="svc-toolbar">
                         <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
-                            {(["todos","pausados"] as const).map(filter => (
+                            {(["todos", "pausados"] as const).map(filter => (
                                 <button key={filter} type="button" className={`svc-filter-button${filtroServicios === filter ? " is-active" : ""}`} aria-pressed={filtroServicios === filter} onClick={() => setFiltroServicios(filter)}>
                                     {filter === "todos" ? "Todos" : "Pausados"}
                                 </button>
@@ -2538,165 +2605,65 @@ function ServiciosManager_ServiciosSection(props: any) {
                         </div>
                         <div className="svc-sort-control">
                             <button type="button" className="svc-sort-button" aria-haspopup="menu" aria-expanded={menuOrdenServicios} onClick={() => setMenuOrdenServicios(open => !open)}>
-                                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></svg>
+                                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z" /></svg>
                                 {etiquetaOrden}
-                                <svg aria-hidden="true" className="svc-sort-chevron" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="m2 4 4 4 4-4"/></svg>
+                                <svg aria-hidden="true" className="svc-sort-chevron" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="m2 4 4 4 4-4" /></svg>
                             </button>
                             <AnimatePresence>
-                                {menuOrdenServicios && <motion.div className="svc-sort-menu" role="menu" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-4}} transition={{duration:.14}}>
-                                    {opcionesOrden.map(option => <button key={option.id} type="button" role="menuitemradio" aria-checked={ordenServicios === option.id} onClick={() => {setOrdenServicios(option.id);setMenuOrdenServicios(false)}}>{option.label}{ordenServicios === option.id && <span aria-hidden="true">✓</span>}</button>)}
+                                {menuOrdenServicios && <motion.div className="svc-sort-menu" role="menu" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: .14 }}>
+                                    {opcionesOrden.map(option => <button key={option.id} type="button" role="menuitemradio" aria-checked={ordenServicios === option.id} onClick={() => { setOrdenServicios(option.id); setMenuOrdenServicios(false) }}>{option.label}{ordenServicios === option.id && <span aria-hidden="true">✓</span>}</button>)}
                                 </motion.div>}
                             </AnimatePresence>
                         </div>
                         <label className="svc-search">
-                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg>
                             <input value={busquedaServicio} onChange={event => setBusquedaServicio(event.target.value)} placeholder="Buscar" aria-label="Buscar servicios" />
                         </label>
-                        {!mostrarForm && !editando && (!branch && (!employeeMode || employeeCanCreate)) && (
-                            <motion.button className="svc-create-button" whileHover={{y:-1}} whileTap={{scale:.98}} onClick={() => setMostrarForm(true)}>
+                        {(!branch && (!employeeMode || employeeCanCreate)) && (
+                            <motion.button className="svc-create-button" whileHover={{ y: -1 }} whileTap={{ scale: .98 }} onClick={abrirCreacion}>
                                 <span aria-hidden="true">+</span> Crear Servicio
                             </motion.button>
                         )}
                     </div>
-                    {error && (
-                        <div
-                            style={{
-                                fontSize: 12,
-                                color: "#ef4444",
-                                marginBottom: 10,
-                            }}
-                        >
-                            {error}
-                        </div>
-                    )}
-
-                    <AnimatePresence>
-                        {mostrarForm && !editando && (
-                            <div style={{ marginBottom: 14 }}>
-                                <ServiciosManager_ServicioForm
-                                            employeeMode={employeeMode}
-                                    accentColor={accentColor}
-                                    apiUrl={api}
-                                    iconoFormUrl={iconoFormUrl || undefined}
-                                    uploadPath={
-                                        employeeMode
-                                            ? `/empleado/${encodeURIComponent(ServiciosManager_getSlug())}/servicios/upload-imagen`
-                                            : undefined
-                                    }
-                                    onSubmit={handleCrear}
-                                    onCancel={() => {
-                                        setMostrarForm(false)
-                                        setFormError("")
-                                    }}
-                                    guardando={guardando}
-                                    error={formError}
-                                    modoEdicion={false}
-                                    isMobile={isMobile}
-                                />
-                            </div>
-                        )}
-                    </AnimatePresence>
-
-                    <div
-                        style={{
-                            flex: 1,
-                            overflowY: "auto",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: isMobile ? 5 : 6,
-                        }}
-                    >
-                        {serviciosVisibles.length === 0 && !mostrarForm && (
-                            <div
-                                style={{
-                                    flex: 1,
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 10,
-                                    opacity: 0.5,
-                                    paddingTop: 40,
-                                }}
-                            >
-                                <ServiciosManager_PlaceholderIcon
-                                    src={iconoVacioUrl || undefined}
-                                    size={36}
-                                />
-                                <span
-                                    style={{ fontSize: 13, color: "#94a3b8" }}
-                                >
-                                    {busquedaServicio || filtroServicios === "pausados" ? "No hay servicios que coincidan con este filtro" : "Todavía no hay servicios"}
-                                </span>
+                    {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 10 }}>{error}</div>}
+                    <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: isMobile ? 5 : 6 }}>
+                        {serviciosVisibles.length === 0 && (
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, opacity: .5, paddingTop: 40 }}>
+                                <ServiciosManager_PlaceholderIcon src={iconoVacioUrl || undefined} size={36} />
+                                <span style={{ fontSize: 13, color: "#94a3b8" }}>{busquedaServicio || filtroServicios === "pausados" ? "No hay servicios que coincidan con este filtro" : "Todavía no hay servicios"}</span>
                             </div>
                         )}
                         <AnimatePresence mode="popLayout">
-                            {serviciosVisibles.map((svc) =>
-                                editando?.id === svc.id ? (
-                                    <motion.div
-                                        key={svc.id + "-edit"}
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        style={{ marginBottom: 6 }}
-                                    >
-                                        <ServiciosManager_ServicioForm
-                                            employeeMode={employeeMode}
-                                            initial={initialEditar}
-                                            accentColor={accentColor}
-                                            apiUrl={api}
-                                            iconoFormUrl={
-                                                iconoFormUrl || undefined
-                                            }
-                                            uploadPath={
-                                                employeeMode
-                                                    ? `/empleado/${encodeURIComponent(ServiciosManager_getSlug())}/servicios/upload-imagen`
-                                                    : undefined
-                                            }
-                                            onSubmit={handleEditar}
-                                            onCancel={() => {
-                                                setEditando(null)
-                                                setFormError("")
-                                            }}
-                                            guardando={guardando}
-                                            error={formError}
-                                            modoEdicion={true}
-                                            isMobile={isMobile}
-                                            servicioId={editando.id}
-                                            employeeVariant={employeeMode && !(editando as any)?.perfil_propio}
-                                        />
-                                    </motion.div>
-                                ) : (
-                                    <ServiciosManager_ServicioCard
-                                        key={svc.id}
-                                        svc={svc}
-                                        accentColor={accentColor}
-                                        iconoPlaceholderUrl={
-                                            iconoPlaceholderUrl || undefined
-                                        }
-                                        iconoCheck={iconoCheck || undefined}
-                                        iconoEditar={iconoEditar || undefined}
-                                        iconoEliminar={
-                                            iconoEliminar || undefined
-                                        }
-                                        onEdit={() => {
-                                            setEditando(svc)
-                                            setMostrarForm(false)
-                                            setFormError("")
-                                        }}
-                                        onToggle={() => handleToggle(svc)}
-                                        onDelete={() => handleDelete(svc)}
-                                        isMobile={isMobile}
-                                        employeeMode={employeeMode}
-                                        employeeCanEdit={
-                                            !branch && (!employeeMode || employeeCanCreate)
-                                        }
-                                    />
-                                )
-                            )}
+                            {serviciosVisibles.map((svc) => (
+                                <ServiciosManager_ServicioCard
+                                    key={svc.id}
+                                    svc={svc}
+                                    accentColor={accentColor}
+                                    iconoPlaceholderUrl={iconoPlaceholderUrl || undefined}
+                                    iconoCheck={iconoCheck || undefined}
+                                    iconoEditar={iconoEditar || undefined}
+                                    iconoEliminar={iconoEliminar || undefined}
+                                    onEdit={() => {
+                                        setMenuServicioAbierto(null)
+                                        setEditando(svc)
+                                        setMostrarForm(false)
+                                        setFormError("")
+                                    }}
+                                    onToggle={() => handleToggle(svc)}
+                                    onDelete={() => handleDelete(svc)}
+                                    isMobile={isMobile}
+                                    employeeMode={employeeMode}
+                                    employeeCanEdit={!branch && (!employeeMode || employeeCanCreate)}
+                                    menuAbierto={menuServicioAbierto === svc.id}
+                                    onToggleMenu={() => setMenuServicioAbierto(open => open === svc.id ? null : svc.id)}
+                                />
+                            ))}
                         </AnimatePresence>
                     </div>
-                </>)
+                </motion.div>
+            )}
+        </AnimatePresence>
+    )
 }
 function ServiciosManager_ProductosSection(props: any) {
     const opcionesOrden = [
