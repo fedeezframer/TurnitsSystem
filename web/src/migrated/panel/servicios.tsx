@@ -3008,7 +3008,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                     {p.dias_semana!=null && <span>Solo los {promoDaysLabel(p.dias_semana)}</span>}
                     <div>{p.items.filter((i:any)=>i.tipo==="producto" && photo(lookup(i))).map((i:any)=><img key={i.id} src={photo(lookup(i))} alt={i.nombre}/>)}</div>
                 </div>{repeated && <b className="promo-multiple">x{p.items[0].cantidad}</b>}
-                </div><div className="promo-foot"><strong>{p.nombre}</strong><div className="promo-cost">{money(Number(p.precio_final))} <del>{money(Number(p.precio_original))}</del></div>
+                </div><div className="promo-foot"><div className="promo-heading"><strong>{p.nombre}</strong><div className="promo-cost">{money(Number(p.precio_final))} <del>{money(Number(p.precio_original))}</del></div></div>
                     <span className="promo-status" data-active={active}>● {active?"Activa":"Pausada"}</span>
                     {!branch && <div className="promo-actions"><button disabled={busy} onClick={()=>editar(p)}>✎ Editar</button><details><summary aria-label={`Opciones de ${p.nombre}`}>•••</summary><div><button disabled={busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");cambiarEstado(p)}}>{active?"Pausar":"Activar"}</button><button disabled={busy} onClick={()=>eliminar(p.id)}>Eliminar</button></div></details></div>}
                 </div></article>

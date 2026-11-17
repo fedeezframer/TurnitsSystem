@@ -1,6 +1,7 @@
 button.turnits-back-button {
-  --button-size: 48px;
-  --icon-size: 24px;
+  --button-size: 26px;
+  --icon-size: 13px;
+  position: relative;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -55,7 +56,16 @@ button.turnits-back-button.is-floating {
 
 @media (width < 860px) {
   button.turnits-back-button {
-    --button-size: 24px;
-    --icon-size: 12px;
+    --button-size: 18px;
+    --icon-size: 9px;
+  }
+}
+
+@media (pointer: coarse) {
+  button.turnits-back-button::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
   }
 }
