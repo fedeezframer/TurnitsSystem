@@ -53,3 +53,13 @@ export const SucursalEmpleado = deferred(() =>
 export const PerfilEditor = deferred(() =>
   import("./perfil").then((m) => ({ default: m.PerfilNegocio })),
 );
+
+export const MisServiciosPanel = deferred(() =>
+  import("./servicios").then((m) => ({ default: m.MisServiciosPanel })),
+);
+export const ProductosPanel = deferred(() =>
+  import("./servicios").then((m) => ({ default: m.ProductosPanel })),
+);
+export const PromocionesPanel = deferred(() =>
+  import("./servicios").then((m) => ({ default: m.PromocionesPanel })),
+);
