@@ -2380,6 +2380,8 @@ function ServiciosManager(props: any) {
     )
     React.useEffect(() => { setVista(initialView) }, [initialView])
     const [serviciosMasPedidos, setServiciosMasPedidos] = React.useState<any[]>([])
+    const [filtroServicios, setFiltroServicios] = React.useState<"todos" | "pausados" | "pedidos">("todos")
+    const [busquedaServicio, setBusquedaServicio] = React.useState("")
     React.useEffect(() => {
         if (filtroServicios !== "pedidos") return
         let cancelled = false
@@ -2418,9 +2420,6 @@ function ServiciosManager(props: any) {
             window.removeEventListener("focus", refresh)
         }
     }, [api, filtroServicios])
-    const [filtroServicios, setFiltroServicios] = React.useState<"todos" | "pausados" | "pedidos">("todos")
-    const [busquedaServicio, setBusquedaServicio] = React.useState("")
-
     // ── Estado: Servicios ──
     const [loading, setLoading] = React.useState(true)
     const [servicios, setServicios] = React.useState<
