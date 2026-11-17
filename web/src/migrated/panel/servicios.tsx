@@ -1153,7 +1153,7 @@ function ServiciosManager_ServicioForm({
         const slug = ServiciosManager_getSlug()
         fetch(`${apiUrl.replace(/\/+$/, "")}/admin/equipo/${encodeURIComponent(slug)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-cache" })
             .then(r => r.ok ? r.json() : Promise.reject())
-            .then(d => { if (activo) setProfesionales(Array.isArray(d.equipo) ? d.equipo.filter((p: any) => p?.activo !== false) : []) })
+            .then(d => { if (activo) setProfesionales(Array.isArray(d.equipo) ? d.equipo.filter((p: any) => p && (p.activo === true || p.activo === "true")) : []) })
             .catch(() => { if (activo) setProfesionales([]) })
         return () => { activo = false }
     }, [apiUrl, employeeMode, employeeVariant, branch])
