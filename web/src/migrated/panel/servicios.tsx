@@ -1085,7 +1085,7 @@ function ServiciosManager_ExtrasVinculados({
 
     return (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {extrasVisibles.map((extra) => {
+            {extras.map((extra) => {
                 const sel = extra.vinculado
                 const pending = pendingIds.has(extra.id)
                 return (
