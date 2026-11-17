@@ -2411,8 +2411,7 @@ function ServiciosManager(props: any) {
         window.addEventListener("turno_actualizado", refresh)
         window.addEventListener("turno_cancelado", refresh)
         window.addEventListener("focus", refresh)
-        const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, puedePromociones, filtroServicios, busquedaServicio, servicios, error, formError, guardando, mostrarForm, editando, extras, errorExtras, formErrorExtra, guardandoExtra, mostrarFormExtra, editandoExtra }
-    return () => {
+        return () => {
             cancelled = true
             if (retryTimer) clearTimeout(retryTimer)
             if (pollTimer) clearInterval(pollTimer)
@@ -2948,11 +2947,16 @@ function ServiciosManager(props: any) {
     const popularidad = new Map<string, number>(serviciosMasPedidos.map((item: any): [string, number] => [String(item.nombre || "").trim().toLocaleLowerCase("es"), Number(item.cantidad || 0)]))
     const serviciosVisibles = servicios
         .filter((item) => filtroServicios !== "pausados" || !item.activo)
-        .filter((item) => item.nombre.toLocaleLowerCase("es").inclu{vista === "servicios"
+        .filter((item) => item.nombre.toLocaleLowerCase("es").includes(busquedaServicio.trim().toLocaleLowerCase("es")))
+        .sort((a, b) => filtroServicios === "pedidos"
+            ? (popularidad.get(b.nombre.trim().toLocaleLowerCase("es")) || 0) - (popularidad.get(a.nombre.trim().toLocaleLowerCase("es")) || 0) || a.orden - b.orden
+            : a.orden - b.orden)
+
+    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, h{vista === "servicios"
                 ? <ServiciosManager_ServiciosSection {...sectionProps} />
                 : vista === "extras"
                     ? <ServiciosManager_ProductosSection {...sectionProps} />
-                    : <ServiciosManager_PromocionesSection {...sectionProps} />}ciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Ofrecé descuentos y combinaciones para tu catálogo.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>
+                    : <ServiciosManager_PromocionesSection {...sectionProps} />}              <>{puedePromociones ? <ServiciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Ofrecé descuentos y combinaciones para tu catálogo.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>
             )}
         </div>
     )
@@ -2960,7 +2964,7 @@ function ServiciosManager(props: any) {
 
 
 function ServiciosManager_ServiciosSection(props: any) {
-    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,editando}=props
+    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,editando,filtroServicios,setFiltroServicios,busquedaServicio,setBusquedaServicio}=props
     return (<>
                     <div className="svc-toolbar">
                         <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
@@ -3121,7 +3125,6 @@ function ServiciosManager_ServiciosSection(props: any) {
                     </div>
                 </>)
 }
-
 function ServiciosManager_ProductosSection(props: any) {
     const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,editandoExtra,extras,errorExtras,formErrorExtra,guardandoExtra}=props
     return (<>
@@ -3317,12 +3320,10 @@ function ServiciosManager_ProductosSection(props: any) {
                     </div>
                 </>)
 }
-
 function ServiciosManager_PromocionesSection(props: any) {
     const {isMobile,accentColor,employeeMode,puedePromociones,api,servicios,extras}=props
     return (<>{puedePromociones ? <ServiciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Ofrecé descuentos y combinaciones para tu catálogo.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>)
 }
-
 function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMobile,employeeMode=false}:{api:string;servicios:any[];productos:any[];accentColor:string;isMobile:boolean;employeeMode?:boolean}) {
     const branch = useBranchAdmin();
     const hoy = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
