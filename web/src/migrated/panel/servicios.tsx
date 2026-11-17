@@ -2952,7 +2952,7 @@ function ServiciosManager(props: any) {
             ? (popularidad.get(b.nombre.trim().toLocaleLowerCase("es")) || 0) - (popularidad.get(a.nombre.trim().toLocaleLowerCase("es")) || 0) || a.orden - b.orden
             : a.orden - b.orden)
 
-    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, puedePromociones, filtroServicios, setFiltroServicios, busquedaServicio, setBusquedaServicio, servicios, error, formError, guardando, mostrarForm, editando, extras, errorExtras, formErrorExtra, guardandoExtra, mostrarFormExtra, editandoExtra }
+    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, puedePromociones, filtroServicios, setFiltroServicios, busquedaServicio, setBusquedaServicio, servicios, error, formError, guardando, mostrarForm, setMostrarForm, editando, setEditando, setFormError, extras, errorExtras, formErrorExtra, setFormErrorExtra, guardandoExtra, mostrarFormExtra, setMostrarFormExtra, editandoExtra, setEditandoExtra }
 
     return (
         <div
@@ -2976,7 +2976,7 @@ function ServiciosManager(props: any) {
 
 
 function ServiciosManager_ServiciosSection(props: any) {
-    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,editando,filtroServicios,setFiltroServicios,busquedaServicio,setBusquedaServicio}=props
+    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,busquedaServicio,setBusquedaServicio}=props
     return (<>
                     <div className="svc-toolbar">
                         <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
@@ -3138,7 +3138,7 @@ function ServiciosManager_ServiciosSection(props: any) {
                 </>)
 }
 function ServiciosManager_ProductosSection(props: any) {
-    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,editandoExtra,extras,errorExtras,formErrorExtra,guardandoExtra}=props
+    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,setMostrarFormExtra,editandoExtra,setEditandoExtra,extras,errorExtras,formErrorExtra,setFormErrorExtra,guardandoExtra}=props
     return (<>
                     <div
                         style={{
