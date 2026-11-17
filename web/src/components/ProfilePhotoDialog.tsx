@@ -1,3 +1,4 @@
+import { BackButton } from "./BackButton";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import "./ProfilePhotoDialog.css";
@@ -41,23 +42,7 @@ export function ProfilePhotoDialog({
           e.currentTarget.close();
       }}
     >
-      <button
-        className="perfil-photo-close"
-        type="button"
-        aria-label="Cerrar imagen"
-        onClick={() => ref.current?.close()}
-        autoFocus
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          aria-hidden="true"
-        >
-          <path d="m6 6 12 12M18 6 6 18" />
-        </svg>
-      </button>
+      <BackButton floating style={{ top: 0, right: 0 }} aria-label="Cerrar imagen" onClick={() => ref.current?.close()} autoFocus />
       {failed ? (
         <p role="status">No pudimos cargar esta imagen.</p>
       ) : (

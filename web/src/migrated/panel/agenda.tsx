@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import LoadingRunner from "../../components/LoadingRunner"
 import BookingReceipt from "../../components/BookingReceipt"
 import whatsappLogo from "../../components/whatsapp-icon.svg"
@@ -875,23 +876,7 @@ function AgendaPanel(props: any) {
                                         >
                                             Turno manual
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setModal(null)}
-                                            aria-label="Cerrar"
-                                            style={{
-                                                border: 0,
-                                                background: "#f1f5f9",
-                                                borderRadius: "50%",
-                                                width: 30,
-                                                height: 30,
-                                                cursor: "pointer",
-                                                color: "#64748b",
-                                                fontSize: 18,
-                                            }}
-                                        >
-                                            ×
-                                        </button>
+                                        <BackButton onClick={() => setModal(null)} aria-label="Cerrar" />
                                     </div>
                                     <div
                                         style={{

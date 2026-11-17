@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
@@ -566,18 +567,7 @@ function TurnitsPanel_Inner(props: any) {
                                 }}
                             >
                                     <BrandMark logoImage={logoImage} logoText={logoText} width={260} height={68} />
-                                    <button
-                                        type="button"
-                                        aria-label="Cerrar menú"
-                                        onClick={() => setMenuMobileAbierto(false)}
-                                        style={{
-                                            flexShrink: 0, width: 40, height: 40, border: 0, borderRadius: 999,
-                                            background: "#f0f4f0", color: "#2b342d", cursor: "pointer",
-                                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                        }}
-                                    >
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" /></svg>
-                                    </button>
+                                    <BackButton aria-label="Cerrar menú" onClick={() => setMenuMobileAbierto(false)} />
                             </div>
                             
                             <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr",gap:2}}>{renderNavItems()}</div>

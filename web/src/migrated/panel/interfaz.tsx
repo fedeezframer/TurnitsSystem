@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import * as React from "react"
 import { appConfig } from "../../config"
 import {
@@ -579,24 +580,7 @@ function QrFlotante({
                                         reservan directo.
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => setAbierto(false)}
-                                    aria-label="Cerrar"
-                                    style={{
-                                        width: 32,
-                                        height: 32,
-                                        flexShrink: 0,
-                                        borderRadius: 10,
-                                        border: "1px solid #e5e9f0",
-                                        background: "#f8fafc",
-                                        color: "#64748b",
-                                        fontSize: 18,
-                                        lineHeight: 1,
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    ×
-                                </button>
+                                <BackButton onClick={() => setAbierto(false)} aria-label="Cerrar" />
                             </div>
 
                             {!matriz ? (
@@ -1169,27 +1153,7 @@ function TurnitsBetaInstallPrompt({
                             "'Inter Display', -apple-system, sans-serif",
                     }}
                 >
-                    <button
-                        type="button"
-                        aria-label="Cerrar"
-                        onClick={cerrar}
-                        style={{
-                            position: "absolute",
-                            top: 9,
-                            right: 10,
-                            width: 30,
-                            height: 30,
-                            border: 0,
-                            borderRadius: "50%",
-                            background: "rgba(15,23,42,.06)",
-                            color: "#64748b",
-                            fontSize: 20,
-                            lineHeight: 1,
-                            cursor: "pointer",
-                        }}
-                    >
-                        ×
-                    </button>
+                    <BackButton floating aria-label="Cerrar" onClick={cerrar} style={{ top: 10, right: 10 }} />
                     <div
                         style={{
                             flex: 1,
@@ -1198,7 +1162,7 @@ function TurnitsBetaInstallPrompt({
                             display: "flex",
                             flexDirection: "column",
                             justifyContent: "center",
-                            paddingRight: 2,
+                            paddingRight: 44,
                         }}
                     >
                         <h2

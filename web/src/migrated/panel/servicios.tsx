@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
@@ -1366,8 +1367,8 @@ function ServiciosManager_ServicioForm({
 
             {typeof document !== "undefined" && createPortal(
                 <AnimatePresence>
-                    {avisoProfesional && <div key="aviso-profesional" style={{ position: "fixed", inset: 0, zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, pointerEvents: "none" }}>
-                        <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18 }} role="status" style={{ maxWidth: "min(420px, 100%)", padding: "16px 26px", borderRadius: 14, background: "#fff", border: "1px solid #d6e3d6", boxShadow: "0 14px 44px rgba(15,23,42,.22)", color: "#166534", fontSize: 15, fontWeight: 650, textAlign: "center" }}>{avisoProfesional}</motion.div>
+                    {avisoProfesional && <div key="aviso-profesional" style={{ position: "fixed", inset: 0, zIndex: 10001, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "calc(76px + env(safe-area-inset-top, 0px)) 16px 16px", pointerEvents: "none" }}>
+                        <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }} role="status" style={{ maxWidth: "min(420px, 100%)", padding: "16px 26px", borderRadius: 14, background: "#fff", border: "1px solid #d6e3d6", boxShadow: "0 14px 44px rgba(15,23,42,.22)", color: "#166534", fontSize: 15, fontWeight: 650, textAlign: "center" }}>{avisoProfesional}</motion.div>
                     </div>}
                 </AnimatePresence>,
                 document.body
@@ -1468,21 +1469,7 @@ function ServiciosManager_ExtraForm({
                             : "Después podés vincularlo a uno o más servicios."}
                     </div>
                 </div>
-                <button
-                    onClick={onCancel}
-                    style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#94a3b8",
-                        fontSize: 20,
-                        lineHeight: 1,
-                        padding: "0 2px",
-                        flexShrink: 0,
-                    }}
-                >
-                    ×
-                </button>
+                <BackButton onClick={onCancel} aria-label="Cerrar" />
             </div>
 
             <div
@@ -2612,16 +2599,9 @@ function ServiciosManager_ServiciosSection(props: any) {
                     transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                     style={{ width: "100%" }}
                 >
-                    <button
-                        type="button"
-                        className="svc-back-button"
-                        onClick={volverALista}
-                        aria-label="Volver a la lista de servicios"
-                        style={{ display: "inline-flex", alignItems: "center", gap: 8, margin: "0 0 14px", padding: "7px 0", border: 0, background: "transparent", color: "#26352a", font: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-                    >
-                        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6M9 12h11" /></svg>
-                        Volver a servicios
-                    </button>
+                    <div style={{ display: "flex", justifyContent: "flex-end", margin: "0 0 12px" }}>
+                        <BackButton className="svc-back-button" onClick={volverALista} aria-label="Volver a la lista de servicios" />
+                    </div>
                     <ServiciosManager_ServicioForm
                         key={editando ? `service-form-${editando.id}` : "service-form-new"}
                         employeeMode={employeeMode}

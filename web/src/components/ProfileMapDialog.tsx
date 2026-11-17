@@ -1,3 +1,4 @@
+import { BackButton } from "./BackButton";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import type { MapBranch } from "./BranchMap";
@@ -59,22 +60,7 @@ export function ProfileMapDialog({
           <h2 id={title}>{location.nombre}</h2>
           {location.direccion && <p>{location.direccion}</p>}
         </div>
-        <button
-          type="button"
-          aria-label="Cerrar mapa"
-          onClick={() => ref.current?.close()}
-          autoFocus
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            aria-hidden="true"
-          >
-            <path d="m6 6 12 12M18 6 6 18" />
-          </svg>
-        </button>
+        <BackButton aria-label="Cerrar mapa" onClick={() => ref.current?.close()} autoFocus />
       </header>
       <React.Suspense
         fallback={

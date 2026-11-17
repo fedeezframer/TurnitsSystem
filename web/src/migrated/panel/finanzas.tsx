@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import * as React from "react"
 import LoadingRunner from "../../components/LoadingRunner"
 import {
@@ -80,7 +81,7 @@ function FinanzasExpensePicker({ title, value, options, onChange, disabled = fal
         <div className="fin-exp-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-heading`} aria-describedby={`${id}-help`}>
             <div className="fin-exp-header">
                 <div><h2 id={`${id}-heading`}>{title === "Categoría" ? "¿En qué gastaste?" : "¿Qué tipo de gasto es?"}</h2><p id={`${id}-help`}>{title === "Categoría" ? "Elegí la opción que mejor describe este gasto. Así vas a poder entender a dónde va tu dinero." : "Elegí cómo se comporta este costo. Podés activar la repetición mensual desde el formulario."}</p></div>
-                <button className="fin-exp-close" type="button" aria-label="Cerrar opciones" onClick={() => setOpen(false)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
+                <BackButton aria-label="Cerrar opciones" onClick={() => setOpen(false)} />
             </div>
             <div className="fin-exp-grid">
                 {options.map(option => <button className="fin-exp-option" type="button" key={option.id} aria-pressed={value === option.id} style={{borderColor:value === option.id ? option.color : undefined}} onClick={() => {onChange(option.id);setOpen(false)}}>
@@ -140,7 +141,7 @@ function FinanzasDatePicker({ value, onChange, disabled = false }: { value: stri
     }, [open,focused,month])
     const overlay = open ? <div className="fin-exp-overlay" onClick={event => {if(event.target === event.currentTarget)close()}}>
         <div className="fin-exp-dialog fin-date-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-heading`}>
-            <div className="fin-exp-header"><div><h2 id={`${id}-heading`}>Fecha del gasto</h2><p>Elegí cuándo se realizó este gasto.</p></div><button className="fin-exp-close" type="button" onClick={close} aria-label="Cerrar calendario"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div>
+            <div className="fin-exp-header"><div><h2 id={`${id}-heading`}>Fecha del gasto</h2><p>Elegí cuándo se realizó este gasto.</p></div><BackButton onClick={close} aria-label="Cerrar calendario" /></div>
             <div className="fin-date-body">
                 <div className="fin-date-nav">
                     <button className="fin-date-arrow" type="button" onClick={() => navigateMonth(-1)} aria-label="Mes anterior"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg></button>
@@ -213,7 +214,7 @@ function FinanzasMonthPicker({ value, onChange, disabled = false }: { value: str
     }, [open,focused,month])
     const overlay = open ? <div className="fin-exp-overlay" onClick={event => {if(event.target === event.currentTarget)close()}}>
         <div className="fin-exp-dialog fin-date-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-heading`}>
-            <div className="fin-exp-header"><div><h2 id={`${id}-heading`}>Mes del resumen</h2><p>Elegí el período que querés consultar.</p></div><button className="fin-exp-close" type="button" onClick={close} aria-label="Cerrar calendario"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div>
+            <div className="fin-exp-header"><div><h2 id={`${id}-heading`}>Mes del resumen</h2><p>Elegí el período que querés consultar.</p></div><BackButton onClick={close} aria-label="Cerrar calendario" /></div>
             <div className="fin-date-body">
                 <div className="fin-date-nav">
                     <button className="fin-date-arrow" type="button" onClick={() => navigateMonth(-1)} aria-label="Año anterior"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg></button>
@@ -844,18 +845,7 @@ function FinanzasPanel({
                             <b style={{ fontSize: 18 }}>
                                 {editando ? "Editar gasto" : "Cargar gasto"}
                             </b>
-                            <button
-                                onClick={() => setModal(false)}
-                                aria-label="Cerrar"
-                                style={{
-                                    border: 0,
-                                    background: "transparent",
-                                    fontSize: 22,
-                                    cursor: "pointer",
-                                }}
-                            >
-                                ×
-                            </button>
+                            <BackButton onClick={() => setModal(false)} aria-label="Cerrar" />
                         </div>
                         <div style={{ display: "grid", gap: 13 }}>
                             {error && (

@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import { ServiciosManager, HorariosConfig, ExcepcionesConfig, MercadoPagoConexion, ConfigPagos, SucursalEmpleado } from "./section-components"
 import LoadingRunner, { SectionLoadingBoundary, InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
@@ -1395,23 +1396,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                                         {turnoDetalle.cliente}
                                     </h2>
                                 </div>
-                                <button
-                                    type="button"
-                                    aria-label="Cerrar detalle"
-                                    onClick={() => setTurnoDetalle(null)}
-                                    style={{
-                                        width: 34,
-                                        height: 34,
-                                        border: 0,
-                                        borderRadius: "50%",
-                                        background: "#f1f5f9",
-                                        color: "#475569",
-                                        cursor: "pointer",
-                                        fontSize: 20,
-                                    }}
-                                >
-                                    ×
-                                </button>
+                                <BackButton aria-label="Cerrar detalle" onClick={() => setTurnoDetalle(null)} />
                             </div>
                             <div
                                 style={{

@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { appConfig } from "../../config"
 import { useSearchParams } from "react-router"
@@ -653,6 +654,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                         }}
                     >
                         <OnboardingSetupCard step={paso === 0 ? "servicios" : paso === pasoPago ? "pagos" : "horarios"}>
+                            {paso > 0 && <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+                                <BackButton aria-label="Volver al paso anterior" onClick={() => { setErrorMsg(""); setPaso((p) => Math.max(0, p - 1)) }} />
+                            </div>}
                             <button
                                 className="tn-onb-skip"
                                 onClick={omitirTodo}

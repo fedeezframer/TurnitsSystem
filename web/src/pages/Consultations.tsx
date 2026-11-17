@@ -1,3 +1,4 @@
+import { BackButton } from "../components/BackButton";
 import * as React from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { appConfig } from "../config";
@@ -319,7 +320,7 @@ function ConsultationsContent({ embedded, guestToken = "", guestAccessMissing = 
     if (url.protocol !== "https:" || !/(^|\.)mercadopago\.(com|com\.ar)$/.test(url.hostname)) throw Error("No pudimos abrir un enlace de pago seguro.");
     window.location.assign(url.href);
   });
-  const inboxView = <section className="chat-inbox" aria-labelledby="chat-inbox-title"><div className="chat-inbox-heading"><h1 id="chat-inbox-title">Mensajes</h1>{embedded === "panel" && onExit && <button className="chat-inbox-exit" type="button" aria-label="Volver al panel" onClick={onExit}><ChatIcon name="back" size={20} /></button>}</div>
+  const inboxView = <section className="chat-inbox" aria-labelledby="chat-inbox-title"><div className="chat-inbox-heading"><h1 id="chat-inbox-title">Mensajes</h1>{embedded === "panel" && onExit && <BackButton className="chat-inbox-exit" aria-label="Volver al panel" onClick={onExit} />}</div>
     {error && <div className="chat-error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>Reintentar</button></div>}
     {loading && !inbox.length && <p className="chat-empty" role="status">Cargando mensajes…</p>}
     {!loading && !inbox.length && !error && <p className="chat-empty">Todavía no tenés mensajes. Tus consultas van a aparecer acá.</p>}
@@ -327,7 +328,7 @@ function ConsultationsContent({ embedded, guestToken = "", guestAccessMissing = 
   </section>;
   const Container = embedded ? "section" : "main";
   const threadView = current ? <section className={`chat-thread${draggingImage ? " chat-thread-dragging" : ""}`} aria-label="Conversación" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDropPhoto}>
-      <header className="chat-person"><ChatAvatar name={participant.nombre || "?"} src={participant.foto_url} /><h1>{participant.nombre || "Cargando…"}</h1><div className="chat-person-actions">{business && conversation && <button className={`chat-tool${screen === "edit" ? " selected" : ""}`} type="button" disabled={busy} aria-label={screen === "edit" ? "Cerrar editor de presupuesto" : canEdit ? "Armar presupuesto" : "Ver presupuesto"} aria-pressed={screen === "edit"} onClick={() => screen === "edit" ? setScreen("chat") : enterEditor()}><ChatIcon name="tool" /></button>}<button className="chat-back" type="button" disabled={busy} aria-label={screen === "chat" ? guestToken ? "Volver al negocio" : "Volver a mensajes" : "Volver al chat"} onClick={() => { if (screen === "chat") guestToken ? navigate(-1) : setThread(); else { setScreen("chat"); setError(""); } }}><ChatIcon name="back" /></button></div></header>
+      <header className="chat-person"><ChatAvatar name={participant.nombre || "?"} src={participant.foto_url} /><h1>{participant.nombre || "Cargando…"}</h1><div className="chat-person-actions">{business && conversation && <button className={`chat-tool${screen === "edit" ? " selected" : ""}`} type="button" disabled={busy} aria-label={screen === "edit" ? "Cerrar editor de presupuesto" : canEdit ? "Armar presupuesto" : "Ver presupuesto"} aria-pressed={screen === "edit"} onClick={() => screen === "edit" ? setScreen("chat") : enterEditor()}><ChatIcon name="tool" /></button>}<BackButton className="chat-back" disabled={busy} aria-label={screen === "chat" ? guestToken ? "Volver al negocio" : "Volver a mensajes" : "Volver al chat"} onClick={() => { if (screen === "chat") guestToken ? navigate(-1) : setThread(); else { setScreen("chat"); setError(""); } }} /></div></header>
       {error && <div className="chat-error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>Reintentar</button></div>}
       {loading && !conversation && <p role="status" className="chat-empty">Cargando conversación…</p>}
       {conversation && screen === "chat" && <>

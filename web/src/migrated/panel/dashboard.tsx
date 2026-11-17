@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
@@ -2300,23 +2301,7 @@ function TurnitsDashboardSidePanel({
                                 : "Acciones de crecimiento y retención sin llenar tu dashboard de tarjetas."}
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        aria-label="Cerrar"
-                        style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 10,
-                            border: "1px solid #e7ecef",
-                            background: "#f8fafb",
-                            color: "#64748b",
-                            cursor: "pointer",
-                            fontSize: 18,
-                        }}
-                    >
-                        ×
-                    </button>
+                    <BackButton onClick={onClose} aria-label="Cerrar" />
                 </div>
                 <div
                     data-lenis-prevent="true"

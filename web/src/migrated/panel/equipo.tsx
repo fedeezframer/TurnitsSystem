@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
@@ -971,20 +972,7 @@ function TeamManager_MiembroForm({
                           ? "Editar miembro"
                           : "Nuevo miembro"}
                 </span>
-                <button
-                    onClick={onCancel}
-                    style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#94a3b8",
-                        fontSize: 20,
-                        lineHeight: 1,
-                        padding: "0 2px",
-                    }}
-                >
-                    ×
-                </button>
+                <BackButton onClick={onCancel} aria-label="Cerrar" />
             </div>
 
             {/* Foto de perfil */}

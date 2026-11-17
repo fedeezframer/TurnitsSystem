@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import * as React from "react"
@@ -1418,20 +1419,7 @@ function ExcepcionesConfig_DayPanel({
                         </div>
                     )}
                 </div>
-                <button
-                    onClick={onClose}
-                    style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#94a3b8",
-                        fontSize: 18,
-                        lineHeight: 1,
-                        padding: "2px 4px",
-                    }}
-                >
-                    ×
-                </button>
+                <BackButton onClick={onClose} aria-label="Cerrar" />
             </div>
 
             <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>

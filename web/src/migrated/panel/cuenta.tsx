@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { InlineLoading } from "../../components/LoadingRunner"
 import * as React from "react"
@@ -943,10 +944,10 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
           @media(max-width:760px){.tn-reduction-dialog{padding:64px 22px 28px}.tn-reduction-title{font-size:27px;line-height:34px}.tn-reduction-description{font-size:14px;line-height:20px}.tn-reduction-art{margin-top:16px}.tn-reduction-details{font-size:12px;line-height:18px}}
         `}</style>
         <motion.div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="tn-planes-title" className={"tn-planes-dialog" + (avisoPlan ? " tn-reduction-dialog" : isCheckout ? " tn-checkout-dialog" : isSuccess ? " tn-thanks-dialog" : "")} initial={{ opacity: 0, y: 14, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: .18 }}>
-            {avisoPlan ? <div className="tn-checkout-controls"><button type="button" className="tn-checkout-control" disabled={busy} onClick={onClose} aria-label="Cerrar aviso">×</button></div> : <>
-            {isSuccess ? <div className="tn-checkout-controls"><button type="button" className="tn-checkout-control" onClick={() => closeRef.current()} aria-label="Cerrar confirmación"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div> : isCheckout ? <div className="tn-checkout-controls"><button type="button" className="tn-checkout-control" disabled={busy} onClick={volver} aria-label="Volver a los planes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 5-5 5 5 5M4 10h9a7 7 0 0 1 7 7v2" /></svg></button><button type="button" className="tn-checkout-control" disabled={busy} onClick={onClose} aria-label="Cerrar planes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div> : <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+            {avisoPlan ? <div className="tn-checkout-controls"><BackButton disabled={busy} onClick={onClose} aria-label="Cerrar aviso" /></div> : <>
+            {isSuccess ? <div className="tn-checkout-controls"><BackButton onClick={() => closeRef.current()} aria-label="Cerrar confirmación" /></div> : isCheckout ? <div className="tn-checkout-controls"><BackButton disabled={busy} onClick={volver} aria-label="Volver a los planes" /></div> : <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
                 <h2 id="tn-planes-title" style={{ margin: 0, fontSize: 25, fontWeight: 650 }}>{compra?.status === "approved" ? "Tu plan ya está activo" : oferta ? `Plan ${oferta.nombre}` : "Un plan para cada etapa"}</h2>
-                <button type="button" disabled={busy} onClick={onClose} aria-label="Cerrar planes" style={{ border: 0, borderRadius: 10, background: "#f1f5f9", width: 34, height: 34, flexShrink: 0, cursor: "pointer", color: "#64748b", fontSize: 24 }}>×</button>
+                <BackButton disabled={busy} onClick={onClose} aria-label="Cerrar planes" />
             </div>}
             {!oferta && <p style={{ margin: "9px 0 20px", color: "#64748b", fontSize: 13, lineHeight: 1.6 }}>Elegí las herramientas que necesita tu negocio.{cuenta && <> Tu plan actual: <strong>{catalogo.find(p => p.id === cuenta.plan)?.nombre || cuenta.plan}</strong>{cuenta.estado === "trial" ? " · en prueba" : ""}.</>}</p>}
             </>}
@@ -1023,7 +1024,7 @@ function MenuCuentaGraciasDemo({ api, logo, onClose }: { api: string; logo?: str
     }, [api])
     const nombre = cuenta?.plan === "premium" ? "Premium" : "Básico"
     const fecha = cuenta?.fecha_vencimiento || new Date(Date.now() + 30 * 86400000).toISOString()
-    return <div className="tn-planes-overlay" data-preview="gracias-pagarplan" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}><style>{MenuCuentaGraciasPreviewCSS}</style><div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="tn-planes-title" className="tn-planes-dialog tn-thanks-dialog"><div className="tn-checkout-controls"><button type="button" className="tn-checkout-control" aria-label="Cerrar vista previa" onClick={onClose}>×</button></div><MenuCuentaGraciasPlanes logo={logo} nombre={nombre} fecha={fecha} /><span style={{position:"absolute",bottom:22,left:0,right:0,textAlign:"center",fontSize:11,color:"#94a3b8"}}>Vista previa · no confirma ni realiza un pago</span></div></div>
+    return <div className="tn-planes-overlay" data-preview="gracias-pagarplan" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}><style>{MenuCuentaGraciasPreviewCSS}</style><div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="tn-planes-title" className="tn-planes-dialog tn-thanks-dialog"><div className="tn-checkout-controls"><BackButton aria-label="Cerrar vista previa" onClick={onClose} /></div><MenuCuentaGraciasPlanes logo={logo} nombre={nombre} fecha={fecha} /><span style={{position:"absolute",bottom:22,left:0,right:0,textAlign:"center",fontSize:11,color:"#94a3b8"}}>Vista previa · no confirma ni realiza un pago</span></div></div>
 }
 
 function MenuCuentaPagoRetorno({ api, logo }: { api: string; logo?: string }) {
@@ -1912,35 +1913,7 @@ function NotificacionesFlotantes({
                                         Notificaciones
                                     </span>
                                 </div>
-                                <button
-                                    onClick={onClose}
-                                    aria-label="Cerrar"
-                                    style={{
-                                        width: 30,
-                                        height: 30,
-                                        borderRadius: "50%",
-                                        border: "none",
-                                        background: "#f1f5f9",
-                                        color: "#64748b",
-                                        cursor: "pointer",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    <svg
-                                        width="14"
-                                        height="14"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2.3"
-                                        strokeLinecap="round"
-                                    >
-                                        <path d="M6 6l12 12M18 6L6 18" />
-                                    </svg>
-                                </button>
+                                <BackButton onClick={onClose} aria-label="Cerrar" />
                             </div>
 
                             <div

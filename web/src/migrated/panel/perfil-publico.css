@@ -870,26 +870,6 @@
   font-size: 13px;
   overflow-wrap: anywhere;
 }
-.perfil-map-dialog header > button {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 35px;
-  height: 35px;
-  background: #f1f5f2;
-  border: 0;
-  border-radius: 10px;
-  color: #526558;
-  cursor: pointer;
-}
-.perfil-map-dialog header > button > svg {
-  width: 19px;
-  height: 19px;
-}
-.perfil-map-dialog header > button:focus-visible {
-  outline: 2px solid #1b6b1a;
-  outline-offset: 3px;
-}
 .perfil-map-dialog .tn-branch-map-expanded {
   margin: 0 18px 18px;
   flex: 1;
