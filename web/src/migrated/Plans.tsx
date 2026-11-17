@@ -17,7 +17,7 @@ const rows = [
     ["Mercado Pago", "Tarjetas aceptadas y saldo", "Tarjetas aceptadas y saldo", "Tarjetas aceptadas y saldo"],
     ["Transferencia y efectivo", false, false, true],
     ["Cobro por reserva", "Total y seña", "Total y seña", "Total, seña y sin cobro"],
-    ["Comisión Turnits por cobro online", "$300 o 2%, el mayor", "Mín. $100 o 0,8% sobre excedente de $15.000", "Mín. $100 o 0,8% sobre excedente de $15.000"],
+    ["Comisión Turnits por cobro online", "$300 o 2%, el mayor", "Mín. $100 o 0,8% sobre excedente de $15.000", "Sin comisión de Turnits"],
     ["Logo del negocio", true, true, true],
     ["Personalización de temas", false, true, true],
     ["Combos y promociones", false, true, true],
@@ -102,7 +102,7 @@ export default function PlanesTurnits(props) {
                 <p className="tp-desc">{descriptions[i]}</p>{cta(p, i)}
                 <div style={{ marginTop: 18 }}>{rows.map(row => <div className="tp-item" key={String(row[0])}><span>{row[0]}</span><span><Value value={row[i + 1]} color={accentColor} /></span></div>)}</div>
             </article>)}</div>
-            <p className="tp-note">Básico y Premium incluyen {days} días de prueba con las funciones de cada plan. Durante cualquier prueba, el fee por cobro online es el de Gratis: el mayor entre $300 y 2%. Después se aplica la comisión del plan elegido. Mercado Pago cobra sus propias comisiones por separado.</p>
+            <p className="tp-note">Básico y Premium incluyen {days} días de prueba con las funciones de cada plan. Durante la prueba de Básico se cobra el mayor entre $300 y el 2% por cobro online. Premium tiene $0 de comisión de Turnits desde el primer día. Mercado Pago cobra sus propias comisiones por separado.</p>
         </div>
     </section>
 }
