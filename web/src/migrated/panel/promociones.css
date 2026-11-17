@@ -1,10 +1,8 @@
+.promo-toolbar {display:flex;justify-content:flex-end;margin-bottom:16px}
 .promotions {container-type:inline-size; color:#101010; font-size:16px; --green:#196a1a}
 .promotions * {box-sizing:border-box}
 .promotions button,.promotions summary {cursor:pointer;font:inherit}
 .promotions button:disabled {opacity:.52;cursor:default}
-.promotions-head {display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:32px}
-.promotions-head h2 {font-size:clamp(28px,3.5cqw,48px);letter-spacing:-.035em;margin:0;line-height:1.1}
-.promotions-head p {margin:5px 0 0;line-height:1.4}
 .promo-primary {background:var(--green);color:white;border:0;border-radius:12px;padding:15px 20px;font-weight:700!important}
 .promo-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(16px,4cqw,64px)}
 .promo-card {border:1px solid #aaa;border-radius:clamp(20px,3cqw,44px);min-width:0;background:white}
@@ -58,5 +56,27 @@
 .promo-editor .promo-primary {justify-self:end}
 .promo-error {color:#9c2222}
 @container(max-width:850px){.promo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@container(max-width:560px){.promo-grid,.promo-intro{grid-template-columns:1fr}.promo-intro{gap:18px}.promotions-head{display:grid;gap:12px}.promotions-head button{justify-self:start}.promo-editor{padding:48px 12px 18px}.promo-line{padding:8px;gap:4px}.promo-prices{gap:10px}.promo-foot{padding:14px}.promo-cost{font-size:15px}}
+@container(max-width:560px){.promo-grid,.promo-intro{grid-template-columns:1fr}.promo-intro{gap:18px}.promo-toolbar{justify-content:flex-start}.promo-editor{padding:48px 12px 18px}.promo-line{padding:8px;gap:4px}.promo-prices{gap:10px}.promo-foot{padding:14px}.promo-cost{font-size:15px}}
 .promo-editor .svc-upload-zone:not(:hover)>img+div {opacity:0!important}
+
+@media (min-width:860px) {
+  .promotions {font-size:14px}
+  .promo-grid {grid-template-columns:repeat(auto-fill,minmax(min(100%,228px),1fr));gap:16px}
+  .promo-card {border-color:#c9cdc9;border-radius:16px}
+  .promo-cover {aspect-ratio:16/9;max-height:176px}
+  .promo-badges {font-size:12px}
+  .promo-badges>b,.promo-badges>span {padding:4px 8px}
+  .promo-badges img {width:28px}
+  .promo-foot {padding:10px 12px;gap:8px}
+  .promo-foot>strong {font-size:15px}
+  .promo-cost {font-size:13px}
+  .promo-primary {padding:9px 14px;border-radius:8px}
+  .promo-editor {max-width:960px;padding:48px 24px 20px;border-radius:18px}
+  .promo-editor fieldset {gap:16px}
+  .promo-intro {grid-template-columns:minmax(0,280px) minmax(0,1fr);gap:24px}
+  .promo-details textarea {min-height:96px;border-radius:12px}
+  .promo-choice>img,.promo-thumb {width:44px}
+  .promo-check {width:24px}
+  .promo-line {padding:6px 10px;border-radius:10px}
+  .promo-people button {width:32px;height:32px}
+}

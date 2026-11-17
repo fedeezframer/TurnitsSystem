@@ -1204,15 +1204,15 @@ function ServiciosManager_ServicioForm({
         setForm((previous) => ({ ...previous, [key]: value }))
 
     const inputStyle: React.CSSProperties = {
-        width: "100%", minWidth: 0, height: isMobile ? 44 : 52,
+        width: "100%", minWidth: 0, height: isMobile ? 44 : 40,
         boxSizing: "border-box", border: "1px solid #aaa", borderRadius: 999,
         padding: isMobile ? "0 15px" : "0 18px", background: "#fff",
-        color: "#111", fontFamily: "inherit", fontSize: isMobile ? 15 : 19,
+        color: "#111", fontFamily: "inherit", fontSize: isMobile ? 15 : 14,
         outlineColor: accentColor,
     }
     const labelStyle: React.CSSProperties = {
         display: "block", marginBottom: isMobile ? 6 : 8,
-        color: "#111", fontSize: isMobile ? 15 : 19,
+        color: "#111", fontSize: isMobile ? 15 : 14,
         fontWeight: 450, lineHeight: 1.2,
     }
     const fieldStyle: React.CSSProperties = { minWidth: 0 }
@@ -1234,9 +1234,9 @@ function ServiciosManager_ServicioForm({
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.2 }}
             style={{
-                background: "#fff", borderRadius: isMobile ? 24 : 48,
+                background: "#fff", borderRadius: isMobile ? 24 : 18,
                 border: "1px solid #b6b6b6", boxShadow: "none",
-                padding: isMobile ? 18 : "clamp(22px, 3.8vw, 56px)",
+                padding: isMobile ? 18 : 24,
                 boxSizing: "border-box", overflow: "hidden", position: "relative",
                 fontFamily: "'Inter Display', -apple-system, sans-serif",
             }}
@@ -1253,8 +1253,8 @@ function ServiciosManager_ServicioForm({
             </div>
 
             <div style={{
-                display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, .82fr) minmax(0, 1fr)",
-                gap: isMobile ? 16 : "clamp(22px, 4vw, 60px)", alignItems: "stretch",
+                display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(200px, 280px) minmax(0, 1fr)",
+                gap: isMobile ? 16 : 24, alignItems: "stretch",
             }}>
                 <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
                     <label style={labelStyle}>Imagen del Servicio</label>
@@ -1273,7 +1273,7 @@ function ServiciosManager_ServicioForm({
                             onChange={(event) => set("descripcion")(event.target.value)}
                             placeholder="Descripción del servicio"
                             style={{
-                                ...inputStyle, height: isMobile ? 110 : 144, minHeight: isMobile ? 90 : 120,
+                                ...inputStyle, height: isMobile ? 110 : 96, minHeight: 90,
                                 borderRadius: 18, padding: isMobile ? 11 : 15, resize: "vertical",
                                 fontSize: isMobile ? 14 : 16, lineHeight: 1.4,
                             }}
@@ -1675,7 +1675,7 @@ function ServiciosManager_ExtraForm({
     )
 }
 
-const CATALOG_THUMB_SIZE = 52
+const catalogThumbSize = (mobile: boolean) => mobile ? 52 : 44
 
 function ServiciosManager_ServicioCard({
     svc,
@@ -1741,8 +1741,8 @@ function ServiciosManager_ServicioCard({
         >
             <div
                 style={{
-                    width: CATALOG_THUMB_SIZE,
-                    height: CATALOG_THUMB_SIZE,
+                    width: catalogThumbSize(isMobile),
+                    height: catalogThumbSize(isMobile),
                     borderRadius: 10,
                     flexShrink: 0,
                     overflow: "hidden",
@@ -1882,7 +1882,7 @@ function ServiciosManager_ExtraCard({
     const moreButtonRef = React.useRef<HTMLButtonElement>(null)
     return (
         <motion.div layout initial={{opacity:0,y:6}} animate={{opacity:!employeeMode && extra.owner_equipo_id ? (extra.activo ? .8 : .5) : (extra.activo ? 1 : .55),y:0}} exit={{opacity:0,scale:.96}} transition={{duration:.18}} className="svc-card" style={{display:"flex",alignItems:"center",flexWrap:"nowrap",gap:10,padding:"7px 9px",borderRadius:11,background:"#fff",border:"1px solid #bfc3bf",opacity:extra.activo?1:.55,transition:"background .15s, opacity .2s",...(!employeeMode?ServiciosManager_EmployeeCardStyle(extra):{})}}>
-            <div style={{width:CATALOG_THUMB_SIZE,height:CATALOG_THUMB_SIZE,borderRadius:5,flexShrink:0,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:catalogThumbSize(isMobile),height:catalogThumbSize(isMobile),borderRadius:5,flexShrink:0,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 {extra.imagen_url && !imgError ? <img src={extra.imagen_url} alt={extra.nombre} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={()=>setImgError(true)}/> : <ServiciosManager_PlaceholderIcon src={iconoPlaceholderUrl} size={22}/>}
             </div>
             <div style={{flex:1,minWidth:0}}>
@@ -2959,9 +2959,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const openNew = () => { setUploadingCover(false); setForm(initial()); setAssigned([]); setEditando(null); setMostrar(true); setError("") }
     const isEligible = (id:string) => selected.every(i => i.tipo !== "servicio" || i.source?.profesionales?.some((p:any) => p.id === id))
     return <section className="promotions">
-        <header className="promotions-head"><div><h2>Promociones</h2><p>Ofrece promociones a tus clientes, descuentos y combos para mejorar su experiencia</p></div>
-            {!mostrar && !branch && <button className="promo-primary" onClick={openNew}>Crear Promoción</button>}
-        </header>
+        {!mostrar && !branch && <div className="promo-toolbar"><button className="promo-primary" onClick={openNew}>Crear Promoción</button></div>}
         {error && <p role="alert" className="promo-error">{error}</p>}
         {mostrar ? <form className="promo-editor" onSubmit={guardar}>
             <BackButton floating onClick={close} disabled={busy || uploadingCover}/>
