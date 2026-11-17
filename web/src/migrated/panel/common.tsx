@@ -536,6 +536,13 @@ function TurnitsGlobalSaveManager_get() {
                             })
                             const data = await res.json().catch(() => ({}))
                             if (!res.ok || !data.success) throw new Error(data.error || "No se pudo guardar el servicio.")
+                            const before = Array.isArray(draft.profesionalesInicialesIds) ? draft.profesionalesInicialesIds : []
+                            const after = Array.isArray(draft.profesionalesIds) ? draft.profesionalesIds : before
+                            const assignments = await Promise.all([
+                                ...before.filter((id: string) => !after.includes(id)).map((id: string) => fetch(`${api()}/admin/equipo/${encodeURIComponent(id)}/servicios/${encodeURIComponent(serviceId)}?slug=${encodeURIComponent(slug)}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })),
+                                ...after.filter((id: string) => !before.includes(id)).map((id: string) => fetch(`${api()}/admin/equipo/${encodeURIComponent(id)}/servicios`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ slug, servicio_id: serviceId }) })),
+                            ])
+                            if (assignments.some(r => !r.ok)) throw new Error("No se pudieron actualizar los profesionales asignados.")
                         }
                         results.servicios = true
                     } catch (e: any) {
@@ -2382,6 +2389,8 @@ interface ServiciosManager_FormData {
     precio: string
     capacidad: string
     orden: string
+    profesionalesIds?: string[]
+    profesionalesInicialesIds?: string[]
 }
 
 interface ServiciosManager_Extra {
@@ -2477,6 +2486,7 @@ interface ServiciosManager_ImageUploaderProps {
     accentColor: string
     apiUrl: string
     iconoFormUrl?: string
+    size?: number
     uploadPath?: string
 }
 

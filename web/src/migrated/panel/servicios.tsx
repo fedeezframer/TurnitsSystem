@@ -360,6 +360,7 @@ function ServiciosManager_ImageUploader({
     accentColor,
     apiUrl,
     iconoFormUrl,
+    size = 86,
     uploadPath = "/admin/servicios/upload-imagen",
 }: ServiciosManager_ImageUploaderProps) {
     const [uploading, setUploading] = React.useState(false)
@@ -472,9 +473,9 @@ function ServiciosManager_ImageUploader({
                     onDragLeave={() => setDragOver(false)}
                     onDrop={handleDrop}
                     style={{
-                        width: 86,
-                        height: 86,
-                        borderRadius: 16,
+                        width: size,
+                        height: size,
+                        borderRadius: size > 100 ? 20 : 16,
                         flexShrink: 0,
                         border: preview
                             ? "1.5px solid #eef2f7"
@@ -542,7 +543,7 @@ function ServiciosManager_ImageUploader({
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    opacity: 0,
+                                    opacity: size > 100 ? 1 : 0,
                                     transition: "opacity 0.15s",
                                 }}
                                 onMouseEnter={(e) =>
@@ -554,12 +555,16 @@ function ServiciosManager_ImageUploader({
                             >
                                 <span
                                     style={{
-                                        fontSize: 18,
+                                        fontSize: size > 100 ? 13 : 18,
                                         color: "#fff",
-                                        lineHeight: 1,
+                                        lineHeight: 1.1,
+                                        fontWeight: 700,
+                                        background: size > 100 ? "rgba(0,0,0,.48)" : "transparent",
+                                        borderRadius: 999,
+                                        padding: size > 100 ? "9px 13px" : 0,
                                     }}
                                 >
-                                    ↑
+                                    {size > 100 ? "Cambiar imagen" : "↑"}
                                 </span>
                             </div>
                         </>
@@ -1139,6 +1144,27 @@ function ServiciosManager_ServicioForm({
     const globalEdit = !!(modoEdicion && servicioId && !employeeVariant && !employeeMode && !branch)
     const [form, setForm] = React.useState<ServiciosManager_FormData>(() => globalEdit ? TurnitsGlobalSaveManager_get()?.getPending("servicios")?.[servicioId!] || initial : initial)
     const [precioError, setPrecioError] = React.useState("")
+    const [profesionales, setProfesionales] = React.useState<CatalogoProfesional[]>([])
+    const [avisoProfesional, setAvisoProfesional] = React.useState("")
+    React.useEffect(() => {
+        if (employeeMode || employeeVariant || branch) return
+        let activo = true
+        const token = ServiciosManager_getToken()
+        const slug = ServiciosManager_getSlug()
+        fetch(`${apiUrl.replace(/\/+$/, "")}/admin/equipo/${encodeURIComponent(slug)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-cache" })
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(d => { if (activo) setProfesionales(Array.isArray(d.equipo) ? d.equipo.filter((p: any) => p?.activo !== false) : []) })
+            .catch(() => { if (activo) setProfesionales([]) })
+        return () => { activo = false }
+    }, [apiUrl, employeeMode, employeeVariant, branch])
+    const selectedProfesionales = form.profesionalesIds || initial.profesionalesIds || []
+    const toggleProfesional = (prof: CatalogoProfesional) => {
+        const selected = selectedProfesionales.includes(prof.id)
+        const nombre = [prof.nombre, prof.apellido].filter(Boolean).join(" ")
+        setForm(p => ({ ...p, profesionalesInicialesIds: p.profesionalesInicialesIds || initial.profesionalesInicialesIds || [], profesionalesIds: selected ? (p.profesionalesIds || initial.profesionalesIds || []).filter(id => id !== prof.id) : [...(p.profesionalesIds || initial.profesionalesIds || []), prof.id] }))
+        setAvisoProfesional(`${selected ? "Quitaste a" : "Agregaste a"} ${nombre}`)
+        window.setTimeout(() => setAvisoProfesional(""), 1900)
+    }
     React.useEffect(() => {
         if (!globalEdit || !servicioId) return
         const manager = TurnitsGlobalSaveManager_get()
@@ -1261,6 +1287,7 @@ function ServiciosManager_ServicioForm({
                     accentColor={accentColor}
                     apiUrl={apiUrl}
                     iconoFormUrl={iconoFormUrl}
+                    size={isMobile ? 150 : 280}
                     uploadPath={uploadPath}
                 />
 
@@ -1504,6 +1531,21 @@ function ServiciosManager_ServicioForm({
 
                 {!quoteMode && !employeeVariant && !employeeMode && !branch && modoEdicion && servicioId && (
                     <ServiceBrowseConfig key={servicioId} api={apiUrl.replace(/\/+$/, "")} serviceId={servicioId} name={form.nombre} price={Number(form.precio)} />
+                )}
+
+                {!employeeVariant && !employeeMode && !branch && profesionales.length > 0 && (
+                    <ServiciosManager_Field label="Profesionales que lo ofrecen" icon="users">
+                        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                            {profesionales.map(prof => {
+                                const selected = selectedProfesionales.includes(prof.id)
+                                return <button key={prof.id} type="button" aria-pressed={selected} title={`${[prof.nombre,prof.apellido].filter(Boolean).join(" ")}${selected ? " · asignado" : " · agregar"}`} onClick={() => toggleProfesional(prof)} style={{position:"relative",width:42,height:42,borderRadius:"50%",padding:0,border:`2px solid ${selected ? accentColor : "transparent"}`,background:prof.color || "#e2e8f0",cursor:"pointer",boxShadow:selected ? `0 0 0 2px ${accentColor}25` : "none"}}>
+                                    {prof.foto_url ? <img src={prof.foto_url} alt="" style={{width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none"}}/> : <span style={{color:"white",fontSize:15,fontWeight:700}}>{[prof.nombre,prof.apellido].filter(Boolean).map(v=>v?.trim()[0]).join("").slice(0,2).toUpperCase()}</span>}
+                                    {selected && <span aria-hidden="true" style={{position:"absolute",right:-3,bottom:-3,width:17,height:17,borderRadius:"50%",background:"white",border:`1px solid ${accentColor}`,color:accentColor,fontSize:11,fontWeight:800,display:"grid",placeItems:"center"}}>✓</span>}
+                                </button>
+                            })}
+                            {avisoProfesional && <motion.span initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}} style={{fontSize:12,color:"#166534",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9,padding:"7px 10px"}}>{avisoProfesional}</motion.span>}
+                        </div>
+                    </ServiciosManager_Field>
                 )}
 
                 {error && (
@@ -2042,7 +2084,8 @@ function ServiciosManager_ProfesionalAvatar({prof}:{prof:CatalogoProfesional}) {
     </span>
 }
 
-function ServiciosManager_Profesionales({profesionales=[]}:{profesionales?:CatalogoProfesional[]}) {
+function ServiciosManager_Profesionales({profesionales=[]}:{profesionales?:CatalogoProfesional[] | null}) {
+    if (!Array.isArray(profesionales)) profesionales = []
     if(!profesionales.length)return null
     return <div aria-label="Profesionales que lo ofrecen" style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:3,marginTop:7}}>{profesionales.map(prof=><ServiciosManager_ProfesionalAvatar key={prof.id} prof={prof}/>)}</div>
 }
@@ -2248,12 +2291,12 @@ function ServiciosManager(props: any) {
                 const accountPlan = await TurnitsResolveAccountPlan(api, slug, token, data, employeeMode)
                 setPuedePromociones(["basico", "premium"].includes(accountPlan))
                 const parsed: ServiciosManager_Servicio[] = (
-                    data.servicios || []
-                ).map((s: any) => {
+                    Array.isArray(data.servicios) ? data.servicios : []
+                ).filter((s: any) => s && typeof s === "object").map((s: any) => {
                     const { imagen, descripcion } = ServiciosManager_parseDesc(
-                        s.descripcion || ""
+                        typeof s.descripcion === "string" ? s.descripcion : ""
                     )
-                    return { ...s, activo: s.activo === true || s.activo === "true", imagen: s.imagen_url || imagen, descripcion }
+                    return { ...s, nombre: s.nombre || "Servicio", precio: Number(s.precio) || 0, duracion: Number(s.duracion) || 30, capacidad: Number(s.capacidad) || 1, orden: Number(s.orden) || 0, profesionales: Array.isArray(s.profesionales) ? s.profesionales.filter(Boolean) : [], activo: s.activo === true || s.activo === "true", imagen: s.imagen_url || imagen, descripcion }
                 })
                 setServicios(parsed)
                 setLoading(false)
@@ -2295,7 +2338,7 @@ function ServiciosManager(props: any) {
                     return
                 }
                 const data = await res.json()
-                setExtras(data.extras || [])
+                setExtras(Array.isArray(data.extras) ? data.extras.filter(Boolean) : [])
                 setLoadingExtras(false)
             } catch {
                 if (++retries < 10) setTimeout(tryLoad, 300)
@@ -2309,6 +2352,14 @@ function ServiciosManager(props: any) {
     }, [api, employeeMode])
 
     // ── Handlers: Servicios (sin cambios funcionales) ──
+    const syncProfesionales = async (servicioId: string, anteriores: string[] = [], nuevos: string[] = []) => {
+        const token = ServiciosManager_getToken()
+        const slug = ServiciosManager_getSlug()
+        const quitar = anteriores.filter(id => !nuevos.includes(id))
+        const sumar = nuevos.filter(id => !anteriores.includes(id))
+        const results = await Promise.all([...quitar.map(id => fetch(`${api}/admin/equipo/${encodeURIComponent(id)}/servicios/${encodeURIComponent(servicioId)}?slug=${encodeURIComponent(slug)}`, { method:"DELETE", headers:{Authorization:`Bearer ${token}`} })), ...sumar.map(id => fetch(`${api}/admin/equipo/${encodeURIComponent(id)}/servicios`, { method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}, body:JSON.stringify({slug,servicio_id:servicioId}) }))])
+        if (results.some(r => !r.ok)) throw new Error("No se pudieron actualizar los profesionales asignados.")
+    }
     const handleCrear = async (form: ServiciosManager_FormData) => {
         if (employeeMode && !employeeCanCreate) return
         if (!form.nombre.trim()) {
@@ -2352,6 +2403,10 @@ function ServiciosManager(props: any) {
             const data = await res.json()
             if (!res.ok || !data.success)
                 throw new Error(data.error || `Error ${res.status}`)
+            if (!employeeMode && data.servicio?.id && form.profesionalesIds?.length) {
+                await syncProfesionales(data.servicio.id, [], form.profesionalesIds)
+                setCatalogRevision(value => value + 1)
+            }
             const { imagen, descripcion } = ServiciosManager_parseDesc(
                 data.servicio.descripcion || ""
             )
@@ -2442,6 +2497,10 @@ function ServiciosManager(props: any) {
             const data = await res.json()
             if (!res.ok || !data.success)
                 throw new Error(data.error || `Error ${res.status}`)
+            if (!employeeMode) {
+                await syncProfesionales(editando.id, (editando.profesionales || []).map((p: any) => p.id), form.profesionalesIds || [])
+                setCatalogRevision(value => value + 1)
+            }
             const { imagen, descripcion } = ServiciosManager_parseDesc(
                 data.servicio.descripcion || ""
             )
@@ -2661,9 +2720,11 @@ function ServiciosManager(props: any) {
               descripcion: editando.descripcion,
               imagen: editando.imagen,
               duracion: String(editando.duracion),
-              precio: String(editando.precio),
+                precio: String(Number(editando.precio) || 0),
               capacidad: String(editando.capacidad),
               orden: String(editando.orden),
+              profesionalesIds: (editando.profesionales || []).map((p: any) => p.id),
+              profesionalesInicialesIds: (editando.profesionales || []).map((p: any) => p.id),
           }
         : undefined
 
