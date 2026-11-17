@@ -54,6 +54,15 @@ button.turnits-back-button.is-floating {
   z-index: 5;
 }
 
+@media (min-width: 860px) {
+  button.turnits-back-button.is-floating {
+    --button-size: 18px;
+    --icon-size: 9px;
+    min-height: var(--button-size);
+    padding: 0;
+  }
+}
+
 @media (width < 860px) {
   button.turnits-back-button {
     --button-size: 18px;
