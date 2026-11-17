@@ -2795,9 +2795,8 @@ function ServiciosManager_ServiciosSection(props: any) {
         {id:"precio-desc",label:"Mayor precio"},
         {id:"precio-asc",label:"Menor precio"},
     ] as const
-    const etiquetaOrden = opcionesOrden.find(option => option.id === ordenServicios)?.label || "Más Pedidos"
-
     const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,ordenServicios,setOrdenServicios,menuOrdenServicios,setMenuOrdenServicios,busquedaServicio,setBusquedaServicio}=props
+    const etiquetaOrden = opcionesOrden.find(option => option.id === ordenServicios)?.label || "Más Pedidos"
     return (<>
                     <div className="svc-toolbar">
                         <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
@@ -2976,9 +2975,8 @@ function ServiciosManager_ProductosSection(props: any) {
         {id:"precio-desc",label:"Mayor precio"},
         {id:"precio-asc",label:"Menor precio"},
     ] as const
-    const etiquetaOrden = opcionesOrden.find(option => option.id === ordenProductos)?.label || "A-Z"
-
     const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,setMostrarFormExtra,editandoExtra,setEditandoExtra,extrasVisibles,extras,errorExtras,formErrorExtra,setFormErrorExtra,guardandoExtra,filtroProductos,setFiltroProductos,ordenProductos,setOrdenProductos,menuOrdenProductos,setMenuOrdenProductos,busquedaProducto,setBusquedaProducto}=props
+    const etiquetaOrden = opcionesOrden.find(option => option.id === ordenProductos)?.label || "A-Z"
     return (<>
                     <div className="svc-toolbar">
                         <div className="svc-toolbar-filters" role="group" aria-label="Filtrar productos">
