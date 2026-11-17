@@ -1561,7 +1561,7 @@ function MenuFooterMiembro({ nombre, fotoUrl, color, iconos = {}, soporteUrl, on
                 alignItems: "center",
                 gap: 10,
                 padding: mobile ? "14px 4px 0" : "12px 4px",
-                borderTop: "1px solid #e9edf3",
+                borderTop: "0",
                 marginTop: mobile ? 16 : 12,
             }}
         >
@@ -1661,8 +1661,8 @@ function MenuFooter({
                 display: "flex",
                 flexDirection: "column",
                 gap: 16,
-                paddingTop: 18,
-                borderTop: "1px solid #9aa09b",
+                paddingTop: 10,
+                borderTop: "0",
             }}
         >
             {/* Plan: gratis → "Mejorar"; premium → días restantes (26d) y,
