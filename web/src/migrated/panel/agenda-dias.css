@@ -5,12 +5,12 @@
 .agenda-day {padding:clamp(14px,1.55cqw,22px);min-height:clamp(245px,30.5cqw,365px);box-sizing:border-box;border-radius:18px;position:relative;isolation:isolate;background:#fbfefb}
 .agenda-day-backdrop {position:absolute;inset:0;z-index:-1;overflow:hidden;border-radius:inherit;pointer-events:none}
 .agenda-day-glow {position:absolute;left:-16%;top:20%;width:82%;height:64%;border-radius:44% 58% 39% 66%;background:#b1f3ab;filter:blur(24px)}
-.agenda-day-glow + .agenda-day-glow {left:55%;top:70%;width:73%;height:52%;border-radius:68% 32% 51% 48%;background:#d1f5c7}
-.agenda-day:nth-child(3n) .agenda-day-glow:first-child {left:56%;top:-12%}
-.agenda-day:nth-child(3n) .agenda-day-glow:last-child {left:28%;top:68%;background:#b9f1af}
-.agenda-day[data-today=true] {background:#e9f8e7}
-.agenda-day[data-today=true] .agenda-day-glow:first-child {left:-4%;top:-19%;width:109%;height:88%;background:#a4f99d}
-.agenda-day[data-today=true] .agenda-day-glow:last-child {left:36%;top:48%;background:#b4f3a5}
+.agenda-day-ribbons {position:absolute;inset:-12%;width:124%;height:124%;fill:none;stroke:#c2edb9;stroke-linecap:round;filter:blur(3px)}
+.agenda-day:nth-child(even) .agenda-day-backdrop {transform:scaleX(-1)}
+.agenda-day:nth-child(3n) .agenda-day-glow {left:56%;top:-12%}
+.agenda-day[data-today=true] {background:#b7f5ae}
+.agenda-day[data-today=true] .agenda-day-glow {left:-4%;top:-19%;width:109%;height:88%;background:#99ed90}
+.agenda-day[data-today=true] .agenda-day-ribbons {stroke:#dcffd4}
 .agenda-day header {display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
 .agenda-day h3,.agenda-day-dialog h2 {margin:0;font-weight:730;line-height:1.06;letter-spacing:-.035em}
 .agenda-day h3 {font-size:clamp(26px,3.7cqw,45px)}

@@ -24,11 +24,15 @@ function DayBackdrop({index}: {index:number}) {
     const reduced = useReducedMotion()
     return <div aria-hidden="true" className="agenda-day-backdrop">
         <motion.span className="agenda-day-glow" initial={{x:0,y:0}}
-            animate={reduced ? {x:0,y:0} : {x:[0,23,-12,0],y:[0,-18,10,0]}}
-            transition={{duration:18 + index % 5,repeat:Infinity,ease:"easeInOut"}} />
-        <motion.span className="agenda-day-glow" initial={{x:0,y:0}}
-            animate={reduced ? {x:0,y:0} : {x:[0,-19,16,0],y:[0,14,-21,0]}}
-            transition={{duration:24 + index % 7,repeat:Infinity,ease:"easeInOut"}} />
+            animate={reduced ? {x:0,y:0} : {x:[0,57,-28,0],y:[0,-38,27,0]}}
+            transition={{duration:13 + index % 5,repeat:Infinity,ease:"easeInOut"}} />
+        <motion.svg className="agenda-day-ribbons" viewBox="0 0 320 300" preserveAspectRatio="none"
+            initial={{x:0,y:0,rotate:0}}
+            animate={reduced ? {x:0,y:0,rotate:0} : {x:[0,-39,28,0],y:[0,34,-25,0],rotate:[0,9,-7,0]}}
+            transition={{duration:15 + index % 5,repeat:Infinity,ease:"easeInOut"}}>
+            <path d="M-65 273 C34 302 47 147 132 179 S247 265 296 130 S384 43 405 66" strokeWidth="13" />
+            <path d="M-43 295 C42 303 61 167 132 197 S260 277 310 151 S379 83 403 68" strokeWidth="3" />
+        </motion.svg>
     </div>
 }
 
