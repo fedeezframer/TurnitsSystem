@@ -586,7 +586,6 @@
   transition:color .16s ease, background .16s ease, border-color .16s ease;
 }
 .svc-filter-button.is-active { color:#176b24; }
-.svc-filter-button:nth-child(3) { border-color:#aeb4ae; color:#111; }
 .svc-filter-button:hover { background:#f5f8f4; }
 .svc-search {
   min-width:130px; width:min(220px,30%); height:34px; display:flex; align-items:center; gap:8px;

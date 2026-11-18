@@ -1,3 +1,4 @@
+import { CatalogToolbar } from "./CatalogToolbar"
 import { useCatalogTransition } from "./catalog-motion"
 import "./promociones.css"
 import { BackButton } from "../../components/BackButton"
@@ -20,6 +21,8 @@ import { ServiciosManager_ImageUploaderProps, ServiciosManager_getSlug, Servicio
 import { ServiciosManager_PlaceholderIcon } from "./inicio"
 import { TurnitsPlanRequirement } from "./shared"
 import { PROMO_DAYS, promoDaysLabel } from "../../shared/promotions.js"
+
+const catalogFilters = [{id:"todos",label:"Todos"},{id:"pausados",label:"Pausados"}] as const
 
 function Turnits_ImageAdjustDialog({
     file,
@@ -2538,7 +2541,7 @@ function ServiciosManager_ServiciosSection(props: any) {
                     {...transition}
                     style={{ width: "100%" }}
                 >
-<CatalogToolbar label="servicios" filterValue={filtroServicios} onFilter={setFiltroServicios} sort={ordenServicios} onSort={setOrdenServicios} opcionesOrden={opcionesOrden} search={busquedaServicio} onSearch={setBusquedaServicio} onCreate={!branch && (!employeeMode || employeeCanCreate) ? abrirCreacion : undefined} />
+<CatalogToolbar filters={catalogFilters} label="servicios" filterValue={filtroServicios} onFilter={setFiltroServicios} sort={ordenServicios} onSort={setOrdenServicios} opcionesOrden={opcionesOrden} search={busquedaServicio} onSearch={setBusquedaServicio} onCreate={!branch && (!employeeMode || employeeCanCreate) ? abrirCreacion : undefined} />
                     {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 10 }}>{error}</div>}
                     <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: isMobile ? 5 : 6 }}>
                         {serviciosVisibles.length === 0 && (
@@ -2579,44 +2582,7 @@ function ServiciosManager_ServiciosSection(props: any) {
         </AnimatePresence>
     )
 }
-function CatalogToolbar({label,filterValue,onFilter,sort,onSort,opcionesOrden,search,onSearch,onCreate}: {
-    label: string; filterValue: string; onFilter: (value:"todos"|"pausados")=>void;
-    sort: string; onSort: (value:any)=>void; opcionesOrden: readonly {id:string;label:string}[];
-    search:string; onSearch:(value:string)=>void; onCreate?:()=>void
-}) {
-    const [open,setOpen] = React.useState(false)
-    const etiquetaOrden = opcionesOrden.find(option => option.id === sort)?.label || "Orden"
-    return (<div className="svc-toolbar">
-                        <div className="svc-toolbar-filters" role="group" aria-label={`Filtrar ${label}`}>
-                            {(["todos","pausados"] as const).map(filter => (
-                                <button key={filter} type="button" className={`svc-filter-button${filterValue === filter ? " is-active" : ""}`} aria-pressed={filterValue === filter} onClick={() => onFilter(filter)}>
-                                    {filter === "todos" ? "Todos" : "Pausados"}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="svc-sort-control">
-                            <button type="button" className="svc-sort-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(open => !open)}>
-                                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></svg>
-                                {etiquetaOrden}
-                                <svg aria-hidden="true" className="svc-sort-chevron" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="m2 4 4 4 4-4"/></svg>
-                            </button>
-                            <AnimatePresence>
-                                {open && <motion.div className="svc-sort-menu" role="menu" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-4}} transition={{duration:.14}}>
-                                    {opcionesOrden.map(option => <button key={option.id} type="button" role="menuitemradio" aria-checked={sort === option.id} onClick={() => {onSort(option.id);setOpen(false)}}>{option.label}</button>)}
-                                </motion.div>}
-                            </AnimatePresence>
-                        </div>
-                        <label className="svc-search">
-                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
-                            <input value={search} onChange={event => onSearch(event.target.value)} placeholder="Buscar" aria-label={`Buscar ${label}`} />
-                        </label>
-                        {onCreate && (
-                            <motion.button className="svc-create-button" whileHover={{y:-1}} whileTap={{scale:.98}} onClick={onCreate}>
-                                <span aria-hidden="true">+</span> Nuevo
-                            </motion.button>
-                        )}
-                    </div>)
-}
+
 
 function ServiciosManager_ProductosSection(props: any) {
     const transition = useCatalogTransition()
@@ -2628,7 +2594,7 @@ function ServiciosManager_ProductosSection(props: any) {
     ] as const
     const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,setMostrarFormExtra,editandoExtra,setEditandoExtra,extrasVisibles,extras,errorExtras,formErrorExtra,setFormErrorExtra,guardandoExtra,filtroProductos,setFiltroProductos,ordenProductos,setOrdenProductos,busquedaProducto,setBusquedaProducto}=props
     return (<>
-<CatalogToolbar label="productos" filterValue={filtroProductos} onFilter={setFiltroProductos} sort={ordenProductos} onSort={setOrdenProductos} opcionesOrden={opcionesOrden} search={busquedaProducto} onSearch={setBusquedaProducto} onCreate={!branch && (!employeeMode || employeeCanCreate) && !mostrarFormExtra && !editandoExtra ? () => setMostrarFormExtra(true) : undefined} />
+<CatalogToolbar filters={catalogFilters} label="productos" filterValue={filtroProductos} onFilter={setFiltroProductos} sort={ordenProductos} onSort={setOrdenProductos} opcionesOrden={opcionesOrden} search={busquedaProducto} onSearch={setBusquedaProducto} onCreate={!branch && (!employeeMode || employeeCanCreate) && !mostrarFormExtra && !editandoExtra ? () => setMostrarFormExtra(true) : undefined} />
                     {errorExtras && (
                         <div
                             style={{
@@ -2877,7 +2843,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     if (ordenPromo === "az") visibles.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"))
     if (ordenPromo === "precio") visibles.sort((a,b)=>Number(a.precio_final)-Number(b.precio_final))
     return <>
-        {!mostrar && <CatalogToolbar label="promociones" filterValue={filtroPromo} onFilter={setFiltroPromo} sort={ordenPromo} onSort={setOrdenPromo} opcionesOrden={opcionesOrden} search={busquedaPromo} onSearch={setBusquedaPromo} onCreate={!branch ? openNew : undefined} />}
+        {!mostrar && <CatalogToolbar filters={catalogFilters} label="promociones" filterValue={filtroPromo} onFilter={setFiltroPromo} sort={ordenPromo} onSort={setOrdenPromo} opcionesOrden={opcionesOrden} search={busquedaPromo} onSearch={setBusquedaPromo} onCreate={!branch ? openNew : undefined} />}
         <section className="promotions">
         {error && <p role="alert" className="promo-error">{error}</p>}
         <AnimatePresence mode="wait" initial={false}>

@@ -1,10 +1,14 @@
 import * as React from "react"
+import { CatalogToolbar } from "./CatalogToolbar"
 import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
 import { ClientesGrid_getSlug, ClientesGrid_getToken } from "./common"
 import { TurnitsPlanRequirement } from "./shared"
 import { ClientOfferDraft } from "./client-offer"
 import "./clientes.css"
+
+const clientFilters = [{id:"todos",label:"Todos"},{id:"recurrentes",label:"Recurrentes"},{id:"nuevos",label:"Una reserva"}] as const
+const clientSorts = [{id:"recientes",label:"Recientes"},{id:"reservas",label:"Más reservas"},{id:"total",label:"Mayor total"},{id:"nombre",label:"Nombre A–Z"}] as const
 
 const avatarColors = ["#d5e9df", "#f3dccf", "#dce4fb", "#ebdef4", "#f3e6b9", "#d2e9ed", "#f2dce3", "#dee7c8", "#dce2e7"]
 function ClientAvatar({nombre,apellido,identity}: {nombre:string; apellido?:string; identity:string}) {
@@ -15,6 +19,7 @@ function ClientAvatar({nombre,apellido,identity}: {nombre:string; apellido?:stri
 }
 
 export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {baseUrl?:string; porPagina?:number; accentColor?:string}) {
+    const [sort,setSort] = React.useState("recientes")
     const [query,setQuery] = React.useState("")
     const [filter,setFilter] = React.useState("todos")
     const [recipient,setRecipient] = React.useState<any>(null)
@@ -94,13 +99,12 @@ export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {base
     const search = query.trim().toLocaleLowerCase("es")
     const results = clientesFiltrados.filter(c => (filter === "todos" || (filter === "recurrentes" ? c.turnos > 1 : c.turnos === 1)) &&
         [c.nombre,c.apellido,esPremium && c.telefono,esPremium && c.email].filter(Boolean).join(" ").toLocaleLowerCase("es").includes(search))
+    if(sort==="reservas")results.sort((a,b)=>b.turnos-a.turnos)
+    if(sort==="total")results.sort((a,b)=>b.total-a.total)
+    if(sort==="nombre")results.sort((a,b)=>(a.nombre+" "+(a.apellido || "")).localeCompare(b.nombre+" "+(b.apellido || ""),"es"))
     return <section className="clients-panel">
-        <div className="clients-tools">
-            <select aria-label="Filtrar clientes" value={filter} onChange={e=>setFilter(e.target.value)}>
-                <option value="todos">Todos</option><option value="recurrentes">Recurrentes</option><option value="nuevos">Una reserva</option>
-            </select>
-            <input type="search" placeholder="Buscar" aria-label="Buscar clientes" value={query} onChange={e=>setQuery(e.target.value)} />
-        </div>
+        <CatalogToolbar label="clientes" filters={clientFilters} filterValue={filter} onFilter={setFilter}
+            sort={sort} onSort={setSort} opcionesOrden={clientSorts} search={query} onSearch={setQuery}/>
         <div className="clients-board">
             {results.slice(0,visibles).map(c=><article key={c.bookingId}>
                 <header><ClientAvatar nombre={c.nombre} apellido={c.apellido} identity={c.telefono || c.email || [c.nombre,c.apellido].join(" ")} /><div><h3>{c.nombre} {c.apellido}</h3>
