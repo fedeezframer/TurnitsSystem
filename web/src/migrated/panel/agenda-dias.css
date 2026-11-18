@@ -40,9 +40,9 @@
 .agenda-day-dialog::backdrop {background:#0005}
 .agenda-day-dialog h2 {font-size:clamp(36px,4.8vw,66px)}
 .agenda-day-dialog>p {margin:12px 0 26px}
-.agenda-reservas {grid-template-columns:repeat(3,minmax(0,26%));justify-content:space-between;gap:24px 0;align-items:start}
-.agenda-reserva {width:100%;max-width:274px;justify-self:start;display:block;text-align:left;padding:0;overflow:hidden;border:1px solid #929292;border-radius:13px;font:inherit;color:inherit;background:#fff;cursor:pointer}
-.agenda-photo {position:relative;display:grid;place-items:center;aspect-ratio:1;background:#f1f4ef}
+.agenda-reservas {grid-template-columns:repeat(3,minmax(0,26%));justify-content:space-between;gap:24px 0;grid-auto-rows:1fr;align-items:stretch}
+.agenda-reserva {width:100%;max-width:274px;justify-self:start;display:flex;flex-direction:column;text-align:left;padding:0;overflow:hidden;border:1px solid #929292;border-radius:13px;font:inherit;color:inherit;background:#fff;cursor:pointer}
+.agenda-photo {flex:none;width:100%;position:relative;display:grid;place-items:center;aspect-ratio:1;background:#f1f4ef}
 .agenda-photo>img {width:100%;height:100%;object-fit:cover}.agenda-photo>img.agenda-placeholder {width:22%;height:auto;opacity:.4}
 .agenda-extra-photos {position:absolute;right:5%;top:6%;display:flex;flex-wrap:wrap;justify-content:end;gap:4px;max-width:90%}
 .agenda-extra-photos img {width:clamp(24px,3vw,44px);aspect-ratio:1;object-fit:contain;background:white;border-radius:50%}
