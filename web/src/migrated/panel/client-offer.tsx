@@ -42,7 +42,7 @@ export function ClientOfferDraft({bookingId,name,baseUrl,onClose}:{bookingId:str
                 "Hola, "+name+". Te preparé una promoción: "+detail+" por "+money(Number(price))+".",
                 productsOnly?"Para usarla, reservá un servicio. El precio del servicio se suma aparte.":null,
                 fixed?"Turno propuesto: "+date.split("-").reverse().join("/")+" a las "+time+".":"Elegí el horario que prefieras en la agenda.",
-                link.toString(),"Tu código personal es "+data.code+"."
+                link.toString()
             ].filter(Boolean).join("\n")
             window.location.assign("https://wa.me/"+data.telefono.replace(/\D/g,"")+"?text="+encodeURIComponent(text))
         } catch(e) {setSendError(e instanceof Error?e.message:"No se pudo crear la oferta.")}
@@ -96,7 +96,7 @@ export function ClientOfferDraft({bookingId,name,baseUrl,onClose}:{bookingId:str
         <fieldset className="offer-schedule"><legend>Elección de fecha y hora</legend><button aria-pressed={!fixed} onClick={()=>{setFixed(false);if(validity==="dia")setValidity("semana")}}>Libre</button><button aria-pressed={fixed} onClick={()=>setFixed(true)}>Establecer</button></fieldset>
         {fixed && <><label>Día<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><label>Hora<input type="time" value={time} onChange={e=>setTime(e.target.value)}/></label></>}</div>
         {selected.length>0 && Object.keys(lines).every(key=>key.startsWith("extras/")) && <p>El cliente elige un servicio y reserva un turno para adquirir estos productos con descuento. El servicio se cobra aparte.</p>}
-        <footer className="client-offer-send"><button disabled={sending || !selected.length || !(Number(price)>0 && Number(price)<total) || (fixed && (!date || !time))} onClick={sendOffer}>{sending?"Preparando…":"Enviar promoción"}</button><small>Se abre WhatsApp con el enlace y el código personal de reserva.</small></footer>
+        <footer className="client-offer-send"><button disabled={sending || !selected.length || !(Number(price)>0 && Number(price)<total) || (fixed && (!date || !time))} onClick={sendOffer}>{sending?"Preparando…":"Enviar promoción"}</button><small>Se abre WhatsApp con el enlace personal de reserva.</small></footer>
         {sendError && <p role="alert">{sendError}</p>}
     </dialog>
 }

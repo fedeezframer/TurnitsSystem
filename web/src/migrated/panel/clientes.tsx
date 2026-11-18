@@ -100,7 +100,7 @@ export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {base
                 <dl><div><dt>Reservas</dt><dd>{c.turnos}</dd></div><div><dt>Total</dt><dd>{money.format(c.total)}</dd></div>
                 <div><dt>Última visita</dt><dd>{c.ultimaVisita || "Sin visitas"}</dd></div>
                 <div><dt>Recurre cada</dt><dd>{c.intervalo ? c.intervalo+" días" : "—"}</dd></div></dl>
-                {esPremium && <footer><button disabled={!c.telefono} onClick={()=>setRecipient(c)}>Ofrecer Promoción</button>
+                {esPremium && <footer><button disabled={!c.telefono || !c.email} title={!c.telefono || !c.email ? "Se necesita teléfono y correo para enviar una promoción." : undefined} onClick={()=>setRecipient(c)}>Ofrecer Promoción</button>
                 {c.telefono && <a target="_blank" rel="noreferrer" href={"https://wa.me/"+c.telefono.replace(/\D/g,"")}>Contactar</a>}</footer>}
             </article>)}
             {!results.length && <p>{clientes.length ? "No hay clientes que coincidan." : "Aún no hay clientes registrados."}</p>}

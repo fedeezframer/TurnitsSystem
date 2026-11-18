@@ -819,7 +819,6 @@ export default function BookingFlow(props: any) {
     const personalKey=bookingQuery.get("oferta_cliente") || ""
     const [personal,setPersonal]=React.useState<(Pick<BookingPromo,"items"> & {precio:number;original:number;fecha:string|null;hora:string|null;vence:string})|null>(null)
     const [personalError,setPersonalError]=React.useState("")
-    const [personalCode,setPersonalCode]=React.useState("")
     const primaryPersonal=personal?.items.find(i=>i.tipo==="servicio")
     const bookingServiceId = personalKey ? primaryPersonal?.id || "" : bookingQuery.get("servicio_id") || ""
     const requestedPromoId = bookingQuery.get("promo_id") || ""
@@ -910,31 +909,9 @@ export default function BookingFlow(props: any) {
     const [emailError, setEmailError] = React.useState("")
     const [telError, setTelError] = React.useState("")
     const [loadingCuenta, setLoadingCuenta] = React.useState(()=>!!consumerHeaders().Authorization)
-    const [verifiedCode,setVerifiedCode]=React.useState("")
-    const [codeError,setCodeError]=React.useState("")
-    React.useEffect(()=>{
-        setVerifiedCode("");setCodeError("")
-        if(!personalKey || !/^\d{6}$/.test(personalCode))return
-        const ctrl=new AbortController()
-        fetch(api+"/ofertas-cliente/"+encodeURIComponent(slug)+"/"+encodeURIComponent(personalKey)+"/contacto",{
-            method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:personalCode}),signal:ctrl.signal
-        }).then(async res=>{
-            const data=await res.json()
-            if(!res.ok)throw new Error(data.error)
-            if(ctrl.signal.aborted)return
-            const contact=data.contacto
-            setNombre(contact.nombre || "");setApellido(contact.apellido || "");setEmail(contact.email || "")
-            const digits=contact.telefono.replace(/\D/g,"")
-            const country=[...PAISES].sort((a,b)=>b.dial.length-a.dial.length).find(p=>digits.startsWith(p.dial.slice(1)) && p.code!=="OTHER")
-            setPais(country || {code:"OTHER",flag:"🌐",dial:"+",name:"Internacional"})
-            setTelefono(country?digits.slice(country.dial.length-1):digits)
-            setVerifiedCode(personalCode)
-        }).catch(e=>{if(!ctrl.signal.aborted)setCodeError(e.message || "No se pudo verificar el código.")})
-        return ()=>ctrl.abort()
-    },[api,slug,personalKey,personalCode])
     const [cuentaConDatosCompletos, setCuentaConDatosCompletos] = React.useState(false)
     React.useEffect(()=>{
-        const headers=consumerHeaders();if(personalKey || !headers.Authorization){setLoadingCuenta(false);return;}
+        const headers=consumerHeaders();if(!headers.Authorization){setLoadingCuenta(false);return;}
         const controller=new AbortController();
         fetch(`${api}/browse/identidad`,{headers,signal:controller.signal}).then(r=>r.ok?r.json():null).then(d=>{
             if(!d?.success||!d.perfil||controller.signal.aborted)return;const c=d.perfil;
@@ -1577,6 +1554,26 @@ export default function BookingFlow(props: any) {
     }, [metodosDisponibles, negocio])
 
     const telefonoDigits = telefono.replace(/[^0-9]/g, "")
+    const offerPhone = pais.dial + telefonoDigits
+    const offerEmail = email.trim().toLowerCase()
+    const contactKey = JSON.stringify([slug,personalKey,offerPhone,offerEmail])
+    const [matchedContact,setMatchedContact] = React.useState("")
+    React.useEffect(()=>{
+        setMatchedContact("")
+        if(!personalKey || !EMAIL_REGEX.test(offerEmail) || !validNationalPhone(telefonoDigits,pais.code))return
+        const controller=new AbortController()
+        const timer=window.setTimeout(async ()=>{
+            try {
+                const response=await fetch(api+"/ofertas-cliente/"+encodeURIComponent(slug)+"/"+encodeURIComponent(personalKey)+"/contacto",{
+                    method:"POST",headers:{"Content-Type":"application/json"},signal:controller.signal,
+                    body:JSON.stringify({phone:offerPhone,email:offerEmail})
+                })
+                if(response.ok && (await response.json()).coincide===true && !controller.signal.aborted)setMatchedContact(contactKey)
+            } catch { /* Una consulta interrumpida no habilita el canje. */ }
+        },350)
+        return ()=>{clearTimeout(timer);controller.abort()}
+    },[api,slug,personalKey,offerEmail,offerPhone,telefonoDigits,pais.code,contactKey])
+    const offerReady = !personalKey || (!!personalPromo && matchedContact===contactKey)
     const datosPersonalesOk =
         nombre.trim().length >= 2 &&
         apellido.trim().length >= 2 &&
@@ -1600,7 +1597,7 @@ export default function BookingFlow(props: any) {
     }, [metodoPagoRequerido, metodo, comprobante])
 
     const puedeConfirmar =
-        (!personalKey || (!!verifiedCode && verifiedCode===personalCode && !!personalPromo)) && !!fecha && !!hora && !loadingCuenta && datosPersonalesOkParaBoton && metodoPagoValido
+        offerReady && !!fecha && !!hora && !loadingCuenta && datosPersonalesOkParaBoton && metodoPagoValido
 
     const STEP_LABELS: Record<string, string> = {
         sucursal: "Sucursal",
@@ -1867,7 +1864,7 @@ export default function BookingFlow(props: any) {
     }
 
     async function confirmarReserva(sinPagoRevalidado = false) {
-        if (submitEstado === "loading" || loadingCuenta) return
+        if (submitEstado === "loading" || loadingCuenta || !offerReady) return
         const sinPago = sinPagoRevalidado || negocio?.agenda_sin_pagos === true
         setSubmitError("")
 
@@ -1936,7 +1933,6 @@ export default function BookingFlow(props: any) {
                         hora,
                         slug,
                         servicio_id: servicioId || undefined,
-                        oferta_codigo: personalKey ? personalCode : undefined,
                         promocion_id: promoAplicada?.id,
                         promocion_precio: promoAplicada?.precio_final,
                         extra_ids: extraIds,
@@ -1977,7 +1973,6 @@ export default function BookingFlow(props: any) {
                         hora,
                         slug,
                         servicio_id: servicioId || undefined,
-                        oferta_codigo: personalKey ? personalCode : undefined,
                         promocion_id: promoAplicada?.id,
                         promocion_precio: promoAplicada?.precio_final,
                         extra_ids: extraIds,
@@ -2020,7 +2015,6 @@ export default function BookingFlow(props: any) {
             form.append("fecha", fecha)
             form.append("hora", hora)
             form.append("slug", slug)
-            if(personalKey)form.append("oferta_codigo",personalCode)
             if(promoAplicada){form.append("promocion_id",promoAplicada.id);form.append("promocion_precio",String(promoAplicada.precio_final))}
             form.append("metodo_pago", metodo)
             if (servicioId) form.append("servicio_id", servicioId)
@@ -2551,7 +2545,7 @@ export default function BookingFlow(props: any) {
                                     >
                                         {stepIndex > 0 && <BackLink onClick={volverPaso} />}
 
-                                        {loadingCuenta ? <Skeleton/> : cuentaConDatosCompletos ? <div aria-label="Datos de tu cuenta" style={{fontSize:14,color:"var(--bf-text-muted)"}}>Reservás como <strong style={{color:"var(--bf-text)"}}>{nombre} {apellido}</strong></div> : <div style={{ minWidth: 0 }}>
+                                        {loadingCuenta ? <Skeleton/> : cuentaConDatosCompletos && !personalKey ? <div aria-label="Datos de tu cuenta" style={{fontSize:14,color:"var(--bf-text-muted)"}}>Reservás como <strong style={{color:"var(--bf-text)"}}>{nombre} {apellido}</strong></div> : <div style={{ minWidth: 0 }}>
                                             <SectionLabel
                                                 text="Tus datos"
                                                 accent={accent}
@@ -2759,7 +2753,6 @@ export default function BookingFlow(props: any) {
                                 </div>
                             )}
                             {offerQuote && <div style={{fontSize:12,color:accent,fontWeight:600}}>Turnits Offer · <del style={{color:"#6b7280",fontWeight:400}}>{formatearMoneda(offerQuote.precio_original)}</del></div>}
-                            {personalKey && <label>Código personal de WhatsApp<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={personalCode} onChange={e=>setPersonalCode(e.target.value.replace(/\D/g,""))}/>{codeError && <small role="alert">{codeError}</small>}</label>}
                             {promoAplicada && <div style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)"}}>Promo: {promoAplicada.nombre}{promoAplicada.tipo === "combo" && <div>Incluye {promoAplicada.items.map(i=>`${i.cantidad} × ${i.nombre}`).join(" + ")}</div>}</div>}
                             {extrasSeleccionados.length > 0 && (
                                 <div
