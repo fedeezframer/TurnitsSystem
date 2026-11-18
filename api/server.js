@@ -3722,7 +3722,7 @@ if (servicio_id) {
 let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
-      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:req.body.phone || req.body.telefono,code:req.body.oferta_codigo,time:hora});
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:phoneClean,email:emailClean,time:hora});
       if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
       await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
       if(promoReserva){
@@ -3908,7 +3908,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
-      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:req.body.phone || req.body.telefono,code:req.body.oferta_codigo,time:hora});
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:phoneClean,email:emailClean,time:hora});
       if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
       await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
       if(promoReserva){
@@ -7756,7 +7756,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
-      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:req.body.phone || req.body.telefono,code:req.body.oferta_codigo,time:hora,online:true});
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:telefono,email,time:hora,online:true});
       if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
       await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
       if(promoReserva){

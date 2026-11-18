@@ -3,6 +3,13 @@ import crypto from "node:crypto";
 const tables = {servicios:"servicios", extras:"extras", promociones:"promociones"};
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
 const active = item => item && (item.activo === true || item.activo === "true");
+const normalizeEmail = value => typeof value === "string" ? value.trim().toLowerCase() : "";
+const normalizePhone = value => typeof value === "string" ? value.replace(/[\s()+-]/g,"") : "";
+function matchesRecipient(row, phone, email) {
+  const digits = normalizePhone(phone), address = normalizeEmail(email);
+  return /^\d{7,15}$/.test(digits) && digits === normalizePhone(row.telefono)
+    && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) && address === normalizeEmail(row.contacto?.email);
+}
 const cents = amount => Math.round(Number(amount) * 100);
 const day = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date());
 const fail = message => {throw Object.assign(new Error(message),{promoValidacion:true})};
@@ -54,6 +61,7 @@ export function clientOffers({app,db,requireAuth,limiter,variant,branchPanel,res
     const {lines,price,date,time,validity,bookingId}=req.body;
     const customer=read(await branchPanel.from(req,"turnos").select("telefono,nombre,apellido,email").eq("slug",slug).eq("id",bookingId).maybeSingle());
     if(!customer?.telefono || !/^\d{7,15}$/.test(customer.telefono.replace(/\D/g,"")))fail("Esta reserva no tiene teléfono de contacto.");
+    if(!matchesRecipient({telefono:customer.telefono,contacto:customer},customer.telefono,customer.email))fail("El cliente necesita un teléfono y un correo válidos para recibir una oferta.");
     const plan=read(await db.from("usuarios").select("plan").eq("slug",slug).maybeSingle());
     if(!["basico","premium"].includes(plan?.plan))fail("Tu plan no incluye promociones personales.");
     if(!Array.isArray(lines)||!lines.length||lines.length>30||!["semana","mes","dia"].includes(validity))fail("Revisá la selección y la vigencia.");
@@ -81,9 +89,9 @@ export function clientOffers({app,db,requireAuth,limiter,variant,branchPanel,res
     }
     const final=cents(price);
     if(!Number.isSafeInteger(original)||!Number.isSafeInteger(final)||final<=0||final>=original)fail("El precio promocional debe ser positivo y menor al original.");
-    const token=crypto.randomBytes(32).toString("base64url"),code=crypto.randomInt(100000,1000000).toString();
-    read(await db.from("ofertas_cliente").insert({slug,token_hash:digest(token),code_hash:digest(token+code),telefono:customer.telefono,contacto:customer,staff_ids:req.sucursalAdmin?.equipo_ids || null,items:entries,fuentes:sources,precio:final/100,original:original/100,fecha:date||null,hora:time||null,vence:until}));
-    return {token,code,telefono:customer.telefono};
+    const token=crypto.randomBytes(32).toString("base64url");
+    read(await db.from("ofertas_cliente").insert({slug,token_hash:digest(token),telefono:customer.telefono,contacto:customer,staff_ids:req.sucursalAdmin?.equipo_ids || null,items:entries,fuentes:sources,precio:final/100,original:original/100,fecha:date||null,hora:time||null,vence:until}));
+    return {token,telefono:customer.telefono};
   }));
   async function load(slug,token){
     if(!/^[\w-]{43}$/.test(token))fail("El enlace no es válido.");
@@ -97,8 +105,7 @@ export function clientOffers({app,db,requireAuth,limiter,variant,branchPanel,res
   }));
   app.post("/ofertas-cliente/:slug/:token/contacto",limiter,response(async req=>{
     const row=await load(req.params.slug,req.params.token);
-    if(digest(req.params.token+String(req.body.code))!==row.code_hash)fail("El código no coincide con el mensaje de WhatsApp.");
-    return {contacto:row.contacto};
+    return {coincide:matchesRecipient(row,req.body?.phone,req.body?.email)};
   }));
   return async function resolve(slug,key,service,date,staff,redeem){
     const token=key.slice(3),row=await load(slug,token);
@@ -107,7 +114,8 @@ export function clientOffers({app,db,requireAuth,limiter,variant,branchPanel,res
     const primary=row.items.find(i=>i.tipo==="servicio");
     if(!service || (primary && service!==primary.id))fail("Elegí el servicio correspondiente para reservar.");
     if(date && (date>row.vence || date<day() || (row.fecha && date!==row.fecha)))fail("La fecha no corresponde a la oferta.");
-    if(redeem && (String(redeem.phone).replace(/\D/g,"")!==row.telefono.replace(/\D/g,"") || digest(token+String(redeem.code))!==row.code_hash || (row.hora && redeem.time!==row.hora)))fail("Revisá el teléfono, el código de WhatsApp y el horario de la oferta.");
+    if(redeem && !matchesRecipient(row,redeem.phone,redeem.email))fail("Los datos de contacto no coinciden con la oferta.");
+    if(redeem && row.hora && redeem.time!==row.hora)fail("El horario no corresponde a la oferta.");
     for(const id of row.fuentes){
       const promo=await item(slug,"promociones",id);
       await resolvePublicPromo(slug,id,promo.items.find(i=>i.tipo==="servicio")?.id,date,staff);
