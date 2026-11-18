@@ -1,0 +1,7 @@
+:is(.promo-editor,.client-offer) :is(input:not([type=checkbox]),textarea,select) {width:100%;padding:11px 16px;font:inherit;border:1px solid #aaa;border-radius:28px;background:white;color:#171717}
+:is(.promo-option-list,.offer-schedule) button { padding:8px 13px; min-height:38px; border:1px solid #9ca49d; border-radius:5px; background:white; color:#202420; }
+:is(.promo-option-list,.offer-schedule) button[aria-pressed=true] { background:var(--green); border-color:var(--green); color:white; }
+@media(pointer:coarse) { :is(.promo-option-list,.offer-schedule) button { min-height:44px; } }
+.promo-money-input { display:flex; align-items:center; gap:6px; min-width:0; border:1px solid #aaa; border-radius:28px; padding-inline:12px; }
+.promo-money-input:focus-within { outline:2px solid var(--green); outline-offset:1px; }
+:is(.promo-editor,.client-offer) .promo-money-input input[type=number] { flex:1; min-width:0; width:0; border:0; border-radius:0; padding-inline:0; outline:none; background:transparent; }

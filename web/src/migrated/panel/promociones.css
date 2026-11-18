@@ -1,3 +1,4 @@
+@import "./promotion-controls.css";
 .promo-toolbar {display:flex;justify-content:flex-end;margin-bottom:16px}
 .promotions {container-type:inline-size; color:#101010; font-size:16px; --green:#196a1a}
 .promotions * {box-sizing:border-box}
@@ -31,7 +32,6 @@
 .promo-editor {position:relative;border:1px solid #aaa;border-radius:clamp(20px,3cqw,48px);padding:clamp(44px,4.5cqw,68px) clamp(16px,4.8cqw,72px) 30px}
 .promo-editor fieldset {border:0;padding:0;margin:0;min-width:0;display:grid;gap:24px}
 .promo-editor label,.promo-details {display:grid;gap:8px}
-.promo-editor :is(input:not([type=checkbox]),textarea,select) {width:100%;padding:11px 16px;font:inherit;border:1px solid #aaa;border-radius:28px;background:white;color:#171717}
 .promo-editor fieldset>label input {font-weight:700}
 .promo-intro {display:grid;grid-template-columns:38% minmax(0,1fr);gap:8%;align-items:stretch}
 .promo-intro>div:first-child>div {margin-top:8px}
@@ -54,10 +54,7 @@
 .promo-count {text-align:right}.promo-count button {background:white;color:#111;border:1px solid;border-radius:7px}
 .promo-options h3 { margin:0 0 5px; font-size:1em; font-weight:600; }
 .promo-option-list { display:flex; flex-wrap:wrap; gap:8px 12px; margin-top:12px; }
-.promo-option-list button { padding:8px 13px; min-height:38px; border:1px solid #9ca49d; border-radius:5px; background:white; color:#202420; }
-.promo-option-list button[aria-pressed=true] { background:var(--green); border-color:var(--green); color:white; }
 .promo-option-list button:focus-visible { outline:2px solid var(--green); outline-offset:3px; }
-@media(pointer:coarse) { .promo-option-list button { min-height:44px; } }
 
 .promo-editor .promo-primary {justify-self:end}
 .promo-error {color:#9c2222}
@@ -113,7 +110,4 @@
   }
 }
 .promo-line[data-selected=true] {background:#f6faf5}
-.promo-money-input { display:flex; align-items:center; gap:6px; min-width:0; border:1px solid #aaa; border-radius:28px; padding-inline:12px; }
-.promo-money-input:focus-within { outline:2px solid var(--green); outline-offset:1px; }
-.promo-editor .promo-money-input input[type=number] { flex:1; min-width:0; width:0; border:0; border-radius:0; padding-inline:0; outline:none; background:transparent; }
 .promo-actions .promo-menu-trigger { border:0; padding-inline:4px; }

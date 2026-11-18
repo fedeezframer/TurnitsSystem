@@ -1,6 +1,6 @@
-.clients-panel,.client-offer {--client-green:#196b20;color:#151a16}
+@import "./promotion-controls.css";
+.clients-panel,.client-offer {--client-green:#196b20;--green:var(--client-green);color:#151a16}
 .clients-board article header,.offer-fields,.offer-item,.offer-qty {display:flex;align-items:center;gap:12px}
-.client-offer input,.client-offer select {max-width:100%;min-width:0;box-sizing:border-box;border:1px solid #a9aea9;border-radius:8px;background:white;color:inherit;padding:9px 12px;font:inherit}
 .clients-board {display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,215px),1fr));gap:clamp(14px,1.5vw,22px);align-content:start;padding:clamp(14px,2vw,28px);border:1px solid #c6cbc6;border-radius:28px;min-height:44vh}
 .clients-board article {display:flex;flex-direction:column;gap:16px;padding:clamp(14px,1.3vw,20px);border:1px solid #d5dbd5;border-radius:18px;background:white;min-width:0}
 .client-avatar {flex:none;display:grid;place-items:center;width:38px;height:38px;color:#28352f;font-size:15px;letter-spacing:.02em;border-radius:50%}
@@ -23,7 +23,7 @@
 .offer-cover {aspect-ratio:1;background:#f0f3ef;border-radius:14px;overflow:hidden}
 .offer-cover img {width:100%;height:100%;object-fit:cover}
 .offer-fields {flex-wrap:wrap;align-items:end;margin-bottom:18px}
-.offer-fields label {display:grid;gap:6px;max-width:100%}
+.offer-fields label {display:grid;gap:8px;min-width:0;max-width:100%}
 .offer-items {margin-top:10px;max-height:240px;overflow:auto;display:grid;gap:8px}
 .offer-item {padding:8px 10px;border:1px solid #a6aea6;border-radius:16px;justify-content:space-between}
 .offer-item[data-selected=true] {border-color:var(--client-green);color:var(--client-green)}
@@ -43,9 +43,13 @@
 .offer-scroll {display:grid;gap:5px}
 .offer-scroll button {border-radius:50%;background:white;border:1px solid #adb3ad;width:30px;height:30px;cursor:pointer}
 .offer-schedule {border:0;margin:0;padding:0}
-.offer-schedule legend {padding:0;margin-bottom:6px}
-.offer-schedule button {border:1px solid #858d85;border-radius:6px;background:white;padding:9px 12px;margin-right:6px;color:inherit;cursor:pointer}
-.offer-schedule button[aria-pressed=true] {background:var(--client-green);border-color:var(--client-green);color:white}
+.offer-schedule legend {padding:0;margin-bottom:8px}
+.offer-schedule button {font:inherit;cursor:pointer}
+.offer-schedule button + button {margin-left:8px}
+.client-offer :is(input,select) {box-sizing:border-box;max-width:100%;min-width:0}
+.client-offer .promo-money-input {width:min(11rem,100%);box-sizing:border-box}
+.client-offer :is(input,select,button):focus-visible {outline:2px solid var(--green);outline-offset:2px}
+.offer-qty button {background:white;color:#171717;border:1px solid #aaa;border-radius:7px;min-width:28px;min-height:28px;cursor:pointer}
 .clients-board {grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:1250px){.clients-board{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:980px){.clients-board{grid-template-columns:repeat(2,minmax(0,1fr))}}
