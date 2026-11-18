@@ -776,7 +776,7 @@ function TurnitsPanel_Inner(props: any) {
                 )}
 
                 {seccionActiva === "agenda" && (
-                    <div
+                    <div className="agenda-section"
                         style={{
                             display: "flex",
                             flexDirection: "column",
@@ -785,7 +785,7 @@ function TurnitsPanel_Inner(props: any) {
                     >
                         <SeccionHeader
                             title="Mi Agenda"
-                            subtitle="Tus turnos organizados por día"
+                            subtitle="Ofrece promociones a tus clientes, descuentos y combos para mejorar su experiencia"
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>

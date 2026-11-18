@@ -1,3 +1,4 @@
+import { AgendaPanel_Layout } from "./agenda-dias"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner from "../../components/LoadingRunner"
 import BookingReceipt from "../../components/BookingReceipt"
@@ -46,6 +47,7 @@ function AgendaPanel(props: any) {
           : columnasDias
     const hoyWidth = isMobile ? "100%" : isTablet ? 160 : 180
 
+    const [today,setToday] = React.useState(AgendaPanel_hoyISO)
     const [dias, setDias] = React.useState<any[]>([])
     const [sucursales,setSucursales]=React.useState<any[]>([])
     const [sucursalFiltro,setSucursalFiltro]=React.useState('todas')
@@ -142,7 +144,8 @@ function AgendaPanel(props: any) {
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const data = await res.json()
             if (data.success && requestId === agendaRequestId.current) {
-                setDias(AgendaPanel_filtrarPasados(data.dias || []))
+                setToday(data.hoy || AgendaPanel_hoyISO())
+                setDias(data.dias || [])
                 setError("")
             }
         } catch {
@@ -207,13 +210,8 @@ function AgendaPanel(props: any) {
         window.addEventListener("pageshow", refrescar)
         window.addEventListener("turno_actualizado", refrescar)
         document.addEventListener("visibilitychange", refrescar)
-        const filtrarPasados = setInterval(
-            () => setDias((prev) => AgendaPanel_filtrarPasados(prev)),
-            60_000
-        )
         return () => {
             clearInterval(intervalo)
-            clearInterval(filtrarPasados)
 
             window.removeEventListener("pageshow", refrescar)
             window.removeEventListener("turno_actualizado", refrescar)
@@ -679,30 +677,6 @@ function AgendaPanel(props: any) {
         window.open(`https://wa.me/54${tel}?text=${msg}`, "_blank")
     }
 
-    if (false) {
-        return (
-            <div
-                ref={containerRef}
-                style={{ ...AgendaPanel_wrapperBase, ...style }}
-            >
-                <AgendaPanel_Layout
-                    dias={AgendaPanel_mockDias()}
-                    colsDias={colsDias}
-                    hoyWidth={hoyWidth}
-                    accentColor={accentColor}
-                    colorPendiente={colorPendiente}
-                    colorReprogramacion={colorReprogramacion}
-                    colorSinProfesional={colorSinProfesional}
-                    resaltarSinProfesional={resaltarSinProfesional}
-                    isMobile={isMobile}
-                    isTablet={isTablet}
-                    onTurnoClick={() => {}}
-                />
-                <style>{AgendaPanel_globalCSS}</style>
-            </div>
-        )
-    }
-
     if (loading)
         return (
             <div
@@ -772,19 +746,13 @@ function AgendaPanel(props: any) {
             {sucursales.length>0 && <div className="negocio-editor" style={{marginBottom:14}}><label className="negocio-field" style={{maxWidth:320}}>Sucursal<select aria-label="Sucursal" value={sucursalFiltro} onChange={e=>setSucursalFiltro(e.target.value)}><option value="todas">Todas las sucursales</option><option value="principal">{principalNombre}</option>{sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}{!s.activo?' · Pausada':''}</option>)}</select></label></div>}
             <div
                 ref={containerRef}
-                style={{ ...AgendaPanel_wrapperBase, ...style }}
+                className="agenda-board" style={style}
             >
                 <AgendaPanel_Layout
                     dias={sucursalFiltro==='todas'?dias:dias.map(d=>({...d,turnos:d.turnos.filter((t:any)=>(t.sucursal_id || 'principal')===sucursalFiltro)})).filter(d=>d.turnos.length)}
-                    colsDias={colsDias}
-                    hoyWidth={hoyWidth}
-                    accentColor={accentColor}
-                    colorPendiente={colorPendiente}
-                    colorReprogramacion={colorReprogramacion}
-                    colorSinProfesional={colorSinProfesional}
-                    resaltarSinProfesional={resaltarSinProfesional}
-                    isMobile={isMobile}
-                    isTablet={isTablet}
+                    today={today}
+                    baseUrl={baseUrl}
+                    turnoOpen={!!modal}
                     onNuevoTurno={abrirNuevo}
                     onTurnoClick={(turno: any, fecha: string) => {
                         setCancelOk(false)
@@ -2119,425 +2087,6 @@ function AgendaPanel_InfoRow({ label, value, highlight, color }: any) {
             >
                 {value}
             </span>
-        </div>
-    )
-}
-
-function AgendaPanel_Layout({
-    dias,
-    colsDias,
-    hoyWidth,
-    accentColor,
-    colorPendiente,
-    colorReprogramacion,
-    colorSinProfesional,
-    resaltarSinProfesional,
-    isMobile,
-    isTablet,
-    onTurnoClick,
-    onNuevoTurno,
-}: any) {
-    const hoy = dias.find((d: any) => d.esHoy)
-    const diasConTurnos = dias.filter((d: any) => d.turnos.length > 0).length
-    const totalTurnos = dias.reduce(
-        (total: number, d: any) => total + d.turnos.length,
-        0
-    )
-    const primerDia = dias.length
-        ? new Date(`${dias[0].fecha}T12:00:00`)
-        : new Date()
-    const mesActual = primerDia.toLocaleDateString("es-AR", {
-        month: "long",
-        year: "numeric",
-    })
-
-    return (
-        <div
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: isMobile ? 12 : 16,
-                width: "100%",
-                minWidth: 0,
-                flex: 1,
-            }}
-        >
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: isMobile ? "flex-start" : "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    flexWrap: "wrap",
-                    padding: isMobile ? "14px 14px" : "16px 18px",
-                    borderRadius: isMobile ? 16 : 20,
-                    border: `1px solid ${AgendaPanel_HAIRLINE}`,
-                    background: AgendaPanel_SURFACE,
-                }}
-            >
-                <div style={{ minWidth: 0 }}>
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            flexWrap: "wrap",
-                        }}
-                    >
-                        <span
-                            style={{
-                                fontFamily: AgendaPanel_FONT_DISPLAY,
-                                fontSize: isMobile ? 18 : 21,
-                                fontWeight: 800,
-                                color: AgendaPanel_INK,
-                                letterSpacing: "-0.5px",
-                            }}
-                        >
-                            Calendario de turnos
-                        </span>
-                        <span
-                            style={{
-                                fontSize: isMobile ? 12 : 13,
-                                fontWeight: 800,
-                                color: AgendaPanel_SLATE,
-                                textTransform: "capitalize",
-                                letterSpacing: "-0.1px",
-                            }}
-                        >
-                            {mesActual}
-                        </span>
-                        <span
-                            style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: accentColor,
-                                background: `${accentColor}15`,
-                                padding: "4px 9px",
-                                borderRadius: 999,
-                                whiteSpace: "nowrap",
-                            }}
-                        >
-                            Próximos 30 días
-                        </span>
-                    </div>
-                    <div
-                        style={{
-                            marginTop: 5,
-                            fontSize: 12,
-                            color: AgendaPanel_SLATE,
-                        }}
-                    >
-                        Tocá un turno para ver todos sus detalles.
-                    </div>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        flexWrap: "wrap",
-                        fontSize: 11,
-                        color: AgendaPanel_SLATE,
-                    }}
-                >
-                    <span>{`${totalTurnos} turnos`}</span>
-                    <span>{`${diasConTurnos} días ocupados`}</span>
-                    {onNuevoTurno && (
-                        <button
-                            onClick={onNuevoTurno}
-                            style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 6,
-                                padding: isMobile ? "9px 14px" : "8px 14px",
-                                borderRadius: 999,
-                                border: "none",
-                                cursor: "pointer",
-                                background: accentColor,
-                                color: "#fff",
-                                fontSize: 12.5,
-                                fontWeight: 700,
-                                fontFamily: AgendaPanel_FONT_BODY,
-                                whiteSpace: "nowrap",
-                            }}
-                        >
-                            <span style={{ fontSize: 15, lineHeight: 1 }}>
-                                +
-                            </span>
-                            Agregar turno
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: isMobile
-                        ? "minmax(0, 1fr)"
-                        : "repeat(auto-fit, minmax(220px, 1fr))",
-                    gap: isMobile ? 10 : 12,
-                    width: "100%",
-                    minWidth: 0,
-                    padding: isMobile ? 6 : 10,
-                    borderRadius: isMobile ? 16 : 20,
-                    backgroundColor: `${AgendaPanel_INK}03`,
-                    backgroundImage: `linear-gradient(${AgendaPanel_INK}08 1px, transparent 1px), linear-gradient(90deg, ${AgendaPanel_INK}08 1px, transparent 1px)`,
-                    backgroundSize: isMobile ? "22px 22px" : "30px 30px",
-                    boxSizing: "border-box",
-                }}
-            >
-                {diasConTurnos === 0 ? (
-                    <div
-                        style={{
-                            gridColumn: "1 / -1",
-                            display: "flex",
-                            justifyContent: "center",
-                            padding: isMobile ? "26px 10px" : "40px 10px",
-                        }}
-                    >
-                        <div
-                            style={{
-                                position: "relative",
-                                width: isMobile ? 190 : 212,
-                                padding: "24px 16px 28px",
-                                background: "#FEF3C7",
-                                boxShadow:
-                                    "0 12px 26px rgba(15,23,42,0.14), 0 2px 6px rgba(15,23,42,0.08)",
-                                transform: "rotate(-2.5deg)",
-                                textAlign: "center",
-                            }}
-                        >
-                            <div
-                                style={{
-                                    position: "absolute",
-                                    top: -9,
-                                    left: "50%",
-                                    transform: "translateX(-50%) rotate(-3deg)",
-                                    width: 44,
-                                    height: 16,
-                                    background: "rgba(250, 204, 21, 0.6)",
-                                    boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
-                                }}
-                            />
-                            <div
-                                style={{
-                                    fontFamily: AgendaPanel_FONT_DISPLAY,
-                                    fontSize: isMobile ? 14.5 : 15.5,
-                                    fontWeight: 800,
-                                    color: "#78350F",
-                                    lineHeight: 1.45,
-                                }}
-                            >
-                                Aún no tienes turnos
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    dias
-                        .filter((dia: any) => dia.turnos.length > 0)
-                        .map((dia: any) => {
-                            const fecha = new Date(`${dia.fecha}T12:00:00`)
-                            const numero = fecha.getDate()
-                            const nombreDia = fecha.toLocaleDateString(
-                                "es-AR",
-                                {
-                                    weekday: "long",
-                                }
-                            )
-                            const tituloDia = `${nombreDia.charAt(0).toUpperCase()}${nombreDia.slice(1)} ${numero}`
-                            const esHoy = !!dia.esHoy
-                            const pendientes = dia.turnos.filter(
-                                AgendaPanel_esPendienteAprobacion
-                            ).length
-                            const reprog = dia.turnos.filter(
-                                AgendaPanel_tieneReprogramacionPendiente
-                            ).length
-                            const sinProfesional = resaltarSinProfesional
-                                ? dia.turnos.filter(
-                                      AgendaPanel_faltaProfesional
-                                  ).length
-                                : 0
-
-                            return (
-                                <div
-                                    key={dia.fecha}
-                                    style={{
-                                        minWidth: 0,
-                                        minHeight: isMobile ? 0 : 148,
-                                        padding: isMobile ? 12 : 13,
-                                        borderRadius: isMobile ? 14 : 17,
-                                        border: esHoy
-                                            ? `1.5px solid ${accentColor}`
-                                            : `1px solid ${AgendaPanel_HAIRLINE}`,
-                                        background: esHoy
-                                            ? `linear-gradient(155deg, ${accentColor}12 0%, ${AgendaPanel_SURFACE} 72%)`
-                                            : AgendaPanel_SURFACE,
-                                        boxShadow: esHoy
-                                            ? `0 5px 16px ${accentColor}12`
-                                            : "none",
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        gap: 9,
-                                        overflow: "hidden",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "space-between",
-                                            gap: 8,
-                                            flexWrap: "wrap",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 8,
-                                                minWidth: 0,
-                                                flexWrap: "wrap",
-                                            }}
-                                        >
-                                            <span
-                                                style={{
-                                                    fontFamily:
-                                                        AgendaPanel_FONT_DISPLAY,
-                                                    fontSize: isMobile
-                                                        ? 16
-                                                        : 17,
-                                                    fontWeight: 800,
-                                                    color: AgendaPanel_INK,
-                                                    lineHeight: 1.2,
-                                                }}
-                                            >
-                                                {tituloDia}
-                                            </span>
-                                            {esHoy && (
-                                                <span
-                                                    style={{
-                                                        fontSize: 10,
-                                                        fontWeight: 800,
-                                                        color: accentColor,
-                                                        background: `${accentColor}18`,
-                                                        padding: "4px 8px",
-                                                        borderRadius: 999,
-                                                        textTransform:
-                                                            "uppercase",
-                                                        letterSpacing: "0.04em",
-                                                    }}
-                                                >
-                                                    Hoy
-                                                </span>
-                                            )}
-                                        </div>
-                                        <span
-                                            style={{
-                                                fontSize: 11,
-                                                color: AgendaPanel_SLATE,
-                                                fontVariantNumeric:
-                                                    "tabular-nums",
-                                                whiteSpace: "nowrap",
-                                            }}
-                                        >
-                                            {`${dia.turnos.length} ${dia.turnos.length === 1 ? "turno" : "turnos"}`}
-                                        </span>
-                                    </div>
-
-                                    {(pendientes > 0 ||
-                                        reprog > 0 ||
-                                        sinProfesional > 0) && (
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                gap: 5,
-                                                flexWrap: "wrap",
-                                            }}
-                                        >
-                                            {pendientes > 0 && (
-                                                <span
-                                                    style={{
-                                                        fontSize: 9,
-                                                        fontWeight: 800,
-                                                        color: colorPendiente,
-                                                        background: `${colorPendiente}18`,
-                                                        padding: "3px 7px",
-                                                        borderRadius: 999,
-                                                    }}
-                                                >
-                                                    {`${pendientes} pend.`}
-                                                </span>
-                                            )}
-                                            {reprog > 0 && (
-                                                <span
-                                                    style={{
-                                                        fontSize: 9,
-                                                        fontWeight: 800,
-                                                        color: colorReprogramacion,
-                                                        background: `${colorReprogramacion}18`,
-                                                        padding: "3px 7px",
-                                                        borderRadius: 999,
-                                                    }}
-                                                >
-                                                    {`${reprog} reprog.`}
-                                                </span>
-                                            )}
-                                            {sinProfesional > 0 && (
-                                                <span
-                                                    style={{
-                                                        fontSize: 9,
-                                                        fontWeight: 800,
-                                                        color: colorSinProfesional,
-                                                        background: `${colorSinProfesional}18`,
-                                                        padding: "3px 7px",
-                                                        borderRadius: 999,
-                                                    }}
-                                                >
-                                                    {`${sinProfesional} sin asignar`}
-                                                </span>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: 6,
-                                            minWidth: 0,
-                                        }}
-                                    >
-                                        {dia.turnos.map((turno: any) => (
-                                            <AgendaPanel_CalendarTurno
-                                                key={turno.id}
-                                                turno={turno}
-                                                accentColor={accentColor}
-                                                colorPendiente={colorPendiente}
-                                                colorReprogramacion={
-                                                    colorReprogramacion
-                                                }
-                                                colorSinProfesional={
-                                                    colorSinProfesional
-                                                }
-                                                resaltarSinProfesional={
-                                                    resaltarSinProfesional
-                                                }
-                                                isMobile={isMobile}
-                                                onClick={() =>
-                                                    onTurnoClick(
-                                                        turno,
-                                                        dia.fecha
-                                                    )
-                                                }
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            )
-                        })
-                )}
-            </div>
         </div>
     )
 }
