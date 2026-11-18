@@ -29,6 +29,7 @@ export function branchCatalogQuery(req, query) {
 export function branchRouteAllowed(req) {
   const rules = {
     GET: [
+      /^\/admin\/clientes\/[^/]+$/,
       /^\/sesion\/panel\/[^/]+$/,
       /^\/settings\/[^/]+$/,
       /^\/admin-stats\/[^/]+$/,
@@ -43,6 +44,7 @@ export function branchRouteAllowed(req) {
       /^\/notificaciones\/[^/]+$/,
     ],
     POST: [
+      /^\/admin\/ofertas-cliente\/[^/]+$/,
       /^\/admin\/equipo$/,
       /^\/admin\/equipo\/upload-foto$/,
       /^\/admin\/equipo\/[^/]+\/(servicios|promociones)$/,

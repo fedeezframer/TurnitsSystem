@@ -7,6 +7,7 @@ import bcrypt         from "bcryptjs";
 import jwt            from "jsonwebtoken";
 import rateLimit      from "express-rate-limit";
 import multer         from "multer";
+import { clientOffers } from "./client-offers.js";
 import crypto         from "crypto";
 import webpush        from "web-push";
 import { normalizePromoDays, promoAppliesOn, promoHasMatchingDate } from "../web/src/shared/promotions.js";
@@ -2554,7 +2555,9 @@ app.get("/equipo/:slug", async (req, res) => {
 // Promos públicas y cálculo autorizado para reservas.
 function promoHoyArgentina() { return new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Argentina/Buenos_Aires'}).format(new Date()); }
 function promoError(message) { const error=new Error(message);error.promoValidacion=true;return error; }
-async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId) {
+const resolveClientOffer=clientOffers({app,db:supabase,branchPanel,requireAuth,limiter:limiterBooking,variant:aplicarVarianteServicio,resolvePublicPromo:resolverPromoBooking});
+async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId,redeem) {
+  if(typeof id === "string" && id.startsWith("co_"))return resolveClientOffer(slug,id,servicioId,fecha,equipoId,redeem);
   if(!id) return null;
   const {data:negocioPlan,error:planError}=await supabase.from('usuarios').select('plan').eq('slug',slug).maybeSingle();
   if(planError)throw planError;
@@ -2701,7 +2704,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
     (todosServicios || []).forEach((s) => { duracionPorServicio[s.id] = s.duracion; });
     const slotsPorHora = new Map();
     for (const miembro of miembrosAgenda) {
-      if(promocionSlots && miembro) {try{await resolverPromoBooking(slug,promocionSlots.id,servicio_id,fecha,miembro.id);}catch(e){if(e.promoValidacion)continue;throw e;}}
+      if(promocionSlots && miembro) {try{await resolverPromoBooking(slug,req.query.promocion_id,servicio_id,fecha,miembro.id);}catch(e){if(e.promoValidacion)continue;throw e;}}
       const configAgenda = configNegocioParaEquipo(user, miembro);
       const duracionSolicitada = promocionSlots?.duracion || servicioBase?.duracion || user.duracion_turno || 30;
       const capacidad = promocionSlots?.capacidad || servicioBase?.capacidad || user.capacidad_por_turno || 1;
@@ -3719,7 +3722,7 @@ if (servicio_id) {
 let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
-      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:req.body.phone || req.body.telefono,code:req.body.oferta_codigo,time:hora});
       if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
       await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
       if(promoReserva){
@@ -3905,7 +3908,7 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
     let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extraIds, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
-      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:req.body.phone || req.body.telefono,code:req.body.oferta_codigo,time:hora});
       if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
       await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
       if(promoReserva){
@@ -7753,7 +7756,7 @@ app.post("/api/create-preference", limiterBooking, async (req, res) => {
     let { extras: extrasResueltos, montoExtras } = await resolverExtras(slugClean, servicio_id || null, extra_ids, req.body.extra_cantidades, equipo_id || null);
     let promoReserva=null;
     try {
-      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id);
+      promoReserva=await resolverPromoBooking(slugClean,req.body.promocion_id,servicio_id,fecha,empleadoReserva?.id,{phone:req.body.phone || req.body.telefono,code:req.body.oferta_codigo,time:hora,online:true});
       if(promoReserva && (!Number.isFinite(Number(req.body.promocion_precio)) || Math.abs(Number(req.body.promocion_precio)-promoReserva.precio_final)>0.005))throw promoError('El precio de la promo cambió. Volvé a elegirla para ver el precio actualizado.');
       await promoDisponibilidad(slugClean,fecha,hora,promoReserva,configReserva,empleadoReserva,servicio_id);
       if(promoReserva){
@@ -7805,9 +7808,22 @@ const fee = planCobraComision(user.plan, user.estado_suscripcion)
           estado: "pendiente",
         };
 
-        const { data: pendiente, error: pendError } = await supabase
-          .from("pagos_pendientes").insert([metaPendiente]).select("id").single();
-        if (pendError) throw pendError;
+        let pendiente;
+        if(promoReserva?.personal_id){
+          const {data:prior,error}=await supabase.from("pagos_pendientes").select("*").eq("slug",slugClean).contains("promocion",{personal_id:promoReserva.personal_id}).maybeSingle();
+          if(error)throw error;
+          if(prior){
+            if(prior.fecha!==fecha || prior.hora.slice(0,5)!==hora || prior.servicio_id!==servicio_id || prior.equipo_id!==equipoIdValido || Number(prior.monto)!==montoACobrar || prior.promocion.canal!==(req.body.card_checkout ? "tarjeta":"mp"))return res.status(409).json({error:"Retomá el horario y el medio de pago que elegiste al iniciar el pago."});
+            if(prior.browse_payment_url)return res.json({payment_url:prior.browse_payment_url,monto:montoACobrar,fee,pasarela:"mercadopago"});
+            pendiente=prior;
+          }
+          promoReserva.canal=req.body.card_checkout ? "tarjeta":"mp";
+        }
+        if(!pendiente){
+          const result=await supabase.from("pagos_pendientes").insert([metaPendiente]).select("id").single();
+          if(result.error)throw result.error;
+          pendiente=result.data;
+        }
 
         if(req.body.card_checkout === true) {
           if(!process.env.MP_TURNERO_PUBLIC_KEY || !process.env.JWT_SECRET)return res.status(503).json({error:"El pago con tarjeta todavía no está configurado."});
@@ -7856,9 +7872,9 @@ const fee = planCobraComision(user.plan, user.estado_suscripcion)
           auto_return: "approved",
         };
         if (fee > 0) prefBody.marketplace_fee = fee;
-        const response = await pref.create({ body: prefBody });
+        const response = await pref.create({ body: prefBody, ...(promoReserva?.personal_id ? {requestOptions:{idempotencyKey:pendiente.id}} : {}) });
 
-        await supabase.from("pagos_pendientes").update({ preference_id: response.id }).eq("id", pendiente.id);
+        await supabase.from("pagos_pendientes").update({ preference_id: response.id, ...(promoReserva?.personal_id ? {browse_payment_url:response.init_point} : {}) }).eq("id", pendiente.id);
 
         console.log(`💰 Preference creada: monto=${montoACobrar} fee=${fee} slug=${slugClean} ref=${pendiente.id}`);
         return res.json({ payment_url: response.init_point, monto: montoACobrar, fee, pasarela: "mercadopago" });
