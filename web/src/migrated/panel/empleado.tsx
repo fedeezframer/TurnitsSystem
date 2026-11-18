@@ -965,6 +965,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                                     tu agenda con la X.
                                 </div>
                             )}
+                            <div id="catalog-save-slot" style={{position:"sticky",top:66,zIndex:30}} />
                             <ServiciosManager
                                 baseUrl={api}
                                 accentColor={accentColor}

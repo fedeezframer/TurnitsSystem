@@ -1115,6 +1115,17 @@ function ServiciosManager_ExtrasVinculados({
     )
 }
 
+function CatalogSaveState({message, label, saving, onSave}: {
+    message: string; label: string; saving: boolean; onSave: () => void
+}) {
+    const slot = document.getElementById("catalog-save-slot")
+    const control = <div className="catalog-save-state" role="region" aria-label={label}>
+        <span>{message}</span>
+        <button type="button" disabled={saving} onClick={onSave}>{saving ? "Guardando…" : label}</button>
+    </div>
+    return slot ? createPortal(control, slot) : control
+}
+
 function ServiciosManager_ServicioForm({
     initial = ServiciosManager_FORM_EMPTY,
     accentColor,
@@ -1215,11 +1226,6 @@ function ServiciosManager_ServicioForm({
 
     const readyToSave = !uploadingImage && !!form.nombre.trim() && (quoteMode || Number(form.precio) >= ServiciosManager_PRECIO_MINIMO)
         && Number(form.duracion) >= 1 && Number(form.capacidad) >= 1
-    const saveSlot = document.getElementById("catalog-save-slot")
-    const saveControl = <div className="catalog-save-state" role="region" aria-label="Guardar servicio">
-        <span>{modoEdicion ? "Cambios en el servicio" : "Servicio listo para guardar"}</span>
-        <button type="button" disabled={guardando} onClick={handleSubmit}>{guardando ? "Guardando…" : "Guardar servicio"}</button>
-    </div>
     return (
         <motion.div
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -1336,7 +1342,7 @@ function ServiciosManager_ServicioForm({
 
             {error && <div role="alert" style={{ marginTop: 22, padding: "10px 14px", borderRadius: 10, background: "#fff5f5", border: "1px solid #fee2e2", color: "#b42318", fontSize: 13 }}>{error}</div>}
 
-            {!globalEdit && readyToSave && (saveSlot ? createPortal(saveControl, saveSlot) : saveControl)}
+            {!globalEdit && readyToSave && <CatalogSaveState message={modoEdicion ? "Cambios en el servicio" : "Servicio listo para guardar"} label="Guardar servicio" saving={guardando} onSave={handleSubmit} />}
             {typeof document !== "undefined" && createPortal(
                 <AnimatePresence>
                     {avisoProfesional && <div key="aviso-profesional" style={{ position: "fixed", inset: 0, zIndex: 10001, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "calc(76px + env(safe-area-inset-top, 0px)) 16px 16px", pointerEvents: "none" }}>
@@ -1376,6 +1382,9 @@ function ServiciosManager_ExtraForm({
         "--accent-30": accentColor + "44",
     } as React.CSSProperties
 
+    const [uploadingImage, setUploadingImage] = React.useState(false)
+    const readyToSave = !uploadingImage && !!form.nombre.trim() && Number(form.precio) >= ServiciosManager_PRECIO_MINIMO_EXTRA
+        && (!modoEdicion || JSON.stringify(form) !== JSON.stringify(initial))
     const handleSubmit = () => {
         if (Number(form.precio) < ServiciosManager_PRECIO_MINIMO_EXTRA) {
             setPrecioError(
@@ -1454,7 +1463,8 @@ function ServiciosManager_ExtraForm({
             >
                 {/* Foto del producto: igual tratamiento que la foto de
                     servicio, arriba de la grilla. */}
-                <ServiciosManager_ImageUploader
+                <small className="catalog-hint">Elegí una foto donde se distinga el producto.</small>
+                <ServiciosManager_ImageUploader onUploadingChange={setUploadingImage}
                     value={form.imagen_url}
                     onChange={set("imagen_url")}
                     accentColor={accentColor}
@@ -1474,7 +1484,7 @@ function ServiciosManager_ExtraForm({
                     }}
                 >
                     <ServiciosManager_Field
-                        label="Nombre del producto"
+                        label="Nombre del producto" hint="Así lo van a ver tus clientes al reservar."
                         icon="tag"
                     >
                         <ServiciosManager_Input
@@ -1485,7 +1495,7 @@ function ServiciosManager_ExtraForm({
                     </ServiciosManager_Field>
 
                     <ServiciosManager_Field
-                        label="Descripción"
+                        label="Descripción" hint="Indicá la presentación, el tamaño o el uso."
                         icon="align-left"
                     >
                         <ServiciosManager_AutoTextarea
@@ -1508,7 +1518,7 @@ function ServiciosManager_ExtraForm({
                     <ServiciosManager_Field
                         label="Precio"
                         icon="dollar"
-                        hint={`Mínimo $${ServiciosManager_PRECIO_MINIMO_EXTRA.toLocaleString("es-AR")}`}
+                        hint={`Precio de una unidad. Mínimo $${ServiciosManager_PRECIO_MINIMO_EXTRA.toLocaleString("es-AR")}`}
                     >
                         <ServiciosManager_PrecioInput
                             value={form.precio}
@@ -1542,7 +1552,7 @@ function ServiciosManager_ExtraForm({
                     <ServiciosManager_Field
                         label="Orden"
                         icon="list"
-                        hint="Posición en la lista"
+                        hint="Los números más bajos aparecen primero."
                     >
                         <ServiciosManager_Input
                             value={form.orden}
@@ -1574,54 +1584,7 @@ function ServiciosManager_ExtraForm({
                     </div>
                 )}
 
-                <div
-                    style={{
-                        display: "flex",
-                        gap: 8,
-                        justifyContent: isMobile ? "stretch" : "flex-end",
-                        flexDirection: isMobile ? "column-reverse" : "row",
-                        paddingTop: 2,
-                    }}
-                >
-
-                    <motion.button
-                        className="svc-save-btn"
-                        whileTap={{ scale: 0.97 }}
-                        onClick={handleSubmit}
-                        disabled={guardando || !form.nombre.trim()}
-                        style={{
-                            padding: isMobile ? "11px 20px" : "9px 22px",
-                            borderRadius: 10,
-                            border: "none",
-                            background:
-                                guardando || !form.nombre.trim()
-                                    ? "#cbd5e1"
-                                    : accentColor,
-                            color: "#fff",
-                            fontSize: 13,
-                            fontWeight: 700,
-                            cursor:
-                                guardando || !form.nombre.trim()
-                                    ? "not-allowed"
-                                    : "pointer",
-                            fontFamily:
-                                "'Inter Display', -apple-system, sans-serif",
-                            letterSpacing: "-0.2px",
-                            transition: "background 0.15s, filter 0.15s",
-                            boxShadow:
-                                guardando || !form.nombre.trim()
-                                    ? "none"
-                                    : `0 4px 14px ${accentColor}40`,
-                            width: isMobile ? "100%" : "auto",
-                        }}
-                    >
-                        {guardando
-                            ? "Guardando…"
-                            : modoEdicion
-                              ? "Guardar cambios"
-                              : "Guardar producto"}
-                    </motion.button>
-                </div>
+                {readyToSave && <CatalogSaveState message={modoEdicion ? "Cambios en el producto" : "Producto listo para guardar"} label="Guardar producto" saving={guardando} onSave={handleSubmit} />}
             </div>
         </motion.div>
     )
@@ -2839,13 +2802,20 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const final=Math.round((form.descuento_tipo === "porcentaje" ? original*(1-valor/100) : valor)*100)/100
     const validPrice=Number.isFinite(final)&&valor>0&&final>0&&final<original
     const toggle=(item:any)=>setForm(prev=>({...prev,items:prev.items.some(i=>i.id===item.id&&i.tipo===item.tipo) ? prev.items.filter(i=>!(i.id===item.id&&i.tipo===item.tipo)) : [...prev.items,{tipo:item.tipo,id:item.id,cantidad:1}]}))
+    const formRef = React.useRef<HTMLFormElement>(null)
+    const originalDraft = React.useRef("")
+    const draftKey = (draft:typeof form, people:string[]) => JSON.stringify([draft, [...people].sort()])
+    const tipo = form.items.length === 1 && form.items[0].tipo === "servicio" && form.items[0].cantidad === 1 ? "descuento" : "combo"
+    const validOffer = !!form.nombre.trim() && form.items.length > 0 && selected.every(i => i.source) && validPrice
+        && (tipo === "descuento" || form.items.reduce((sum,i) => sum + i.cantidad, 0) >= 2)
+    const readyToSave = validOffer && !uploadingCover && (form.dias_semana === null || (diasHabilitados && form.dias_semana.length > 0))
+        && originalDraft.current !== draftKey(form, assigned)
     const guardar=async(e:React.FormEvent)=>{
         e.preventDefault();setError("")
         if(uploadingCover || busy) return
         if(form.dias_semana !== null && !diasHabilitados) {setError("La programación por días todavía no está disponible. Volvé a cargar las promociones.");return}
         if(form.dias_semana !== null && !form.dias_semana.length) {setError("Elegí al menos un día para esta promo.");return}
-        const tipo=form.items.length===1 && form.items[0].tipo==="servicio" && form.items[0].cantidad===1 ? "descuento" : "combo"
-        if(!form.nombre.trim() || !form.items.length || selected.some(i=>!i.source) || !validPrice || (tipo === "combo" && form.items.reduce((sum,i)=>sum+i.cantidad,0)<2)) {setError("Completá el nombre, los elementos y un precio menor al original. Una oferta combinada necesita al menos dos unidades.");return}
+        if (!validOffer) {setError("Revisá los elementos y el descuento de la promoción.");return}
         setBusy(true)
         try {
             const result=await request(editando ? `/${editando}` : "",editando ? "PUT" : "POST",{...form,tipo,valor})
@@ -2870,7 +2840,12 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
             setMostrar(false);setEditando(null);setForm(initial())
         }catch(e:any){setError(e.message)}finally{setBusy(false)}
     }
-    const editar=(promo:any)=>{setAssigned((promo.profesionales || []).map((p:any)=>p.id));setForm({...promo,descripcion:promo.descripcion || "",imagen_url:promo.imagen_url || "",dias_semana:promo.dias_semana ?? null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))});setEditando(promo.id);setMostrar(true);setError("")}
+    const editar=(promo:any)=>{
+        const people = (promo.profesionales || []).map((p:any)=>p.id)
+        const draft = {...promo,descripcion:promo.descripcion || "",imagen_url:promo.imagen_url || "",dias_semana:promo.dias_semana ?? null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))}
+        originalDraft.current = draftKey(draft,people)
+        setAssigned(people); setForm(draft); setEditando(promo.id); setMostrar(true); setError("")
+    }
     const promoActiva=(promo:any)=>promo.activo===true && hoy()>=promo.fecha_inicio && hoy()<=promo.fecha_fin
     const cambiarEstado=async(promo:any)=>{setBusy(true);setError("");try{const result=await request(`/${promo.id}/estado`,"PUT",{activo:!promoActiva(promo)});setLista(prev=>prev.map(p=>p.id===promo.id ? result.promocion : p));if(editando===promo.id)setForm(prev=>({...prev,activo:result.promocion.activo}))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
     const eliminar=async(id:string)=>{if(!window.confirm("¿Eliminar esta promoción?"))return;setBusy(true);setError("");try{await request(`/${id}`,"DELETE");setLista(prev=>prev.filter(p=>p.id!==id))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
@@ -2878,7 +2853,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const lookup = (item:any) => (item.tipo === "servicio" ? servicios : productos).find(s => s.id === item.id)
     const fallbackCover = (items:any[]) => items.map(lookup).map(photo).find(Boolean) || ""
     const close = () => { setMostrar(false); setEditando(null); setError("") }
-    const openNew = () => { setUploadingCover(false); setForm(initial()); setAssigned([]); setEditando(null); setMostrar(true); setError("") }
+    const openNew = () => { originalDraft.current = ""; setUploadingCover(false); setForm(initial()); setAssigned([]); setEditando(null); setMostrar(true); setError("") }
     const isEligible = (id:string) => selected.every(i => i.tipo !== "servicio" || i.source?.profesionales?.some((p:any) => p.id === id))
     const [filtroPromo,setFiltroPromo] = React.useState("todos")
     const [ordenPromo,setOrdenPromo] = React.useState("actual")
@@ -2897,28 +2872,29 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const visibles = lista.filter(p => (filtroPromo !== "pausados" || !promoActiva(p)) && p.nombre.toLocaleLowerCase().includes(busquedaPromo.trim().toLocaleLowerCase()))
     if (ordenPromo === "az") visibles.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"))
     if (ordenPromo === "precio") visibles.sort((a,b)=>Number(a.precio_final)-Number(b.precio_final))
-    return <section className="promotions">
+    return <>
         {!mostrar && <CatalogToolbar label="promociones" filterValue={filtroPromo} onFilter={setFiltroPromo} sort={ordenPromo} onSort={setOrdenPromo} opcionesOrden={opcionesOrden} search={busquedaPromo} onSearch={setBusquedaPromo} onCreate={!branch ? openNew : undefined} />}
+        <section className="promotions">
         {error && <p role="alert" className="promo-error">{error}</p>}
         <AnimatePresence mode="wait" initial={false}>
-        {mostrar ? <motion.form key="editor" {...transition} className="promo-editor" onSubmit={guardar}>
+        {mostrar ? <motion.form ref={formRef} key="editor" {...transition} className="promo-editor" onSubmit={guardar}>
             <BackButton floating onClick={close} disabled={busy || uploadingCover}/>
             <fieldset disabled={busy}>
-                <label>Nombre de la promoción<input required placeholder="Ej. Corte + barba" maxLength={100} value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label>
+                <label>Nombre de la promoción<small className="catalog-hint">Este nombre aparece en tu agenda pública.</small><input required placeholder="Ej. Corte + barba" maxLength={100} value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label>
                 <div className="promo-intro">
-                    <div>Imagen de la promoción<ServiciosManager_ImageUploader size={450} onUploadingChange={setUploadingCover} value={form.imagen_url || fallbackCover(form.items)} onChange={imagen_url=>setForm(prev=>({...prev,imagen_url}))} apiUrl={api} accentColor={accentColor} uploadPath={employeeMode ? `/empleado/${encodeURIComponent(slug)}/extras/upload-imagen` : undefined}/></div>
-                    <div className="promo-details"><label>Descripción<textarea aria-label="Descripción" placeholder="Contá qué incluye y cuándo se puede usar." maxLength={2000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>
-                        <div className="promo-prices"><div>Precio Original<output>{money(original)}</output></div>
-                            <label>{form.descuento_tipo==="porcentaje" ? "Descuento (%)" : "Precio promo"}<span className="promo-money-input">{form.descuento_tipo !== "porcentaje" && <span aria-hidden="true">$</span>}<input required type="number" min="0.01" step="0.01" value={form.valor} placeholder={form.descuento_tipo === "porcentaje" ? "Ej. 15" : "Ej. 30000"} onChange={e=>setForm({...form,valor:e.target.value})}/></span></label></div>
+                    <div>Imagen de la promoción<small className="catalog-hint">Subí una portada o usá la foto de un elemento incluido.</small><ServiciosManager_ImageUploader size={450} onUploadingChange={setUploadingCover} value={form.imagen_url || fallbackCover(form.items)} onChange={imagen_url=>setForm(prev=>({...prev,imagen_url}))} apiUrl={api} accentColor={accentColor} uploadPath={employeeMode ? `/empleado/${encodeURIComponent(slug)}/extras/upload-imagen` : undefined}/></div>
+                    <div className="promo-details"><label>Descripción<small className="catalog-hint">Explicá qué incluye la oferta y sus condiciones.</small><textarea aria-label="Descripción" placeholder="Contá qué incluye y cuándo se puede usar." maxLength={2000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>
+                        <div className="promo-prices"><div>Precio original<small className="catalog-hint">Suma de las unidades elegidas.</small><output>{money(original)}</output></div>
+                            <label>{form.descuento_tipo==="porcentaje" ? "Descuento (%)" : "Precio promo"}<small className="catalog-hint">{form.descuento_tipo === "porcentaje" ? "Porcentaje que se descuenta del precio original." : "Total que paga el cliente con la promoción."}</small><span className="promo-money-input">{form.descuento_tipo !== "porcentaje" && <span aria-hidden="true">$</span>}<input required type="number" min="0.01" step="0.01" value={form.valor} placeholder={form.descuento_tipo === "porcentaje" ? "Ej. 15" : "Ej. 30000"} onChange={e=>setForm({...form,valor:e.target.value})}/></span></label></div>
                         {form.descuento_tipo==="porcentaje" && <output>Precio promo {money(final)}</output>}
-                        {!branch && !employeeMode && !form.owner_equipo_id && equipo.length>0 && <div>Profesionales que lo ofrecen<div className="promo-people">{equipo.map(person=>{
+                        {!branch && !employeeMode && !form.owner_equipo_id && equipo.length>0 && <div>Profesionales que lo ofrecen<small className="catalog-hint">Elegí quiénes pueden realizar todos los servicios incluidos.</small><div className="promo-people">{equipo.map(person=>{
                             const active=assigned.includes(person.id) && isEligible(person.id)
                             const name=[person.nombre,person.apellido].filter(Boolean).join(" ")
                             return <button type="button" key={person.id} aria-label={name} title={isEligible(person.id)?name:`${name} debe ofrecer todos los servicios elegidos`} aria-pressed={active} disabled={!isEligible(person.id)} style={{background:person.color || "#704dad"}} onClick={()=>setAssigned(ids=>active?ids.filter(id=>id!==person.id):[...ids,person.id])}>{person.foto_url?<img src={person.foto_url} alt=""/>:name.charAt(0)}{active && <small><img src="/assets/panel-nav/akar-icons_check.svg" alt="" width="12" height="12" /></small>}</button>
                         })}</div></div>}
                     </div>
                 </div>
-                {["servicio","producto"].map(tipo=><section className="promo-items" key={tipo}><h3>{tipo==="servicio"?"Servicios":"Productos"} que incluye la promoción</h3>
+                {["servicio","producto"].map(tipo=><section className="promo-items" key={tipo}><h3>{tipo==="servicio"?"Servicios":"Productos"} que incluye la promoción</h3><small className="catalog-hint">Seleccioná los elementos y ajustá sus cantidades. Un combo requiere al menos dos unidades.</small>
                     {catalogo.filter(i=>i.tipo===tipo).map(item=>{
                         const entry=form.items.find(i=>i.id===item.id && i.tipo===tipo)
                         const quantity=(delta:number)=>setForm(prev=>({...prev,items:prev.items.map(i=>i.id===item.id && i.tipo===tipo?{...i,cantidad:i.cantidad+delta}:i)}))
@@ -2933,10 +2909,10 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </section>)}
                 <details className="promo-settings"><summary>Descuento y días de vigencia</summary>
                     <label>Calcular el descuento por<select value={form.descuento_tipo} onChange={e=>setForm({...form,descuento_tipo:e.target.value,valor:""})}><option value="precio_final">Precio promo</option><option value="porcentaje">Porcentaje</option></select></label>
-                    {diasHabilitados && <div className="promo-days"><label><input type="checkbox" checked={form.dias_semana!==null} onChange={e=>setForm({...form,dias_semana:e.target.checked?[]:null})}/> Elegir días específicos</label>
+                    {diasHabilitados && <div className="promo-days"><label><input type="checkbox" checked={form.dias_semana!==null} onChange={e=>setForm({...form,dias_semana:e.target.checked?[]:null})}/> Elegir días específicos</label><small className="catalog-hint">Si lo dejás desmarcado, la promoción se ofrece todos los días.</small>
                     {form.dias_semana!==null && PROMO_DAYS.map(d=><button type="button" key={d.id} aria-pressed={form.dias_semana?.includes(d.id)} onClick={()=>setForm(prev=>({...prev,dias_semana:prev.dias_semana?.includes(d.id)?prev.dias_semana.filter(id=>id!==d.id):[...(prev.dias_semana || []),d.id]}))}>{d.short}</button>)}</div>}
                 </details>
-                <button className="promo-primary" type="submit" disabled={uploadingCover}>{busy?"Guardando…":"Guardar promoción"}</button>
+                {readyToSave && <CatalogSaveState message={editando ? "Cambios en la promoción" : "Promoción lista para guardar"} label="Guardar promoción" saving={busy} onSave={()=>formRef.current?.requestSubmit()} />}
             </fieldset>
         </motion.form> : loading ? <InlineLoading label="Cargando promociones…"/> : lista.length===0 ? <p>Todavía no hay promociones.</p> :
         !visibles.length ? <p>No hay promociones que coincidan.</p> : <motion.div key="list" {...transition} className="promo-grid">{visibles.map(p=>{
@@ -2954,7 +2930,8 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </div></article>
         })}</motion.div>}
         </AnimatePresence>
-    </section>
+        </section>
+    </>
 }
 
 function ServiciosManager_SeccionIcon({tipo,size=17}:{tipo:"servicios"|"extras"|"promociones";size?:number}) {
