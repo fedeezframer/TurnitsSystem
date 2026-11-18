@@ -39,6 +39,8 @@ function TurnitsGlobalSaveBar({
                 ["horarios", "Horarios"],
                 ["excepciones", "Excepciones"],
                 ["servicios", "Servicios"],
+                ["productos", "Productos"],
+                ["promociones", "Promociones"],
                 ["pagos", "Pagos"],
                 ["tema", "Tema"],
                 ["perfil", "Perfil"],

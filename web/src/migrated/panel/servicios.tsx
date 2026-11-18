@@ -807,9 +807,64 @@ function ServiciosManager_FieldIcon({
                     <path d="M12 22V12" />
                 </svg>
             )
+        case "image":
+            return (
+                <svg {...common}>
+                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                    <circle cx="9" cy="9" r="2" />
+                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                </svg>
+            )
+        case "user-check":
+            return (
+                <svg {...common}>
+                    <path d="m16 11 2 2 4-4" />
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                </svg>
+            )
+        case "percent":
+            return (
+                <svg {...common}>
+                    <line x1="19" x2="5" y1="5" y2="19" />
+                    <circle cx="6.5" cy="6.5" r="2.5" />
+                    <circle cx="17.5" cy="17.5" r="2.5" />
+                </svg>
+            )
         default:
             return null
     }
+}
+
+// Título de un campo con su ícono y una línea de ayuda debajo, igual que en el
+// formulario de productos (ServiciosManager_Field), pero con la tipografía del
+// formulario de servicios.
+function ServiciosManager_FieldTitle({
+    icon,
+    label,
+    hint,
+    htmlFor,
+    labelStyle,
+}: {
+    icon: string
+    label: string
+    hint?: string
+    htmlFor?: string
+    labelStyle: React.CSSProperties
+}) {
+    const gap = labelStyle.marginBottom
+    return (
+        <>
+            <label
+                htmlFor={htmlFor}
+                style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 8, marginBottom: hint ? 3 : gap }}
+            >
+                <ServiciosManager_FieldIcon name={icon} size={16} color="#566257" />
+                {label}
+            </label>
+            {hint && <small className="catalog-hint" style={{ marginBottom: gap }}>{hint}</small>}
+        </>
+    )
 }
 
 function ServiciosManager_Field({
@@ -1129,6 +1184,19 @@ function CatalogSaveState({message, label, saving, onSave}: {
     return slot ? createPortal(control, slot) : control
 }
 
+// Los borradores de productos y promociones viven en el gestor global de
+// guardado, igual que los de servicios. Esto ajusta o descarta uno sin pasar
+// por la API (por ejemplo, al pausar o eliminar un elemento con edición abierta).
+function ServiciosManager_updatePending(section: "productos" | "promociones", id: string, update: ((draft: any) => any) | null) {
+    const manager = TurnitsGlobalSaveManager_get()
+    const pending = { ...manager?.getPending(section) }
+    if (pending[id] === undefined) return
+    if (update) pending[id] = update(pending[id])
+    else delete pending[id]
+    if (Object.keys(pending).length) manager?.markDirty(section, pending)
+    else manager?.clear(section)
+}
+
 function ServiciosManager_ServicioForm({
     initial = ServiciosManager_FORM_EMPTY,
     accentColor,
@@ -1243,7 +1311,7 @@ function ServiciosManager_ServicioForm({
         >
             <style>{ServiciosManager_shimmerCSS}</style>
             <div style={{ ...fieldStyle, marginBottom: isMobile ? 16 : 20 }}>
-                <label style={labelStyle} htmlFor="servicio-nombre">Nombre del Servicio</label>
+                <ServiciosManager_FieldTitle icon="tag" label="Nombre del Servicio" hint="Así lo van a ver tus clientes al reservar." htmlFor="servicio-nombre" labelStyle={labelStyle} />
                 <input
                     id="servicio-nombre" className="svc-input" value={form.nombre}
                     onChange={(event) => set("nombre")(event.target.value)}
@@ -1257,7 +1325,7 @@ function ServiciosManager_ServicioForm({
                 gap: isMobile ? 16 : 24, alignItems: "stretch",
             }}>
                 <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
-                    <label style={labelStyle}>Imagen del Servicio</label>
+                    <ServiciosManager_FieldTitle icon="image" label="Imagen del Servicio" hint="Elegí una foto donde se distinga el servicio." labelStyle={labelStyle} />
                     <ServiciosManager_ImageUploader onUploadingChange={setUploadingImage}
                         value={form.imagen} onChange={set("imagen")} accentColor={accentColor}
                         apiUrl={apiUrl} iconoFormUrl={iconoFormUrl}
@@ -1267,7 +1335,7 @@ function ServiciosManager_ServicioForm({
 
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: isMobile ? 14 : 16, minWidth: 0 }}>
                     <div style={fieldStyle}>
-                        <label style={labelStyle} htmlFor="servicio-descripcion">Descripción</label>
+                        <ServiciosManager_FieldTitle icon="align-left" label="Descripción" hint="Detallá qué incluye y cualquier aclaración útil." htmlFor="servicio-descripcion" labelStyle={labelStyle} />
                         <textarea
                             id="servicio-descripcion" className="svc-input" value={form.descripcion}
                             onChange={(event) => set("descripcion")(event.target.value)}
@@ -1281,9 +1349,9 @@ function ServiciosManager_ServicioForm({
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 14 }}>
-                        <div style={fieldStyle}>
-                            <label style={labelStyle} htmlFor="servicio-precio">Precio</label>
-                            <div style={{ position: "relative" }}>
+                        <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
+                            <ServiciosManager_FieldTitle icon="dollar" label="Precio" hint={quoteMode ? undefined : `Desde $${ServiciosManager_PRECIO_MINIMO.toLocaleString("es-AR")} por turno.`} htmlFor="servicio-precio" labelStyle={labelStyle} />
+                            <div style={{ position: "relative", marginTop: "auto" }}>
                                 <span aria-hidden="true" style={{ position: "absolute", left: 15, top: "50%", transform: "translateY(-50%)", fontSize: 18, color: "#666" }}>$</span>
                                 <input
                                     id="servicio-precio" className="svc-input" type="number" min={quoteMode ? 0 : ServiciosManager_PRECIO_MINIMO}
@@ -1291,29 +1359,28 @@ function ServiciosManager_ServicioForm({
                                     placeholder={quoteMode ? "0" : String(ServiciosManager_PRECIO_MINIMO)} style={{ ...inputStyle, paddingLeft: 36 }}
                                 />
                             </div>
-                            {!quoteMode && <small>Desde ${ServiciosManager_PRECIO_MINIMO.toLocaleString("es-AR")} por turno.</small>}
-                            {precioError && <span style={{ display: "block", marginTop: 5, color: "#b42318", fontSize: 12 }}>{precioError}</span>}
+                            {precioError &&<span style={{ display: "block", marginTop: 5, color: "#b42318", fontSize: 12 }}>{precioError}</span>}
                         </div>
-                        <div style={fieldStyle}>
-                            <label style={labelStyle} htmlFor="servicio-duracion">Duración (minutos)</label>
-                            <input id="servicio-duracion" className="svc-input" type="number" min={1} step={1} value={form.duracion} onChange={e => set("duracion")(e.target.value)} style={inputStyle} />
+                        <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
+                            <ServiciosManager_FieldTitle icon="clock" label="Duración (minutos)" hint="Cuánto dura cada turno." htmlFor="servicio-duracion" labelStyle={labelStyle} />
+                            <input id="servicio-duracion" className="svc-input" type="number" min={1} step={1} value={form.duracion} onChange={e => set("duracion")(e.target.value)} style={{ ...inputStyle, marginTop: "auto" }} />
                         </div>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 14 }}>
-                        <div style={fieldStyle}>
-                            <label style={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} htmlFor="servicio-capacidad">Personas por turno</label>
-                            <input id="servicio-capacidad" className="svc-input" type="number" min={1} value={form.capacidad} onChange={(event) => set("capacidad")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 38 : 40, fontSize: isMobile ? 14 : 15, paddingLeft: 14 }} />
+                        <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
+                            <ServiciosManager_FieldTitle icon="users" label="Personas por turno" hint="Cuántos clientes entran a la vez." htmlFor="servicio-capacidad" labelStyle={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} />
+                            <input id="servicio-capacidad" className="svc-input" type="number" min={1} value={form.capacidad} onChange={(event) => set("capacidad")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 38 : 40, fontSize: isMobile ? 14 : 15, paddingLeft: 14, marginTop: "auto" }} />
                         </div>
-                        <div style={fieldStyle}>
-                            <label style={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} htmlFor="servicio-orden">Orden en el listado</label>
-                            <input id="servicio-orden" className="svc-input" type="number" min={0} value={form.orden} onChange={(event) => set("orden")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 38 : 40, fontSize: isMobile ? 14 : 15, paddingLeft: 14 }} />
+                        <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
+                            <ServiciosManager_FieldTitle icon="list" label="Orden en el listado" hint="Los números más bajos aparecen primero." htmlFor="servicio-orden" labelStyle={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} />
+                            <input id="servicio-orden" className="svc-input" type="number" min={0} value={form.orden} onChange={(event) => set("orden")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 38 : 40, fontSize: isMobile ? 14 : 15, paddingLeft: 14, marginTop: "auto" }} />
                         </div>
                     </div>
 
                     {!employeeVariant && !employeeMode && !branch && profesionales.length > 0 && (
                         <div style={fieldStyle}>
-                            <div style={{ ...labelStyle, marginBottom: isMobile ? 7 : 8 }}>Profesionales que lo ofrecen</div>
+                            <ServiciosManager_FieldTitle icon="user-check" label="Profesionales que lo ofrecen" hint="Tocá un profesional para sumarlo o quitarlo." labelStyle={{ ...labelStyle, marginBottom: isMobile ? 7 : 8 }} />
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minHeight: 46 }}>
                                 {profesionales.map((profesional) => {
                                     const selected = selectedProfesionales.includes(profesional.id)
@@ -1370,10 +1437,33 @@ function ServiciosManager_ExtraForm({
     error,
     modoEdicion,
     isMobile,
+    extraId,
 }: ServiciosManager_ExtraFormProps) {
+    // Edición de un producto existente: el borrador vive en el estado global
+    // (barra "Guardar cambios"), no en un botón propio.
+    const globalEdit = !!(modoEdicion && extraId && !employeeMode)
     const [form, setForm] =
-        React.useState<ServiciosManager_ExtraFormData>(initial)
+        React.useState<ServiciosManager_ExtraFormData>(() => {
+            if (globalEdit) {
+                const draft = TurnitsGlobalSaveManager_get()?.getPending("productos")?.[extraId!]
+                if (draft) return draft as ServiciosManager_ExtraFormData
+            }
+            return initial
+        })
     const [precioError, setPrecioError] = React.useState("")
+
+    React.useEffect(() => {
+        if (!globalEdit) return
+        const manager = TurnitsGlobalSaveManager_get()
+        if (!manager) return
+        manager.configure(apiUrl)
+        const pending = { ...manager.getPending("productos") }
+        if (JSON.stringify(form) === JSON.stringify(initial)) delete pending[extraId!]
+        else pending[extraId!] = form
+        if (Object.keys(pending).length) manager.markDirty("productos", pending)
+        else manager.clear("productos")
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [form, globalEdit, extraId, apiUrl])
 
     const set = (key: keyof ServiciosManager_ExtraFormData) => (val: string) =>
         setForm((p) => ({ ...p, [key]: val }))
@@ -1587,7 +1677,7 @@ function ServiciosManager_ExtraForm({
                     </div>
                 )}
 
-                {readyToSave && <CatalogSaveState message={modoEdicion ? "Cambios en el producto" : "Producto listo para guardar"} label="Guardar producto" saving={guardando} onSave={handleSubmit} />}
+                {readyToSave && !globalEdit && <CatalogSaveState message={modoEdicion ? "Cambios en el producto" : "Producto listo para guardar"} label="Guardar producto" saving={guardando} onSave={handleSubmit} />}
             </div>
         </motion.div>
     )
@@ -1905,9 +1995,11 @@ function ServiciosManager(props: any) {
     const [catalogRevision, setCatalogRevision] = React.useState(0)
     React.useEffect(() => {
         const reload = (event: any) => {
-            if (event.type === "turnits_global_saved" && event.detail?.section !== "servicios" && event.detail?.section !== "browse") return
+            const section = event.detail?.section
+            if (event.type === "turnits_global_saved" && section !== "servicios" && section !== "browse" && section !== "productos") return
             setCatalogRevision(value => value + 1)
-            setEditando(null)
+            if (event.type === "turnits_global_discarded" || section !== "productos") setEditando(null)
+            if (event.type === "turnits_global_discarded" || section === "productos") setEditandoExtra(null)
         }
         window.addEventListener("turnits_global_saved", reload)
         window.addEventListener("turnits_global_discarded", reload)
@@ -2042,7 +2134,7 @@ function ServiciosManager(props: any) {
             }
         }
         tryLoad()
-    }, [api, employeeMode])
+    }, [api, employeeMode, catalogRevision])
 
     // ── Handlers: Servicios (sin cambios funcionales) ──
     const syncProfesionales = async (servicioId: string, anteriores: string[] = [], nuevos: string[] = []) => {
@@ -2400,6 +2492,7 @@ function ServiciosManager(props: any) {
                 }
             )
             if (!res.ok) throw new Error()
+            ServiciosManager_updatePending("productos", extra.id, null)
         } catch {
             setExtras((p) => [...p, extra].sort((a, b) => a.orden - b.orden))
         }
@@ -2672,6 +2765,7 @@ function ServiciosManager_ProductosSection(props: any) {
                                     >
                                         <ServiciosManager_ExtraForm
                                     employeeMode={employeeMode}
+                                            extraId={extra.id}
                                             initial={initialEditarExtra}
                                             accentColor={accentColor}
                                             apiUrl={api}
@@ -2741,6 +2835,19 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const [mostrar,setMostrar]=React.useState(false)
     const [editando,setEditando]=React.useState<string|null>(null)
     const slug=ServiciosManager_getSlug(),token=ServiciosManager_getToken()
+    const [revision,setRevision]=React.useState(0)
+    React.useEffect(()=>{
+        const reload=(event:any)=>{
+            if(event.type==="turnits_global_saved" && event.detail?.section!=="promociones") return
+            setRevision(value=>value+1)
+            setMostrar(false);setEditando(null);setForm(initial());setError("")
+        }
+        window.addEventListener("turnits_global_saved",reload)
+        window.addEventListener("turnits_global_discarded",reload)
+        return()=>{window.removeEventListener("turnits_global_saved",reload);window.removeEventListener("turnits_global_discarded",reload)}
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    },[])
+    const title=(icon:string,text:string)=><span className="catalog-field-title"><ServiciosManager_FieldIcon name={icon} size={16} color="#566257"/>{text}</span>
     const money=(n:number)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:0,maximumFractionDigits:2}).format(n)
     const request=async(path:string,method="GET",body?:any)=>{
         const response=await fetch(employeeMode ? `${api}/empleado/${encodeURIComponent(slug)}/promociones${path}` : `${api}/admin/promociones/${encodeURIComponent(slug)}${path}`,{method,headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},...(body ? {body:JSON.stringify(body)} : {}),cache:"no-store"})
@@ -2748,7 +2855,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
         if(!response.ok || !result.success)throw new Error(result.error || "No se pudo completar la operación.")
         return result
     }
-    React.useEffect(()=>{let active=true;request("").then(r=>{if(active){setLista(r.promociones);setDiasHabilitados(r.dias_semana_habilitado===true)}}).catch(e=>{if(active)setError(e.message)}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[api,slug,token])
+    React.useEffect(()=>{let active=true;request("").then(r=>{if(active){setLista(r.promociones);setDiasHabilitados(r.dias_semana_habilitado===true)}}).catch(e=>{if(active)setError(e.message)}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[api,slug,token,revision])
     const catalogo=[...servicios.filter(s=>s.activo).map(s=>({...s,tipo:"servicio"})),...productos.filter(p=>p.activo === true || p.activo === "true").map(p=>({...p,tipo:"producto"}))]
     const [equipo,setEquipo]=React.useState<CatalogoProfesional[]>([])
     const [uploadingCover,setUploadingCover]=React.useState(false)
@@ -2781,8 +2888,11 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
         && (tipo === "descuento" || form.items.reduce((sum,i) => sum + i.cantidad, 0) >= 2)
     const readyToSave = validOffer && !uploadingCover && (form.dias_semana === null || diasHabilitados)
         && originalDraft.current !== draftKey(form, assigned)
+    // Editar una promoción existente: el borrador va al estado global (barra "Guardar cambios").
+    const globalEdit = mostrar && !!editando && !employeeMode && !branch && originalDraft.current !== ""
     const guardar=async(e:React.FormEvent)=>{
         e.preventDefault();setError("")
+        if(globalEdit) return
         if(uploadingCover || busy) return
         if(form.dias_semana !== null && !diasHabilitados) {setError("La programación por días todavía no está disponible. Volvé a cargar las promociones.");return}
         if (!validOffer) {setError("Revisá los elementos y el descuento de la promoción.");return}
@@ -2814,17 +2924,36 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
         const people = (promo.profesionales || []).map((p:any)=>p.id)
         const draft = {...promo,descripcion:promo.descripcion || "",imagen_url:promo.imagen_url || "",dias_semana:promo.dias_semana?.length ? promo.dias_semana : null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))}
         originalDraft.current = draftKey(draft,people)
-        setAssigned(people); setForm(draft); setEditando(promo.id); setMostrar(true); setError("")
+        const saved = !employeeMode && !branch ? TurnitsGlobalSaveManager_get()?.getPending("promociones")?.[promo.id] : undefined
+        setAssigned(saved?.assigned || people); setForm(saved?.form || draft); setEditando(promo.id); setMostrar(true); setError("")
     }
     const promoActiva=(promo:any)=>promo.activo===true && hoy()>=promo.fecha_inicio && hoy()<=promo.fecha_fin
-    const cambiarEstado=async(promo:any)=>{setBusy(true);setError("");try{const result=await request(`/${promo.id}/estado`,"PUT",{activo:!promoActiva(promo)});setLista(prev=>prev.map(p=>p.id===promo.id ? result.promocion : p));if(editando===promo.id)setForm(prev=>({...prev,activo:result.promocion.activo}))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
-    const eliminar=async(id:string)=>{if(!window.confirm("¿Eliminar esta promoción?"))return;setBusy(true);setError("");try{await request(`/${id}`,"DELETE");setLista(prev=>prev.filter(p=>p.id!==id))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
+    const cambiarEstado=async(promo:any)=>{setBusy(true);setError("");try{const result=await request(`/${promo.id}/estado`,"PUT",{activo:!promoActiva(promo)});setLista(prev=>prev.map(p=>p.id===promo.id ? result.promocion : p));if(editando===promo.id)setForm(prev=>({...prev,activo:result.promocion.activo}));ServiciosManager_updatePending("promociones",promo.id,d=>({...d,form:{...d.form,activo:result.promocion.activo},payload:{...d.payload,activo:result.promocion.activo}}))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
+    const eliminar=async(id:string)=>{if(!window.confirm("¿Eliminar esta promoción?"))return;setBusy(true);setError("");try{await request(`/${id}`,"DELETE");setLista(prev=>prev.filter(p=>p.id!==id));ServiciosManager_updatePending("promociones",id,null)}catch(e:any){setError(e.message)}finally{setBusy(false)}}
     const photo = (item:any) => item?.imagen_url || item?.imagen || ServiciosManager_parseDesc(item?.descripcion || "").imagen
     const lookup = (item:any) => (item.tipo === "servicio" ? servicios : productos).find(s => s.id === item.id)
     const fallbackCover = (items:any[]) => items.map(lookup).map(photo).find(Boolean) || ""
     const close = () => { setMostrar(false); setEditando(null); setError("") }
     const openNew = () => { originalDraft.current = ""; setUploadingCover(false); setForm(initial()); setAssigned([]); setEditando(null); setMostrar(true); setError("") }
     const isEligible = (id:string) => selected.every(i => i.tipo !== "servicio" || i.source?.profesionales?.some((p:any) => p.id === id))
+    React.useEffect(() => {
+        if (!globalEdit || !editando) return
+        const manager = TurnitsGlobalSaveManager_get()
+        if (!manager) return
+        manager.configure(api)
+        const pending = { ...manager.getPending("promociones") }
+        if (draftKey(form, assigned) === originalDraft.current) delete pending[editando]
+        else pending[editando] = {
+            form, assigned,
+            payload: {...form, tipo, valor, dias_semana: form.dias_semana?.length === PROMO_DAYS.length ? null : form.dias_semana},
+            profesionalesIds: assigned.filter(isEligible),
+            equipoIds: equipo.map(p => p.id),
+            valid: validOffer && (form.dias_semana === null || diasHabilitados),
+        }
+        if (Object.keys(pending).length) manager.markDirty("promociones", pending)
+        else manager.clear("promociones")
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [globalEdit, editando, draftKey(form, assigned), validOffer, diasHabilitados, equipo.length, api])
     const [filtroPromo,setFiltroPromo] = React.useState("todos")
     const [ordenPromo,setOrdenPromo] = React.useState("actual")
     const [busquedaPromo,setBusquedaPromo] = React.useState("")
@@ -2850,21 +2979,21 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
         {mostrar ? <motion.form ref={formRef} key="editor" {...transition} className="promo-editor" onSubmit={guardar}>
             <BackButton floating onClick={close} disabled={busy || uploadingCover}/>
             <fieldset disabled={busy}>
-                <label>Nombre de la promoción<small className="catalog-hint">Este nombre aparece en tu agenda pública.</small><input required placeholder="Ej. Corte + barba" maxLength={100} value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label>
+                <label>{title("tag","Nombre de la promoción")}<small className="catalog-hint">Este nombre aparece en tu agenda pública.</small><input required placeholder="Ej. Corte + barba" maxLength={100} value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label>
                 <div className="promo-intro">
-                    <div>Imagen de la promoción<small className="catalog-hint">Subí una portada o usá la foto de un elemento incluido.</small><ServiciosManager_ImageUploader size={450} onUploadingChange={setUploadingCover} value={form.imagen_url || fallbackCover(form.items)} onChange={imagen_url=>setForm(prev=>({...prev,imagen_url}))} apiUrl={api} accentColor={accentColor} uploadPath={employeeMode ? `/empleado/${encodeURIComponent(slug)}/extras/upload-imagen` : undefined}/></div>
-                    <div className="promo-details"><label>Descripción<small className="catalog-hint">Explicá qué incluye la oferta y sus condiciones.</small><textarea aria-label="Descripción" placeholder="Contá qué incluye y cuándo se puede usar." maxLength={2000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>
-                        <div className="promo-prices"><div>Precio original<small className="catalog-hint">Suma de las unidades elegidas.</small><output>{money(original)}</output></div>
-                            <label>{form.descuento_tipo==="porcentaje" ? "Descuento (%)" : "Precio promo"}<small className="catalog-hint">{form.descuento_tipo === "porcentaje" ? "Porcentaje que se descuenta del precio original." : "Total que paga el cliente con la promoción."}</small><span className="promo-money-input">{form.descuento_tipo !== "porcentaje" && <span aria-hidden="true">$</span>}<input required type="number" min="0.01" step="0.01" value={form.valor} placeholder={form.descuento_tipo === "porcentaje" ? "Ej. 15" : "Ej. 30000"} onChange={e=>setForm({...form,valor:e.target.value})}/></span></label></div>
+                    <div>{title("image","Imagen de la promoción")}<small className="catalog-hint">Subí una portada o usá la foto de un elemento incluido.</small><ServiciosManager_ImageUploader size={450} onUploadingChange={setUploadingCover} value={form.imagen_url || fallbackCover(form.items)} onChange={imagen_url=>setForm(prev=>({...prev,imagen_url}))} apiUrl={api} accentColor={accentColor} uploadPath={employeeMode ? `/empleado/${encodeURIComponent(slug)}/extras/upload-imagen` : undefined}/></div>
+                    <div className="promo-details"><label>{title("align-left","Descripción")}<small className="catalog-hint">Explicá qué incluye la oferta y sus condiciones.</small><textarea aria-label="Descripción" placeholder="Contá qué incluye y cuándo se puede usar." maxLength={2000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>
+                        <div className="promo-prices"><div>{title("dollar","Precio original")}<small className="catalog-hint">Suma de las unidades elegidas.</small><output>{money(original)}</output></div>
+                            <label>{form.descuento_tipo==="porcentaje" ? title("percent","Descuento (%)") : title("dollar","Precio promo")}<small className="catalog-hint">{form.descuento_tipo === "porcentaje" ? "Porcentaje que se descuenta del precio original." : "Total que paga el cliente con la promoción."}</small><span className="promo-money-input">{form.descuento_tipo !== "porcentaje" && <span aria-hidden="true">$</span>}<input required type="number" min="0.01" step="0.01" value={form.valor} placeholder={form.descuento_tipo === "porcentaje" ? "Ej. 15" : "Ej. 30000"} onChange={e=>setForm({...form,valor:e.target.value})}/></span></label></div>
                         {form.descuento_tipo==="porcentaje" && <output>Precio promo {money(final)}</output>}
-                        {!branch && !employeeMode && !form.owner_equipo_id && equipo.length>0 && <div>Profesionales que lo ofrecen<small className="catalog-hint">Elegí quiénes pueden realizar todos los servicios incluidos.</small><div className="promo-people">{equipo.map(person=>{
+                        {!branch && !employeeMode && !form.owner_equipo_id && equipo.length>0 && <div>{title("user-check","Profesionales que lo ofrecen")}<small className="catalog-hint">Elegí quiénes pueden realizar todos los servicios incluidos.</small><div className="promo-people">{equipo.map(person=>{
                             const active=assigned.includes(person.id) && isEligible(person.id)
                             const name=[person.nombre,person.apellido].filter(Boolean).join(" ")
                             return <button type="button" key={person.id} aria-label={name} title={isEligible(person.id)?name:`${name} debe ofrecer todos los servicios elegidos`} aria-pressed={active} disabled={!isEligible(person.id)} style={{background:person.color || "#704dad"}} onClick={()=>setAssigned(ids=>active?ids.filter(id=>id!==person.id):[...ids,person.id])}>{person.foto_url?<img src={person.foto_url} alt=""/>:name.charAt(0)}{active && <small><img src="/assets/panel-nav/akar-icons_check.svg" alt="" width="12" height="12" /></small>}</button>
                         })}</div></div>}
                     </div>
                 </div>
-                {["servicio","producto"].map(tipo=><section className="promo-items" key={tipo}><h3>{tipo==="servicio"?"Servicios":"Productos"} que incluye la promoción</h3><small className="catalog-hint">Seleccioná los elementos y ajustá sus cantidades. Un combo requiere al menos dos unidades.</small>
+                {["servicio","producto"].map(tipo=><section className="promo-items" key={tipo}><h3 className="catalog-field-title"><ServiciosManager_SeccionIcon tipo={tipo==="servicio"?"servicios":"extras"} size={16}/>{tipo==="servicio"?"Servicios":"Productos"} que incluye la promoción</h3><small className="catalog-hint">Seleccioná los elementos y ajustá sus cantidades. Un combo requiere al menos dos unidades.</small>
                     {catalogo.filter(i=>i.tipo===tipo).map(item=>{
                         const entry=form.items.find(i=>i.id===item.id && i.tipo===tipo)
                         const quantity=(delta:number)=>setForm(prev=>({...prev,items:prev.items.map(i=>i.id===item.id && i.tipo===tipo?{...i,cantidad:i.cantidad+delta}:i)}))
@@ -2878,7 +3007,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                     {!catalogo.some(i=>i.tipo===tipo) && <p>No hay {tipo==="servicio"?"servicios":"productos"} activos.</p>}
                 </section>)}
                 {diasHabilitados && <section className="promo-options" aria-labelledby="promo-valid-days">
-                    <h3 id="promo-valid-days">Días de vigencia</h3>
+                    <h3 id="promo-valid-days" className="catalog-field-title"><ServiciosManager_FieldIcon name="calendar" size={16} color="#566257"/>Días de vigencia</h3>
                     <small className="catalog-hint">Opcional. Si no marcás ningún día, la promoción se ofrece todos los días.</small>
                     <div className="promo-option-list">
                         {PROMO_DAYS.map(day => <button key={day.id} type="button"
@@ -2889,7 +3018,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                     </div>
                 </section>}
                 <section className="promo-options" aria-labelledby="promo-discount-mode">
-                    <h3 id="promo-discount-mode">Reducción del precio</h3>
+                    <h3 id="promo-discount-mode" className="catalog-field-title"><ServiciosManager_FieldIcon name="percent" size={16} color="#566257"/>Reducción del precio</h3>
                     <small className="catalog-hint">Elegí si vas a ingresar el precio final en pesos o el porcentaje de descuento sobre el precio original.</small>
                     <div className="promo-option-list">
                         {[["precio_final","Precio establecido"],["porcentaje","Porcentaje %"]].map(([mode,label]) =>
@@ -2900,7 +3029,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                         )}
                     </div>
                 </section>
-                {readyToSave && <CatalogSaveState message={editando ? "Cambios en la promoción" : "Promoción lista para guardar"} label="Guardar promoción" saving={busy} onSave={()=>formRef.current?.requestSubmit()} />}
+                {readyToSave && !globalEdit && <CatalogSaveState message={editando ? "Cambios en la promoción" : "Promoción lista para guardar"} label="Guardar promoción" saving={busy} onSave={()=>formRef.current?.requestSubmit()} />}
             </fieldset>
         </motion.form> : loading ? <InlineLoading label="Cargando promociones…"/> : lista.length===0 ? <p>Todavía no hay promociones.</p> :
         !visibles.length ? <p>No hay promociones que coincidan.</p> : <motion.div key="list" {...transition} className="promo-grid">{visibles.map(p=>{

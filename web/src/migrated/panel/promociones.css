@@ -111,3 +111,6 @@
 }
 .promo-line[data-selected=true] {background:#f6faf5}
 .promo-actions .promo-menu-trigger { border:0; padding-inline:4px; }
+
+.catalog-field-title{display:flex;align-items:center;gap:7px}
+.catalog-field-title svg{flex:none}

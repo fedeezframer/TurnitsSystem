@@ -91,7 +91,7 @@ function Turnits_useElementWidth(
     return width
 }
 
-type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios"
+type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios" | "productos" | "promociones"
 
 type TurnitsGlobalPending = Record<string, any>
 
@@ -550,6 +550,60 @@ function TurnitsGlobalSaveManager_get() {
                         errors.servicios = e.message || "No se pudieron guardar los servicios."
                     }
                 }
+                // Productos y promociones se guardan después de los servicios:
+                // una promoción calcula su precio original con los precios vigentes.
+                if (current.productos !== undefined) {
+                    try {
+                        for (const [extraId, draft] of Object.entries(current.productos) as [string, any][]) {
+                            if (!draft.nombre?.trim() || Number(draft.precio) < ServiciosManager_PRECIO_MINIMO_EXTRA)
+                                throw new Error("Revisá el nombre y el precio del producto.")
+                            const res = await fetch(`${api()}/admin/extras/${encodeURIComponent(extraId)}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ slug, nombre: draft.nombre.trim(), descripcion: draft.descripcion?.trim() || null, precio: Number(draft.precio) || 0, imagen_url: draft.imagen_url?.trim() || null, orden: parseInt(draft.orden) || 0 }),
+                            })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok || !data.success) throw new Error(data.error || "No se pudo guardar el producto.")
+                        }
+                        results.productos = true
+                    } catch (e: any) {
+                        results.productos = false
+                        errors.productos = e.message || "No se pudieron guardar los productos."
+                    }
+                }
+                if (current.promociones !== undefined) {
+                    try {
+                        for (const [promoId, draft] of Object.entries(current.promociones) as [string, any][]) {
+                            if (!draft.valid) throw new Error("Revisá los elementos y el descuento de la promoción.")
+                            const res = await fetch(`${api()}/admin/promociones/${encodeURIComponent(slug)}/${encodeURIComponent(promoId)}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify(draft.payload),
+                            })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok || !data.success) throw new Error(data.error || "No se pudo guardar la promoción.")
+                            // Profesionales: solo se tocan los del equipo que el editor mostraba.
+                            if (!data.promocion?.owner_equipo_id) {
+                                for (const personId of (draft.equipoIds || []) as string[]) {
+                                    const want = (draft.profesionalesIds || []).includes(personId)
+                                    const had = (data.promocion?.profesionales || []).some((p: any) => p.id === personId)
+                                    if (want === had) continue
+                                    const path = `${api()}/admin/equipo/${encodeURIComponent(personId)}/promociones`
+                                    const response = await fetch(want ? path : `${path}/${encodeURIComponent(promoId)}`, {
+                                        method: want ? "POST" : "DELETE",
+                                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                        body: JSON.stringify({ slug, promocion_id: promoId }),
+                                    })
+                                    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "Revisá los profesionales y volvé a guardar.")
+                                }
+                            }
+                        }
+                        results.promociones = true
+                    } catch (e: any) {
+                        results.promociones = false
+                        errors.promociones = e.message || "No se pudieron guardar las promociones."
+                    }
+                }
                 if (current.browse !== undefined && results.servicios !== false) {
                     tasks.push((async () => {
                         try {
@@ -604,7 +658,7 @@ function TurnitsGlobalSaveManager_get() {
                     window.dispatchEvent(
                         new CustomEvent("turnits_global_save_error", {
                             detail: {
-                                error: failed.map((key) => `${key === "perfil" ? "Perfil" : key === "tema" ? "Temas" : key}: ${errors[key] || "No se pudo guardar."}`).join(" "),
+                                error: failed.map((key) => `${({ perfil: "Perfil", tema: "Temas", productos: "Productos", promociones: "Promociones" } as Record<string, string>)[key] || key}: ${errors[key] || "No se pudo guardar."}`).join(" "),
                                 failed,
                             },
                         })
@@ -2510,6 +2564,8 @@ interface ServiciosManager_FormProps {
 
 interface ServiciosManager_ExtraFormProps {
     employeeMode?: boolean
+    /** Id del producto que se edita: con él, los cambios van al guardado global. */
+    extraId?: string
     initial?: ServiciosManager_ExtraFormData
     accentColor: string
     apiUrl: string
