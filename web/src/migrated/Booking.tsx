@@ -815,8 +815,13 @@ export default function BookingFlow(props: any) {
     const api = baseUrl.replace(/\/+$/, "")
     const bookingQuery = React.useMemo(() => new URLSearchParams(window.location.search), [slugFromQueryKey()])
     function slugFromQueryKey(){ return window.location.pathname + window.location.search }
-    const browseOfferId = bookingQuery.get("browse_offer_id") || ""
-    const bookingServiceId = bookingQuery.get("servicio_id") || ""
+    const browseOfferId = bookingQuery.has("oferta_cliente") ? "" : bookingQuery.get("browse_offer_id") || ""
+    const personalKey=bookingQuery.get("oferta_cliente") || ""
+    const [personal,setPersonal]=React.useState<(Pick<BookingPromo,"items"> & {precio:number;original:number;fecha:string|null;hora:string|null;vence:string})|null>(null)
+    const [personalError,setPersonalError]=React.useState("")
+    const [personalCode,setPersonalCode]=React.useState("")
+    const primaryPersonal=personal?.items.find(i=>i.tipo==="servicio")
+    const bookingServiceId = personalKey ? primaryPersonal?.id || "" : bookingQuery.get("servicio_id") || ""
     const requestedPromoId = bookingQuery.get("promo_id") || ""
     const [offerQuote, setOfferQuote] = React.useState<any>(null)
     const [offerLoading, setOfferLoading] = React.useState(!!browseOfferId)
@@ -825,6 +830,15 @@ export default function BookingFlow(props: any) {
     const isCanvas = false
     const slug = getSlugFromUrl(manualSlug)
 
+    React.useEffect(()=>{
+        if(!personalKey)return
+        const ctrl=new AbortController()
+        setPersonal(null);setPersonalError("")
+        fetch(api+"/ofertas-cliente/"+encodeURIComponent(slug)+"/"+encodeURIComponent(personalKey),{signal:ctrl.signal,cache:"no-store"})
+            .then(async res=>{const data=await res.json();if(!res.ok)throw new Error(data.error);if(!ctrl.signal.aborted)setPersonal(data.oferta)})
+            .catch(e=>{if(!ctrl.signal.aborted)setPersonalError(e.message || "Oferta no disponible.")})
+        return ()=>ctrl.abort()
+    },[personalKey,api,slug])
     const [negocio, setNegocio] = React.useState<Negocio | null>(null)
     const [loadingNegocio, setLoadingNegocio] = React.useState(true)
     const [errorNegocio, setErrorNegocio] = React.useState("")
@@ -847,7 +861,7 @@ export default function BookingFlow(props: any) {
     const [loadingPromos,setLoadingPromos] = React.useState(false)
     const [esDesktop,setEsDesktop]=React.useState(false)
     React.useEffect(()=>{const media=window.matchMedia("(min-width: 861px)");const sync=()=>setEsDesktop(media.matches);sync();media.addEventListener("change",sync);return ()=>media.removeEventListener("change",sync)},[])
-    const promoElegida = promociones.find(p=>p.id===promocionId) || null
+    const catalogPromo = promociones.find(p=>p.id===promocionId) || null
     const descuentoServicio = (id:string) => promociones.filter(p=>p.tipo === "descuento" && p.servicio_id===id && p.precio_final < Number(servicios.find(s=>s.id===id)?.precio || 0)).sort((a,b)=>a.precio_final-b.precio_final)[0]
 
     const [loadingServicios, setLoadingServicios] = React.useState(false)
@@ -857,8 +871,17 @@ export default function BookingFlow(props: any) {
     const hoyBA = React.useMemo(() => getHoyBA(), [])
     const [verMasDias, setVerMasDias] = React.useState(false)
     const [fecha, setFecha] = React.useState<string>("")
+    const selectedService = servicios.find(s=>s.id===servicioId)
+    const personalPromo:BookingPromo|null = React.useMemo(()=>{
+        if(!personal || !selectedService)return null
+        const base=primaryPersonal?0:Number(selectedService.precio)
+        return {id:"co_"+personalKey,nombre:primaryPersonal?"Promoción personal":selectedService.nombre,tipo:"combo",servicio_id:selectedService.id,
+            items:personal.items,precio_original:personal.original+base,precio_final:personal.precio+base,duracion:selectedService.duracion,
+            fecha_inicio:personal.fecha || getHoyBAISO(),fecha_fin:personal.fecha || personal.vence}
+    },[personal,personalKey,selectedService,primaryPersonal])
+    const promoElegida = personalKey ? personalPromo : catalogPromo
     const promoParaFecha = (dia:string) => promoElegida?.tipo === "combo" ? (promoAppliesOn(promoElegida,dia) ? promoElegida : null) : promociones.filter(p=>p.tipo === "descuento" && p.servicio_id===servicioId && promoAppliesOn(p,dia) && p.precio_final<Number(servicios.find(s=>s.id===servicioId)?.precio || 0)).sort((a,b)=>a.precio_final-b.precio_final)[0] || null
-    const promoAplicada = browseOfferId ? null : fecha ? promoParaFecha(fecha) : promoElegida
+    const promoAplicada = personalKey ? personalPromo : browseOfferId ? null : fecha ? promoParaFecha(fecha) : promoElegida
     const [diasLlenos, setDiasLlenos] = React.useState<string[]>([])
     const [diasSinDisponibilidad, setDiasSinDisponibilidad] = React.useState<
         string[]
@@ -887,9 +910,31 @@ export default function BookingFlow(props: any) {
     const [emailError, setEmailError] = React.useState("")
     const [telError, setTelError] = React.useState("")
     const [loadingCuenta, setLoadingCuenta] = React.useState(()=>!!consumerHeaders().Authorization)
+    const [verifiedCode,setVerifiedCode]=React.useState("")
+    const [codeError,setCodeError]=React.useState("")
+    React.useEffect(()=>{
+        setVerifiedCode("");setCodeError("")
+        if(!personalKey || !/^\d{6}$/.test(personalCode))return
+        const ctrl=new AbortController()
+        fetch(api+"/ofertas-cliente/"+encodeURIComponent(slug)+"/"+encodeURIComponent(personalKey)+"/contacto",{
+            method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:personalCode}),signal:ctrl.signal
+        }).then(async res=>{
+            const data=await res.json()
+            if(!res.ok)throw new Error(data.error)
+            if(ctrl.signal.aborted)return
+            const contact=data.contacto
+            setNombre(contact.nombre || "");setApellido(contact.apellido || "");setEmail(contact.email || "")
+            const digits=contact.telefono.replace(/\D/g,"")
+            const country=[...PAISES].sort((a,b)=>b.dial.length-a.dial.length).find(p=>digits.startsWith(p.dial.slice(1)) && p.code!=="OTHER")
+            setPais(country || {code:"OTHER",flag:"🌐",dial:"+",name:"Internacional"})
+            setTelefono(country?digits.slice(country.dial.length-1):digits)
+            setVerifiedCode(personalCode)
+        }).catch(e=>{if(!ctrl.signal.aborted)setCodeError(e.message || "No se pudo verificar el código.")})
+        return ()=>ctrl.abort()
+    },[api,slug,personalKey,personalCode])
     const [cuentaConDatosCompletos, setCuentaConDatosCompletos] = React.useState(false)
     React.useEffect(()=>{
-        const headers=consumerHeaders();if(!headers.Authorization){setLoadingCuenta(false);return;}
+        const headers=consumerHeaders();if(personalKey || !headers.Authorization){setLoadingCuenta(false);return;}
         const controller=new AbortController();
         fetch(`${api}/browse/identidad`,{headers,signal:controller.signal}).then(r=>r.ok?r.json():null).then(d=>{
             if(!d?.success||!d.perfil||controller.signal.aborted)return;const c=d.perfil;
@@ -1093,7 +1138,7 @@ export default function BookingFlow(props: any) {
     },[loadingProf,browseOfferId,profesionalesVisibles,equipoId])
 
     React.useEffect(()=>{
-        if(isCanvas || !slug)return
+        if(isCanvas || !slug || personalKey)return
         let alive=true;setLoadingPromos(true);setPromociones([]);setPromocionId(null);setErrorPromos("")
         const equipoFiltro=equipoId && equipoId!==CUALQUIER_PROFESIONAL ? "?equipo_id="+encodeURIComponent(equipoId) : ""
         fetch(api+"/promociones/"+slug+equipoFiltro,{cache:"no-store"}).then(r=>r.json()).then(async data=>{
@@ -1220,6 +1265,7 @@ export default function BookingFlow(props: any) {
     }, [negocio, excepcionesMap, hoyBA, promoElegida])
 
     const diasParaSeleccion = React.useMemo(() => diasTodos.filter(f => promoElegida?.tipo !== "combo" || promoAppliesOn(promoElegida,f)), [diasTodos,promoElegida])
+    React.useEffect(()=>{if(servicioId && personal?.fecha)setFecha(personal.fecha)},[personal,servicioId,equipoId,fecha])
     const hayMasDias = diasParaSeleccion.slice(MAX_DIAS_VISIBLES).some(f => !diasSinDisponibilidad.includes(f))
     const diasCandidatos = React.useMemo(
         () => (verMasDias ? diasParaSeleccion : diasParaSeleccion.slice(0, MAX_DIAS_VISIBLES)),
@@ -1359,7 +1405,12 @@ export default function BookingFlow(props: any) {
             .then((data) => {
                 if (!alive) return
                 if (data?.success) {
-                    setSlots(data.slots || [])
+                    const available=personal?.hora ? (data.slots || []).filter((s:Slot)=>s.hora===personal.hora) : data.slots || []
+                    setSlots(available)
+                    if(personal?.hora && available.some((s:Slot)=>!s.lleno && s.disponibles>0)){
+                        const slot=available.find((s:Slot)=>!s.lleno && s.disponibles>0)
+                        setHora(slot.hora);setEquipoIdReservado(slot.equipo_id || equipoId)
+                    }
                     setPuedeAnotarseEspera(
                         habilitarListaEspera &&
                             data.puede_anotarse_espera === true
@@ -1549,7 +1600,7 @@ export default function BookingFlow(props: any) {
     }, [metodoPagoRequerido, metodo, comprobante])
 
     const puedeConfirmar =
-        !!fecha && !!hora && !loadingCuenta && datosPersonalesOkParaBoton && metodoPagoValido
+        (!personalKey || (!!verifiedCode && verifiedCode===personalCode && !!personalPromo)) && !!fecha && !!hora && !loadingCuenta && datosPersonalesOkParaBoton && metodoPagoValido
 
     const STEP_LABELS: Record<string, string> = {
         sucursal: "Sucursal",
@@ -1561,7 +1612,7 @@ export default function BookingFlow(props: any) {
     }
 
     const servicioResuelto = !!servicioId && servicios.some(s=>s.id===servicioId) && (servicioId===bookingServiceId || (servicios.length===1 && !tieneCombos))
-    const steps = bookingSteps({offer:!!offerQuote,branchCount:sucursales.length,branchPinned:!!pinnedBranch,professionalCount:profesionalesVisibles.length,professionalPinned:!!pinnedProfessional,serviceResolved:servicioResuelto})
+    const steps = bookingSteps({offer:!!offerQuote,branchCount:sucursales.length,branchPinned:!!pinnedBranch,professionalCount:profesionalesVisibles.length,professionalPinned:!!pinnedProfessional,serviceResolved:servicioResuelto}).filter(step=>!(personal?.fecha && step==="fecha") && !(personal?.hora && hora===personal.hora && step==="hora"))
     const [stepId, setStepId] = React.useState("")
     React.useEffect(()=>{
         if(loadingProf || (browseOfferId && offerLoading))return
@@ -1885,6 +1936,7 @@ export default function BookingFlow(props: any) {
                         hora,
                         slug,
                         servicio_id: servicioId || undefined,
+                        oferta_codigo: personalKey ? personalCode : undefined,
                         promocion_id: promoAplicada?.id,
                         promocion_precio: promoAplicada?.precio_final,
                         extra_ids: extraIds,
@@ -1925,6 +1977,7 @@ export default function BookingFlow(props: any) {
                         hora,
                         slug,
                         servicio_id: servicioId || undefined,
+                        oferta_codigo: personalKey ? personalCode : undefined,
                         promocion_id: promoAplicada?.id,
                         promocion_precio: promoAplicada?.precio_final,
                         extra_ids: extraIds,
@@ -1967,6 +2020,7 @@ export default function BookingFlow(props: any) {
             form.append("fecha", fecha)
             form.append("hora", hora)
             form.append("slug", slug)
+            if(personalKey)form.append("oferta_codigo",personalCode)
             if(promoAplicada){form.append("promocion_id",promoAplicada.id);form.append("promocion_precio",String(promoAplicada.precio_final))}
             form.append("metodo_pago", metodo)
             if (servicioId) form.append("servicio_id", servicioId)
@@ -2063,6 +2117,7 @@ export default function BookingFlow(props: any) {
         )
     }
 
+    if(personalKey && (personalError || !personal || (primaryPersonal && listoParaServicios && !loadingServicios && servicios.length && !servicios.some(s=>s.id===primaryPersonal.id)))) return <div role="status" style={statusStyle}>{personalError || (!personal?"Cargando tu promoción…":"El servicio de la oferta no está disponible para esta selección.")}</div>
     if (loadingNegocio || (browseOfferId && (offerLoading || (!offerError && !negocio?.agenda_sin_pagos && !errorServicios && (loadingProf || loadingServicios || !servicioBase))))) {
         return <div className="route-blur-loading" role="status" aria-label="Cargando agenda"><span /></div>
     }
@@ -2181,6 +2236,7 @@ export default function BookingFlow(props: any) {
 
     return (
         <div style={{width:"100%",minHeight:"100dvh",margin:0,boxSizing:"border-box",display:"flex",flexDirection:"column",fontFamily:"'DM Sans', -apple-system, sans-serif",...temaVars}}>
+            {personal && stepId==="servicio" && !primaryPersonal && <p style={{margin:"12px auto",padding:"0 16px"}}>Elegí un servicio para reservar tu turno. La oferta de {personal.items.map(item=>item.nombre).join(" + ")} se suma por {formatearMoneda(personal.precio)}.</p>}
             {!esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && <BookingCombosSubheader promociones={promociones.filter(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id))} servicios={servicios} accent={accent} icono={iconoVerCombo} onSelect={elegirPromo} />}
         <div className={esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && promociones.some(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id)) ? "bf-combos-desktop-stage" : undefined} style={{display:"flex",flex:1,width:"100%",alignItems:enCheckoutStep ? "flex-start" : "center",justifyContent:"center",padding:enCheckoutStep ? 0 : "20px 0",boxSizing:"border-box"}}>
         {esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && <BookingCombosDesktop promociones={promociones.filter(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id))} servicios={servicios} accent={accent} onSelect={elegirPromo}/>}
@@ -2703,6 +2759,7 @@ export default function BookingFlow(props: any) {
                                 </div>
                             )}
                             {offerQuote && <div style={{fontSize:12,color:accent,fontWeight:600}}>Turnits Offer · <del style={{color:"#6b7280",fontWeight:400}}>{formatearMoneda(offerQuote.precio_original)}</del></div>}
+                            {personalKey && <label>Código personal de WhatsApp<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={personalCode} onChange={e=>setPersonalCode(e.target.value.replace(/\D/g,""))}/>{codeError && <small role="alert">{codeError}</small>}</label>}
                             {promoAplicada && <div style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)"}}>Promo: {promoAplicada.nombre}{promoAplicada.tipo === "combo" && <div>Incluye {promoAplicada.items.map(i=>`${i.cantidad} × ${i.nombre}`).join(" + ")}</div>}</div>}
                             {extrasSeleccionados.length > 0 && (
                                 <div

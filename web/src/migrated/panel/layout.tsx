@@ -762,8 +762,8 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title="Mis Clientes"
-                            subtitle="Todas las personas que reservaron turno con vos"
+                            title="Clientes"
+                            subtitle="Ofrece promociones a tus clientes, descuentos y combos para mejorar su experiencia"
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>

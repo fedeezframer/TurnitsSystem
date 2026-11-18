@@ -1,0 +1,53 @@
+.clients-panel,.client-offer {--client-green:#196b20;color:#151a16}
+.clients-tools,.clients-board article header,.offer-fields,.offer-item,.offer-qty {display:flex;align-items:center;gap:12px}
+.clients-tools {margin:6px 0 16px}
+.clients-tools select,.clients-tools input,.client-offer input,.client-offer select {max-width:100%;min-width:0;box-sizing:border-box;border:1px solid #a9aea9;border-radius:8px;background:white;color:inherit;padding:9px 12px;font:inherit}
+.clients-tools input {border-radius:24px;width:min(100%,330px)}
+.clients-board {display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,215px),1fr));gap:12px;align-content:start;padding:clamp(14px,2vw,28px);border:1px solid #c6cbc6;border-radius:28px;min-height:44vh}
+.clients-board article {display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid #afb5af;border-radius:18px;background:white;min-width:0}
+.client-avatar {flex:none;display:grid;place-items:center;width:38px;height:38px;background:var(--client-green);color:white;border-radius:50%}
+.clients-board h3,.client-offer h3 {margin:0;font-size:18px}
+.clients-board header div {min-width:0;overflow-wrap:anywhere}
+.clients-board small,.offer-item small {display:block;color:#525a54}
+.clients-board dl {margin:0;display:grid;gap:6px}
+.clients-board dl div {display:flex;gap:8px;font-weight:600}
+.clients-board dd {margin:0;color:var(--client-green)}
+.clients-board footer {display:grid;justify-items:start;gap:7px;margin-top:auto;padding-top:10px;border-top:1px solid #d3d7d3}
+.clients-board footer button,.clients-board footer a {border-radius:22px;padding:7px 12px;font:inherit;font-size:14px;text-decoration:none;background:white;border:1px solid;color:inherit;cursor:pointer}
+.clients-board footer button {color:white;background:var(--client-green);border-color:var(--client-green)}
+.clients-board button:disabled {opacity:.5}
+.client-offer {position:fixed;width:min(90vw,1080px);max-height:88dvh;box-sizing:border-box;overflow:auto;border:0;border-radius:30px;padding:clamp(22px,4vw,48px);background:white}
+.client-offer::backdrop {background:#0005}
+.client-offer h2 {margin:0 24px 4px 0;font-size:clamp(24px,3vw,38px);line-height:1.1}
+.client-offer p {margin:0 0 22px}
+.offer-main {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr);gap:clamp(16px,3vw,40px);margin:26px 0}
+.offer-cover {aspect-ratio:1;background:#f0f3ef;border-radius:14px;overflow:hidden}
+.offer-cover img {width:100%;height:100%;object-fit:cover}
+.offer-fields {flex-wrap:wrap;align-items:end;margin-bottom:18px}
+.offer-fields label {display:grid;gap:6px;max-width:100%}
+.offer-items {margin-top:10px;max-height:240px;overflow:auto;display:grid;gap:8px}
+.offer-item {padding:8px 10px;border:1px solid #a6aea6;border-radius:16px;justify-content:space-between}
+.offer-item[data-selected=true] {border-color:var(--client-green);color:var(--client-green)}
+.offer-item>button {display:flex;align-items:center;gap:10px;text-align:left;min-width:0;background:none;border:0;color:inherit;cursor:pointer}
+.offer-item img {width:44px;height:44px;border-radius:5px;object-fit:cover}
+.offer-qty {gap:6px;justify-content:end}
+@media(max-width:650px){.offer-main{grid-template-columns:1fr}.offer-cover{width:min(180px,100%)}.client-offer{width:95vw;padding:22px 16px}.clients-tools{gap:6px}}
+
+.client-offer-send {display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.client-offer-send button {border:0;border-radius:9px;background:#a4e5a4;color:#103714;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer}
+.client-offer-send button:disabled {opacity:.55;cursor:default}
+
+.offer-picker {display:flex;align-items:center;gap:8px}
+.offer-items {flex:1;min-width:0}
+.offer-check {border:1px solid currentColor;border-radius:50%;width:22px;height:22px;flex:none}
+.offer-item[data-selected=true] .offer-check {background:center/12px no-repeat url("/assets/panel-nav/akar-icons_check.svg")}
+.offer-scroll {display:grid;gap:5px}
+.offer-scroll button {border-radius:50%;background:white;border:1px solid #adb3ad;width:30px;height:30px;cursor:pointer}
+.offer-schedule {border:0;margin:0;padding:0}
+.offer-schedule legend {padding:0;margin-bottom:6px}
+.offer-schedule button {border:1px solid #858d85;border-radius:6px;background:white;padding:9px 12px;margin-right:6px;color:inherit;cursor:pointer}
+.offer-schedule button[aria-pressed=true] {background:var(--client-green);border-color:var(--client-green);color:white}
+.clients-board {grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1250px){.clients-board{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:980px){.clients-board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:550px){.clients-board{grid-template-columns:minmax(0,1fr)}}

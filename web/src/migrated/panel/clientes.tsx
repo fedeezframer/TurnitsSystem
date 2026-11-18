@@ -1,32 +1,16 @@
+import * as React from "react"
 import LoadingRunner from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
-import * as React from "react"
-import {
-    useState,
-    useEffect,
-    useRef,
-    useCallback,
-    useLayoutEffect,
-} from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { createPortal } from "react-dom"
-import { ClientesGrid_useContainerWidth, ClientesGrid_getColumnas, ClientesGrid_buildClientes, ClientesGrid_getSlug, ClientesGrid_getToken, ClientesGrid_wrapperBase, ClientesGrid_MOCK_CLIENTES, ClientesGrid_shimmerCSS, ClientesGrid_frecuenciaLabel, TurnitsLockedStyle, ClientesGrid_frecuenciaColor } from "./common"
+import { ClientesGrid_getSlug, ClientesGrid_getToken } from "./common"
 import { TurnitsPlanRequirement } from "./shared"
+import { ClientOfferDraft } from "./client-offer"
+import "./clientes.css"
 
-function ClientesGrid(props: any) {
-    const {
-        baseUrl = appConfig.apiUrl,
-        accentColor = "#22c55e",
-        columnas = 4,
-        porPagina = 12,
-        style,
-    } = props
-
-    const containerRef = React.useRef<HTMLDivElement>(null)
-    const containerWidth = ClientesGrid_useContainerWidth(containerRef)
-    const colsActivas = ClientesGrid_getColumnas(containerWidth, columnas)
-    const isMobile = containerWidth < 500
-
+export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {baseUrl?:string; porPagina?:number; accentColor?:string}) {
+    const [query,setQuery] = React.useState("")
+    const [filter,setFilter] = React.useState("todos")
+    const [recipient,setRecipient] = React.useState<any>(null)
+    const [total,setTotal]=React.useState(0)
     const [clientes, setClientes] = React.useState<any[]>([])
     const [loading, setLoading] = React.useState(true)
     const [error, setError] = React.useState("")
@@ -35,21 +19,16 @@ function ClientesGrid(props: any) {
 
     const esPremium = plan !== "gratis"
     const limiteClientes = plan === "premium" ? Infinity : plan === "basico" ? 50 : 10
-    // Gratis: solo los 10 más recientes. Básico: todos.
     const clientesFiltrados = clientes.slice(0, limiteClientes)
 
     React.useEffect(() => {
-        if (false) {
-            setLoading(false)
-            return
-        }
         const api = baseUrl.replace(/\/+$/, "")
         let retries = 0
         let retryTimer: ReturnType<typeof setTimeout> | null = null
 
         const fetchData = async (slug: string, token: string) => {
             try {
-                const res = await fetch(`${api}/admin-stats/${slug}`, {
+                const res = await fetch(`${api}/admin/clientes/${slug}`, {
                     headers: { Authorization: `Bearer ${token}` },
                     cache: "no-cache",
                 })
@@ -67,9 +46,8 @@ function ClientesGrid(props: any) {
                         ? (result?.plan || result?.config?.plan)
                         : "gratis"
                 )
-                setClientes(
-                    ClientesGrid_buildClientes(result?.turnosLista || [])
-                )
+                setClientes(result.clientes || [])
+                setTotal(result.total || 0)
                 setError("")
             } catch {
                 setError("Error de conexión.")
@@ -102,456 +80,34 @@ function ClientesGrid(props: any) {
         setVisibles(porPagina)
     }, [porPagina])
 
-    if (false) {
-        return (
-            <div
-                ref={containerRef}
-                style={{ ...ClientesGrid_wrapperBase, ...style }}
-            >
-                <ClientesGrid_Shell
-                    clientes={ClientesGrid_MOCK_CLIENTES}
-                    visibles={porPagina}
-                    colsActivas={colsActivas}
-                    accentColor={accentColor}
-                    isMobile={isMobile}
-                    esPremium={true}
-                    totalReal={ClientesGrid_MOCK_CLIENTES.length}
-                    onVerMas={() => {}}
-                />
-                <style>{ClientesGrid_shimmerCSS}</style>
-            </div>
-        )
-    }
 
-    if (loading) {
-        return (
-            <div
-                ref={containerRef}
-                style={{ ...ClientesGrid_wrapperBase, ...style }}
-            >
-                <ClientesGrid_SkeletonGrid
-                    columnas={colsActivas}
-                    isMobile={isMobile}
-                />
-                <style>{ClientesGrid_shimmerCSS}</style>
-            </div>
-        )
-    }
-
-    if (error) {
-        return (
-            <div
-                ref={containerRef}
-                style={{
-                    ...ClientesGrid_wrapperBase,
-                    ...style,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    minHeight: 200,
-                }}
-            >
-                <span style={{ fontSize: 13, color: "#ef4444" }}>{error}</span>
-            </div>
-        )
-    }
-
-    return (
-        <div
-            ref={containerRef}
-            style={{ ...ClientesGrid_wrapperBase, ...style }}
-        >
-            <ClientesGrid_Shell
-                clientes={clientesFiltrados}
-                visibles={visibles}
-                colsActivas={colsActivas}
-                accentColor={accentColor}
-                isMobile={isMobile}
-                esPremium={esPremium}
-                totalReal={clientes.length}
-                limiteClientes={limiteClientes}
-                plan={plan}
-                onVerMas={() => setVisibles((v) => v + porPagina)}
-            />
-            <style>{ClientesGrid_shimmerCSS}</style>
+    if (loading) return <LoadingRunner card label="Cargando clientes…" />
+    if (error) return <p role="alert">{error}</p>
+    const search = query.trim().toLocaleLowerCase("es")
+    const results = clientesFiltrados.filter(c => (filter === "todos" || (filter === "recurrentes" ? c.turnos > 1 : c.turnos === 1)) &&
+        [c.nombre,c.apellido,esPremium && c.telefono,esPremium && c.email].filter(Boolean).join(" ").toLocaleLowerCase("es").includes(search))
+    return <section className="clients-panel">
+        <div className="clients-tools">
+            <select aria-label="Filtrar clientes" value={filter} onChange={e=>setFilter(e.target.value)}>
+                <option value="todos">Todos</option><option value="recurrentes">Recurrentes</option><option value="nuevos">Una reserva</option>
+            </select>
+            <input type="search" placeholder="Buscar" aria-label="Buscar clientes" value={query} onChange={e=>setQuery(e.target.value)} />
         </div>
-    )
-}
-
-function ClientesGrid_Shell({
-    clientes,
-    visibles,
-    colsActivas,
-    accentColor,
-    isMobile,
-    esPremium,
-    totalReal,
-    limiteClientes = 10,
-    plan = "gratis",
-    onVerMas,
-}: any) {
-    const slice = clientes.slice(0, visibles)
-    const hayMas = esPremium && visibles < clientes.length
-
-    const concurrentes = clientes.filter(
-        (c: any) => ClientesGrid_frecuenciaLabel(c.turnos) === "Concurrente"
-    ).length
-    const regulares = clientes.filter(
-        (c: any) => ClientesGrid_frecuenciaLabel(c.turnos) === "Regular"
-    ).length
-    const esporadicos = clientes.filter(
-        (c: any) => ClientesGrid_frecuenciaLabel(c.turnos) === "Irregular"
-    ).length
-
-    const totalCeldas = slice.length + (hayMas ? 1 : 0)
-    const filas = Math.ceil(totalCeldas / colsActivas)
-    const celdas = filas * colsActivas
-    const vacias = celdas - slice.length - (hayMas ? 1 : 0)
-
-    return (
-        <>
-            {/* HEADER */}
-            <div
-                style={{
-                    display: "flex",
-                    flexDirection: isMobile ? "column" : "row",
-                    justifyContent: "space-between",
-                    alignItems: isMobile ? "flex-start" : "center",
-                    marginBottom: isMobile ? 12 : 16,
-                    gap: isMobile ? 8 : 6,
-                }}
-            >
-                <div
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        flexWrap: "wrap",
-                    }}
-                >
-                    <span
-                        style={{
-                            fontSize: isMobile ? 11 : 12,
-                            color: "#94a3b8",
-                        }}
-                    >
-                        {esPremium
-                            ? `${clientes.length} cliente${clientes.length !== 1 ? "s" : ""} únicos`
-                            : `Últimos ${clientes.length} clientes`}
-                    </span>
-                    {totalReal > limiteClientes && <span style={{display:"inline-flex",alignItems:"center",gap:8,fontSize:10,color:"#64748b"}}><span>+{totalReal - limiteClientes} clientes</span><TurnitsPlanRequirement premiumOnly={plan === "basico"} /></span>}
-                </div>
-
-                {/* Badges frecuencia — solo premium */}
-                {esPremium && (
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: isMobile ? 4 : 6,
-                            flexWrap: "wrap",
-                        }}
-                    >
-                        <ClientesGrid_FrecBadge
-                            label={isMobile ? "Conc." : "Concurrentes"}
-                            count={concurrentes}
-                            color={accentColor}
-                            isMobile={isMobile}
-                        />
-                        <ClientesGrid_FrecBadge
-                            label={isMobile ? "Reg." : "Regulares"}
-                            count={regulares}
-                            color="#f59e0b"
-                            isMobile={isMobile}
-                        />
-                        <ClientesGrid_FrecBadge
-                            label={isMobile ? "Irreg." : "Irregulares"}
-                            count={esporadicos}
-                            color="#94a3b8"
-                            isMobile={isMobile}
-                        />
-                    </div>
-                )}
-            </div>
-
-            {/* GRILLA */}
-            {clientes.length === 0 ? (
-                <div
-                    style={{
-                        textAlign: "center",
-                        padding: "40px 0",
-                        color: "#cbd5e1",
-                        fontSize: 13,
-                    }}
-                >
-                    Aún no hay clientes registrados.
-                </div>
-            ) : (
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${colsActivas}, minmax(0, 1fr))`,
-                        border: "1px solid #f1f5f9",
-                        borderRadius: isMobile ? 12 : 16,
-                        overflow: "hidden",
-                    }}
-                >
-                    <AnimatePresence>
-                        {slice.map((c: any, i: number) => (
-                            <ClientesGrid_ClienteCell
-                                key={`${c.telefono || c.email}-${i}`}
-                                cliente={c}
-                                accentColor={accentColor}
-                                index={i}
-                                columnas={colsActivas}
-                                isMobile={isMobile}
-                                esPremium={esPremium}
-                            />
-                        ))}
-                    </AnimatePresence>
-
-                    {/* Ver más — solo premium */}
-                    {hayMas && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            onClick={onVerMas}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                background: accentColor,
-                                cursor: "pointer",
-                                minHeight: isMobile ? 80 : 110,
-                                borderLeft: `1px solid ${accentColor}`,
-                            }}
-                        >
-                            <span
-                                style={{
-                                    fontSize: isMobile ? 12 : 14,
-                                    fontWeight: 700,
-                                    color: "#fff",
-                                    letterSpacing: "-0.2px",
-                                }}
-                            >
-                                Ver más
-                            </span>
-                        </motion.div>
-                    )}
-
-                    {/* Celda upgrade — gratis con más clientes ocultos */}
-                    {totalReal > limiteClientes && (
-                        <div style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#f8fafc",borderLeft:"1px solid #e5e7eb",borderTop:slice.length >= colsActivas ? "1px solid #e5e7eb" : "none",minHeight:isMobile ? 100 : 110,padding:"36px 8px 10px",...TurnitsLockedStyle}}>
-                            <span style={{position:"absolute",top:10,right:10}}><TurnitsPlanRequirement premiumOnly={plan === "basico"} /></span>
-                            <span style={{fontSize:isMobile ? 10 : 12,fontWeight:700,color:"#64748b",textAlign:"center",lineHeight:1.4}}>{totalReal - limiteClientes} clientes más</span>
-                        </div>
-                    )}
-
-                    {Array.from({
-                        length:
-                            vacias > 0
-                                ? vacias -
-                                  (totalReal > limiteClientes
-                                      ? 1
-                                      : 0)
-                                : 0,
-                    }).map((_, i) => (
-                        <div
-                            key={`empty-${i}`}
-                            style={{
-                                background: "#fff",
-                                borderLeft: "1px solid #f1f5f9",
-                                borderTop: "1px solid #f1f5f9",
-                                minHeight: isMobile ? 80 : 110,
-                            }}
-                        />
-                    ))}
-                </div>
-            )}
-        </>
-    )
-}
-
-function ClientesGrid_ClienteCell({
-    cliente,
-    accentColor,
-    index,
-    columnas,
-    isMobile,
-    esPremium,
-}: any) {
-    const col = index % columnas
-    const fila = Math.floor(index / columnas)
-    const frec = ClientesGrid_frecuenciaLabel(cliente.turnos)
-    const color = ClientesGrid_frecuenciaColor(frec, accentColor)
-    const nombreCompleto = [cliente.nombre, cliente.apellido]
-        .filter(Boolean)
-        .join(" ")
-    const inicial = (cliente.nombre || "?")[0].toUpperCase()
-    const avatarSize = isMobile ? 28 : 34
-
-    return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{
-                delay: Math.min(index * 0.025, 0.35),
-                duration: 0.22,
-            }}
-            style={{
-                padding: isMobile ? "12px 8px" : "16px 14px",
-                borderLeft: col > 0 ? "1px solid #f1f5f9" : "none",
-                borderTop: fila > 0 ? "1px solid #f1f5f9" : "none",
-                background: "#fff",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                textAlign: "center",
-                gap: isMobile ? 2 : 3,
-                minHeight: isMobile ? 80 : 110,
-                justifyContent: "center",
-            }}
-        >
-            {/* Avatar */}
-            <div
-                style={{
-                    width: avatarSize,
-                    height: avatarSize,
-                    borderRadius: "50%",
-                    background: `${accentColor}15`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginBottom: isMobile ? 3 : 5,
-                    flexShrink: 0,
-                }}
-            >
-                <span
-                    style={{
-                        fontSize: isMobile ? 11 : 13,
-                        fontWeight: 700,
-                        color: accentColor,
-                    }}
-                >
-                    {inicial}
-                </span>
-            </div>
-
-            {/* Nombre */}
-            <div
-                style={{
-                    fontSize: isMobile ? 10 : 12,
-                    fontWeight: 700,
-                    color: "#0f172a",
-                    letterSpacing: "-0.2px",
-                    lineHeight: 1.2,
-                    wordBreak: "break-word",
-                    maxWidth: "100%",
-                }}
-            >
-                {nombreCompleto || "—"}
-            </div>
-
-            {/* Email — solo desktop y premium */}
-            {cliente.email && !isMobile && esPremium && (
-                <div
-                    style={{
-                        fontSize: 9,
-                        color: "#94a3b8",
-                        wordBreak: "break-all",
-                        lineHeight: 1.3,
-                    }}
-                >
-                    {cliente.email}
-                </div>
-            )}
-
-            {/* Teléfono — solo premium */}
-            {cliente.telefono && esPremium && (
-                <div
-                    style={{
-                        fontSize: isMobile ? 9 : 10,
-                        color: "#64748b",
-                        fontWeight: 500,
-                    }}
-                >
-                    +{cliente.telefono}
-                </div>
-            )}
-
-            {/* Frecuencia — solo premium */}
-            {esPremium && (
-                <div
-                    style={{
-                        marginTop: isMobile ? 2 : 4,
-                        fontSize: isMobile ? 9 : 10,
-                        fontWeight: 600,
-                        color,
-                        letterSpacing: "0.01em",
-                    }}
-                >
-                    {frec}
-                </div>
-            )}
-
-            {/* Turnos */}
-            <div style={{ fontSize: 9, color: "#cbd5e1", marginTop: 1 }}>
-                {cliente.turnos} turno{cliente.turnos !== 1 ? "s" : ""}
-            </div>
-        </motion.div>
-    )
-}
-
-function ClientesGrid_FrecBadge({ label, count, color, isMobile }: any) {
-    return (
-        <div
-            style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: isMobile ? "3px 6px" : "3px 8px",
-                borderRadius: 20,
-                background: `${color}10`,
-            }}
-        >
-            <div
-                style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: color,
-                    flexShrink: 0,
-                }}
-            />
-            <span
-                style={{
-                    fontSize: isMobile ? 9 : 10,
-                    fontWeight: 600,
-                    color,
-                    whiteSpace: "nowrap",
-                }}
-            >
-                {count} {label}
-            </span>
+        <div className="clients-board">
+            {results.slice(0,visibles).map(c=><article key={c.bookingId}>
+                <header><b className="client-avatar">{c.nombre.charAt(0)}</b><div><h3>{c.nombre} {c.apellido}</h3>
+                {esPremium && <><small>{c.email}</small><small>{c.telefono}</small></>}</div></header>
+                <dl><div><dt>Reservas</dt><dd>{c.turnos}</dd></div><div><dt>Total</dt><dd>{money.format(c.total)}</dd></div>
+                <div><dt>Última visita</dt><dd>{c.ultimaVisita || "Sin visitas"}</dd></div>
+                <div><dt>Recurre cada</dt><dd>{c.intervalo ? c.intervalo+" días" : "—"}</dd></div></dl>
+                {esPremium && <footer><button disabled={!c.telefono} onClick={()=>setRecipient(c)}>Ofrecer Promoción</button>
+                {c.telefono && <a target="_blank" rel="noreferrer" href={"https://wa.me/"+c.telefono.replace(/\D/g,"")}>Contactar</a>}</footer>}
+            </article>)}
+            {!results.length && <p>{clientes.length ? "No hay clientes que coincidan." : "Aún no hay clientes registrados."}</p>}
         </div>
-    )
+        {visibles < results.length && <button onClick={()=>setVisibles(v=>v+porPagina)}>Ver más</button>}
+        {total > limiteClientes && <p>{total-limiteClientes} clientes más <TurnitsPlanRequirement premiumOnly={plan==="basico"}/></p>}
+        {recipient && <ClientOfferDraft bookingId={recipient.bookingId} baseUrl={baseUrl} name={[recipient.nombre,recipient.apellido].filter(Boolean).join(" ")} onClose={()=>setRecipient(null)}/>}
+    </section>
 }
-
-function ClientesGrid_SkeletonGrid({ columnas, isMobile }: any) { return <LoadingRunner card label="Cargando clientes…" /> }
-
-function ClientesGrid_Skel({ width, height, style = {} }: any) {
-    return (
-        <div
-            style={{
-                width,
-                height,
-                borderRadius: 6,
-                background:
-                    "linear-gradient(90deg,#f1f5f9 25%,#e8edf3 50%,#f1f5f9 75%)",
-                backgroundSize: "200% 100%",
-                animation: "shimmer 1.4s infinite",
-                ...style,
-            }}
-        />
-    )
-}
-
-export { ClientesGrid, ClientesGrid_Shell, ClientesGrid_ClienteCell, ClientesGrid_FrecBadge, ClientesGrid_SkeletonGrid, ClientesGrid_Skel }
+const money = new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0})
