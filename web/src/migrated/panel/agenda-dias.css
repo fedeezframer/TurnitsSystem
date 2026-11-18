@@ -33,3 +33,32 @@
 @container(max-width:690px){.agenda-day-grid {grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container(max-width:450px){.agenda-day-grid {grid-template-columns:1fr}.agenda-day {min-height:190px}.agenda-day ol {margin-top:24px}}
 @media(max-width:650px){.agenda-day-dialog {width:94vw;padding:38px 16px 24px}.agenda-reservas {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
+
+.agenda-empty-note {
+  grid-column: 1 / -1;
+  justify-self: center;
+  position: relative;
+  box-sizing: border-box;
+  width: min(212px, 90%);
+  margin: 40px 0;
+  padding: 24px 16px 28px;
+  transform: rotate(-2.5deg);
+  background: #fef3c7;
+  box-shadow: 0 12px 26px #0f172a24, 0 2px 6px #0f172a14;
+  color: #78350f;
+  font-size: 15.5px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: center;
+}
+.agenda-empty-note::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 44px;
+  height: 16px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: #facc1599;
+  box-shadow: 0 1px 3px #0003;
+}

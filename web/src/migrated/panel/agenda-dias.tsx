@@ -44,26 +44,20 @@ export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick,on
         if(selected && !turnoOpen && el && !el.open) el.showModal()
         else if(el?.open && (!selected || turnoOpen)) el.close()
     },[selected,turnoOpen])
-    const days = new Map(dias.map(d=>[d.fecha,d]))
-    for(let offset=0;offset<3;offset++){
-        const date = new Date(today+"T12:00:00Z")
-        date.setUTCDate(date.getUTCDate()+offset)
-        const fecha=date.toISOString().slice(0,10)
-        if(!days.has(fecha)) days.set(fecha,{fecha,turnos:[]})
-    }
+    const days = dias.filter(day => day.turnos.length > 0).sort((a,b) => a.fecha.localeCompare(b.fecha))
     const time = new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
     const openDay = (fecha:string) => {setSelected(fecha);setLoadPhotos(true)}
-    const selectedTurns = days.get(selected)?.turnos || []
+    const selectedTurns = days.find(day => day.fecha === selected)?.turnos || []
     return <>
         <div className="agenda-day-grid">
-            {[...days.values()].sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(day=>{
+            {days.length === 0 && <p className="agenda-empty-note" role="status">Aún no tienes reservas</p>}
+            {days.map(day=>{
                 const next = day.fecha === today ? day.turnos.find(t=>t.hora>=time)?.id : null
                 return <article className="agenda-day" key={day.fecha}>
                     <header><h3>{day.fecha===today?"Hoy":shortDate(day.fecha)}</h3><button onClick={()=>openDay(day.fecha)} aria-label={"Ver detalles del "+shortDate(day.fecha)}>Ver detalles</button></header>
                     <ol>{day.turnos.map(t=><li key={t.id} data-state={t.id===next?"next":day.fecha===today && t.hora<time?"past":"upcoming"}>
                         <button onClick={()=>onTurnoClick(t,day.fecha)}>{t.nombre} <time>{t.hora}</time></button>
                     </li>)}</ol>
-                    {!day.turnos.length && <p>Sin reservas</p>}
                 </article>
             })}
         </div>
