@@ -84,17 +84,16 @@ const nombrePlan = plan => plan === "premium" ? "Premium" : plan === "basico" ? 
 const TURNITS_COMISION_TOPE_ARS = Number(process.env.TURNITS_COMISION_TOPE_ARS || 9000);
 const TURNITS_COMISION_MINIMA_ARS = 300;
 const TURNITS_COMISION_TASA = 0.02;
-const TURNITS_COMISION_UMBRAL_PAGOS_ARS = 15000;
 
 // Planes: gratis < basico < premium.
 //  · Gratis: funciones limitadas. Cobra comisión de Turnits.
-//  · Básico: herramientas para negocios chicos; titular + 2 miembros. Cobra comisión online.
+//  · Básico: herramientas para negocios chicos; titular + 2 miembros. Sin comisión de Turnits.
 //  · Premium: equipo sin límite; sin comisión de Turnits.
 //    Suscripción mensual; los accesos otorgados sin vencimiento se conservan.
 const PLANES_VALIDOS = ["gratis", "basico", "premium"];
 const esPlanVip = (plan) => plan === "premium";
 const planTieneFuncionesPremium = (plan) => plan === "basico" || plan === "premium";
-const planCobraComision = plan => !esPlanVip(plan);
+const planCobraComision = plan => !planTieneFuncionesPremium(plan);
 // Meta del logro "Facturaste $500 USD" (Tus logros, panel > Inicio). Se
 // fija en pesos porque es lo que factura el negocio; ~USD 500 al tipo de
 // cambio de referencia. Se compara contra la facturación histórica total
@@ -362,9 +361,11 @@ const cleanSlug = (raw) => {
 
 const isActivo = (val) => val === "true" || val === true;
 
+const rutasReservadas = new Set(['admin', 'agenda', 'agenda-test', 'alert', 'api', 'app', 'assets', 'browse', 'cambiar-contrasena', 'cambiar-contraseña', 'consultas', 'error', 'internal', 'login', 'login-test', 'panel', 'panel-test', 'pendiente', 'perfil', 'planes', 'politica-de-privacidad', 'privacidad', 'public', 'register', 'register-test', 'registro', 'renovar', 'reprogramar', 'store-login', 'success', 'sucess', 'terminos', 'terminos-y-condiciones', 'test']);
 async function generarSlugUnico(businessName) {
   const base = cleanSlug(businessName);
-  let slug = base, n = 2;
+  let n = 2;
+  let slug = rutasReservadas.has(base) ? `${base}-${n++}` : base;
   while (true) {
     const { data } = await supabase.from("usuarios").select("id").eq("slug", slug).maybeSingle();
     if (!data) break;
@@ -440,20 +441,18 @@ function fechaVencimientoComision(periodo) {
   return `${nextYear}-${String(nextMonth).padStart(2, "0")}-05`;
 }
 
-// Básico pago: $100 hasta $15.000 inclusive, luego 0,8% del total cobrado.
+// Turnits cobra comisión únicamente en el plan Gratis.
 const COMISION_POR_PLAN = {
   gratis:  { tasa: TURNITS_COMISION_TASA, minima: TURNITS_COMISION_MINIMA_ARS, umbral: 0 },
-  basico:  { tasa: 0.008,                 minima: 100,                         umbral: TURNITS_COMISION_UMBRAL_PAGOS_ARS },
+  basico:  { tasa: 0, minima: 0 },
   premium: { tasa: 0, minima: 0, umbral: 0 },
 };
 function configComisionPlan(plan, estadoSuscripcion) {
-  if (esPlanVip(plan)) return COMISION_POR_PLAN.premium;
-  return estadoSuscripcion === "trial" ? COMISION_POR_PLAN.gratis : COMISION_POR_PLAN[plan] || COMISION_POR_PLAN.gratis;
+  return COMISION_POR_PLAN[plan] || COMISION_POR_PLAN.gratis;
 }
 function calcularComisionTurnits(base, plan = "gratis", estadoSuscripcion) {
   const cfg = configComisionPlan(plan, estadoSuscripcion);
   const importe = Number(base || 0);
-  if (cfg.umbral && importe <= cfg.umbral) return cfg.minima;
   return Math.max(cfg.minima, Math.round(importe * cfg.tasa));
 }
 
@@ -628,7 +627,7 @@ function horaDentroDeIntervalos(horarios, excepciones, fecha, hora) {
 }
 
 function mediosOfflinePermitidos(user) {
-  return user?.plan === "premium";
+  return planTieneFuncionesPremium(user?.plan);
 }
 function limitarPagosPorPlan(config) {
   const result={...config};
@@ -1487,9 +1486,9 @@ app.get("/panel-version", (_, res) => res.json({ success: true, version: PANEL_V
 // REGISTRO — PASO 1
 // POST /registro/iniciar
 // ══════════════════════════════════════════════════════════════
-app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:300,tasa:0.02}, comision_trial_por_plan:{basico:configComisionPlan("basico","trial"),premium:configComisionPlan("premium","trial")}, planes:[
+app.get("/planes", (_req,res) => res.json({success:true, moneda:"ARS", dias_prueba_basico:DIAS_PRUEBA, dias_prueba_premium:DIAS_PRUEBA, comision_trial:{minima:0,tasa:0}, comision_trial_por_plan:{basico:configComisionPlan("basico","trial"),premium:configComisionPlan("premium","trial")}, planes:[
   {id:"gratis",nombre:"Gratis",precio_mensual:0,miembros_adicionales:0,comision_minima:300,comision_tasa:0.02,comision_umbral_ars:0,clientes_visibles:10,finanzas:true,temas:false,promociones:false,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
-  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,precio_anual:precioAnualPlan("basico"),descuento_anual:33,dias_anual:365,miembros_adicionales:2,comision_minima:100,comision_tasa:0.008,comision_umbral_ars:TURNITS_COMISION_UMBRAL_PAGOS_ARS,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:false,sin_cobro:false,sucursales:false,soporte:"lista_espera"},
+  {id:"basico",nombre:"Básico",precio_mensual:PRECIO_BASICO,precio_anual:precioAnualPlan("basico"),descuento_anual:33,dias_anual:365,miembros_adicionales:2,comision_minima:0,comision_tasa:0,clientes_visibles:50,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:false,soporte:"lista_espera"},
   {id:"premium",nombre:"Premium",precio_mensual:PRECIO_PREMIUM,precio_anual:precioAnualPlan("premium"),descuento_anual:33,dias_anual:365,miembros_adicionales:null,comision_minima:0,comision_tasa:0,comision_umbral_ars:0,clientes_visibles:null,finanzas:true,temas:true,promociones:true,pagos_directos:true,sin_cobro:true,sucursales:true,soporte:"prioritario"}
 ]}));
 
@@ -1504,6 +1503,7 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
     if(rubros && (typeof nombre_persona !== "string" || !nombre_persona.trim() || typeof apellido !== "string" || !apellido.trim() || typeof email !== "string" || email.length>254 || typeof telefono !== "string" || !telefono || typeof password !== "string" || Buffer.byteLength(password)>72 || typeof business_name !== "string" || typeof req.body.usuario !== "string"))
       return res.status(400).json({success:false,error:"Revisá los datos del negocio y completá todos los campos."});
     const requestedSlug = req.body.usuario === undefined ? null : String(req.body.usuario).trim().toLowerCase();
+    if (rutasReservadas.has(requestedSlug)) return res.status(409).json({success:false,error:"Ese usuario está reservado. Elegí otro."});
     if (requestedSlug !== null && (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(requestedSlug) || requestedSlug.endsWith("-")))
       return res.status(400).json({success:false,error:"El usuario debe tener entre 2 y 60 letras minúsculas, números o guiones."});
 
@@ -1626,6 +1626,7 @@ app.post("/registro/verificar", limiterAuth, limiterCodigo, async (req, res) => 
       return res.status(409).json({ success: false, error: "Ya existe una cuenta con ese email." });
 
     const slug              = pendiente.slug_solicitado || await generarSlugUnico(pendiente.business_name);
+    if(rutasReservadas.has(slug)) return res.status(409).json({success:false,error:"Ese usuario está reservado. Registrate con otro."});
     if(pendiente.slug_solicitado) {
       const {data:taken,error:slugError}=await supabase.from("usuarios").select("id").eq("slug",slug).maybeSingle();
       if(slugError) throw slugError;
@@ -2162,11 +2163,12 @@ app.get("/verify-session", async (req, res) => {
       return res.json({active:true,...consumerIdentity(consumer)});
     }
     if (payload.rol === "empleado" && payload.equipoId) {
-      const [{ data: miembro }, { data: negocio }] = await Promise.all([
+      const [{ data: miembro, error: errorMiembro }, { data: negocio, error: errorNegocio }] = await Promise.all([
         supabase.from("equipo").select("id, slug, nombre, apellido, activo, es_dueño, login_activado")
           .eq("id", payload.equipoId).eq("slug", payload.slug).eq("es_dueño", false).maybeSingle(),
         supabase.from("usuarios").select("activo, plan, fecha_vencimiento").eq("slug", payload.slug).maybeSingle(),
       ]);
+      if (errorMiembro || errorNegocio) throw errorMiembro || errorNegocio;
       if (!miembro || !isActivo(miembro.activo) || !miembro.login_activado || !negocio ||
           !isActivo(negocio.activo) || !planTieneFuncionesPremium(negocio.plan) ||
           (negocio.fecha_vencimiento && diasHastaVencer(negocio.fecha_vencimiento) <= 0)) {
@@ -2180,10 +2182,11 @@ app.get("/verify-session", async (req, res) => {
         nombre_persona: `${miembro.nombre}${miembro.apellido ? ` ${miembro.apellido}` : ""}`,
       });
     }
-    const { data: user } = await supabase.from("usuarios")
+    const { data: user, error: errorUsuario } = await supabase.from("usuarios")
       .select("slug, business_name, email, nombre_persona, activo, plan, estado_suscripcion, fecha_vencimiento")
       .eq("slug", payload.slug).maybeSingle();
 
+    if (errorUsuario) throw errorUsuario;
     if (!user || !isActivo(user.activo)) return res.json({ active: false, reason: "not_found" });
 
     const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
@@ -2201,7 +2204,8 @@ app.get("/verify-session", async (req, res) => {
       },
     });
   } catch (e) {
-    res.json({ active: false, reason: "invalid_token" });
+    if (["JsonWebTokenError","TokenExpiredError","NotBeforeError"].includes(e.name)) return res.json({ active: false, reason: "invalid_token" });
+    res.status(503).json({ error: "No se pudo verificar la sesión en este momento." });
   }
 });
 
@@ -3667,7 +3671,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     const requierePago = tieneMP && (metodoPagoEfectivo === "sena" || metodoPagoEfectivo === "total");
 
 
-    if (!mediosOfflinePermitidos(user) && !tieneMP) return res.status(403).json({success:false,error:"free_no_payment_method",message:"El negocio debe conectar Mercado Pago para recibir reservas en Gratis o Básico."});
+    if (!mediosOfflinePermitidos(user) && !tieneMP) return res.status(403).json({success:false,error:"free_no_payment_method",message:"El negocio debe conectar Mercado Pago para recibir reservas en Gratis."});
     if (requierePago && !agendaSinPagos) return res.status(403).json({ success: false, error: "Este turno requiere pago previo." });
 
     const hoy = new Date().toISOString().split("T")[0];
@@ -4717,7 +4721,7 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       if (negocioError) throw negocioError;
       if (!negocioActual) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
       if (update.agenda_sin_pagos && !mediosOfflinePermitidos(negocioActual)) {
-        return res.status(403).json({ success: false, error: "La agenda sin cobro está disponible en el plan Premium." });
+        return res.status(403).json({ success: false, error: "La agenda sin cobro está disponible en Básico y Premium." });
       }
     }
     if (update.metodo_pago !== undefined && !["none", "sena", "total"].includes(update.metodo_pago)) {
@@ -6039,7 +6043,7 @@ async function actualizarConfigEquipo(slug, equipoId, body) {
   if (update.agenda_sin_pagos === true) {
     const { data: negocio, error } = await supabase.from("usuarios").select("plan").eq("slug", slug).single();
     if (error) throw error;
-    if (!mediosOfflinePermitidos(negocio)) return { error: "La agenda sin cobro está disponible en el plan Premium." };
+    if (!mediosOfflinePermitidos(negocio)) return { error: "La agenda sin cobro está disponible en Básico y Premium." };
   }
   if(["metodo_pago","acepta_transferencia","acepta_efectivo","datos_bancarios"].some(key=>update[key]!==undefined)) {
     const {data:negocio,error}=await supabase.from("usuarios").select("plan,estado_suscripcion").eq("slug",slug).single();
@@ -6887,7 +6891,8 @@ app.get("/admin/rendimiento-equipo/:slug", requireAuth, async (req, res) => {
     if (equipoError) throw equipoError;
     if (!integrante) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
 
-    const { desde, hasta } = rangoPeriodoArg(periodo);
+    const { desde, hasta } = periodo === "mes" && req.query.hasta === "hoy"
+      ? rangosComparativos(fechaArgentinaISO()).mes.actual : rangoPeriodoArg(periodo);
 
     const [{ data: userConfig }, { data: servicios }] = await Promise.all([
       supabase.from("usuarios").select("duracion_turno").eq("slug", slug).maybeSingle(),
@@ -6973,7 +6978,8 @@ app.get("/admin/rendimiento-equipo-resumen/:slug", requireAuth, async (req, res)
       });
     }
 
-    const { desde, hasta } = rangoPeriodoArg(periodo);
+    const { desde, hasta } = periodo === "mes" && req.query.hasta === "hoy"
+      ? rangosComparativos(fechaArgentinaISO()).mes.actual : rangoPeriodoArg(periodo);
 
     const { data: equipo, error: equipoError } = await branchPanel.from(req, "equipo")
       .select("id, nombre, apellido, rol")
@@ -7017,8 +7023,8 @@ app.get("/admin/rendimiento-equipo-resumen/:slug", requireAuth, async (req, res)
       };
     }).sort((x, y) => y.facturacion - x.facturacion || y.turnos - x.turnos);   // sort estable: empates conservan el orden dueño -> antigüedad
 
-    const totalTurnos      = integrantes.reduce((acc, m) => acc + m.turnos, 0);
-    const totalFacturacion = integrantes.reduce((acc, m) => acc + m.facturacion, 0);
+    const totalTurnos      = integrantes.reduce((acc, m) => acc + m.turnos, sinAsignar.turnos);
+    const totalFacturacion = integrantes.reduce((acc, m) => acc + m.facturacion, sinAsignar.facturacion);
 
     res.json({
       success: true,
@@ -9574,6 +9580,20 @@ app.get("/empleado/:slug/notificaciones", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("Error cargando notificaciones del colaborador:", e.message);
     res.status(500).json({ success: false, error: "No se pudieron cargar tus notificaciones." });
+  }
+});
+
+app.put("/empleado/:slug/notificaciones/leer-todas", requireAuth, async (req, res) => {
+  try {
+    const slug = cleanSlug(req.params.slug);
+    const miembro = req.empleado;
+    if (!miembro || miembro.slug !== slug) return res.status(403).json({ success: false, error: "No autorizado." });
+    const { error } = await supabase.from("notificaciones").update({ leida: true })
+      .eq("leida", false).eq("slug", slug).contains("data", { equipo_id: miembro.id });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "No se pudo marcar como leída." });
   }
 });
 
