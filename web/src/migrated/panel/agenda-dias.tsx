@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "framer-motion"
 import * as React from "react"
 import { BackButton } from "../../components/BackButton"
 import { AgendaPanel_getSlug, AgendaPanel_getToken, AgendaPanel_formatMonto, ServiciosManager_parseDesc } from "./common"
@@ -19,8 +20,20 @@ function photo(items:Item[],id?:string,name?:string) {
     return matches[0].imagen_url || ServiciosManager_parseDesc(matches[0].descripcion || "").imagen
 }
 
-export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick,onNuevoTurno}:{
-    dias:Dia[];today:string;baseUrl:string;turnoOpen:boolean;onTurnoClick:(turno:Turno,fecha:string)=>void;onNuevoTurno:()=>void
+function DayBackdrop({index}: {index:number}) {
+    const reduced = useReducedMotion()
+    return <div aria-hidden="true" className="agenda-day-backdrop">
+        <motion.span className="agenda-day-glow" initial={{x:0,y:0}}
+            animate={reduced ? {x:0,y:0} : {x:[0,23,-12,0],y:[0,-18,10,0]}}
+            transition={{duration:18 + index % 5,repeat:Infinity,ease:"easeInOut"}} />
+        <motion.span className="agenda-day-glow" initial={{x:0,y:0}}
+            animate={reduced ? {x:0,y:0} : {x:[0,-19,16,0],y:[0,14,-21,0]}}
+            transition={{duration:24 + index % 7,repeat:Infinity,ease:"easeInOut"}} />
+    </div>
+}
+
+export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick}:{
+    dias:Dia[];today:string;baseUrl:string;turnoOpen:boolean;onTurnoClick:(turno:Turno,fecha:string)=>void
 }) {
     const [selected,setSelected] = React.useState("")
     const dialog = React.useRef<HTMLDialogElement>(null)
@@ -49,12 +62,12 @@ export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick,on
     const openDay = (fecha:string) => {setSelected(fecha);setLoadPhotos(true)}
     const selectedTurns = days.find(day => day.fecha === selected)?.turnos || []
     return <>
-        <button className="agenda-add" onClick={onNuevoTurno}>+ Agregar turno</button>
         <div className="agenda-day-grid">
             {days.length === 0 && <p className="agenda-empty-note" role="status">Aún no tienes reservas</p>}
-            {days.map(day=>{
+            {days.map((day,index)=>{
                 const next = day.fecha === today ? day.turnos.find(t=>t.hora>=time)?.id : null
-                return <article className="agenda-day" key={day.fecha}>
+                return <article className="agenda-day" data-today={day.fecha===today} key={day.fecha}>
+                    <DayBackdrop index={index} />
                     <header><h3>{day.fecha===today?"Hoy":shortDate(day.fecha)}</h3><button onClick={()=>openDay(day.fecha)} aria-label={"Ver detalles del "+shortDate(day.fecha)}>Ver detalles</button></header>
                     <ol>{day.turnos.map(t=><li key={t.id} data-state={t.id===next?"next":day.fecha===today && t.hora<time?"past":"upcoming"}>
                         <button onClick={()=>onTurnoClick(t,day.fecha)}>{t.nombre} <time>{t.hora}</time></button>

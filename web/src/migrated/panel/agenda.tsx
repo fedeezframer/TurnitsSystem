@@ -744,6 +744,9 @@ function AgendaPanel(props: any) {
     return (
         <>
             {sucursales.length>0 && <div className="negocio-editor" style={{marginBottom:14}}><label className="negocio-field" style={{maxWidth:320}}>Sucursal<select aria-label="Sucursal" value={sucursalFiltro} onChange={e=>setSucursalFiltro(e.target.value)}><option value="todas">Todas las sucursales</option><option value="principal">{principalNombre}</option>{sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}{!s.activo?' · Pausada':''}</option>)}</select></label></div>}
+            <div className="agenda-actions">
+                <button className="agenda-add" type="button" onClick={abrirNuevo}>+ Agregar turno</button>
+            </div>
             <div
                 ref={containerRef}
                 className="agenda-board" style={style}
@@ -753,7 +756,6 @@ function AgendaPanel(props: any) {
                     today={today}
                     baseUrl={baseUrl}
                     turnoOpen={!!modal}
-                    onNuevoTurno={abrirNuevo}
                     onTurnoClick={(turno: any, fecha: string) => {
                         setCancelOk(false)
                         setCancelError("")
