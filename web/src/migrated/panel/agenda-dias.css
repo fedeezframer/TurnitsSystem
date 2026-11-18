@@ -1,6 +1,6 @@
 .agenda-section .turnits-section-heading-title {font-size:clamp(30px,3.2vw,44px)!important;font-weight:730!important;color:#080808!important}
 .agenda-section .turnits-section-heading-subtitle {color:#171717!important}
-.agenda-board {display:flex;flex-direction:column;container-type:inline-size;position:relative;box-sizing:border-box;width:100%;min-height:82dvh;padding:clamp(22px,3vw,40px) 5.7%;border:1px solid #b8b8b8;border-radius:clamp(24px,3vw,45px);background:white;color:#101010}
+.agenda-board {display:flex;flex-direction:column;container-type:inline-size;position:relative;box-sizing:border-box;width:100%;min-height:70dvh;padding:clamp(22px,3vw,40px) 5.7%;border:1px solid #b8b8b8;border-radius:clamp(24px,3vw,45px);background:white;color:#101010}
 .agenda-day-grid,.agenda-reservas {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3.4%;row-gap:26px}
 .agenda-day {padding:clamp(14px,1.55cqw,22px);min-height:clamp(245px,30.5cqw,365px);box-sizing:border-box;border-radius:18px;background:radial-gradient(ellipse at 25% 65%,#b0f3a4 0%,transparent 64%),radial-gradient(ellipse at 5% 98%,#e5f3e4,transparent 64%),white}
 .agenda-day:nth-child(3n) {background:radial-gradient(ellipse at 82% 24%,#a3f19c,transparent 53%),radial-gradient(ellipse at 62% 87%,#b2f6ab,transparent 57%),white}
@@ -17,7 +17,7 @@
 .agenda-day li[data-state=past] {color:#40543d}.agenda-day li[data-state=past]:before {background:#41553d}
 .agenda-day li[data-state=next] {color:#176c21}.agenda-day li[data-state=next]:before {background:#82c783}
 .agenda-day p,.agenda-day-dialog>p {color:#5a605c}
-.agenda-add {align-self:flex-end;margin-top:auto;transform:translateY(12px);padding:8px 13px;border:1px solid #b8beb7;border-radius:8px;background:white;color:#263826;font:inherit;cursor:pointer}
+.agenda-add {align-self:flex-end;margin-bottom:16px;padding:8px 13px;border:1px solid #b8beb7;border-radius:8px;background:white;color:#263826;font:inherit;cursor:pointer}
 .agenda-day-dialog {box-sizing:border-box;width:min(86vw,1186px);max-width:none;height:82dvh;max-height:92dvh;padding:clamp(26px,4.9vw,68px);border:1px solid #bbb;border-radius:clamp(22px,3vw,45px);color:#101010;background:#fff;overflow:auto}
 .agenda-day-dialog::backdrop {background:#0005}
 .agenda-day-dialog h2 {font-size:clamp(36px,4.8vw,66px)}

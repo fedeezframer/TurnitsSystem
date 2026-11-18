@@ -49,6 +49,7 @@ export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick,on
     const openDay = (fecha:string) => {setSelected(fecha);setLoadPhotos(true)}
     const selectedTurns = days.find(day => day.fecha === selected)?.turnos || []
     return <>
+        <button className="agenda-add" onClick={onNuevoTurno}>+ Agregar turno</button>
         <div className="agenda-day-grid">
             {days.length === 0 && <p className="agenda-empty-note" role="status">Aún no tienes reservas</p>}
             {days.map(day=>{
@@ -61,7 +62,6 @@ export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick,on
                 </article>
             })}
         </div>
-        <button className="agenda-add" onClick={onNuevoTurno}>+ Agregar turno</button>
         <dialog ref={dialog} className="agenda-day-dialog" aria-labelledby="agenda-day-title" onCancel={()=>setSelected("")} onClick={e=>{if(e.target===dialog.current){const r=dialog.current.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)setSelected("")}}}>
             <BackButton floating onClick={()=>setSelected("")} aria-label="Volver a Mi Agenda"/>
             <h2 id="agenda-day-title">{selected && shortDate(selected)}</h2><p>Detalles de tus reservas</p>
