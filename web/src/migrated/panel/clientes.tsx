@@ -6,6 +6,14 @@ import { TurnitsPlanRequirement } from "./shared"
 import { ClientOfferDraft } from "./client-offer"
 import "./clientes.css"
 
+const avatarColors = ["#d5e9df", "#f3dccf", "#dce4fb", "#ebdef4", "#f3e6b9", "#d2e9ed", "#f2dce3", "#dee7c8", "#dce2e7"]
+function ClientAvatar({nombre,apellido,identity}: {nombre:string; apellido?:string; identity:string}) {
+    let hash = 0
+    for (const char of identity) hash = (Math.imul(hash,31) + char.charCodeAt(0)) >>> 0
+    const initials = [nombre,apellido].map(part=>Array.from(part?.trim() || "")[0]).join("").toLocaleUpperCase("es")
+    return <b className="client-avatar" aria-hidden="true" style={{backgroundColor:avatarColors[hash % avatarColors.length]}}>{initials}</b>
+}
+
 export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {baseUrl?:string; porPagina?:number; accentColor?:string}) {
     const [query,setQuery] = React.useState("")
     const [filter,setFilter] = React.useState("todos")
@@ -95,7 +103,7 @@ export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {base
         </div>
         <div className="clients-board">
             {results.slice(0,visibles).map(c=><article key={c.bookingId}>
-                <header><b className="client-avatar">{c.nombre.charAt(0)}</b><div><h3>{c.nombre} {c.apellido}</h3>
+                <header><ClientAvatar nombre={c.nombre} apellido={c.apellido} identity={c.telefono || c.email || [c.nombre,c.apellido].join(" ")} /><div><h3>{c.nombre} {c.apellido}</h3>
                 {esPremium && <><small>{c.email}</small><small>{c.telefono}</small></>}</div></header>
                 <dl><div><dt>Reservas</dt><dd>{c.turnos}</dd></div><div><dt>Total</dt><dd>{money.format(c.total)}</dd></div>
                 <div><dt>Última visita</dt><dd>{c.ultimaVisita || "Sin visitas"}</dd></div>
