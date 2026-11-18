@@ -2803,9 +2803,9 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const validPrice=Number.isFinite(final)&&valor>0&&final>0&&final<original
     const toggle=(item:any)=>setForm(prev=>({...prev,items:prev.items.some(i=>i.id===item.id&&i.tipo===item.tipo) ? prev.items.filter(i=>!(i.id===item.id&&i.tipo===item.tipo)) : [...prev.items,{tipo:item.tipo,id:item.id,cantidad:1}]}))
     const toggleDay = (id:number) => setForm(prev => {
-        const days = prev.dias_semana ?? PROMO_DAYS.map(day => day.id)
+        const days = prev.dias_semana ?? []
         const next = days.includes(id) ? days.filter(day => day !== id) : [...days, id]
-        return {...prev, dias_semana: next.length === PROMO_DAYS.length ? null : next}
+        return {...prev, dias_semana: next.length ? next : null}
     })
     const formRef = React.useRef<HTMLFormElement>(null)
     const originalDraft = React.useRef("")
@@ -2813,17 +2813,16 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const tipo = form.items.length === 1 && form.items[0].tipo === "servicio" && form.items[0].cantidad === 1 ? "descuento" : "combo"
     const validOffer = !!form.nombre.trim() && form.items.length > 0 && selected.every(i => i.source) && validPrice
         && (tipo === "descuento" || form.items.reduce((sum,i) => sum + i.cantidad, 0) >= 2)
-    const readyToSave = validOffer && !uploadingCover && (form.dias_semana === null || (diasHabilitados && form.dias_semana.length > 0))
+    const readyToSave = validOffer && !uploadingCover && (form.dias_semana === null || diasHabilitados)
         && originalDraft.current !== draftKey(form, assigned)
     const guardar=async(e:React.FormEvent)=>{
         e.preventDefault();setError("")
         if(uploadingCover || busy) return
         if(form.dias_semana !== null && !diasHabilitados) {setError("La programación por días todavía no está disponible. Volvé a cargar las promociones.");return}
-        if(form.dias_semana !== null && !form.dias_semana.length) {setError("Elegí al menos un día para esta promo.");return}
         if (!validOffer) {setError("Revisá los elementos y el descuento de la promoción.");return}
         setBusy(true)
         try {
-            const result=await request(editando ? `/${editando}` : "",editando ? "PUT" : "POST",{...form,tipo,valor})
+            const result=await request(editando ? `/${editando}` : "",editando ? "PUT" : "POST",{...form,tipo,valor,dias_semana:form.dias_semana?.length === PROMO_DAYS.length ? null : form.dias_semana})
             const promo=result.promocion
             setEditando(promo.id)
             setLista(prev=>[promo,...prev.filter(p=>p.id!==promo.id)])
@@ -2847,7 +2846,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     }
     const editar=(promo:any)=>{
         const people = (promo.profesionales || []).map((p:any)=>p.id)
-        const draft = {...promo,descripcion:promo.descripcion || "",imagen_url:promo.imagen_url || "",dias_semana:promo.dias_semana ?? null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))}
+        const draft = {...promo,descripcion:promo.descripcion || "",imagen_url:promo.imagen_url || "",dias_semana:promo.dias_semana?.length ? promo.dias_semana : null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))}
         originalDraft.current = draftKey(draft,people)
         setAssigned(people); setForm(draft); setEditando(promo.id); setMostrar(true); setError("")
     }
@@ -2914,15 +2913,14 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </section>)}
                 {diasHabilitados && <section className="promo-options" aria-labelledby="promo-valid-days">
                     <h3 id="promo-valid-days">Días de vigencia</h3>
-                    <small className="catalog-hint">Elegí los días en que se puede reservar la promoción. Marcá los siete para ofrecerla todos los días.</small>
+                    <small className="catalog-hint">Opcional. Si no marcás ningún día, la promoción se ofrece todos los días.</small>
                     <div className="promo-option-list">
                         {PROMO_DAYS.map(day => <button key={day.id} type="button"
-                            aria-pressed={form.dias_semana === null || form.dias_semana.includes(day.id)}
+                            aria-pressed={form.dias_semana?.includes(day.id) ?? false}
                             onClick={() => toggleDay(day.id)}>
                             {["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][day.id]}
                         </button>)}
                     </div>
-                    {form.dias_semana?.length === 0 && <small role="status">Elegí al menos un día para guardar.</small>}
                 </section>}
                 <section className="promo-options" aria-labelledby="promo-discount-mode">
                     <h3 id="promo-discount-mode">Reducción del precio</h3>
