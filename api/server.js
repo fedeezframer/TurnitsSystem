@@ -4563,6 +4563,7 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
         apellido:       t.apellido || null,
         hora:           t.hora.slice(0, 5),
         servicio:       t.servicio_nombre || null,
+        servicio_id:    t.servicio_id || t.promocion?.servicio_id || null,
         equipo_id:      t.equipo_id       || null,
         equipo_nombre:  t.equipo_nombre   || null,
         sucursal_id:    t.sucursal_id     || null,
