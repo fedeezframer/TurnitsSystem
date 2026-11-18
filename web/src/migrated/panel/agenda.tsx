@@ -203,7 +203,7 @@ function AgendaPanel(props: any) {
             if (document.visibilityState !== "hidden") fetchAgenda()
         }
         const intervalo = setInterval(refrescar, 20_000)
-        window.addEventListener("focus", refrescar)
+
         window.addEventListener("pageshow", refrescar)
         window.addEventListener("turno_actualizado", refrescar)
         document.addEventListener("visibilitychange", refrescar)
@@ -214,7 +214,7 @@ function AgendaPanel(props: any) {
         return () => {
             clearInterval(intervalo)
             clearInterval(filtrarPasados)
-            window.removeEventListener("focus", refrescar)
+
             window.removeEventListener("pageshow", refrescar)
             window.removeEventListener("turno_actualizado", refrescar)
             document.removeEventListener("visibilitychange", refrescar)
@@ -2089,23 +2089,7 @@ function AgendaPanel(props: any) {
                                                   ? "Agendar igual"
                                                   : "Agendar turno"}
                                         </button>
-                                        <button
-                                            onClick={cerrarNuevo}
-                                            style={{
-                                                padding: "10px",
-                                                borderRadius: 10,
-                                                border: "none",
-                                                cursor: "pointer",
-                                                background: "transparent",
-                                                color: "#A6A6A0",
-                                                fontSize: 13,
-                                                fontWeight: 500,
-                                                fontFamily:
-                                                    AgendaPanel_FONT_BODY,
-                                            }}
-                                        >
-                                            Cancelar
-                                        </button>
+                                        <BackButton onClick={cerrarNuevo} aria-label="Volver" />
                                     </div>
                                 </>
                             )}

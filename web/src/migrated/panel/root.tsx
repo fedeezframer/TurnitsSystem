@@ -1,3 +1,4 @@
+import { selectStoredSession } from "../../shared/session-startup"
 import * as React from "react"
 import BrandPreloader from "../../components/BrandPreloader"
 import {
@@ -29,22 +30,14 @@ function TurnitsPanel_SessionRouter(props: any) {
     const [error, setError] = React.useState("")
     React.useEffect(() => {
         let alive = true
-        const token =
-            [
-                "access_token",
-                "user_token",
-                "token",
-                "auth_token",
-                "turnits_token",
-            ]
-                .map((key) => {
-                    try {
-                        return localStorage.getItem(key)
-                    } catch {
-                        return null
-                    }
-                })
-                .find(Boolean) || ""
+        const session = selectStoredSession()
+        if (!session) { window.location.replace("/login"); return }
+        const token = session.token
+        // Legacy components read different aliases. Keep them on the selected session.
+        for (const key of ["access_token","user_token","token","auth_token","turnits_token"]) {
+            if (key === "access_token") localStorage.setItem(key,token)
+            else if (localStorage.getItem(key) && localStorage.getItem(key) !== token) localStorage.removeItem(key)
+        }
         const claims = token ? GuardaSesion_leerJwt(token) : null
         if (claims?.rol === "consumidor") {
             setPanelScope(null)
@@ -72,6 +65,22 @@ function TurnitsPanel_SessionRouter(props: any) {
         }
         return () => { alive = false }
     }, [props.baseUrl])
+    React.useEffect(() => {
+        const session = selectStoredSession()
+        if (!session?.exp) return
+        let timer: number
+        const check = () => {
+            window.clearTimeout(timer)
+            const current = selectStoredSession()
+            if (!current) { window.location.replace("/login"); return }
+            if (current.token !== session.token) { window.location.replace("/app"); return }
+            timer = window.setTimeout(check, Math.min(2_147_000_000, Math.max(1000,current.exp * 1000 - Date.now())))
+        }
+        const visible = () => { if (!document.hidden) check() }
+        check()
+        document.addEventListener("visibilitychange",visible)
+        return () => { window.clearTimeout(timer); document.removeEventListener("visibilitychange",visible) }
+    },[])
     if (error) return <div className="app-page"><section className="app-card"><p role="alert">{error}</p><a className="app-button" href="/login">Volver a iniciar sesión</a></section></div>
     if (false)
         return <TurnitsPanel_Inner {...props} />

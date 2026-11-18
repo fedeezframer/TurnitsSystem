@@ -3217,10 +3217,10 @@ function Pagos_baselineDesdeSettings(s: any) {
     const esPremiumPlan = ["basico", "premium"].includes(s?.plan)
     return {
         metodo_pago: ["none", "sena", "total"].includes(s?.metodo_pago)
-            ? esPremiumPlan && s.metodo_pago === "none"
+            ? !esPremiumPlan && s.metodo_pago === "none"
                 ? "total"
                 : s.metodo_pago
-            : esPremiumPlan
+            : !esPremiumPlan
               ? "total"
               : "none",
         porcentaje_sena: Number(s?.porcentaje_sena ?? 30),

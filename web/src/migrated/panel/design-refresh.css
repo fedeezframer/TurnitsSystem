@@ -637,3 +637,15 @@
 .svc-delete-confirm-label { display:block; padding:6px 8px 4px; color:#555; font-size:10px; white-space:nowrap; }
 .svc-row-price { font-weight:700; }
 @media (max-width:700px) { .svc-sort-button { font-size:11px; } .svc-row-price { min-width:62px; } }
+
+.svc-card.product-card { padding-block: 9px !important; }
+.promotions .svc-toolbar { display: grid; grid-template-columns: auto minmax(0,220px) auto; }
+.promotions .svc-toolbar-filters { grid-column: 1 / -1; }
+.promotions .svc-search { width: 100%; }
+.catalog-save-state { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:9px 14px; background:#f2f7f2; border:1px solid #cee0ce; border-radius:10px; font-size:13px; font-weight:600; line-height:1.4; }
+.catalog-save-state button { border:0; border-radius:7px; padding:9px 14px; color:white; background:#176b24; cursor:pointer; }
+@media(max-width:700px) {
+  .svc-toolbar, .promotions .svc-toolbar { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:6px; }
+  .svc-toolbar-filters { grid-column:1 / -1; }
+  .svc-search { min-width:0; width:100%; }
+}

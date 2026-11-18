@@ -113,18 +113,21 @@ export default function BusinessLanding() {
     const controller = new AbortController()
     setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setOffers([]); setLogoFailed(false); setServices([]); setMembers([]); setReviewItems([]); setAvailability({})
     const s = encodeURIComponent(slug)
+    getJson(`/negocio/${s}`, controller.signal).then(data => {
+      if (controller.signal.aborted) return
+      if (!data.negocio) return setState("missing")
+      if (data.suspendido) return setState("paused")
+      setNegocio(data.negocio)
+      setState("ready")
+    }).catch(() => { if (!controller.signal.aborted) setState("missing") })
     Promise.allSettled([
-      getJson(`/negocio/${s}`, controller.signal),
       getJson(`/perfil/${s}`, controller.signal),
       getJson(`/perfil/${s}/resenas`, controller.signal),
       getJson(`/promociones/${s}`, controller.signal),
       getJson(`/servicios/${s}`, controller.signal),
       getJson(`/equipo/${s}`, controller.signal),
-    ]).then(async ([biz, profile, rev, promo, srv, team]) => {
+    ]).then(async ([profile, rev, promo, srv, team]) => {
       if (controller.signal.aborted) return
-      if (biz.status !== "fulfilled" || !biz.value.negocio) return setState("missing")
-      if (biz.value.suspendido) return setState("paused")
-      setNegocio(biz.value.negocio)
       if (profile.status === "fulfilled") setPerfil(profile.value.perfil)
       if (rev.status === "fulfilled") { setReviews({ promedio: rev.value.promedio || 0, cantidad: rev.value.cantidad || 0 }); setReviewItems(rev.value.resenas || []) }
       if (promo.status === "fulfilled") setPromos(promo.value.promociones || [])
@@ -140,7 +143,6 @@ export default function BusinessLanding() {
           a.nombre.localeCompare(b.nombre, "es"),
         ))
       }
-      setState("ready")
     })
     return () => controller.abort()
   }, [slug])

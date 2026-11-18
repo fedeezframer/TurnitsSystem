@@ -7,7 +7,7 @@ export function setupProgress(settings: any, services: any[], now = Date.now()) 
     day.jornada.every((time: unknown) => typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)) &&
     day.jornada.length === 2 && day.jornada[0] < day.jornada[1],
   );
-  const premium = settings.plan === "premium";
+  const premium = ["basico", "premium"].includes(settings.plan);
   const payment = settings.mp_status === "Conectado" ||
     (premium && (settings.agenda_sin_pagos === true || settings.acepta_efectivo === true ||
       (settings.acepta_transferencia === true && Boolean(settings.datos_bancarios?.cbu || settings.datos_bancarios?.alias))));

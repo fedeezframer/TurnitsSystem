@@ -127,7 +127,7 @@ const output = process.env.SETUP_SCREENSHOTS;
     await page.locator("#turnits-startup-preloader").waitFor({ state: "hidden" });
     await page.locator(".setup-guide").waitFor({ state: "detached" });
     await page.getByRole("button", { name: "Copiar link de tu agenda", exact: true }).first().click();
-    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "https://turnits.com/agenda/demo");
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "https://turnits.com/demo");
     if (output) await page.screenshot({ path: path.join(output, "Turnits-inicio-listo.png") });
     failed = true;
     await page.reload();

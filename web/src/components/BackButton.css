@@ -65,8 +65,8 @@ button.turnits-back-button.is-floating {
 
 @media (width < 860px) {
   button.turnits-back-button {
-    --button-size: 18px;
-    --icon-size: 9px;
+    --button-size: 22px;
+    --icon-size: 11px;
   }
 }
 

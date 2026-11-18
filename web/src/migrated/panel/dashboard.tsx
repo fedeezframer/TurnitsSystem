@@ -2535,7 +2535,7 @@ function TurnitsDashboard_Fetch({
         window.addEventListener("turno_cancelado", refresh)
         window.addEventListener("turno_actualizado", refresh)
         window.addEventListener("pageshow", refresh)
-        window.addEventListener("focus", refresh)
+
         document.addEventListener("visibilitychange", refresh)
         return () => {
             cancelled = true
@@ -2544,7 +2544,7 @@ function TurnitsDashboard_Fetch({
             window.removeEventListener("turno_cancelado", refresh)
             window.removeEventListener("turno_actualizado", refresh)
             window.removeEventListener("pageshow", refresh)
-            window.removeEventListener("focus", refresh)
+
             document.removeEventListener("visibilitychange", refresh)
         }
     }, [baseUrl])

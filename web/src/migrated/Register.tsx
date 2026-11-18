@@ -42,6 +42,7 @@ function detailsError(fields: Fields, type: AccountType, phone: string) {
   if (!/^[0-9]{7,15}$/.test(phone))
     return "Elegí el país e ingresá tu teléfono con código de área.";
   if (!validNewPassword(fields.password)) return PASSWORD_ERROR;
+  if (type === "negocio" && ['admin', 'agenda', 'agenda-test', 'alert', 'api', 'app', 'assets', 'browse', 'cambiar-contrasena', 'cambiar-contraseña', 'consultas', 'error', 'internal', 'login', 'login-test', 'panel', 'panel-test', 'pendiente', 'perfil', 'planes', 'politica-de-privacidad', 'privacidad', 'public', 'register', 'register-test', 'registro', 'renovar', 'reprogramar', 'store-login', 'success', 'sucess', 'terminos', 'terminos-y-condiciones', 'test'].includes(fields.usuario)) return "Ese usuario está reservado. Elegí otro para tu enlace.";
   if (
     type === "negocio" &&
     (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(fields.usuario) ||
@@ -415,7 +416,7 @@ export default function Register({
         </button>}
         </div>
         {key === "usuario" && (
-          <small id="registration-link-help">Tu enlace: turnits.com/agenda/{fields.usuario || "tu-negocio"}</small>
+          <small id="registration-link-help">Tu enlace: turnits.com/{fields.usuario || "tu-negocio"}</small>
         )}
         {key === "password" && <small id="registration-password-help">Usá al menos {PASSWORD_MIN_LENGTH} caracteres.</small>}
       </div>

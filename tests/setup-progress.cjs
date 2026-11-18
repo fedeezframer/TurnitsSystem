@@ -19,8 +19,8 @@ for (const jornada of [[], ["09:00"], ["18:00", "09:00"], ["bad", "18:00"], ["09
 }
 assert.equal(setupProgress({ ...settings, horarios: { lunes: { activo: false, jornada: ["09:00", "18:00"] } } }, services).ready, false);
 const offline = { ...settings, mp_status: "Desconectado", acepta_efectivo: true };
-for (const plan of ["gratis", "basico"]) assert.equal(setupProgress({ ...offline, plan }, services).ready, false);
-assert.equal(setupProgress({ ...offline, plan: "premium" }, services).ready, true);
+assert.equal(setupProgress({ ...offline, plan: "gratis" }, services).ready, false);
+for (const plan of ["basico", "premium"]) assert.equal(setupProgress({ ...offline, plan }, services).ready, true);
 assert.equal(setupProgress({ ...offline, acepta_efectivo: false, plan: "premium", agenda_sin_pagos: true }, services).ready, true);
 const transfer = { ...offline, acepta_efectivo: false, plan: "premium", acepta_transferencia: true };
 assert.equal(setupProgress(transfer, services).ready, false);

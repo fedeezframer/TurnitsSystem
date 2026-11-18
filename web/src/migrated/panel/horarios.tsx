@@ -1564,22 +1564,7 @@ function ExcepcionesConfig_DayPanel({
                         {slotError}
                     </span>
                 )}
-                <button
-                    onClick={onClose}
-                    style={{
-                        padding: "7px 14px",
-                        borderRadius: 8,
-                        border: "1px solid #e2e8f0",
-                        background: "none",
-                        fontSize: 13,
-                        cursor: "pointer",
-                        color: "#64748b",
-                        fontFamily:
-                            "'Inter Display', -apple-system, sans-serif",
-                    }}
-                >
-                    Cancelar
-                </button>
+
                 <button
                     onClick={handleApply}
                     style={{

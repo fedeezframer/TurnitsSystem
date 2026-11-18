@@ -1017,18 +1017,7 @@ function FinanzasPanel({
                                     marginTop: 4,
                                 }}
                             >
-                                <button
-                                    onClick={() => setModal(false)}
-                                    style={{
-                                        background: "white",
-                                        border: "1px solid #dbe2ea",
-                                        borderRadius: 10,
-                                        padding: "10px 14px",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Cancelar
-                                </button>
+
                                 <button
                                     onClick={guardar}
                                     disabled={guardando}

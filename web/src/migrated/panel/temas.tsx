@@ -168,7 +168,6 @@ function ThemeEditor({
         {!enabled && <TurnitsPlanRequirement />}
       </div>
       {!quoteMode && <div className="te-photo-note">
-        <span>La foto del negocio se cambia desde Perfil.</span>
         {onOpenProfile && (
           <button type="button" onClick={onOpenProfile}>
             Editar foto

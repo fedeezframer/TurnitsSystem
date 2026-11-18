@@ -598,7 +598,7 @@ function PlanEstado(props: any) {
     const enAlerta = vencida || porVencer
 
     // Contador de días (ej: "26d"). Vencido → "Venció".
-    const etiquetaDias = vencida ? "Venció" : dias !== null ? `${dias}d` : ""
+    const etiquetaDias = vencida ? "Venció" : dias !== null ? `${dias === 1 ? "Queda" : "Quedan"} ${dias}d` : ""
     const precio = Number(data.precio_renovacion) || 0
     const precioTxt = precio > 0 ? ` · $${precio.toLocaleString("es-AR")}` : ""
 
@@ -1104,6 +1104,7 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
         return { token, slug }
     }, [tokenStorageKey])
 
+    const panelOpen = useRef(false)
     const fetchNotifs = useCallback(async () => {
         const auth = getAuth()
         if (!auth) {
@@ -1121,6 +1122,16 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
             const data = await res.json()
             if (data.success) {
                 const incoming: NotificacionesPanel_Notificacion[] = data.notificaciones || []
+                if (!panelOpen.current) return
+                if (data.no_leidas > 0) {
+                    const path = employeeMode ? `/empleado/${encodeURIComponent(auth.slug)}/notificaciones/leer-todas` : `/notificaciones/${encodeURIComponent(auth.slug)}/leer-todas`
+                    const read = await fetch(apiBaseUrl + path, {method:"PUT", headers:{Authorization:`Bearer ${auth.token}`}})
+                    if (read.ok && (await read.json()).success) {
+                        incoming.forEach(n => readConfirmed.current.add(n.id))
+                        data.no_leidas = 0
+                        window.dispatchEvent(new CustomEvent("turnits-notifications-updated",{detail:{slug:auth.slug,employeeMode}}))
+                    }
+                }
                 const confirmedInResponse = incoming.filter(n => !n.leida && readConfirmed.current.has(n.id)).length
                 setNotifs(incoming.map(n => readConfirmed.current.has(n.id) ? {...n,leida:true} : n))
                 setNoLeidas(Math.max(0, Number(data.no_leidas || 0) - confirmedInResponse))
@@ -1138,12 +1149,13 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
     }, [apiBaseUrl, getAuth, employeeMode])
 
     useEffect(() => {
+        panelOpen.current = true
         fetchNotifs()
         const interval = setInterval(
             fetchNotifs,
             Math.max(10, pollingSeconds) * 1000
         )
-        return () => clearInterval(interval)
+        return () => { panelOpen.current = false; clearInterval(interval) }
     }, [fetchNotifs, pollingSeconds])
 
     const marcarLeida = useCallback(async (id: string): Promise<boolean> => {
@@ -1178,15 +1190,6 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
         } finally {readInFlight.current.delete(id)}
     }, [apiBaseUrl, employeeMode, getAuth])
 
-    useEffect(() => {
-        if (!listRef.current || cargando || error) return
-        const unread = new Map<string, HTMLDivElement>()
-        notifs.forEach(n => {
-            const element = itemRefs.current.get(n.id)
-            if (!n.leida && element) unread.set(n.id,element)
-        })
-        return NotificacionesPanel_observarVisibles(listRef.current,unread,marcarLeida)
-    }, [notifs, cargando, error, marcarLeida])
 
     // A qué sección navegar al tocar una notificación: prioriza lo que
     // mande el backend en `data.seccion` (si vino) y si no, el default
@@ -2378,7 +2381,12 @@ function RendimientoEquipo(props: any) {
     const isCanvas = false
 
     React.useEffect(() => {
-        const refrescar = () => setRefreshKey((actual) => actual + 1)
+        let lastRefresh = Date.now()
+        const refrescar = () => {
+            if (Date.now() - lastRefresh < 60000 || document.hidden) return
+            lastRefresh = Date.now()
+            setRefreshKey(actual => actual + 1)
+        }
         const alVolverVisible = () => {
             if (document.visibilityState === "visible") refrescar()
         }
@@ -2480,7 +2488,7 @@ function RendimientoEquipo(props: any) {
         setErrorResumen("")
 
         fetch(
-            `${api}/admin/rendimiento-equipo-resumen/${slug}?periodo=${periodo}`,
+            `${api}/admin/rendimiento-equipo-resumen/${slug}?periodo=${periodo}&hasta=hoy`,
             { headers: { Authorization: `Bearer ${token}` }, cache: "no-cache" }
         )
             .then((res) => res.json())
@@ -2531,7 +2539,7 @@ function RendimientoEquipo(props: any) {
         setCargandoDatos(true)
 
         fetch(
-            `${api}/admin/rendimiento-equipo/${slug}?equipo_id=${equipoId}&periodo=${periodo}`,
+            `${api}/admin/rendimiento-equipo/${slug}?equipo_id=${equipoId}&periodo=${periodo}&hasta=hoy`,
             { headers: { Authorization: `Bearer ${token}` }, cache: "no-cache" }
         )
             .then((res) => res.json())
@@ -2564,7 +2572,9 @@ function RendimientoEquipo(props: any) {
     const resumenParaMostrar = isCanvas
         ? RendimientoEquipo_MOCK.resumen
         : resumen
-    const filasEquipo = resumenParaMostrar?.integrantes || []
+    const filasEquipo = [...(resumenParaMostrar?.integrantes || [])]
+    const sinAsignar = resumenParaMostrar?.sin_asignar
+    if (sinAsignar?.turnos) filasEquipo.push({ ...sinAsignar, id: "sin-asignar", nombre: "Sin profesional activo", rol: "Sin asignar o dado de baja", ticket_promedio: Math.round(sinAsignar.facturacion / sinAsignar.turnos) })
     const integranteResumen = filasEquipo.find((m: any) => m.id === equipoId)
     const minutosTrabajados = Number(
         dataParaMostrar?.minutosTrabajados ??

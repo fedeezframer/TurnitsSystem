@@ -1,3 +1,4 @@
+import { useCatalogTransition } from "./catalog-motion"
 import { BackButton } from "../../components/BackButton"
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { SectionLoadingBoundary } from "../../components/LoadingRunner"
@@ -35,6 +36,7 @@ const OnboardingNube = React.lazy(() => import("./onboarding").then(module => ({
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
 function TurnitsPanel_Inner(props: any) {
+    const catalogTransition = useCatalogTransition()
     const discardRevision = useGlobalDiscardRevision()
     const branchAdmin = useBranchAdmin()
     const {
@@ -533,7 +535,7 @@ function TurnitsPanel_Inner(props: any) {
                                     position: "relative",
                                     overflow: "hidden",
                                     width: "100%",
-                                    height: "100dvh",
+                                    height: "100dvh", display: "flex", flexDirection: "column",
                                     maxHeight: "100dvh",
                                     overflowY: "auto",
                                     overscrollBehavior: "contain",
@@ -572,7 +574,7 @@ function TurnitsPanel_Inner(props: any) {
                             
                             <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr",gap:2}}>{renderNavItems()}</div>
 
-                            <div style={{ marginTop: 16 }}>
+                            <div style={{ marginTop: "auto", paddingTop: 16 }}>
                                 <MenuFooter
                                     mobile={isMobile}
                         checkoutLogo={logoImage}
@@ -677,6 +679,7 @@ function TurnitsPanel_Inner(props: any) {
                         flexDirection: "column",
                     }}
                 >
+                    <div id="catalog-save-slot" />
                     <TurnitsGlobalSaveBar
                         seccionActiva={seccionActiva}
                         accentColor={accentColor}
@@ -721,7 +724,8 @@ function TurnitsPanel_Inner(props: any) {
                 )}
 
                 {seccionActiva === "servicios" && (
-                    <div
+                    <AnimatePresence initial={false} mode="wait">
+                    <motion.div key={serviciosVistaInicial} {...catalogTransition}
                         style={{
                             display: "flex",
                             flexDirection: "column",
@@ -745,7 +749,8 @@ function TurnitsPanel_Inner(props: any) {
                             iconoEliminar: iconos.eliminar,
                         })}
                         </SectionLoadingBoundary>
-                    </div>
+                    </motion.div>
+                    </AnimatePresence>
                 )}
 
                 {seccionActiva === "clientes" && (

@@ -1,3 +1,4 @@
+import { useCatalogTransition } from "./catalog-motion"
 import "./promociones.css"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
@@ -320,20 +321,7 @@ function Turnits_ImageAdjustDialog({
                         gap: 8,
                     }}
                 >
-                    <button
-                        type="button"
-                        onClick={onCancel}
-                        style={{
-                            border: "1px solid #e2e8f0",
-                            background: "white",
-                            borderRadius: 10,
-                            padding: "10px 14px",
-                            fontWeight: 650,
-                            color: "#475569",
-                        }}
-                    >
-                        Cancelar
-                    </button>
+                    <BackButton onClick={onCancel} aria-label="Volver" />
                     <button
                         type="button"
                         onClick={apply}
@@ -1145,10 +1133,10 @@ function ServiciosManager_ServicioForm({
 }: ServiciosManager_FormProps) {
     const quoteMode = useQuoteMode(apiUrl)
     const branch = useBranchAdmin()
+    const [uploadingImage,setUploadingImage] = React.useState(false)
     const globalEdit = !!(modoEdicion && servicioId && !employeeVariant && !employeeMode && !branch)
     const [form, setForm] = React.useState<ServiciosManager_FormData>(() => globalEdit ? TurnitsGlobalSaveManager_get()?.getPending("servicios")?.[servicioId!] || initial : initial)
     const [precioError, setPrecioError] = React.useState("")
-    const [unidadDuracion, setUnidadDuracion] = React.useState<"min" | "h">("min")
     const [profesionales, setProfesionales] = React.useState<CatalogoProfesional[]>([])
     const [avisoProfesional, setAvisoProfesional] = React.useState("")
     const avisoTimer = React.useRef<number | undefined>(undefined)
@@ -1224,11 +1212,14 @@ function ServiciosManager_ServicioForm({
         setPrecioError("")
         onSubmit(quoteMode ? { ...form, precio: "0" } : form)
     }
-    const durationMinutes = Number(form.duracion) || 30
-    const durationValue = unidadDuracion === "h"
-        ? String(Number((durationMinutes / 60).toFixed(2)))
-        : String(durationMinutes)
 
+    const readyToSave = !uploadingImage && !!form.nombre.trim() && (quoteMode || Number(form.precio) >= ServiciosManager_PRECIO_MINIMO)
+        && Number(form.duracion) >= 1 && Number(form.capacidad) >= 1
+    const saveSlot = document.getElementById("catalog-save-slot")
+    const saveControl = <div className="catalog-save-state" role="region" aria-label="Guardar servicio">
+        <span>{modoEdicion ? "Cambios en el servicio" : "Servicio listo para guardar"}</span>
+        <button type="button" disabled={guardando} onClick={handleSubmit}>{guardando ? "Guardando…" : "Guardar servicio"}</button>
+    </div>
     return (
         <motion.div
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -1247,7 +1238,7 @@ function ServiciosManager_ServicioForm({
                 <input
                     id="servicio-nombre" className="svc-input" value={form.nombre}
                     onChange={(event) => set("nombre")(event.target.value)}
-                    placeholder="Nombre del servicio" maxLength={80}
+                    placeholder="Ej. Corte de pelo" maxLength={80}
                     style={{ ...inputStyle, fontWeight: 700 }}
                 />
             </div>
@@ -1258,7 +1249,7 @@ function ServiciosManager_ServicioForm({
             }}>
                 <div style={{ ...fieldStyle, display: "flex", flexDirection: "column" }}>
                     <label style={labelStyle}>Imagen del Servicio</label>
-                    <ServiciosManager_ImageUploader
+                    <ServiciosManager_ImageUploader onUploadingChange={setUploadingImage}
                         value={form.imagen} onChange={set("imagen")} accentColor={accentColor}
                         apiUrl={apiUrl} iconoFormUrl={iconoFormUrl}
                         size={isMobile ? 300 : 450} uploadPath={uploadPath}
@@ -1271,9 +1262,9 @@ function ServiciosManager_ServicioForm({
                         <textarea
                             id="servicio-descripcion" className="svc-input" value={form.descripcion}
                             onChange={(event) => set("descripcion")(event.target.value)}
-                            placeholder="Descripción del servicio"
+                            placeholder="Contá qué incluye el servicio."
                             style={{
-                                ...inputStyle, height: isMobile ? 110 : 112, minHeight: 90,
+                                ...inputStyle, height: isMobile ? 110 : 112,
                                 borderRadius: 18, padding: isMobile ? 11 : 15, resize: "vertical",
                                 fontSize: isMobile ? 14 : 16, lineHeight: 1.4,
                             }}
@@ -1288,44 +1279,25 @@ function ServiciosManager_ServicioForm({
                                 <input
                                     id="servicio-precio" className="svc-input" type="number" min={quoteMode ? 0 : ServiciosManager_PRECIO_MINIMO}
                                     value={form.precio} onChange={(event) => { set("precio")(event.target.value); if (Number(event.target.value) >= ServiciosManager_PRECIO_MINIMO) setPrecioError("") }}
-                                    placeholder="0" style={{ ...inputStyle, paddingLeft: 36 }}
+                                    placeholder={quoteMode ? "0" : String(ServiciosManager_PRECIO_MINIMO)} style={{ ...inputStyle, paddingLeft: 36 }}
                                 />
                             </div>
+                            {!quoteMode && <small>Desde ${ServiciosManager_PRECIO_MINIMO.toLocaleString("es-AR")} por turno.</small>}
                             {precioError && <span style={{ display: "block", marginTop: 5, color: "#b42318", fontSize: 12 }}>{precioError}</span>}
                         </div>
                         <div style={fieldStyle}>
-                            <label style={labelStyle} htmlFor="servicio-duracion">Duración</label>
-                            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 82px", gap: 8 }}>
-                                <input
-                                    id="servicio-duracion" className="svc-input" type="number"
-                                    min={unidadDuracion === "h" ? 0.25 : 1}
-                                    step={unidadDuracion === "h" ? 0.25 : 1}
-                                    value={durationValue}
-                                    onChange={(event) => {
-                                        const value = Number(event.target.value)
-                                        set("duracion")(String(unidadDuracion === "h" ? Math.round(value * 60) : Math.round(value)))
-                                    }}
-                                    style={inputStyle}
-                                />
-                                <select
-                                    aria-label="Unidad de duración" value={unidadDuracion}
-                                    onChange={(event) => setUnidadDuracion(event.target.value as "min" | "h")}
-                                    style={{ ...inputStyle, padding: "0 12px", textAlign: "center", cursor: "pointer" }}
-                                >
-                                    <option value="min">min</option>
-                                    <option value="h">h</option>
-                                </select>
-                            </div>
+                            <label style={labelStyle} htmlFor="servicio-duracion">Duración (minutos)</label>
+                            <input id="servicio-duracion" className="svc-input" type="number" min={1} step={1} value={form.duracion} onChange={e => set("duracion")(e.target.value)} style={inputStyle} />
                         </div>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 14 }}>
                         <div style={fieldStyle}>
-                            <label style={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} htmlFor="servicio-capacidad">Capacidad</label>
+                            <label style={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} htmlFor="servicio-capacidad">Personas por turno</label>
                             <input id="servicio-capacidad" className="svc-input" type="number" min={1} value={form.capacidad} onChange={(event) => set("capacidad")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 38 : 40, fontSize: isMobile ? 14 : 15, paddingLeft: 14 }} />
                         </div>
                         <div style={fieldStyle}>
-                            <label style={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} htmlFor="servicio-orden">Orden</label>
+                            <label style={{ ...labelStyle, fontSize: isMobile ? 13 : 14, marginBottom: 5 }} htmlFor="servicio-orden">Orden en el listado</label>
                             <input id="servicio-orden" className="svc-input" type="number" min={0} value={form.orden} onChange={(event) => set("orden")(event.target.value)} style={{ ...inputStyle, height: isMobile ? 38 : 40, fontSize: isMobile ? 14 : 15, paddingLeft: 14 }} />
                         </div>
                     </div>
@@ -1364,11 +1336,7 @@ function ServiciosManager_ServicioForm({
 
             {error && <div role="alert" style={{ marginTop: 22, padding: "10px 14px", borderRadius: 10, background: "#fff5f5", border: "1px solid #fee2e2", color: "#b42318", fontSize: 13 }}>{error}</div>}
 
-            {!globalEdit && <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexDirection: isMobile ? "column-reverse" : "row", paddingTop: 22 }}>
-                <button type="button" onClick={onCancel} style={{ height: 44, padding: "0 18px", borderRadius: 10, border: "1px solid #aeb3af", background: "white", color: "#344054", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
-                <button type="button" onClick={handleSubmit} disabled={guardando || !form.nombre.trim()} style={{ height: 44, padding: "0 20px", borderRadius: 10, border: 0, background: guardando || !form.nombre.trim() ? "#cbd5e1" : accentColor, color: "white", fontSize: 14, fontWeight: 700, cursor: guardando || !form.nombre.trim() ? "not-allowed" : "pointer" }}>{guardando ? "Guardando…" : modoEdicion ? "Guardar cambios" : "Crear servicio"}</button>
-            </div>}
-
+            {!globalEdit && readyToSave && (saveSlot ? createPortal(saveControl, saveSlot) : saveControl)}
             {typeof document !== "undefined" && createPortal(
                 <AnimatePresence>
                     {avisoProfesional && <div key="aviso-profesional" style={{ position: "fixed", inset: 0, zIndex: 10001, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "calc(76px + env(safe-area-inset-top, 0px)) 16px 16px", pointerEvents: "none" }}>
@@ -1523,7 +1491,7 @@ function ServiciosManager_ExtraForm({
                         <ServiciosManager_AutoTextarea
                             value={form.descripcion}
                             onChange={set("descripcion")}
-                            placeholder="Describí brevemente el producto…"
+                            placeholder="Ej. Cera mate de 100 g, fijación media."
                         />
                     </ServiciosManager_Field>
                 </div>
@@ -1615,23 +1583,7 @@ function ServiciosManager_ExtraForm({
                         paddingTop: 2,
                     }}
                 >
-                    <button
-                        onClick={onCancel}
-                        style={{
-                            padding: isMobile ? "11px 16px" : "9px 16px",
-                            borderRadius: 10,
-                            border: "1px solid #e2e8f0",
-                            background: "none",
-                            fontSize: 13,
-                            cursor: "pointer",
-                            color: "#64748b",
-                            fontFamily:
-                                "'Inter Display', -apple-system, sans-serif",
-                            width: isMobile ? "100%" : "auto",
-                        }}
-                    >
-                        Cancelar
-                    </button>
+
                     <motion.button
                         className="svc-save-btn"
                         whileTap={{ scale: 0.97 }}
@@ -1881,7 +1833,7 @@ function ServiciosManager_ExtraCard({
     const [imgError, setImgError] = React.useState(false)
     const moreButtonRef = React.useRef<HTMLButtonElement>(null)
     return (
-        <motion.div layout initial={{opacity:0,y:6}} animate={{opacity:!employeeMode && extra.owner_equipo_id ? (extra.activo ? .8 : .5) : (extra.activo ? 1 : .55),y:0}} exit={{opacity:0,scale:.96}} transition={{duration:.18}} className="svc-card" style={{display:"flex",alignItems:"center",flexWrap:"nowrap",gap:10,padding:"7px 9px",borderRadius:11,background:"#fff",border:"1px solid #bfc3bf",opacity:extra.activo?1:.55,transition:"background .15s, opacity .2s",...(!employeeMode?ServiciosManager_EmployeeCardStyle(extra):{})}}>
+        <motion.div layout initial={{opacity:0,y:6}} animate={{opacity:!employeeMode && extra.owner_equipo_id ? (extra.activo ? .8 : .5) : (extra.activo ? 1 : .55),y:0}} exit={{opacity:0,scale:.96}} transition={{duration:.18}} className="svc-card product-card" style={{display:"flex",alignItems:"center",flexWrap:"nowrap",gap:10,padding:"9px 9px",borderRadius:11,background:"#fff",border:"1px solid #bfc3bf",opacity:extra.activo?1:.55,transition:"background .15s, opacity .2s",...(!employeeMode?ServiciosManager_EmployeeCardStyle(extra):{})}}>
             <div style={{width:catalogThumbSize(isMobile),height:catalogThumbSize(isMobile),borderRadius:5,flexShrink:0,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 {extra.imagen_url && !imgError ? <img src={extra.imagen_url} alt={extra.nombre} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={()=>setImgError(true)}/> : <ServiciosManager_PlaceholderIcon src={iconoPlaceholderUrl} size={22}/>}
             </div>
@@ -1935,15 +1887,13 @@ function ServiciosManager(props: any) {
     const [serviciosMasPedidos, setServiciosMasPedidos] = React.useState<any[]>([])
     const [filtroServicios, setFiltroServicios] = React.useState<"todos" | "pausados">("todos")
     const [ordenServicios, setOrdenServicios] = React.useState<"pedidos" | "az" | "za" | "precio-desc" | "precio-asc">("pedidos")
-    const [menuOrdenServicios, setMenuOrdenServicios] = React.useState(false)
     const [menuServicioAbierto, setMenuServicioAbierto] = React.useState<string | null>(null)
     const [busquedaServicio, setBusquedaServicio] = React.useState("")
     const [filtroProductos, setFiltroProductos] = React.useState<"todos" | "pausados">("todos")
     const [ordenProductos, setOrdenProductos] = React.useState<"az" | "za" | "precio-desc" | "precio-asc">("az")
-    const [menuOrdenProductos, setMenuOrdenProductos] = React.useState(false)
     const [busquedaProducto, setBusquedaProducto] = React.useState("")
     React.useEffect(() => {
-        if (ordenServicios !== "pedidos") return
+        if (vista !== "servicios" || ordenServicios !== "pedidos") return
         let cancelled = false
         let retryTimer: ReturnType<typeof setTimeout> | undefined
         let pollTimer: ReturnType<typeof setInterval> | undefined
@@ -1967,19 +1917,17 @@ function ServiciosManager(props: any) {
         }
         const refresh = () => { if (document.visibilityState !== "hidden") loadPopularity() }
         loadPopularity()
-        pollTimer = setInterval(loadPopularity, 30000)
+        pollTimer = setInterval(refresh, 60000)
         window.addEventListener("turno_actualizado", refresh)
         window.addEventListener("turno_cancelado", refresh)
-        window.addEventListener("focus", refresh)
         return () => {
             cancelled = true
             if (retryTimer) clearTimeout(retryTimer)
             if (pollTimer) clearInterval(pollTimer)
             window.removeEventListener("turno_actualizado", refresh)
             window.removeEventListener("turno_cancelado", refresh)
-            window.removeEventListener("focus", refresh)
         }
-    }, [api, ordenServicios])
+    }, [api, ordenServicios, vista])
     // ── Estado: Servicios ──
     const [loading, setLoading] = React.useState(true)
     const [servicios, setServicios] = React.useState<
@@ -2491,7 +2439,7 @@ function ServiciosManager(props: any) {
         }
     }
 
-    if (loading || loadingExtras) return <ServiciosManager_SkeletonLista />
+    if ((vista !== "extras" && loading) || (vista !== "servicios" && loadingExtras)) return <InlineLoading label={vista === "extras" ? "Cargando productos…" : vista === "servicios" ? "Cargando servicios…" : "Cargando promociones…"} />
 
     const initialEditar: ServiciosManager_FormData | undefined = editando
         ? {
@@ -2543,7 +2491,7 @@ function ServiciosManager(props: any) {
             return Number(a.precio) - Number(b.precio) || a.orden - b.orden
         })
 
-    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, extrasVisibles, puedePromociones, filtroServicios, setFiltroServicios, ordenServicios, setOrdenServicios, menuOrdenServicios, setMenuOrdenServicios, busquedaServicio, setBusquedaServicio, filtroProductos, setFiltroProductos, ordenProductos, setOrdenProductos, menuOrdenProductos, setMenuOrdenProductos, busquedaProducto, setBusquedaProducto, servicios, error, formError, guardando, mostrarForm, setMostrarForm, editando, setEditando, setFormError, menuServicioAbierto, setMenuServicioAbierto, extras, errorExtras, formErrorExtra, setFormErrorExtra, guardandoExtra, mostrarFormExtra, setMostrarFormExtra, editandoExtra, setEditandoExtra }
+    const sectionProps = { branch, api, isMobile, accentColor, iconoPlaceholderUrl, iconoFormUrl, iconoVacioUrl, iconoCheck, iconoEditar, iconoEliminar, employeeMode, employeeCanCreate, handleCrear, handleEditar, handleToggle, handleDelete, handleCrearExtra, handleEditarExtra, handleToggleExtra, handleDeleteExtra, initialEditar, initialEditarExtra, extrasActivos, extrasInactivos, serviciosVisibles, extrasVisibles, puedePromociones, filtroServicios, setFiltroServicios, ordenServicios, setOrdenServicios, busquedaServicio, setBusquedaServicio, filtroProductos, setFiltroProductos, ordenProductos, setOrdenProductos, busquedaProducto, setBusquedaProducto, servicios, error, formError, guardando, mostrarForm, setMostrarForm, editando, setEditando, setFormError, menuServicioAbierto, setMenuServicioAbierto, extras, errorExtras, formErrorExtra, setFormErrorExtra, guardandoExtra, mostrarFormExtra, setMostrarFormExtra, editandoExtra, setEditandoExtra }
 
     return (
         <div
@@ -2567,6 +2515,7 @@ function ServiciosManager(props: any) {
 
 
 function ServiciosManager_ServiciosSection(props: any) {
+    const transition = useCatalogTransition()
     const opcionesOrden = [
         {id:"pedidos",label:"Más Pedidos"},
         {id:"az",label:"A-Z"},
@@ -2574,8 +2523,7 @@ function ServiciosManager_ServiciosSection(props: any) {
         {id:"precio-desc",label:"Mayor precio"},
         {id:"precio-asc",label:"Menor precio"},
     ] as const
-    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,ordenServicios,setOrdenServicios,menuOrdenServicios,setMenuOrdenServicios,busquedaServicio,setBusquedaServicio,menuServicioAbierto,setMenuServicioAbierto}=props
-    const etiquetaOrden = opcionesOrden.find(option => option.id === ordenServicios)?.label || "Más Pedidos"
+    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrear,handleEditar,handleToggle,handleDelete,initialEditar,serviciosVisibles,error,formError,guardando,mostrarForm,setMostrarForm,editando,setEditando,setFormError,filtroServicios,setFiltroServicios,ordenServicios,setOrdenServicios,busquedaServicio,setBusquedaServicio,menuServicioAbierto,setMenuServicioAbierto}=props
     const mostrarFormulario = mostrarForm || !!editando
     const volverALista = () => {
         setMostrarForm(false)
@@ -2597,10 +2545,7 @@ function ServiciosManager_ServiciosSection(props: any) {
             {mostrarFormulario ? (
                 <motion.div
                     key={editando ? `service-edit-${editando.id}` : "service-create"}
-                    initial={{ opacity: 0, x: 18 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -14 }}
-                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    {...transition}
                     style={{ width: "100%" }}
                 >
                     <div style={{ display: "flex", justifyContent: "flex-end", margin: "0 0 12px" }}>
@@ -2627,42 +2572,10 @@ function ServiciosManager_ServiciosSection(props: any) {
             ) : (
                 <motion.div
                     key="service-list"
-                    initial={{ opacity: 0, x: -14 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 14 }}
-                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    {...transition}
                     style={{ width: "100%" }}
                 >
-                    <div className="svc-toolbar">
-                        <div className="svc-toolbar-filters" role="group" aria-label="Filtrar servicios">
-                            {(["todos", "pausados"] as const).map(filter => (
-                                <button key={filter} type="button" className={`svc-filter-button${filtroServicios === filter ? " is-active" : ""}`} aria-pressed={filtroServicios === filter} onClick={() => setFiltroServicios(filter)}>
-                                    {filter === "todos" ? "Todos" : "Pausados"}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="svc-sort-control">
-                            <button type="button" className="svc-sort-button" aria-haspopup="menu" aria-expanded={menuOrdenServicios} onClick={() => setMenuOrdenServicios(open => !open)}>
-                                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z" /></svg>
-                                {etiquetaOrden}
-                                <svg aria-hidden="true" className="svc-sort-chevron" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="m2 4 4 4 4-4" /></svg>
-                            </button>
-                            <AnimatePresence>
-                                {menuOrdenServicios && <motion.div className="svc-sort-menu" role="menu" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: .14 }}>
-                                    {opcionesOrden.map(option => <button key={option.id} type="button" role="menuitemradio" aria-checked={ordenServicios === option.id} onClick={() => { setOrdenServicios(option.id); setMenuOrdenServicios(false) }}>{option.label}{ordenServicios === option.id && <span aria-hidden="true">✓</span>}</button>)}
-                                </motion.div>}
-                            </AnimatePresence>
-                        </div>
-                        <label className="svc-search">
-                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg>
-                            <input value={busquedaServicio} onChange={event => setBusquedaServicio(event.target.value)} placeholder="Buscar" aria-label="Buscar servicios" />
-                        </label>
-                        {(!branch && (!employeeMode || employeeCanCreate)) && (
-                            <motion.button className="svc-create-button" whileHover={{ y: -1 }} whileTap={{ scale: .98 }} onClick={abrirCreacion}>
-                                <span aria-hidden="true">+</span> Crear Servicio
-                            </motion.button>
-                        )}
-                    </div>
+<CatalogToolbar label="servicios" filterValue={filtroServicios} onFilter={setFiltroServicios} sort={ordenServicios} onSort={setOrdenServicios} opcionesOrden={opcionesOrden} search={busquedaServicio} onSearch={setBusquedaServicio} onCreate={!branch && (!employeeMode || employeeCanCreate) ? abrirCreacion : undefined} />
                     {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 10 }}>{error}</div>}
                     <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: isMobile ? 5 : 6 }}>
                         {serviciosVisibles.length === 0 && (
@@ -2703,46 +2616,56 @@ function ServiciosManager_ServiciosSection(props: any) {
         </AnimatePresence>
     )
 }
+function CatalogToolbar({label,filterValue,onFilter,sort,onSort,opcionesOrden,search,onSearch,onCreate}: {
+    label: string; filterValue: string; onFilter: (value:"todos"|"pausados")=>void;
+    sort: string; onSort: (value:any)=>void; opcionesOrden: readonly {id:string;label:string}[];
+    search:string; onSearch:(value:string)=>void; onCreate?:()=>void
+}) {
+    const [open,setOpen] = React.useState(false)
+    const etiquetaOrden = opcionesOrden.find(option => option.id === sort)?.label || "Orden"
+    return (<div className="svc-toolbar">
+                        <div className="svc-toolbar-filters" role="group" aria-label={`Filtrar ${label}`}>
+                            {(["todos","pausados"] as const).map(filter => (
+                                <button key={filter} type="button" className={`svc-filter-button${filterValue === filter ? " is-active" : ""}`} aria-pressed={filterValue === filter} onClick={() => onFilter(filter)}>
+                                    {filter === "todos" ? "Todos" : "Pausados"}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="svc-sort-control">
+                            <button type="button" className="svc-sort-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(open => !open)}>
+                                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></svg>
+                                {etiquetaOrden}
+                                <svg aria-hidden="true" className="svc-sort-chevron" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="m2 4 4 4 4-4"/></svg>
+                            </button>
+                            <AnimatePresence>
+                                {open && <motion.div className="svc-sort-menu" role="menu" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-4}} transition={{duration:.14}}>
+                                    {opcionesOrden.map(option => <button key={option.id} type="button" role="menuitemradio" aria-checked={sort === option.id} onClick={() => {onSort(option.id);setOpen(false)}}>{option.label}</button>)}
+                                </motion.div>}
+                            </AnimatePresence>
+                        </div>
+                        <label className="svc-search">
+                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+                            <input value={search} onChange={event => onSearch(event.target.value)} placeholder="Buscar" aria-label={`Buscar ${label}`} />
+                        </label>
+                        {onCreate && (
+                            <motion.button className="svc-create-button" whileHover={{y:-1}} whileTap={{scale:.98}} onClick={onCreate}>
+                                <span aria-hidden="true">+</span> Nuevo
+                            </motion.button>
+                        )}
+                    </div>)
+}
+
 function ServiciosManager_ProductosSection(props: any) {
+    const transition = useCatalogTransition()
     const opcionesOrden = [
         {id:"az",label:"A-Z"},
         {id:"za",label:"Z-A"},
         {id:"precio-desc",label:"Mayor precio"},
         {id:"precio-asc",label:"Menor precio"},
     ] as const
-    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,setMostrarFormExtra,editandoExtra,setEditandoExtra,extrasVisibles,extras,errorExtras,formErrorExtra,setFormErrorExtra,guardandoExtra,filtroProductos,setFiltroProductos,ordenProductos,setOrdenProductos,menuOrdenProductos,setMenuOrdenProductos,busquedaProducto,setBusquedaProducto}=props
-    const etiquetaOrden = opcionesOrden.find(option => option.id === ordenProductos)?.label || "A-Z"
+    const {branch,api,isMobile,accentColor,iconoPlaceholderUrl,iconoFormUrl,iconoVacioUrl,iconoCheck,iconoEditar,iconoEliminar,employeeMode,employeeCanCreate,handleCrearExtra,handleEditarExtra,handleToggleExtra,handleDeleteExtra,initialEditarExtra,extrasActivos,extrasInactivos,mostrarFormExtra,setMostrarFormExtra,editandoExtra,setEditandoExtra,extrasVisibles,extras,errorExtras,formErrorExtra,setFormErrorExtra,guardandoExtra,filtroProductos,setFiltroProductos,ordenProductos,setOrdenProductos,busquedaProducto,setBusquedaProducto}=props
     return (<>
-                    <div className="svc-toolbar">
-                        <div className="svc-toolbar-filters" role="group" aria-label="Filtrar productos">
-                            {(["todos","pausados"] as const).map(filter => (
-                                <button key={filter} type="button" className={`svc-filter-button${filtroProductos === filter ? " is-active" : ""}`} aria-pressed={filtroProductos === filter} onClick={() => setFiltroProductos(filter)}>
-                                    {filter === "todos" ? "Todos" : "Pausados"}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="svc-sort-control">
-                            <button type="button" className="svc-sort-button" aria-haspopup="menu" aria-expanded={menuOrdenProductos} onClick={() => setMenuOrdenProductos(open => !open)}>
-                                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></svg>
-                                {etiquetaOrden}
-                                <svg aria-hidden="true" className="svc-sort-chevron" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="m2 4 4 4 4-4"/></svg>
-                            </button>
-                            <AnimatePresence>
-                                {menuOrdenProductos && <motion.div className="svc-sort-menu" role="menu" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-4}} transition={{duration:.14}}>
-                                    {opcionesOrden.map(option => <button key={option.id} type="button" role="menuitemradio" aria-checked={ordenProductos === option.id} onClick={() => {setOrdenProductos(option.id);setMenuOrdenProductos(false)}}>{option.label}{ordenProductos === option.id && <span aria-hidden="true">✓</span>}</button>)}
-                                </motion.div>}
-                            </AnimatePresence>
-                        </div>
-                        <label className="svc-search">
-                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
-                            <input value={busquedaProducto} onChange={event => setBusquedaProducto(event.target.value)} placeholder="Buscar" aria-label="Buscar productos" />
-                        </label>
-                        {(!employeeMode || employeeCanCreate) && !mostrarFormExtra && !editandoExtra && (
-                            <motion.button className="svc-create-button" whileHover={{y:-1}} whileTap={{scale:.98}} onClick={() => setMostrarFormExtra(true)}>
-                                <span aria-hidden="true">+</span> Crear Producto
-                            </motion.button>
-                        )}
-                    </div>
+<CatalogToolbar label="productos" filterValue={filtroProductos} onFilter={setFiltroProductos} sort={ordenProductos} onSort={setOrdenProductos} opcionesOrden={opcionesOrden} search={busquedaProducto} onSearch={setBusquedaProducto} onCreate={!branch && (!employeeMode || employeeCanCreate) && !mostrarFormExtra && !editandoExtra ? () => setMostrarFormExtra(true) : undefined} />
                     {errorExtras && (
                         <div
                             style={{
@@ -2757,7 +2680,7 @@ function ServiciosManager_ProductosSection(props: any) {
 
                     <AnimatePresence>
                         {mostrarFormExtra && !editandoExtra && (
-                            <div style={{ marginBottom: 14 }}>
+                            <motion.div key="create-product" {...transition} style={{ marginBottom: 14 }}>
                                 <ServiciosManager_ExtraForm
                                     employeeMode={employeeMode}
                                     accentColor={accentColor}
@@ -2773,7 +2696,7 @@ function ServiciosManager_ProductosSection(props: any) {
                                     modoEdicion={false}
                                     isMobile={isMobile}
                                 />
-                            </div>
+                            </motion.div>
                         )}
                     </AnimatePresence>
 
@@ -2811,13 +2734,11 @@ function ServiciosManager_ProductosSection(props: any) {
                             </div>
                         )}
                         <AnimatePresence mode="popLayout">
-                            {extras.map((extra) =>
+                            {extrasVisibles.map((extra) =>
                                 editandoExtra?.id === extra.id ? (
                                     <motion.div
                                         key={extra.id + "-edit"}
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
+                                        {...transition}
                                         style={{ marginBottom: 6 }}
                                     >
                                         <ServiciosManager_ExtraForm
@@ -2878,6 +2799,7 @@ function ServiciosManager_PromocionesSection(props: any) {
     return (<>{puedePromociones ? <ServiciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Ofrecé descuentos y combinaciones para tu catálogo.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>)
 }
 function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMobile,employeeMode=false}:{api:string;servicios:any[];productos:any[];accentColor:string;isMobile:boolean;employeeMode?:boolean}) {
+    const transition = useCatalogTransition()
     const branch = useBranchAdmin();
     const hoy = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
     const initial = () => ({nombre:"",descripcion:"",imagen_url:"",owner_equipo_id:null as string|null,tipo:"combo",items:[] as {tipo:string;id:string;cantidad:number}[],descuento_tipo:"precio_final",valor:"",fecha_inicio:hoy(),fecha_fin:"2099-12-31",dias_semana:null as number[] | null,activo:true})
@@ -2958,23 +2880,41 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const close = () => { setMostrar(false); setEditando(null); setError("") }
     const openNew = () => { setUploadingCover(false); setForm(initial()); setAssigned([]); setEditando(null); setMostrar(true); setError("") }
     const isEligible = (id:string) => selected.every(i => i.tipo !== "servicio" || i.source?.profesionales?.some((p:any) => p.id === id))
+    const [filtroPromo,setFiltroPromo] = React.useState("todos")
+    const [ordenPromo,setOrdenPromo] = React.useState("actual")
+    const [busquedaPromo,setBusquedaPromo] = React.useState("")
+    const [menuId,setMenuId] = React.useState<string|null>(null)
+    const anchor = React.useRef<HTMLButtonElement>(null)
+    React.useEffect(() => {
+        if (!menuId) return
+        const outside = (e:PointerEvent) => { if (!(e.target as Element).closest(".svc-row-menu,.promo-menu-trigger")) setMenuId(null) }
+        const escape = (e:KeyboardEvent) => { if(e.key === "Escape") {anchor.current?.focus();setMenuId(null)} }
+        document.addEventListener("pointerdown",outside)
+        document.addEventListener("keydown",escape)
+        return () => {document.removeEventListener("pointerdown",outside);document.removeEventListener("keydown",escape)}
+    },[menuId])
+    const opcionesOrden = [{id:"actual",label:"Orden actual"},{id:"az",label:"A-Z"},{id:"precio",label:"Menor precio"}]
+    const visibles = lista.filter(p => (filtroPromo !== "pausados" || !promoActiva(p)) && p.nombre.toLocaleLowerCase().includes(busquedaPromo.trim().toLocaleLowerCase()))
+    if (ordenPromo === "az") visibles.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"))
+    if (ordenPromo === "precio") visibles.sort((a,b)=>Number(a.precio_final)-Number(b.precio_final))
     return <section className="promotions">
-        {!mostrar && !branch && <div className="promo-toolbar"><button className="promo-primary" onClick={openNew}>Crear Promoción</button></div>}
+        {!mostrar && <CatalogToolbar label="promociones" filterValue={filtroPromo} onFilter={setFiltroPromo} sort={ordenPromo} onSort={setOrdenPromo} opcionesOrden={opcionesOrden} search={busquedaPromo} onSearch={setBusquedaPromo} onCreate={!branch ? openNew : undefined} />}
         {error && <p role="alert" className="promo-error">{error}</p>}
-        {mostrar ? <form className="promo-editor" onSubmit={guardar}>
+        <AnimatePresence mode="wait" initial={false}>
+        {mostrar ? <motion.form key="editor" {...transition} className="promo-editor" onSubmit={guardar}>
             <BackButton floating onClick={close} disabled={busy || uploadingCover}/>
             <fieldset disabled={busy}>
-                <label>Nombre de la promoción<input required maxLength={100} value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label>
+                <label>Nombre de la promoción<input required placeholder="Ej. Corte + barba" maxLength={100} value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label>
                 <div className="promo-intro">
                     <div>Imagen de la promoción<ServiciosManager_ImageUploader size={450} onUploadingChange={setUploadingCover} value={form.imagen_url || fallbackCover(form.items)} onChange={imagen_url=>setForm(prev=>({...prev,imagen_url}))} apiUrl={api} accentColor={accentColor} uploadPath={employeeMode ? `/empleado/${encodeURIComponent(slug)}/extras/upload-imagen` : undefined}/></div>
-                    <div className="promo-details"><label>Descripción<textarea aria-label="Descripción" maxLength={2000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>
+                    <div className="promo-details"><label>Descripción<textarea aria-label="Descripción" placeholder="Contá qué incluye y cuándo se puede usar." maxLength={2000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>
                         <div className="promo-prices"><div>Precio Original<output>{money(original)}</output></div>
-                            <label>{form.descuento_tipo==="porcentaje" ? "Descuento (%)" : "Precio Promo"}<input required type="number" min="0.01" step="0.01" value={form.valor} onChange={e=>setForm({...form,valor:e.target.value})}/></label></div>
+                            <label>{form.descuento_tipo==="porcentaje" ? "Descuento (%)" : "Precio promo"}<span className="promo-money-input">{form.descuento_tipo !== "porcentaje" && <span aria-hidden="true">$</span>}<input required type="number" min="0.01" step="0.01" value={form.valor} placeholder={form.descuento_tipo === "porcentaje" ? "Ej. 15" : "Ej. 30000"} onChange={e=>setForm({...form,valor:e.target.value})}/></span></label></div>
                         {form.descuento_tipo==="porcentaje" && <output>Precio promo {money(final)}</output>}
                         {!branch && !employeeMode && !form.owner_equipo_id && equipo.length>0 && <div>Profesionales que lo ofrecen<div className="promo-people">{equipo.map(person=>{
                             const active=assigned.includes(person.id) && isEligible(person.id)
                             const name=[person.nombre,person.apellido].filter(Boolean).join(" ")
-                            return <button type="button" key={person.id} aria-label={name} title={isEligible(person.id)?name:`${name} debe ofrecer todos los servicios elegidos`} aria-pressed={active} disabled={!isEligible(person.id)} style={{background:person.color || "#704dad"}} onClick={()=>setAssigned(ids=>active?ids.filter(id=>id!==person.id):[...ids,person.id])}>{person.foto_url?<img src={person.foto_url} alt=""/>:name.charAt(0)}{active && <small>✓</small>}</button>
+                            return <button type="button" key={person.id} aria-label={name} title={isEligible(person.id)?name:`${name} debe ofrecer todos los servicios elegidos`} aria-pressed={active} disabled={!isEligible(person.id)} style={{background:person.color || "#704dad"}} onClick={()=>setAssigned(ids=>active?ids.filter(id=>id!==person.id):[...ids,person.id])}>{person.foto_url?<img src={person.foto_url} alt=""/>:name.charAt(0)}{active && <small><img src="/assets/panel-nav/akar-icons_check.svg" alt="" width="12" height="12" /></small>}</button>
                         })}</div></div>}
                     </div>
                 </div>
@@ -2983,7 +2923,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                         const entry=form.items.find(i=>i.id===item.id && i.tipo===tipo)
                         const quantity=(delta:number)=>setForm(prev=>({...prev,items:prev.items.map(i=>i.id===item.id && i.tipo===tipo?{...i,cantidad:i.cantidad+delta}:i)}))
                         return <div className="promo-line" key={item.id} data-selected={!!entry}>
-                            <button className="promo-choice" type="button" aria-pressed={!!entry} onClick={()=>toggle(item)}><span className="promo-check">{entry?"✓":""}</span>
+                            <button className="promo-choice" type="button" aria-pressed={!!entry} onClick={()=>toggle(item)}><span className="promo-check">{entry && <img src="/assets/panel-nav/akar-icons_check.svg" alt="" width="12" height="12" />}</span>
                                 {photo(item)?<img src={photo(item)} alt=""/>:<span className="promo-thumb"><ServiciosManager_SeccionIcon tipo={tipo==="servicio"?"servicios":"extras"}/></span>}
                                 <span><strong>{item.nombre}</strong><small>{ServiciosManager_parseDesc(item.descripcion || "").descripcion || "Sin descripción"}</small></span></button>
                             <div className="promo-count"><b>{money(Number(item.precio))}</b>{entry && <div><button aria-label={`Aumentar cantidad de ${item.nombre}`} type="button" disabled={entry.cantidad>=99} onClick={()=>quantity(1)}>+</button> {entry.cantidad} <button aria-label={`Reducir cantidad de ${item.nombre}`} type="button" disabled={entry.cantidad<=1} onClick={()=>quantity(-1)}>−</button></div>}</div>
@@ -2998,8 +2938,8 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </details>
                 <button className="promo-primary" type="submit" disabled={uploadingCover}>{busy?"Guardando…":"Guardar promoción"}</button>
             </fieldset>
-        </form> : loading ? <InlineLoading label="Cargando promociones…"/> : lista.length===0 ? <p>Todavía no hay promociones.</p> :
-        <div className="promo-grid">{lista.map(p=>{
+        </motion.form> : loading ? <InlineLoading label="Cargando promociones…"/> : lista.length===0 ? <p>Todavía no hay promociones.</p> :
+        !visibles.length ? <p>No hay promociones que coincidan.</p> : <motion.div key="list" {...transition} className="promo-grid">{visibles.map(p=>{
             const active=promoActiva(p),cover=p.imagen_url || fallbackCover(p.items)
             const repeated=p.items.length===1 && p.items[0].cantidad>1
             return <article className="promo-card" key={p.id}><div className="promo-cover">
@@ -3010,9 +2950,10 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </div>{repeated && <b className="promo-multiple">x{p.items[0].cantidad}</b>}
                 </div><div className="promo-foot"><div className="promo-heading"><strong>{p.nombre}</strong><div className="promo-cost">{money(Number(p.precio_final))} <del>{money(Number(p.precio_original))}</del></div></div>
                     <span className="promo-status" data-active={active}>● {active?"Activa":"Pausada"}</span>
-                    {!branch && <div className="promo-actions"><button disabled={busy} onClick={()=>editar(p)}>✎ Editar</button><details><summary aria-label={`Opciones de ${p.nombre}`}>•••</summary><div><button disabled={busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");cambiarEstado(p)}}>{active?"Pausar":"Activar"}</button><button disabled={busy} onClick={()=>eliminar(p.id)}>Eliminar</button></div></details></div>}
+                    {!branch && <div className="promo-actions"><button disabled={busy} onClick={()=>editar(p)}>✎ Editar</button><button type="button" className="promo-menu-trigger" ref={menuId===p.id ? anchor : undefined} aria-label={`Opciones de ${p.nombre}`} aria-expanded={menuId===p.id} onClick={()=>setMenuId(menuId===p.id ? null : p.id)}>•••</button>{menuId===p.id && <ServiciosManager_RowMenu anchor={anchor}><button disabled={busy} onClick={()=>{setMenuId(null);cambiarEstado(p)}}>{active?"Pausar":"Activar"}</button><button disabled={busy} className="is-danger" onClick={()=>{setMenuId(null);eliminar(p.id)}}>Eliminar</button></ServiciosManager_RowMenu>}</div>}
                 </div></article>
-        })}</div>}
+        })}</motion.div>}
+        </AnimatePresence>
     </section>
 }
 

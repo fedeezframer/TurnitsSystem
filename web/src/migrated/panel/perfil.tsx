@@ -1,3 +1,4 @@
+import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
@@ -792,13 +793,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               <button className="negocio-button">
                 {busy ? "Guardando…" : "Guardar sucursal"}
               </button>
-              <button
-                type="button"
-                className="negocio-button secondary"
-                onClick={() => setForm(null)}
-              >
-                Cancelar
-              </button>
+              <BackButton disabled={busy} onClick={() => setForm(null)} aria-label="Volver" />
             </div>
           </fieldset>
         </form>
@@ -1104,14 +1099,7 @@ export function SucursalEmpleado({
                   <button className="negocio-button" disabled={busy}>
                     Guardar
                   </button>
-                  <button
-                    type="button"
-                    className="negocio-button secondary"
-                    disabled={busy}
-                    onClick={() => setForm(null)}
-                  >
-                    Cancelar
-                  </button>
+                  <BackButton disabled={busy} onClick={() => setForm(null)} aria-label="Volver" />
                 </div>
               </form>
             )}

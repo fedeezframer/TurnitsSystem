@@ -197,14 +197,14 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
         }
         refrescar()
         const intervalo = window.setInterval(refrescar, 30_000)
-        window.addEventListener("focus", refrescar)
+
         window.addEventListener("pageshow", refrescar)
         window.addEventListener("turno_actualizado", refrescar)
         document.addEventListener("visibilitychange", refrescar)
         return () => {
             alive = false
             window.clearInterval(intervalo)
-            window.removeEventListener("focus", refrescar)
+
             window.removeEventListener("pageshow", refrescar)
             window.removeEventListener("turno_actualizado", refrescar)
             document.removeEventListener("visibilitychange", refrescar)
@@ -1281,22 +1281,7 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                                     marginTop: 18,
                                 }}
                             >
-                                <button
-                                    type="button"
-                                    disabled={manualGuardando}
-                                    onClick={() => setManualAbierto(false)}
-                                    style={{
-                                        border: "1px solid #e2e8f0",
-                                        borderRadius: 10,
-                                        padding: "10px 14px",
-                                        background: "#fff",
-                                        color: "#475569",
-                                        fontWeight: 650,
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Cancelar
-                                </button>
+                                <BackButton disabled={manualGuardando} onClick={() => setManualAbierto(false)} aria-label="Volver" />
                                 <button
                                     type="button"
                                     disabled={manualGuardando}

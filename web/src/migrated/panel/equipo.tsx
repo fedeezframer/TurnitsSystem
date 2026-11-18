@@ -1246,23 +1246,7 @@ function TeamManager_MiembroForm({
                     paddingTop: 4,
                 }}
             >
-                <button
-                    onClick={onCancel}
-                    style={{
-                        padding: isMobile ? "11px 16px" : "8px 16px",
-                        borderRadius: 10,
-                        border: "1px solid #e2e8f0",
-                        background: "none",
-                        fontSize: 13,
-                        cursor: "pointer",
-                        color: "#64748b",
-                        fontFamily:
-                            "'Inter Display', -apple-system, sans-serif",
-                        width: isMobile ? "100%" : "auto",
-                    }}
-                >
-                    Cancelar
-                </button>
+
                 <motion.button
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}

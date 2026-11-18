@@ -402,7 +402,7 @@ function MercadoPagoConexion(props: any) {
                     : "none"
                 const esPlanPremium = ["basico", "premium"].includes(s.plan)
                 const metodoEfectivo =
-                    esPlanPremium && mp === "none" ? "total" : mp
+                    !esPlanPremium && mp === "none" ? "total" : mp
                 setMetodoPago(metodoEfectivo)
                 if (metodoEfectivo !== "none")
                     setMetodoPreferido(metodoEfectivo)
@@ -428,7 +428,7 @@ function MercadoPagoConexion(props: any) {
                         )
                     )
                         setMetodoPago(
-                            esPlanPremium && pendiente.metodo_pago === "none"
+                            !esPlanPremium && pendiente.metodo_pago === "none"
                                 ? "total"
                                 : pendiente.metodo_pago
                         )
@@ -439,7 +439,7 @@ function MercadoPagoConexion(props: any) {
                     if (pendiente.datos_bancarios)
                         setDatosBancarios(pendiente.datos_bancarios)
                 }
-                if (esPlanPremium && mp === "none")
+                if (!esPlanPremium && mp === "none")
                     TurnitsGlobalSaveManager_get()?.markDirty?.("pagos", {
                         ...Pagos_baselineDesdeSettings(s),
                         ...(pendiente || {}),
@@ -537,7 +537,7 @@ function MercadoPagoConexion(props: any) {
 
     // ── Toggle transferencia — solo local ─────────────────────
     const toggleTransferencia = () => {
-        if(plan !== "premium")return
+        if(plan === "gratis")return
         const nuevoValor = !aceptaTransferencia
         setAceptaTransferencia(nuevoValor)
         MercadoPagoConexion_emitPagosChanged({
@@ -547,7 +547,7 @@ function MercadoPagoConexion(props: any) {
 
     // ── Toggle efectivo — solo local ──────────────────────────
     const toggleEfectivo = () => {
-        if(plan !== "premium")return
+        if(plan === "gratis")return
         const nuevoValor = !aceptaEfectivo
         setAceptaEfectivo(nuevoValor)
         MercadoPagoConexion_emitPagosChanged({ acepta_efectivo: nuevoValor })
@@ -665,7 +665,7 @@ function MercadoPagoConexion(props: any) {
                             ? handleConectar
                             : undefined
                     }
-                    onToggle={conectado && !esPremium ? toggleMp : undefined}
+                    onToggle={conectado && plan !== "gratis" ? toggleMp : undefined}
                     accion={
                         (!employeeMode || allowPersonalAccount) ? (
                             <button
@@ -710,7 +710,7 @@ function MercadoPagoConexion(props: any) {
                             aceptaTransferencia ? "Activo" : "Desactivada"
                         }
                         color={transferenciaColor}
-                        locked={plan !== "premium"}
+                        locked={plan === "gratis"}
                         onToggle={toggleTransferencia}
                     >
                         {/* Datos bancarios — se cargan acá y se guardan con el
@@ -830,7 +830,7 @@ function MercadoPagoConexion(props: any) {
                         activo={aceptaEfectivo}
                         estadoTexto={aceptaEfectivo ? "Activo" : "Desactivado"}
                         color={efectivoColor}
-                        locked={plan !== "premium"}
+                        locked={plan === "gratis"}
                         onToggle={toggleEfectivo}
                     />
                 }
@@ -871,7 +871,7 @@ function MercadoPagoConexion(props: any) {
                 </div>
             )}
 
-            {plan !== "premium" && (
+            {plan === "gratis" && (
                 <div
                     style={{
                         fontSize: 11.5,
@@ -879,8 +879,8 @@ function MercadoPagoConexion(props: any) {
                         lineHeight: 1.5,
                     }}
                 >
-                    En Gratis y Básico, los cobros son por Mercado Pago.
-                    Actualizá a Premium para sumar transferencia y efectivo.
+                    En Gratis, los cobros son por Mercado Pago.
+                    Con Básico o Premium también podés usar transferencia y efectivo.
                 </div>
             )}
         </div>
@@ -999,7 +999,7 @@ function MercadoPagoConexion_CanvasPreview({
 function ConfigPagos_Skeleton() { return <LoadingRunner card size="compact" label="Cargando configuración de pagos…" /> }
 
 function ConfigPagos_PremiumBadge({label}: {label?: string} = {}) {
-    return <TurnitsPlanRequirement premiumOnly />
+    return <TurnitsPlanRequirement />
 }
 
 function ConfigPagos_OpcionMetodo({
@@ -1355,7 +1355,7 @@ function ConfigPagos(props: any) {
                 // Nadie queda sin Seña/Total marcado: "none" se muestra como
                 // Total (default). Si ya hay "sena" guardado se respeta.
                 let metodoHidratado =
-                    metodoRecibido === "none" ? "total" : metodoRecibido
+                    planRecibido === "gratis" && metodoRecibido === "none" ? "total" : metodoRecibido
                 setMetodo(metodoHidratado as ConfigPagos_MetodoPago)
 
                 setMpStatus(cfg.mp_status || "Desconectado")
@@ -1395,7 +1395,7 @@ function ConfigPagos(props: any) {
                         )
                     )
                         metodoHidratado =
-                            planRecibido === "basico" &&
+                            planRecibido === "gratis" &&
                             pendiente.metodo_pago === "none"
                                 ? "total"
                                 : pendiente.metodo_pago
@@ -1428,7 +1428,7 @@ function ConfigPagos(props: any) {
                 // Total como pendiente para que lo mostrado coincida con lo
                 // que realmente se cobra. Conserva transferencia/efectivo.
                 if (
-                    planRecibido === "basico" &&
+                    planRecibido === "gratis" &&
                     cfg.metodo_pago !== "sena" &&
                     cfg.metodo_pago !== "total"
                 )
@@ -1465,7 +1465,7 @@ function ConfigPagos(props: any) {
     if (loading) return <ConfigPagos_Skeleton />
 
     const elegirMetodo = (m: ConfigPagos_MetodoPago) => {
-        if (esPremium && m === "none") return
+        if (plan === "gratis" && m === "none") return
         metodoTocadoRef.current = true
         setMetodo(m)
         // Persiste la selección de inmediato y junto con el porcentaje que
@@ -1921,7 +1921,7 @@ function ConfigPagos_CanvasPreview({ accentColor }: { accentColor: string }) {
                                         {label}
                                     </span>
                                     {locked && (
-                                        <TurnitsPlanRequirement premiumOnly />
+                                        <TurnitsPlanRequirement />
                                     )}
                                     {!locked && tag && (
                                         <span

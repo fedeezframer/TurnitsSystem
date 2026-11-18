@@ -38,6 +38,7 @@ function TurnitsGlobalSaveBar({
             const sections = [
                 ["horarios", "Horarios"],
                 ["excepciones", "Excepciones"],
+                ["servicios", "Servicios"],
                 ["pagos", "Pagos"],
                 ["tema", "Tema"],
                 ["perfil", "Perfil"],
@@ -251,7 +252,7 @@ function QrFlotante({
             .then((r) => r.json())
             .then((d) => {
                 const cfg = d?.settings || {}
-                setEsPremium(cfg.plan === "premium")
+                setEsPremium(["basico","premium"].includes(cfg.plan))
                 setAgendaSinPagos(cfg.agenda_sin_pagos === true)
             })
             .catch(() => {})

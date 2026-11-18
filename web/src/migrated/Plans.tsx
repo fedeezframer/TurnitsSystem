@@ -15,9 +15,9 @@ const rows = [
     ["Clientes visibles en el listado", "Hasta 10", "Hasta 50", "Ilimitados"],
     ["Estadísticas del negocio", "Resumen de actividad", "Métricas completas", "Métricas completas"],
     ["Mercado Pago", "Tarjetas aceptadas y saldo", "Tarjetas aceptadas y saldo", "Tarjetas aceptadas y saldo"],
-    ["Transferencia y efectivo", false, false, true],
-    ["Cobro por reserva", "Total y seña", "Total y seña", "Total, seña y sin cobro"],
-    ["Comisión Turnits por cobro online", "$300 o 2%, el mayor", "$100 hasta $15.000 inclusive. Por encima, 0,8% del total", "Sin comisión de Turnits"],
+    ["Transferencia y efectivo", false, true, true],
+    ["Cobro por reserva", "Total y seña", "Total, seña y sin cobro", "Total, seña y sin cobro"],
+    ["Comisión Turnits por cobro online", "$300 hasta $15.000 inclusive. Por encima, 2% del total", "Sin comisión de Turnits", "Sin comisión de Turnits"],
     ["Logo del negocio", true, true, true],
     ["Personalización de temas", false, true, true],
     ["Combos y promociones", false, true, true],
@@ -102,7 +102,7 @@ export default function PlanesTurnits(props) {
                 <p className="tp-desc">{descriptions[i]}</p>{cta(p, i)}
                 <div style={{ marginTop: 18 }}>{rows.map(row => <div className="tp-item" key={String(row[0])}><span>{row[0]}</span><span><Value value={row[i + 1]} color={accentColor} /></span></div>)}</div>
             </article>)}</div>
-            <p className="tp-note">Básico y Premium incluyen {days} días de prueba con las funciones de cada plan. Durante la prueba de Básico se cobra el mayor entre $300 y el 2% por cobro online. Premium tiene $0 de comisión de Turnits desde el primer día. Mercado Pago cobra sus propias comisiones por separado.</p>
+            <p className="tp-note">Básico y Premium incluyen {days} días de prueba con las funciones de cada plan. Ambos planes tienen todos los medios de pago y cero comisión de Turnits desde el primer día. Mercado Pago cobra sus propias comisiones por separado.</p>
         </div>
     </section>
 }
