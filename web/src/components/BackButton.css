@@ -10,6 +10,7 @@ button.turnits-back-button {
   width: var(--button-size);
   height: var(--button-size);
   min-width: var(--button-size);
+  min-height: var(--button-size);
   padding: 0;
   border: 1px solid #c9cfc9;
   border-radius: 24px;
@@ -52,15 +53,6 @@ button.turnits-back-button.is-floating {
   top: 16px;
   right: 16px;
   z-index: 5;
-}
-
-@media (min-width: 860px) {
-  button.turnits-back-button.is-floating {
-    --button-size: 18px;
-    --icon-size: 9px;
-    min-height: var(--button-size);
-    padding: 0;
-  }
 }
 
 @media (width < 860px) {

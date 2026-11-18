@@ -1706,7 +1706,7 @@ function MenuFooter({
                         icon={iconos?.soporte}
                         defaultIcon={MenuFooterSoporteIcon}
                         ariaLabel={soporte.prioritario ? "Soporte prioritario" : "Soporte: lista de espera"}
-                        size={48}
+                        size={40}
                         onClick={() => window.open(soporte.url, "_blank", "noopener,noreferrer")}
                     />
                 </div>

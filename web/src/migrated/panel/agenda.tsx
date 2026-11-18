@@ -743,8 +743,17 @@ function AgendaPanel(props: any) {
 
     return (
         <>
-            {sucursales.length>0 && <div className="negocio-editor" style={{marginBottom:14}}><label className="negocio-field" style={{maxWidth:320}}>Sucursal<select aria-label="Sucursal" value={sucursalFiltro} onChange={e=>setSucursalFiltro(e.target.value)}><option value="todas">Todas las sucursales</option><option value="principal">{principalNombre}</option>{sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}{!s.activo?' · Pausada':''}</option>)}</select></label></div>}
             <div className="agenda-actions">
+                {sucursales.length > 0 && (
+                    <label className="negocio-field">
+                        Sucursal
+                        <select aria-label="Sucursal" value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)}>
+                            <option value="todas">Todas las sucursales</option>
+                            <option value="principal">{principalNombre}</option>
+                            {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}{!s.activo ? " · Pausada" : ""}</option>)}
+                        </select>
+                    </label>
+                )}
                 <button className="agenda-add" type="button" onClick={abrirNuevo}>+ Agregar turno</button>
             </div>
             <div
