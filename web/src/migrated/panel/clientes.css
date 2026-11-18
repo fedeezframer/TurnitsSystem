@@ -12,6 +12,7 @@
 .clients-board dd {margin:0;color:#253728;font-weight:650}
 .clients-board footer {display:grid;justify-items:start;gap:7px;margin-top:auto;padding-top:10px;border-top:1px solid #d3d7d3}
 .clients-board footer button,.clients-board footer a {border-radius:22px;padding:7px 12px;font:inherit;font-size:14px;text-decoration:none;background:white;border:1px solid;color:inherit;cursor:pointer}
+.clients-board footer a {display:inline-flex;align-items:center;gap:6px}
 .clients-board footer button {color:white;background:var(--client-green);border-color:var(--client-green)}
 .clients-board button:disabled {opacity:.5}
 .client-offer {position:fixed;width:min(90vw,1080px);max-height:88dvh;box-sizing:border-box;overflow:auto;border:0;border-radius:30px;padding:clamp(22px,4vw,48px);background:white}

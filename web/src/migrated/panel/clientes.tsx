@@ -6,9 +6,10 @@ import { appConfig } from "../../config"
 import { ClientesGrid_getSlug, ClientesGrid_getToken } from "./common"
 import { TurnitsPlanRequirement } from "./shared"
 import { ClientOfferDraft } from "./client-offer"
+import whatsappIcon from "../../components/whatsapp-icon.svg"
 import "./clientes.css"
 
-const clientFilters = [{id:"todos",label:"Todos"},{id:"recurrentes",label:"Recurrentes"},{id:"nuevos",label:"Una reserva"}] as const
+const clientFilters = [{id:"todos",label:"Todos"},{id:"recurrentes",label:"Recurrentes"},{id:"nuevos",label:"Poco recurrentes"}] as const
 const clientSorts = [{id:"recientes",label:"Recientes"},{id:"reservas",label:"Más reservas"},{id:"total",label:"Mayor total"},{id:"nombre",label:"Nombre A–Z"}] as const
 
 const avatarColors = ["#d5e9df", "#f3dccf", "#dce4fb", "#ebdef4", "#f3e6b9", "#d2e9ed", "#f2dce3", "#dee7c8", "#dce2e7"]
@@ -154,7 +155,7 @@ export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {base
                 <div><dt>Última visita</dt><dd>{c.ultimaVisita || "Sin visitas"}</dd></div>
                 <div><dt>Recurre cada</dt><dd>{c.intervalo ? c.intervalo+" días" : "—"}</dd></div></dl>
                 {esPremium && <footer><button disabled={!c.telefono || !c.email} title={!c.telefono || !c.email ? "Se necesita teléfono y correo para enviar una promoción." : undefined} onClick={()=>setRecipient(c)}>Ofrecer Promoción</button>
-                {c.telefono && <a target="_blank" rel="noreferrer" href={"https://wa.me/"+c.telefono.replace(/\D/g,"")}>Contactar</a>}</footer>}
+                {c.telefono && <a target="_blank" rel="noreferrer" href={"https://wa.me/"+c.telefono.replace(/\D/g,"")}><img src={whatsappIcon} alt="" width="16" height="16" />Contactar</a>}</footer>}
             </article>)}
             {!results.length && <p>{clientes.length ? "No hay clientes que coincidan." : "Aún no hay clientes registrados."}</p>}
         </div>
