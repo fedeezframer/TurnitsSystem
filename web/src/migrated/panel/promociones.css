@@ -23,14 +23,14 @@
 .promo-status {color:#585858;font-weight:650;font-size:.86em}
 .promo-status[data-active=true],.promo-line[data-selected=true] {color:var(--green)}
 .promo-actions {display:flex;align-items:center;justify-content:end;gap:6px}
-.promo-actions button,.promo-days button {color:inherit;background:white;border:1px solid #686868;border-radius:30px;padding:5px 12px}
+.promo-actions button {color:inherit;background:white;border:1px solid #686868;border-radius:30px;padding:5px 12px}
 .promo-actions details {position:relative}
 .promo-actions summary {list-style:none;padding:6px 2px}
 .promo-actions details>div {position:absolute;z-index:2;right:0;background:white;border:1px solid #aaa;border-radius:12px;padding:5px;box-shadow:0 4px 16px #0002}
 .promo-actions details button {display:block;border:0;width:100%;text-align:left}
 .promo-editor {position:relative;border:1px solid #aaa;border-radius:clamp(20px,3cqw,48px);padding:clamp(44px,4.5cqw,68px) clamp(16px,4.8cqw,72px) 30px}
 .promo-editor fieldset {border:0;padding:0;margin:0;min-width:0;display:grid;gap:24px}
-.promo-editor label,.promo-details,.promo-settings[open] {display:grid;gap:8px}
+.promo-editor label,.promo-details {display:grid;gap:8px}
 .promo-editor :is(input:not([type=checkbox]),textarea,select) {width:100%;padding:11px 16px;font:inherit;border:1px solid #aaa;border-radius:28px;background:white;color:#171717}
 .promo-editor fieldset>label input {font-weight:700}
 .promo-intro {display:grid;grid-template-columns:38% minmax(0,1fr);gap:8%;align-items:stretch}
@@ -52,9 +52,13 @@
 .promo-check {width:clamp(23px,3.3cqw,46px);aspect-ratio:1;border:1.5px solid;border-radius:50%}
 .promo-choice small {color:#555;display:block;margin-top:4px}.promo-choice strong,.promo-choice small {overflow-wrap:anywhere}
 .promo-count {text-align:right}.promo-count button {background:white;color:#111;border:1px solid;border-radius:7px}
-.promo-settings {border-top:1px solid #ddd;padding-top:14px}.promo-settings>label {margin-top:12px}
-.promo-days {display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}.promo-days label {display:flex;align-items:center}
-.promo-days [aria-pressed=true] {background:var(--green);color:white}
+.promo-options h3 { margin:0 0 5px; font-size:1em; font-weight:600; }
+.promo-option-list { display:flex; flex-wrap:wrap; gap:8px 12px; margin-top:12px; }
+.promo-option-list button { padding:8px 13px; min-height:38px; border:1px solid #9ca49d; border-radius:5px; background:white; color:#202420; }
+.promo-option-list button[aria-pressed=true] { background:var(--green); border-color:var(--green); color:white; }
+.promo-option-list button:focus-visible { outline:2px solid var(--green); outline-offset:3px; }
+@media(pointer:coarse) { .promo-option-list button { min-height:44px; } }
+
 .promo-editor .promo-primary {justify-self:end}
 .promo-error {color:#9c2222}
 @container(max-width:850px){.promo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -104,7 +108,7 @@
   outline-offset:2px;
 }
 @media (prefers-reduced-motion:no-preference) {
-  .promo-line,.svc-filter-button,.promo-days button {
+  .promo-line,.svc-filter-button,.promo-option-list button {
     transition:background-color .14s ease,border-color .14s ease,color .14s ease;
   }
 }

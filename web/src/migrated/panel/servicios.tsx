@@ -2802,6 +2802,11 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const final=Math.round((form.descuento_tipo === "porcentaje" ? original*(1-valor/100) : valor)*100)/100
     const validPrice=Number.isFinite(final)&&valor>0&&final>0&&final<original
     const toggle=(item:any)=>setForm(prev=>({...prev,items:prev.items.some(i=>i.id===item.id&&i.tipo===item.tipo) ? prev.items.filter(i=>!(i.id===item.id&&i.tipo===item.tipo)) : [...prev.items,{tipo:item.tipo,id:item.id,cantidad:1}]}))
+    const toggleDay = (id:number) => setForm(prev => {
+        const days = prev.dias_semana ?? PROMO_DAYS.map(day => day.id)
+        const next = days.includes(id) ? days.filter(day => day !== id) : [...days, id]
+        return {...prev, dias_semana: next.length === PROMO_DAYS.length ? null : next}
+    })
     const formRef = React.useRef<HTMLFormElement>(null)
     const originalDraft = React.useRef("")
     const draftKey = (draft:typeof form, people:string[]) => JSON.stringify([draft, [...people].sort()])
@@ -2907,11 +2912,30 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                     })}
                     {!catalogo.some(i=>i.tipo===tipo) && <p>No hay {tipo==="servicio"?"servicios":"productos"} activos.</p>}
                 </section>)}
-                <details className="promo-settings"><summary>Descuento y días de vigencia</summary>
-                    <label>Calcular el descuento por<select value={form.descuento_tipo} onChange={e=>setForm({...form,descuento_tipo:e.target.value,valor:""})}><option value="precio_final">Precio promo</option><option value="porcentaje">Porcentaje</option></select></label>
-                    {diasHabilitados && <div className="promo-days"><label><input type="checkbox" checked={form.dias_semana!==null} onChange={e=>setForm({...form,dias_semana:e.target.checked?[]:null})}/> Elegir días específicos</label><small className="catalog-hint">Si lo dejás desmarcado, la promoción se ofrece todos los días.</small>
-                    {form.dias_semana!==null && PROMO_DAYS.map(d=><button type="button" key={d.id} aria-pressed={form.dias_semana?.includes(d.id)} onClick={()=>setForm(prev=>({...prev,dias_semana:prev.dias_semana?.includes(d.id)?prev.dias_semana.filter(id=>id!==d.id):[...(prev.dias_semana || []),d.id]}))}>{d.short}</button>)}</div>}
-                </details>
+                {diasHabilitados && <section className="promo-options" aria-labelledby="promo-valid-days">
+                    <h3 id="promo-valid-days">Días de vigencia</h3>
+                    <small className="catalog-hint">Elegí los días en que se puede reservar la promoción. Marcá los siete para ofrecerla todos los días.</small>
+                    <div className="promo-option-list">
+                        {PROMO_DAYS.map(day => <button key={day.id} type="button"
+                            aria-pressed={form.dias_semana === null || form.dias_semana.includes(day.id)}
+                            onClick={() => toggleDay(day.id)}>
+                            {["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][day.id]}
+                        </button>)}
+                    </div>
+                    {form.dias_semana?.length === 0 && <small role="status">Elegí al menos un día para guardar.</small>}
+                </section>}
+                <section className="promo-options" aria-labelledby="promo-discount-mode">
+                    <h3 id="promo-discount-mode">Reducción del precio</h3>
+                    <small className="catalog-hint">Elegí si vas a ingresar el precio final en pesos o el porcentaje de descuento sobre el precio original.</small>
+                    <div className="promo-option-list">
+                        {[["precio_final","Precio establecido"],["porcentaje","Porcentaje %"]].map(([mode,label]) =>
+                            <button type="button" key={mode} aria-pressed={form.descuento_tipo === mode}
+                                onClick={() => setForm(prev => prev.descuento_tipo === mode ? prev : {...prev, descuento_tipo:mode, valor:""})}>
+                                {label}
+                            </button>
+                        )}
+                    </div>
+                </section>
                 {readyToSave && <CatalogSaveState message={editando ? "Cambios en la promoción" : "Promoción lista para guardar"} label="Guardar promoción" saving={busy} onSave={()=>formRef.current?.requestSubmit()} />}
             </fieldset>
         </motion.form> : loading ? <InlineLoading label="Cargando promociones…"/> : lista.length===0 ? <p>Todavía no hay promociones.</p> :
