@@ -24,7 +24,9 @@
 .offer-cover img {width:100%;height:100%;object-fit:cover}
 .offer-fields {flex-wrap:wrap;align-items:end;margin-bottom:18px}
 .offer-fields label {display:grid;gap:8px;min-width:0;max-width:100%}
-.offer-items {margin-top:10px;max-height:240px;overflow:auto;display:grid;gap:8px}
+.offer-items {margin-top:10px;max-height:240px;overflow:auto;scrollbar-width:none}
+.offer-items::-webkit-scrollbar {display:none}
+.offer-item-list {display:grid;gap:8px}
 .offer-item {padding:8px 10px;border:1px solid #a6aea6;border-radius:16px;justify-content:space-between}
 .offer-item[data-selected=true] {border-color:var(--client-green);color:var(--client-green)}
 .offer-item>button {display:flex;align-items:center;gap:10px;text-align:left;min-width:0;background:none;border:0;color:inherit;cursor:pointer}
@@ -54,3 +56,10 @@
 @media(max-width:1250px){.clients-board{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:980px){.clients-board{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:550px){.clients-board{grid-template-columns:minmax(0,1fr)}}
+
+.offer-scroll button {display:grid;place-items:center;padding:0}
+.offer-scroll button:disabled {opacity:.35;cursor:default}
+.offer-prices {display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:clamp(5px,1vw,12px);align-items:end;max-width:100%;min-width:0}
+.offer-prices strong {display:flex;align-items:center;min-height:44px}
+.offer-discount {display:grid;justify-items:center;align-content:center;gap:2px;min-height:44px}
+.offer-discount small {color:white;background:var(--client-green);border-radius:4px;padding:2px 4px;font-size:12px}

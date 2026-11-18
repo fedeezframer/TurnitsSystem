@@ -1,8 +1,15 @@
+import { IconOptionPicker } from "./IconOptionPicker"
 import * as React from "react"
 import { BackButton } from "../../components/BackButton"
 import { ClientesGrid_getSlug, ClientesGrid_getToken, ServiciosManager_parseDesc } from "./common"
 
 const categories = {servicios:"Servicios",extras:"Productos",promociones:"Promociones"}
+const arrow = "/assets/panel-nav/akar-icons_arrow-down.svg"
+const categoryOptions = [
+    {id:"servicios", label:categories.servicios, color:"#196b20", icon:"ix_product-management.svg", description:"Servicios disponibles para reservar."},
+    {id:"extras", label:categories.extras, color:"#86521d", icon:"ant-design_product-outlined.svg", description:"Productos para sumar al turno."},
+    {id:"promociones", label:categories.promociones, color:"#6245a0", icon:"hugeicons_sale-tag-01.svg", description:"Promociones de tu catálogo."},
+]
 type Category = keyof typeof categories
 type Item = {id:string; nombre:string; precio:number; imagen:string; descripcion:string}
 type Line = {item:Item; count:number}
@@ -22,6 +29,27 @@ export function ClientOfferDraft({bookingId,name,baseUrl,onClose}:{bookingId:str
     const [time,setTime] = React.useState("")
     const [sending,setSending] = React.useState(false)
     const [sendError,setSendError] = React.useState("")
+    const [scroll, setScroll] = React.useState({up:false, down:false})
+    React.useLayoutEffect(() => {
+        const viewport = list.current
+        if (!viewport) return
+        viewport.scrollTop = 0
+        function measure() {
+            if (!viewport) return
+            const up = viewport.scrollTop > 1
+            const down = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop > 1
+            setScroll(previous => previous.up === up && previous.down === down ? previous : {up, down})
+        }
+        const observer = new ResizeObserver(measure)
+        observer.observe(viewport)
+        if (viewport.firstElementChild) observer.observe(viewport.firstElementChild)
+        viewport.addEventListener("scroll", measure, {passive:true})
+        measure()
+        return () => {
+            observer.disconnect()
+            viewport.removeEventListener("scroll", measure)
+        }
+    }, [category])
     async function sendOffer() {
         setSending(true)
         setSendError("")
@@ -84,15 +112,23 @@ export function ClientOfferDraft({bookingId,name,baseUrl,onClose}:{bookingId:str
         <BackButton floating onClick={()=>dialog.current?.close()}/>
         <h2 id="client-offer-title">Promoción para {name}</h2><p>Impulsa a que este cliente vuelva</p>
         <div className="offer-main"><div className="offer-cover">{image && <img src={image} alt=""/>}</div>
-        <div><div className="offer-fields"><label>¿Qué quieres ofrecer?<select value={category} onChange={e=>setCategory(e.target.value as Category)}>{Object.entries(categories).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></label>
+        <div><div className="offer-fields"><IconOptionPicker title="¿Qué querés ofrecer?" heading="¿Qué querés ofrecer?" help="Elegí una categoría para ver su catálogo." value={category} options={categoryOptions}
+            icon={(id,size) => <img alt="" width={size} height={size} src={"/assets/panel-nav/"+categoryOptions.find(option=>option.id===id)?.icon}/>}
+            onChange={id=>setCategory(id as Category)}/>
         <label>Vigente durante<select value={validity} onChange={e=>setValidity(e.target.value)}><option value="semana">7 días</option><option value="mes">30 días</option>{fixed && <option value="dia">Solo durante el día seleccionado</option>}</select></label></div>
-        <h3>Seleccioná {categories[category].toLowerCase()}</h3><div className="offer-picker"><div className="offer-items" ref={list}>{status && <p role="status">{status}</p>}{items.map(item=>{
+        <h3>Seleccioná {categories[category].toLowerCase()}</h3><div className="offer-picker"><div className="offer-items" ref={list}><div className="offer-item-list">{status && <p role="status">{status}</p>}{items.map(item=>{
             const count=lines[category+"/"+item.id]?.count || 0
             return <div className="offer-item" data-selected={count>0} key={item.id}><button aria-pressed={count>0} onClick={()=>quantity(item,count?0:1)}><span aria-hidden="true" className="offer-check"/>{item.imagen && <img src={item.imagen} alt=""/>}<span><strong>{item.nombre}</strong><small>{item.descripcion || "Sin descripción"}</small></span></button>
             <div><b>{money(item.precio)}</b>{count>0 && <div className="offer-qty"><button aria-label={"Sumar "+item.nombre} onClick={()=>quantity(item,count+1)}>+</button>{count}<button aria-label={"Restar "+item.nombre} onClick={()=>quantity(item,count-1)}>−</button></div>}</div></div>
-        })}</div>{items.length>2 && <div className="offer-scroll">{[-1,1].map(dir=><button key={dir} aria-label={dir<0?"Ver anteriores":"Ver siguientes"} onClick={()=>list.current?.scrollBy({top:dir*128,behavior:"smooth"})}>{dir<0?"↑":"↓"}</button>)}</div>}</div></div></div>
-        <div className="offer-fields"><label>Precio original<strong>{money(total)}</strong></label><label>Precio de promoción<span className="promo-money-input"><span aria-hidden="true">$</span><input placeholder="0" type="number" min="0" max={total} value={price} onChange={e=>setPrice(e.target.value)} /></span></label>
-        {Number(price)>0 && Number(price)<total && <span>−{Math.round((1-Number(price)/total)*100)}%</span>}
+        })}</div></div>{items.length > 0 && (scroll.up || scroll.down) && <div className="offer-scroll">{[-1,1].map(dir=><button key={dir} disabled={dir<0?!scroll.up:!scroll.down} aria-label={dir<0?"Ver anteriores":"Ver siguientes"} onClick={()=>{
+            const viewport=list.current
+            viewport?.scrollBy({top:dir*viewport.clientHeight,behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})
+        }}><img src={arrow} alt="" width="18" height="18" style={{transform:`rotate(${dir*90}deg)`}}/></button>)}</div>}</div></div></div>
+        <div className="offer-fields"><div className="offer-prices"><label>Precio original<strong>{money(total)}</strong></label>
+        <span className="offer-discount"><img src={arrow} alt="" width="22" height="22"/>
+            {Number(price)>0 && Number(price)<total && <small>−{((1-Number(price)/total)*100).toLocaleString("es-AR",{maximumFractionDigits:1})}%</small>}
+        </span><label>Precio de promoción<span className="promo-money-input"><span aria-hidden="true">$</span><input placeholder="0" type="number" min="0" max={total} value={price} onChange={e=>setPrice(e.target.value)} /></span></label>
+        </div>
         <fieldset className="offer-schedule"><legend>Elección de fecha y hora</legend><button aria-pressed={!fixed} onClick={()=>{setFixed(false);if(validity==="dia")setValidity("semana")}}>Libre</button><button aria-pressed={fixed} onClick={()=>setFixed(true)}>Establecer</button></fieldset>
         {fixed && <><label>Día<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><label>Hora<input type="time" value={time} onChange={e=>setTime(e.target.value)}/></label></>}</div>
         {selected.length>0 && Object.keys(lines).every(key=>key.startsWith("extras/")) && <p>El cliente elige un servicio y reserva un turno para adquirir estos productos con descuento. El servicio se cobra aparte.</p>}
