@@ -1103,6 +1103,10 @@ app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
     let ingresoBruto = 0, ingresoMp = 0, ingresoMpConDetalle = 0, ingresoOffline = 0;
     let comisionMpReal = 0, comisionTurnitsOnline = 0, turnosMpSinDetalle = 0, turnosMpConDetalle = 0;
     for (const turno of turnosMes || []) {
+      if (turno.pago_estado === "sin_pago" && ["confirmado", "completado"].includes(turno.estado)) {
+        ingresoBruto += Number(turno.precio_cobrado || 0);
+        continue;
+      }
       if (turno.estado === "pendiente" || turno.pago_estado !== "aprobado") continue;
       const montoCobrado = Number(turno.monto_pagado || 0);
       ingresoBruto += montoCobrado;
@@ -1232,10 +1236,12 @@ function agruparPagos(turnos, hoyISO) {
   let volumenTotal = 0, cantidadTotal = 0;
 
   turnos.forEach((t) => {
-    const fecha  = (t.fecha_pago || t.created_at || hoyISO).toString().split("T")[0];
-    const monto  = Number(t.monto_pagado || 0);
     const estado = t.pago_estado || "sin_pago";
-    if (estado === "sin_pago") return;
+    const sinCobroOnline = estado === "sin_pago";
+    if (sinCobroOnline && !["confirmado", "completado"].includes(t.estado)) return;
+    const fechaBase = sinCobroOnline ? t.fecha : t.fecha_pago || t.created_at;
+    const fecha = (fechaBase || hoyISO).toString().split("T")[0];
+    const monto = Number((sinCobroOnline ? t.precio_cobrado : t.monto_pagado) || 0);
 
     const [va, vm, vd] = fecha.split("-").map(Number);
     const semKey = `${va}-S${Math.ceil(vd / 7)}`;
@@ -1255,7 +1261,7 @@ function agruparPagos(turnos, hoyISO) {
     if (t.email)         clientesSet.add(t.email.toLowerCase());
     else if (t.telefono) clientesSet.add(t.telefono);
 
-    if (estado === "aprobado") { volumenTotal += monto; cantidadTotal += 1; }
+    if (sinCobroOnline || estado === "aprobado") { volumenTotal += monto; cantidadTotal += 1; }
   });
 
   return {
@@ -6602,13 +6608,7 @@ const turnosHoyDetalle = turnosData
     // el valor agendado, mientras que las comisiones siguen usando pagos reales.
     const turnosMetricasPago = [
       ...(turnosPago || []),
-      ...(turnosSinPago || []).map((t) => ({
-        fecha_pago: t.fecha,
-        monto_pagado: t.precio_cobrado,
-        pago_estado: "aprobado",
-        email: t.email,
-        telefono: t.telefono,
-      })),
+      ...(turnosSinPago || []).map(t => ({ ...t, pago_estado: "sin_pago" })),
     ];
     const metricas  = agruparPagos(turnosMetricasPago, hoyISO);
     const mesKey    = `${anioActual}-${String(mesActual).padStart(2, "0")}`;
@@ -6681,7 +6681,7 @@ const turnosHoyDetalle = turnosData
 
     const facturacionHistorica = turnosLogros.reduce(
       (acc, t) => acc + (t.pago_estado === "sin_pago"
-        ? Number(t.precio_cobrado || 0)
+        ? (["confirmado", "completado"].includes(t.estado) ? Number(t.precio_cobrado || 0) : 0)
         : (t.pago_estado === "aprobado" ? Number(t.monto_pagado || 0) : 0)),
       0
     );

@@ -102,6 +102,10 @@ async function harness({ branch = false, bulk = false, failure, missing = false,
   const data = owner.res.body;
   assert.equal(data.turnosMes, 6); assert.equal(data.turnosHoy, 3);
   assert.equal(data.turnosLista.length, 7, "pending appointments remain visible, canceled appointments excluded");
+  const sinCobro = data.proximosDias.find(d => d.fecha === "2026-10-20");
+  assert.equal(sinCobro.volumen, 15000);
+  assert.equal(sinCobro.aprobado, 0);
+  assert.equal(sinCobro.cantidad, 1);
   assert.equal(data.turnosHoyDetalle[0].duracion, undefined);
   assert.equal(data.turnosLista.find(t => t.id === 1).duracion, 45);
   assert.equal(data.turnosLista.find(t => t.id === 1).monto_pendiente_local, 14500);

@@ -33,14 +33,15 @@ export function clientOffers({app,db,requireAuth,limiter,variant,branchPanel,res
     const customers=new Map(), today=day();
     const now=new Intl.DateTimeFormat("en-GB",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit"}).format(new Date());
     for(let start=0;;start+=1000){
-      const page=read(await branchPanel.from(req,"turnos").select("id,nombre,apellido,telefono,email,fecha,hora,estado,monto_pagado").eq("slug",slug).neq("estado","cancelado").order("fecha",{ascending:false}).order("id").range(start,start+999));
+      const page=read(await branchPanel.from(req,"turnos").select("id,nombre,apellido,telefono,email,fecha,hora,estado,pago_estado,precio_cobrado,monto_pagado").eq("slug",slug).neq("estado","cancelado").order("fecha",{ascending:false}).order("id").range(start,start+999));
       for(const row of page){
         const key=row.telefono || row.email;
         if(!key)continue;
         if(!customers.has(key))customers.set(key,{bookingId:row.id,nombre:row.nombre || "—",apellido:row.apellido,email:row.email,telefono:row.telefono,turnos:0,total:0,visits:new Set()});
         const customer=customers.get(key);
         customer.turnos++;
-        customer.total+=Number(row.monto_pagado || 0);
+        const sinCobroOnline = row.pago_estado === "sin_pago" && ["confirmado", "completado"].includes(row.estado);
+        customer.total += Number((sinCobroOnline ? row.precio_cobrado : row.monto_pagado) || 0);
         if(row.estado==="completado" || (row.estado==="confirmado" && (row.fecha<today || (row.fecha===today && row.hora.slice(0,5)<=now))))customer.visits.add(row.fecha);
       }
       if(page.length<1000)break;
