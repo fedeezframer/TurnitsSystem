@@ -5,7 +5,7 @@ import { AgendaPanel_getSlug, AgendaPanel_getToken, AgendaPanel_formatMonto, Ser
 import "./agenda-dias.css"
 
 type Extra = { id?: string; extra_id?: string; nombre?: string; imagen_url?: string }
-type Turno = { id:string; nombre:string; hora:string; servicio?:string; servicio_id?:string; precio_cobrado:number; monto_pagado:number; extras?:Array<string|Extra> }
+type Turno = { id:string; nombre:string; hora:string; estado?:string; reprogramacion_pendiente?:{id:string}|null; servicio?:string; servicio_id?:string; precio_cobrado:number; monto_pagado:number; extras?:Array<string|Extra> }
 type Dia = { fecha:string; turnos:Turno[] }
 type Item = { id:string; nombre:string; imagen_url?:string; descripcion?:string }
 const month = new Intl.DateTimeFormat("es-AR",{month:"short",timeZone:"UTC"})
@@ -105,18 +105,30 @@ export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick}:{
     },[selected,turnoOpen])
     const days = dias.filter(day => day.turnos.length > 0).sort((a,b) => a.fecha.localeCompare(b.fecha))
     const time = new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
+    // La API entrega los turnos de cada día ordenados por hora.
+    const next = days.flatMap(day => day.turnos.filter(t =>
+        (day.fecha > today || (day.fecha === today && t.hora >= time)) &&
+        (!t.estado || t.estado === "confirmado" || t.estado === "pendiente")
+    ))[0]
+    function appointmentLabel(turno: Turno) {
+        const status = turno.reprogramacion_pendiente ? "Reprogramación pendiente"
+            : turno.id === next?.id ? "Próximo turno" : undefined
+        return <span className="agenda-appointment-label" data-status={status} title={status}>
+            {turno.nombre} <time>{turno.hora}</time>
+            {status && <span className="agenda-status-description"> · {status}</span>}
+        </span>
+    }
     const openDay = (fecha:string) => {setSelected(fecha);setLoadPhotos(true)}
     const selectedTurns = days.find(day => day.fecha === selected)?.turnos || []
     return <>
         <div className="agenda-day-grid">
             {days.length === 0 && <p className="agenda-empty-note" role="status">Aún no tienes reservas</p>}
             {days.map(day=>{
-                const next = day.fecha === today ? day.turnos.find(t=>t.hora>=time)?.id : null
                 return <article className="agenda-day" data-today={day.fecha===today} key={day.fecha}>
-                    <DayBackdrop date={day.fecha} />
+                    {day.fecha === today && <DayBackdrop date={day.fecha} />}
                     <header><h3>{day.fecha===today?"Hoy":shortDate(day.fecha)}</h3><button onClick={()=>openDay(day.fecha)} aria-label={"Ver detalles del "+shortDate(day.fecha)}>Ver detalles</button></header>
-                    <ol>{day.turnos.map(t=><li key={t.id} data-state={t.id===next?"next":day.fecha===today && t.hora<time?"past":"upcoming"}>
-                        <button onClick={()=>onTurnoClick(t,day.fecha)}>{t.nombre} <time>{t.hora}</time></button>
+                    <ol>{day.turnos.map(t=><li key={t.id} data-state={t.id===next?.id?"next":day.fecha===today && t.hora<time?"past":"upcoming"}>
+                        <button onClick={()=>onTurnoClick(t,day.fecha)}>{appointmentLabel(t)}</button>
                     </li>)}</ol>
                 </article>
             })}
@@ -134,7 +146,7 @@ export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick}:{
                             return url && <img key={i} src={url} alt={item.nombre || "Producto adicional"}/>
                         })}</span>
                     </span>
-                    <span className="agenda-reserva-body"><span>{t.nombre} {t.hora}</span><strong>{t.servicio || "Turno"} {!!t.extras?.length && <small>+ extra</small>}</strong>
+                    <span className="agenda-reserva-body">{appointmentLabel(t)}<strong>{t.servicio || "Turno"} {!!t.extras?.length && <small>+ extra</small>}</strong>
                         <span>Abonado: {AgendaPanel_formatMonto(t.monto_pagado)}</span><span>Debe pagar: {AgendaPanel_formatMonto(Math.max(0,t.precio_cobrado-t.monto_pagado))}</span>
                     </span>
                 </button>

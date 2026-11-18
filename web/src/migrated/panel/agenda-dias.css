@@ -5,7 +5,6 @@
 .agenda-day-backdrop {position:absolute;inset:0;z-index:-1;overflow:hidden;border-radius:inherit;pointer-events:none}
 .agenda-day-glow {position:absolute;left:-16%;top:20%;width:82%;height:64%;border-radius:44% 58% 39% 66%;background:#b1f3ab;filter:blur(24px)}
 .agenda-day-ribbons {position:absolute;inset:-12%;width:124%;height:124%;fill:none;stroke:#c2edb9;stroke-linecap:round;filter:blur(3px)}
-.agenda-day:nth-child(3n) .agenda-day-glow {left:56%;top:-12%}
 .agenda-day[data-today=true] {background:#b7f5ae}
 .agenda-day[data-today=true] .agenda-day-glow {left:-4%;top:-19%;width:109%;height:88%;background:#99ed90}
 .agenda-day[data-today=true] .agenda-day-ribbons {stroke:#dcffd4}
@@ -20,6 +19,17 @@
 .agenda-day li:not(:last-child):after {content:"";position:absolute;left:.35em;top:1.25em;bottom:0;border-left:1px dashed #688565}
 .agenda-day li[data-state=past] {color:#40543d}.agenda-day li[data-state=past]:before {background:#41553d}
 .agenda-day li[data-state=next] {color:#176c21}.agenda-day li[data-state=next]:before {background:#82c783}
+.agenda-appointment-label[data-status="Reprogramación pendiente"] {--pulse-ink:#174b8a;--pulse-bright:#205da4;--pulse-glow:#438cec80}
+.agenda-appointment-label[data-status="Próximo turno"] {--pulse-ink:#14551d;--pulse-bright:#196825;--pulse-glow:#37a44d80}
+.agenda-appointment-label[data-status] {color:var(--pulse-ink)}
+.agenda-status-description {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@media (prefers-reduced-motion:no-preference) {
+    .agenda-appointment-label[data-status] {animation:agenda-status-pulse 2.8s ease-in-out infinite}
+    @keyframes agenda-status-pulse {
+        0%,100% {color:var(--pulse-ink);text-shadow:0 0 0 transparent}
+        50% {color:var(--pulse-bright);text-shadow:0 0 6px var(--pulse-glow)}
+    }
+}
 .agenda-day p,.agenda-day-dialog>p {color:#5a605c}
 .agenda-actions {display:flex;align-items:flex-end;justify-content:flex-end;gap:12px}
 .agenda-actions .negocio-field {flex:1 1 320px;max-width:320px;margin-right:auto}

@@ -785,7 +785,7 @@ function TurnitsPanel_Inner(props: any) {
                     >
                         <SeccionHeader
                             title="Mi Agenda"
-                            subtitle="Ofrece promociones a tus clientes, descuentos y combos para mejorar su experiencia"
+                            subtitle="Consultá tus próximos turnos y revisá las solicitudes de reprogramación."
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
