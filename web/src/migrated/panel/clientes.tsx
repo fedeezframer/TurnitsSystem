@@ -1,3 +1,4 @@
+import parsePhoneNumber from "libphonenumber-js/min"
 import * as React from "react"
 import { CatalogToolbar } from "./CatalogToolbar"
 import LoadingRunner from "../../components/LoadingRunner"
@@ -16,6 +17,46 @@ function ClientAvatar({nombre,apellido,identity}: {nombre:string; apellido?:stri
     for (const char of identity) hash = (Math.imul(hash,31) + char.charCodeAt(0)) >>> 0
     const initials = [nombre,apellido].map(part=>Array.from(part?.trim() || "")[0]).join("").toLocaleUpperCase("es")
     return <b className="client-avatar" aria-hidden="true" style={{backgroundColor:avatarColors[hash % avatarColors.length]}}>{initials}</b>
+}
+
+function ClientEmail({email}: {email: string}) {
+    const ref = React.useRef<HTMLElement>(null)
+    React.useLayoutEffect(() => {
+        const label = ref.current
+        if (!label || !email) return
+        const measure = document.createRange()
+        measure.selectNodeContents(label)
+        let lastWidth = -1
+        function fit() {
+            if (!label?.isConnected) return
+            lastWidth = label.clientWidth
+            label.style.fontSize = ""
+            label.style.whiteSpace = "nowrap"
+            const baseSize = parseFloat(getComputedStyle(label).fontSize)
+            const textWidth = measure.getBoundingClientRect().width
+            if (textWidth > lastWidth && lastWidth > 0) {
+                label.style.fontSize = Math.max(10, Math.floor(baseSize * lastWidth / textWidth * 10) / 10) + "px"
+            }
+            label.style.whiteSpace = ""
+        }
+        fit()
+        const observer = new ResizeObserver(() => {
+            if (label.clientWidth !== lastWidth) fit()
+        })
+        observer.observe(label)
+        document.fonts.addEventListener("loadingdone", fit)
+        return () => {
+            observer.disconnect()
+            document.fonts.removeEventListener("loadingdone", fit)
+        }
+    }, [email])
+    return <small ref={ref} title={email}>{email}</small>
+}
+
+function displayPhone(value: string) {
+    if (!value) return ""
+    const digits = value.replace(/\D/g, "").replace(/^00/, "")
+    return parsePhoneNumber("+" + digits)?.formatInternational() || value
 }
 
 export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {baseUrl?:string; porPagina?:number; accentColor?:string}) {
@@ -108,7 +149,7 @@ export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {base
         <div className="clients-board">
             {results.slice(0,visibles).map(c=><article key={c.bookingId}>
                 <header><ClientAvatar nombre={c.nombre} apellido={c.apellido} identity={c.telefono || c.email || [c.nombre,c.apellido].join(" ")} /><div><h3>{c.nombre} {c.apellido}</h3>
-                {esPremium && <><small>{c.email}</small><small>{c.telefono}</small></>}</div></header>
+                {esPremium && <><ClientEmail email={c.email} /><small>{displayPhone(c.telefono)}</small></>}</div></header>
                 <dl><div><dt>Reservas</dt><dd>{c.turnos}</dd></div><div><dt>Total</dt><dd>{money.format(c.total)}</dd></div>
                 <div><dt>Última visita</dt><dd>{c.ultimaVisita || "Sin visitas"}</dd></div>
                 <div><dt>Recurre cada</dt><dd>{c.intervalo ? c.intervalo+" días" : "—"}</dd></div></dl>

@@ -5,7 +5,7 @@
 .clients-board article {display:flex;flex-direction:column;gap:16px;padding:clamp(14px,1.3vw,20px);border:1px solid #d5dbd5;border-radius:18px;background:white;min-width:0}
 .client-avatar {flex:none;display:grid;place-items:center;width:38px;height:38px;color:#28352f;font-size:15px;letter-spacing:.02em;border-radius:50%}
 .clients-board h3,.client-offer h3 {margin:0;font-size:18px}
-.clients-board header div {min-width:0;overflow-wrap:anywhere}
+.clients-board header div {flex:1;min-width:0;overflow-wrap:anywhere}
 .clients-board small,.offer-item small {display:block;color:#525a54}
 .clients-board dl {margin:0;display:grid;gap:6px}
 .clients-board dl div {display:flex;gap:8px;color:#546056;font-weight:500}
