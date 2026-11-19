@@ -652,10 +652,10 @@ function TeamManager_PromocionesVinculadas({
                             }
                             style={{ "--equipo-accent": accentColor, opacity: pending ? 0.6 : s.activo ? 1 : 0.65 } as React.CSSProperties}
                         >
+                            <span className="equipo-check" aria-hidden="true">{sel && <img src="/assets/panel-nav/akar-icons_check.svg" alt="" />}</span>
                             <span className="equipo-promo-icon" aria-hidden="true">%</span>
                             <span className="equipo-promo-copy"><strong>{s.nombre}</strong><small>{Array.isArray(s.items) && s.items.length ? `Incluye ${s.items.length} ${s.items.length === 1 ? "servicio" : "servicios"}` : "Promoción del negocio"}{!s.activo ? " · Inactiva" : ""}</small></span>
                             <b className="equipo-promo-price">${Number(s.precio || 0).toLocaleString("es-AR")}</b>
-                            <span className="equipo-check" aria-hidden="true">{sel ? <img src="/assets/panel-nav/akar-icons_check.svg" alt="" /> : "+"}</span>
                         </button>
                     </div>
                 )
