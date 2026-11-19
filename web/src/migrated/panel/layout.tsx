@@ -925,11 +925,11 @@ function TurnitsPanel_Inner(props: any) {
                             gap: 20,
                         }}
                     >
-                        <SeccionHeader
+                        {!sucursales && <SeccionHeader
                             title={sucursales ? "Sucursales" : "Equipo"}
                             subtitle={sucursales ? "Administrá las sedes y sus profesionales." : "Gestioná a las personas que trabajan con vos."}
                             isMobile={isMobile}
-                        />
+                        />}
                         <SectionLoadingBoundary>
                         <EquipoSecciones sucursales={sucursales}
                             baseUrl={baseUrl}

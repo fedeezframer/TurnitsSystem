@@ -649,31 +649,33 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
     disabled = locked || !data.habilitado;
   return (
     <div className="negocio-editor negocio-stack">
-      {!form && <div className="sucursal-heading-card" style={locked ? { opacity: 0.55, filter: "grayscale(1)" } : {}}>
-        <div className="negocio-between">
-          {locked ? (
-            <TurnitsPlanRequirement premiumOnly />
-          ) : (
-            <button
-              type="button"
-              className="negocio-button"
-              disabled={disabled || busy || !!form}
-              onClick={() => {
-                setForm({ ...sucursalVacia, miembros: [] });
-                setError("");
-                setSaved("");
-              }}
-            >
-              + Nueva sucursal
-            </button>
-          )}
+      <div className="sucursal-section-top">
+        <div className="turnits-section-heading">
+          <h1 className="turnits-section-heading-title">Sucursales</h1>
+          <p className="turnits-section-heading-subtitle">Administrá las sedes y sus profesionales.</p>
         </div>
-        {!data.habilitado && (
-          <p className="negocio-muted">
-            Falta instalar la actualización de Sucursales en la base de datos.
-          </p>
-        )}
-      </div>}
+        {!form && (locked ? (
+          <TurnitsPlanRequirement premiumOnly />
+        ) : (
+          <button
+            type="button"
+            className="negocio-button"
+            disabled={disabled || busy}
+            onClick={() => {
+              setForm({ ...sucursalVacia, miembros: [] });
+              setError("");
+              setSaved("");
+            }}
+          >
+            + Nueva sucursal
+          </button>
+        ))}
+      </div>
+      {!data.habilitado && (
+        <p className="negocio-muted">
+          Falta instalar la actualización de Sucursales en la base de datos.
+        </p>
+      )}
       {form && (
         <form className="negocio-card negocio-stack sucursal-editor" onSubmit={guardar}>
           <h2>
