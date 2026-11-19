@@ -79,3 +79,13 @@
 .schedule-exceptions nav .exception-today {width:auto;padding:0 12px;border-radius:9px;font:inherit}
 @media(prefers-reduced-motion:no-preference){.week-switch::before {transition:transform .16s}.week-switch[aria-checked=true]::before {margin-left:0;transform:translateX(17px)}.week-days button {transition:background-color .15s,border-color .15s}}
 @container(max-width:570px){.exception-columns {display:none}.week-notice {grid-template-columns:1fr;padding:14px}.week-notice-input {grid-column:1;grid-row:3;margin-top:6px}.week-days {grid-template-columns:repeat(3,minmax(0,1fr))}.week-days button {padding:8px}.week-days small {font-size:10px}}
+
+@container(min-width:720px){
+    .week-periods {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(24px,4cqw,60px)}
+    .week-periods .week-period {min-width:0;max-width:none;margin:0}
+    .week-periods .week-period + .week-period {padding-left:clamp(18px,3cqw,40px);border-left:1px solid #e3e7e3}
+    .week-periods .week-range {max-width:none;gap:16px}
+    .week-periods .week-range label {min-width:0;gap:10px}
+}
+.exception-usual {display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:4px 12px;padding:12px 14px;margin-top:16px;border-radius:10px;background:#f4f7f4;color:#465649;font-size:13px;font-variant-numeric:tabular-nums}
+.exception-usual small {grid-column:1/-1}

@@ -471,7 +471,7 @@ function HorariosConfig_Shell({
             })}
         </div>
         <hr/>
-        <div key={diaActivo}>
+        <div key={diaActivo} className="week-periods">
             {["jornada","descanso"].map((field,index)=>{
                 const rest = index===1
                 const enabled = day?.activo && (!rest || hasBreak)
@@ -741,11 +741,10 @@ function ExcepcionesConfig_SkeletonCalendar() { return <div className="exception
 function ExcepcionesConfig_DayPanel({
     dayKey,
     excepcion,
-    accentColor,
-    isMobile,
+    habitual,
     onSave,
     onClose,
-}: ExcepcionesConfig_DayPanelProps) {
+}: ExcepcionesConfig_DayPanelProps & {habitual?: {activo:boolean; jornada?: (string|null)[]; descanso?: (string|null)[]}}) {
     const dialog = React.useRef<HTMLDialogElement>(null)
     const titleId = React.useId()
     const [type,setType] = React.useState(excepcion?.type ?? null)
@@ -772,6 +771,10 @@ function ExcepcionesConfig_DayPanel({
                 <h2 id={titleId}>{date.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</h2></div>
                 <BackButton onClick={onClose} aria-label="Cerrar"/>
             </div>
+            {habitual && <div className="exception-usual"><strong>Jornada semanal</strong>
+                <span>{habitual.activo && habitual.jornada?.every(Boolean) ? habitual.jornada.join(" – ") : "Cerrado"}</span>
+                {habitual.activo && habitual.descanso?.[0] && habitual.descanso[1] && <small>Descanso de {habitual.descanso.join(" a ")}</small>}
+            </div>}
             <div className="exception-options" role="group" aria-label="Disponibilidad">
                 {(excepcion || type) && <button aria-pressed={type===null} onClick={()=>{setType(null);setError("")}}>Horario habitual</button>}
                 {([{id:"block",label:"Día bloqueado"},{id:"custom",label:"Intervalos propios"}] as const).map(option=>
@@ -973,7 +976,7 @@ function ExcepcionesConfig({
                 {slots.length ? slots.map(([from,to],i)=><span key={i} className="exception-hours"><span>De </span>{from}<span>hs</span><br/><span>a </span>{to}<span>hs</span></span>) : <span>Cerrado</span>}
             </button>
         })}</div>
-        {selectedKey && <ExcepcionesConfig_DayPanel key={selectedKey} dayKey={selectedKey} excepcion={exceptions[selectedKey] ?? null} accentColor={accentColor} isMobile={isMobile} onSave={handleDaySave} onClose={()=>setSelectedKey(null)}/>}
+        {selectedKey && <ExcepcionesConfig_DayPanel key={selectedKey} dayKey={selectedKey} habitual={weekly[HorariosConfig_DIAS_CONFIG[(new Date(selectedKey+"T12:00:00").getDay()+6)%7].key]} excepcion={exceptions[selectedKey] ?? null} accentColor={accentColor} isMobile={isMobile} onSave={handleDaySave} onClose={()=>setSelectedKey(null)}/>}
         {error && <p role="alert">{error}</p>}
     </section>
 }

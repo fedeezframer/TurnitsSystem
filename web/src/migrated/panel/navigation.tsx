@@ -336,7 +336,7 @@ function NavButton({
   onClick,
   navIconos,
   showChevron = false,
-  chevronDown = false,
+  chevronDown,
 }: {
   item: { id: SeccionId; label: string };
   active: boolean;
@@ -351,6 +351,7 @@ function NavButton({
       onClick={onClick}
       whileHover={{ x: active ? 0 : 2 }}
       whileTap={{ scale: 0.97 }}
+      aria-expanded={chevronDown}
       aria-current={active ? "page" : undefined}
       style={{
         position: "relative",
@@ -382,7 +383,8 @@ function NavButton({
           viewBox="0 0 12 12"
           fill="currentColor"
           style={{ opacity: 0.55 }}
-          animate={{rotate:chevronDown ? 0 : item.id === "servicios" ? -90 : 0}}
+          initial={false}
+          animate={{rotate:chevronDown === false ? -90 : 0}}
           transition={{duration:.2,ease:[.22,1,.36,1]}}
         >
           <path d="m2 4 4 4 4-4" />
