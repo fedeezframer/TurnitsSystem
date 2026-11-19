@@ -2456,6 +2456,36 @@ const ServiciosManager_shimmerCSS = `
     animation: svc-shimmer 1.4s infinite;
 }
 .svc-card:hover { background: #fafcff !important; }
+.svc-card{min-height:88px!important;padding:14px 18px!important;border-radius:18px!important;border-color:#e6eaf0!important}
+.svc-card>div:nth-child(2)>div:first-child{font-size:18px!important;color:#111827!important;letter-spacing:-.35px!important}
+.svc-card-price{font-size:21px!important;color:#111827!important;margin-left:auto!important;white-space:nowrap}
+.turnits-create-button{background:linear-gradient(135deg,#1b9430,#0f6e20)!important;box-shadow:0 8px 18px rgba(23,109,38,.16)}
+.turnits-services-root{height:auto!important;overflow:visible!important}
+.turnits-services-root.turnits-services-servicios{gap:18px!important}
+.turnits-services-servicios .svc-catalog-tabs{order:2}
+.turnits-services-servicios .svc-catalog-tabs+div{order:1;align-items:center!important;margin:0 0 4px!important}
+.turnits-services-servicios .svc-catalog-tabs+div>div:first-child>div:first-child{line-height:1.12!important}
+.turnits-services-root.is-editing .svc-catalog-tabs{display:none!important}
+.svc-service-form>div:first-of-type{display:none!important}
+.svc-form-body>div:not(.svc-form-image){grid-column:2}
+.svc-form-image{grid-column:1;grid-row:1 / span 8;width:100%;min-width:0;align-self:start}
+.svc-form-image>div{width:100%!important}
+.svc-form-body input,.svc-form-body textarea{border-radius:16px!important}
+.svc-form-body>div:last-child{align-self:end}
+.svc-promos>div:first-of-type p{font-size:17px!important;color:#64748b!important}
+.svc-promos>div:first-of-type button{padding:15px 24px!important;border-radius:18px!important;font-size:16px!important}
+.turnits-promo-images{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.turnits-promo-images>span:only-child{grid-column:1/-1;aspect-ratio:1.2!important}
+.svc-catalog-tabs{background:#f8fafb!important;border:1px solid #e9edf1}
+.svc-tab{font-size:15px!important;padding:12px 20px!important;color:#1e293b!important}
+.svc-tab.active{background:#e8f6e9!important;color:#176a25!important;box-shadow:none!important}
+.turnits-promos-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:22px!important}
+.turnits-promo-card{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;padding:0!important;border-radius:24px!important;overflow:hidden!important;background:#fff!important;border-color:#e7ebf0!important;box-shadow:0 1px 2px rgba(15,23,42,.025)}
+.turnits-promo-images{width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:0!important;align-self:stretch!important}
+.turnits-promo-images>span{aspect-ratio:1.2!important;border:0!important;border-radius:0!important}
+.turnits-promo-card>div:last-child{padding:18px 20px 20px!important}
+@media(max-width:1100px){.turnits-promos-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:16px!important}}
+@media(max-width:860px){.svc-form-body>div:not(.svc-form-image){grid-column:1}.svc-form-image{grid-column:1;grid-row:auto}.svc-card-price{font-size:15px!important}.turnits-promos-grid{grid-template-columns:minmax(0,1fr)!important}}
 .svc-input:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent-10); }
 .svc-btn-icon:hover { opacity: 0.7; }
 .svc-dur:hover { border-color: var(--accent-30) !important; }
@@ -2464,6 +2494,8 @@ const ServiciosManager_shimmerCSS = `
 .svc-save-btn:hover { filter: brightness(1.06); }
 .svc-tab { padding: 7px 14px; border-radius: 9px; border: none; background: transparent; font-size: 12.5px; font-weight: 700; color: #94a3b8; cursor: pointer; font-family: 'Inter Display', -apple-system, sans-serif; transition: all 0.15s; white-space: nowrap; }
 @media (max-width: 600px) {
+ .turnits-promos-grid{grid-template-columns:minmax(0,1fr)!important;gap:14px!important}
+ .svc-card{padding:12px!important}
  .svc-catalog-tabs .svc-tab {min-width:0;padding:7px 3px;font-size:11px;gap:4px!important;}
  .svc-catalog-tabs .svc-tab svg {width:14px;height:14px;flex-shrink:0;}
 }
@@ -5006,8 +5038,10 @@ function SeccionHeader({
             <h1
                 style={{
                     fontFamily: "'Inter Display', -apple-system, sans-serif",
-                    fontSize: isMobile ? 22 : 28,
-                    fontWeight: 500,
+                    fontSize: isMobile ? 23 : 38,
+                    lineHeight: 1.12,
+                    letterSpacing: "-1.1px",
+                    fontWeight: 700,
                     color: "#0f172a",
                     margin: 0,
                 }}
@@ -5019,7 +5053,7 @@ function SeccionHeader({
                     style={{
                         fontFamily:
                             "'Inter Display', -apple-system, sans-serif",
-                        fontSize: 14,
+                        fontSize: isMobile ? 14 : 17,
                         fontWeight: 500,
                         color: "#64748b",
                         margin: "4px 0 0",

@@ -1177,6 +1177,7 @@ function ServiciosManager_ServicioForm({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.2 }}
+            className="svc-service-form"
             style={{
                 ...accentVars,
                 background: "#fff",
@@ -1246,23 +1247,27 @@ function ServiciosManager_ServicioForm({
             </div>
 
             <div
+                className="svc-form-body"
                 style={{
-                    padding: isMobile ? "16px" : "20px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: isMobile ? 18 : 20,
+                    padding: isMobile ? "16px" : "24px 30px 28px",
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(260px,368px) minmax(0,1fr)",
+                    gap: isMobile ? 18 : 24,
+                    alignItems: "start",
                 }}
             >
                 {/* Foto del servicio: se deja arriba de la grilla, es funcional
                     (no decorativa) así que no sigue el layout del mockup. */}
-                <ServiciosManager_ImageUploader
-                    value={form.imagen}
-                    onChange={set("imagen")}
-                    accentColor={accentColor}
-                    apiUrl={apiUrl}
-                    iconoFormUrl={iconoFormUrl}
-                    uploadPath={uploadPath}
-                />
+                <div className="svc-form-image">
+                    <ServiciosManager_ImageUploader
+                        value={form.imagen}
+                        onChange={set("imagen")}
+                        accentColor={accentColor}
+                        apiUrl={apiUrl}
+                        iconoFormUrl={iconoFormUrl}
+                        uploadPath={uploadPath}
+                    />
+                </div>
 
                 {/* Nombre + Descripción lado a lado, sin título de sección,
                     igual que el mockup. La descripción arranca del mismo
@@ -1936,7 +1941,7 @@ function ServiciosManager_ServicioCard({
     const [confirmDelete, setConfirmDelete] = React.useState(false)
     const [imgError, setImgError] = React.useState(false)
 
-    const thumbSize = isMobile ? 46 : 52
+    const thumbSize = isMobile ? 56 : 74
 
     return (
         <motion.div
@@ -2019,6 +2024,7 @@ function ServiciosManager_ServicioCard({
                     }}
                 >
                     <span
+                        className="svc-card-price"
                         style={{
                             fontSize: 11,
                             fontWeight: 700,
@@ -3112,9 +3118,14 @@ function ServiciosManager(props: any) {
     return (
         <div
             ref={containerRef}
+            className={`turnits-services-root turnits-services-${vista}${editando ? " is-editing" : ""}`}
             style={{
                 ...ServiciosManager_cardBase,
-                padding: isMobile ? "16px" : "22px",
+                padding: isMobile ? "8px 0" : "0",
+                background: "transparent",
+                boxShadow: "none",
+                borderRadius: 0,
+                overflow: "visible",
                 ...style,
             }}
         >
@@ -3139,30 +3150,29 @@ function ServiciosManager(props: any) {
                         <div>
                             <div
                                 style={{
-                                    fontSize: isMobile ? 15 : 16,
+                                    fontSize: isMobile ? 22 : 38,
                                     fontWeight: 700,
-                                    color: "#1e293b",
-                                    letterSpacing: "-0.3px",
+                                    color: "#111827",
+                                    letterSpacing: "-1px",
                                 }}
                             >
-                                Servicios
+                                    {editando ? "Editar servicio" : mostrarForm ? "Crear servicio" : "Servicios"}
                             </div>
                             <div
                                 style={{
-                                    fontSize: 12,
-                                    color: "#94a3b8",
-                                    marginTop: 2,
+                                    fontSize: isMobile ? 13 : 17,
+                                    color: "#64748b",
+                                    marginTop: 6,
                                 }}
                             >
-                                {servicios.length === 0
-                                    ? "Sin servicios aún"
-                                    : `${activos.length} activo${activos.length !== 1 ? "s" : ""}${inactivos.length > 0 ? `, ${inactivos.length} inactivo${inactivos.length !== 1 ? "s" : ""}` : ""}`}
+                                {editando ? "Modificá la información de tu servicio." : mostrarForm ? "Completá la información del servicio." : servicios.length === 0 ? "Sin servicios aún" : "Gestioná tus servicios y editá toda la información."}
                             </div>
                         </div>
                         {!mostrarForm &&
                             !editando &&
                             (!branch && (!employeeMode || employeeCanCreate)) && (
                                 <motion.button
+                                    className="turnits-create-button"
                                     whileHover={{ scale: 1.04 }}
                                     whileTap={{ scale: 0.96 }}
                                     onClick={() => setMostrarForm(true)}
@@ -3172,12 +3182,12 @@ function ServiciosManager(props: any) {
                                         gap: 6,
                                         padding: isMobile
                                             ? "9px 12px"
-                                            : "8px 14px",
-                                        borderRadius: 10,
+                                            : "15px 24px",
+                                        borderRadius: 18,
                                         border: "none",
                                         background: accentColor,
                                         color: "#fff",
-                                        fontSize: isMobile ? 12 : 13,
+                                        fontSize: isMobile ? 12 : 16,
                                         fontWeight: 700,
                                         cursor: "pointer",
                                         fontFamily:
@@ -3191,7 +3201,7 @@ function ServiciosManager(props: any) {
                                     >
                                         +
                                     </span>
-                                    {isMobile ? "" : " Nuevo"}
+                                    {isMobile ? "" : " Crear Servicio"}
                                 </motion.button>
                             )}
                     </div>
@@ -3304,7 +3314,7 @@ function ServiciosManager(props: any) {
                                             employeeVariant={employeeMode && !(editando as any)?.perfil_propio}
                                         />
                                     </motion.div>
-                                ) : (
+                                ) : editando ? null : (
                                     <ServiciosManager_ServicioCard
                                         key={svc.id}
                                         svc={svc}
@@ -3582,8 +3592,8 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     return <div className="svc-promos" style={{fontSize:13,"--promo-accent":accentColor} as React.CSSProperties}>
         <style>{` .svc-promos .promo-input:focus {outline:none;border-color:var(--promo-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--promo-accent) 12%,transparent)} .svc-promos button:focus-visible,.svc-promos .promo-check:focus-visible + span,.svc-promos .promo-switch:focus-visible {outline:2px solid var(--promo-accent);outline-offset:3px} .svc-promos .promo-check {position:absolute;opacity:0;width:20px;height:20px;margin:0} .svc-promos .promo-switch {appearance:none;-webkit-appearance:none;width:36px;height:21px;border:0;border-radius:99px;background:#cbd5e1;position:relative;flex-shrink:0;cursor:pointer;margin:0;transition:background .18s} .svc-promos .promo-switch:checked {background:var(--promo-accent)} .svc-promos .promo-switch:after {content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:white;box-shadow:0 1px 3px #0002;transition:transform .18s} .svc-promos .promo-switch:checked:after {transform:translateX(15px)} .svc-promos .promo-input::-webkit-inner-spin-button {appearance:none} .svc-promos button:disabled {opacity:.55;cursor:wait} `}</style>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-            <div><div style={{display:"flex",alignItems:"center",gap:8,fontSize:16,fontWeight:700}}>Promociones</div><p style={{margin:"6px 0",color:"#64748b",fontSize:12}}>Armá combos o descuentos con una vigencia definida.</p></div>
-            {!branch && !mostrar && <button type="button" style={button} onClick={()=>{setForm(initial());setEditando(null);setError("");setMostrar(true)}}>+ Crear promo</button>}
+            <div><div style={{display:"flex",alignItems:"center",gap:8,fontSize:isMobile ? 22 : 38,fontWeight:700,letterSpacing:"-1px",color:"#111827"}}>Promociones</div><p style={{margin:"6px 0",color:"#64748b",fontSize:isMobile ? 13 : 17}}>Ofrecé promociones, descuentos y combos a tus clientes.</p></div>
+            {!branch && !mostrar && <button type="button" className="turnits-create-button" style={button} onClick={()=>{setForm(initial());setEditando(null);setError("");setMostrar(true)}}>+ Crear promo</button>}
         </div>
         {error && <div role="alert" style={{padding:12,marginTop:12,borderRadius:10,background:"#fff1f2",color:"#b91c1c"}}>{error}</div>}
         {mostrar && <form noValidate onSubmit={guardar} style={{marginTop:18,padding:isMobile ? 14 : 22,border:"1px solid #e2e8f0",borderRadius:16,display:"grid",gap:18}}>
@@ -3616,7 +3626,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
             </fieldset>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button disabled={busy} type="submit" style={button}>{busy ? "Guardando…" : "Guardar promo"}</button><button disabled={busy} type="button" style={{...button,background:"#f1f5f9",color:"#475569"}} onClick={()=>{setMostrar(false);setError("")}}>Cancelar</button></div>
         </form>}
-        {loading ? <InlineLoading label="Cargando promociones…" /> : !lista.length && !mostrar ? <div style={{padding:30,textAlign:"center",border:"1px dashed #dbe2ea",borderRadius:16,marginTop:18,color:"#64748b"}}>Todavía no hay promos. Creá un combo o un descuento para empezar.</div> : <div style={{display:"grid",gridTemplateColumns:isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))",gap:12,marginTop:18}}>{lista.map(p=>{
+        {loading ? <InlineLoading label="Cargando promociones…" /> : !lista.length && !mostrar ? <div style={{padding:30,textAlign:"center",border:"1px dashed #dbe2ea",borderRadius:16,marginTop:18,color:"#64748b"}}>Todavía no hay promos. Creá un combo o un descuento para empezar.</div> : <div className="turnits-promos-grid" style={{display:"grid",gridTemplateColumns:isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))",gap:12,marginTop:18}}>{lista.map(p=>{
             const today=hoy()
             const status=today>p.fecha_fin ? "Vencida" : !p.activo ? "Pausada" : today<p.fecha_inicio ? "Programada" : "Vigente"
             const imagenes=p.items.map((item:any)=>{
@@ -3624,9 +3634,9 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 const url=item.tipo === "servicio" ? source?.imagen || source?.imagen_url || ServiciosManager_parseDesc(source?.descripcion || "").imagen : source?.imagen_url
                 return {url,nombre:item.nombre,tipo:item.tipo,id:item.id,cantidad:item.cantidad}
             })
-            return <div key={p.id} style={{position:"relative",border:"1px solid #e2e8f0",padding:isMobile ? 14 : 16,borderRadius:15,display:"flex",alignItems:"center",gap:isMobile ? 12 : 18,minWidth:0,background:"white",opacity:p.activo ? 1 : 0.65,...(!employeeMode ? ServiciosManager_EmployeeCardStyle(p) : {})}}>
+            return <div key={p.id} className="turnits-promo-card" style={{position:"relative",border:"1px solid #e2e8f0",padding:isMobile ? 14 : 16,borderRadius:15,display:"flex",alignItems:"center",gap:isMobile ? 12 : 18,minWidth:0,background:"white",opacity:p.activo ? 1 : 0.65,...(!employeeMode ? ServiciosManager_EmployeeCardStyle(p) : {})}}>
                 <span style={{position:"absolute",right:16,top:16,fontSize:10,padding:"3px 7px",borderRadius:5,background:status === "Vigente" ? "#eaf4ec" : "#f1f5f9",color:status === "Vigente" ? "#18732a" : "#64748b"}}>{status}</span>
-                {!!imagenes.length && <div aria-label="Elementos del combo" style={{display:"grid",gridTemplateColumns:imagenes.length===1 ? "minmax(0,1fr)" : imagenes.length>4 && !isMobile ? "repeat(3,minmax(0,1fr))" : "repeat(2,minmax(0,1fr))",width:isMobile ? (imagenes.length===1 ? 64 : 104) : (imagenes.length===1 ? 100 : 164),gap:isMobile ? 6 : 8,flexShrink:0,alignSelf:"center"}}>{imagenes.map((image:any)=><span key={image.tipo+image.id} title={`${image.cantidad} × ${image.nombre}`} style={{position:"relative",width:"100%",aspectRatio:"1",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8,overflow:"hidden",background:"#f8fafc",border:"1px solid #eef2f6",boxSizing:"border-box"}}>
+                {!!imagenes.length && <div className="turnits-promo-images" aria-label="Elementos del combo" style={{display:"grid",gridTemplateColumns:imagenes.length===1 ? "minmax(0,1fr)" : imagenes.length>4 && !isMobile ? "repeat(3,minmax(0,1fr))" : "repeat(2,minmax(0,1fr))",width:isMobile ? (imagenes.length===1 ? 64 : 104) : (imagenes.length===1 ? 100 : 164),gap:isMobile ? 6 : 8,flexShrink:0,alignSelf:"center"}}>{imagenes.map((image:any)=><span key={image.tipo+image.id} title={`${image.cantidad} × ${image.nombre}`} style={{position:"relative",width:"100%",aspectRatio:"1",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8,overflow:"hidden",background:"#f8fafc",border:"1px solid #eef2f6",boxSizing:"border-box"}}>
                     {image.url ? <img src={image.url} alt={image.nombre} style={{display:"block",width:image.tipo === "producto" ? "auto" : "100%",height:image.tipo === "producto" ? "auto" : "100%",maxWidth:"100%",maxHeight:"100%",objectFit:image.tipo === "producto" ? "contain" : "cover",borderRadius:8}}/> : <span role="img" aria-label={image.nombre} style={{display:"grid",justifyItems:"center",gap:3,padding:4,textAlign:"center",color:"#64748b",maxWidth:"100%",boxSizing:"border-box"}}><ServiciosManager_SeccionIcon tipo={image.tipo === "servicio" ? "servicios" : "extras"} size={16}/><span style={{fontSize:9,lineHeight:1.2,overflowWrap:"anywhere",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{image.nombre}</span></span>}
                     {image.cantidad>1 && <span style={{position:"absolute",right:3,bottom:3,borderRadius:5,padding:"2px 4px",fontSize:9,fontWeight:700,lineHeight:1.2,background:"#fff",color:"#1e293b",boxShadow:"0 1px 4px #0f172a1a"}}>×{image.cantidad}</span>}
                 </span>)}</div>}
