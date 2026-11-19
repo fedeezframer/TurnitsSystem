@@ -1287,6 +1287,7 @@ function TeamManager_OwnerFallbackCard({
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18 }}
+            className="tm-card"
             style={{
                 display: "flex",
                 alignItems: "center",
@@ -1460,33 +1461,14 @@ function TeamManager_MiembroCard({
             >
                 {/* Editar — siempre disponible, incluso para el dueño */}
                 <button
-                    className="tm-btn-icon"
+                    className="svc-edit-button"
                     title="Editar" aria-label={`Editar a ${miembro.nombre}`}
                     onClick={onEdit}
-                    style={{
-                        width: "auto", padding: "0 10px", gap: 4,
-                        height: isMobile ? 28 : 30,
-                        borderRadius: 20,
-                        border: "1px solid #e2e8f0",
-                        background: "#f8fafc",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: isMobile ? 12 : 13,
-                        color: "#64748b",
-                        transition: "opacity 0.15s",
-                    }}
                 >
                     {iconoEditar ? (
                         <img
                             src={iconoEditar}
                             alt=""
-                            style={{
-                                width: isMobile ? 14 : 16,
-                                height: isMobile ? 14 : 16,
-                                objectFit: "contain",
-                            }}
                         />
                     ) : (
                         "✎"

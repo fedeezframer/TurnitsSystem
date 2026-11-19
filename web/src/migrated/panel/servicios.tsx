@@ -2819,10 +2819,10 @@ function ServiciosManager_ProductosSection(props: any) {
                 </>)
 }
 function ServiciosManager_PromocionesSection(props: any) {
-    const {isMobile,accentColor,employeeMode,puedePromociones,api,servicios,extras}=props
-    return (<>{puedePromociones ? <ServiciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Ofrecé descuentos y combinaciones para tu catálogo.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>)
+    const {isMobile,accentColor,employeeMode,puedePromociones,api,servicios,extras,iconoEditar}=props
+    return (<>{puedePromociones ? <ServiciosManager_Promociones employeeMode={employeeMode} api={api} servicios={servicios} productos={extras} accentColor={accentColor} isMobile={isMobile} iconoEditar={iconoEditar} /> : <div style={{padding:24,border:"1px solid #e5e7eb",borderRadius:14,...TurnitsLockedStyle}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}><h3 style={{margin:"0 0 8px"}}>Promociones</h3><TurnitsPlanRequirement /></div><p style={{fontSize:13,color:"#64748b"}}>Ofrecé descuentos y combinaciones para tu catálogo.</p><a href="/planes" style={{color:accentColor,fontSize:13}}>Ver planes</a></div>}</>)
 }
-function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMobile,employeeMode=false}:{api:string;servicios:any[];productos:any[];accentColor:string;isMobile:boolean;employeeMode?:boolean}) {
+function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMobile,employeeMode=false,iconoEditar}:{api:string;servicios:any[];productos:any[];accentColor:string;isMobile:boolean;employeeMode?:boolean;iconoEditar?:string}) {
     const transition = useCatalogTransition()
     const branch = useBranchAdmin();
     const hoy = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
@@ -3045,7 +3045,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </div>{repeated && <b className="promo-multiple">x{p.items[0].cantidad}</b>}
                 </div><div className="promo-foot"><div className="promo-heading"><strong>{p.nombre}</strong><div className="promo-cost">{money(Number(p.precio_final))} <del>{money(Number(p.precio_original))}</del></div></div>
                     <span className="promo-status" data-active={active}>● {active?"Activa":"Pausada"}</span>
-                    {!branch && <div className="promo-actions"><button disabled={busy} onClick={()=>editar(p)}>✎ Editar</button><button type="button" className="promo-menu-trigger" ref={menuId===p.id ? anchor : undefined} aria-label={`Opciones de ${p.nombre}`} aria-expanded={menuId===p.id} onClick={()=>setMenuId(menuId===p.id ? null : p.id)}>•••</button>{menuId===p.id && <ServiciosManager_RowMenu anchor={anchor}><button disabled={busy} onClick={()=>{setMenuId(null);cambiarEstado(p)}}>{active?"Pausar":"Activar"}</button><button disabled={busy} className="is-danger" onClick={()=>{setMenuId(null);eliminar(p.id)}}>Eliminar</button></ServiciosManager_RowMenu>}</div>}
+                    {!branch && <div className="promo-actions"><button className="svc-edit-button" disabled={busy} onClick={()=>editar(p)}>{iconoEditar?<img src={iconoEditar} alt=""/>:<span aria-hidden="true">✎</span>}Editar</button><button type="button" className="promo-menu-trigger" ref={menuId===p.id ? anchor : undefined} aria-label={`Opciones de ${p.nombre}`} aria-expanded={menuId===p.id} onClick={()=>setMenuId(menuId===p.id ? null : p.id)}>•••</button>{menuId===p.id && <ServiciosManager_RowMenu anchor={anchor}><button disabled={busy} onClick={()=>{setMenuId(null);cambiarEstado(p)}}>{active?"Pausar":"Activar"}</button><button disabled={busy} className="is-danger" onClick={()=>{setMenuId(null);eliminar(p.id)}}>Eliminar</button></ServiciosManager_RowMenu>}</div>}
                 </div></article>
         })}</motion.div>}
         </AnimatePresence>
