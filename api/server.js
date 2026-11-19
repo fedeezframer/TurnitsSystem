@@ -1101,7 +1101,7 @@ app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
     const [{ data: turnosMes, error: turnosError }, { data: comisionesOfflineMes, error: comisionesMesError }] = await Promise.all([
       supabase.from("turnos")
         .select("fecha, estado, pago_estado, metodo_pago, precio_cobrado, monto_pagado, comision_mp, comision_plataforma")
-        .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).neq("estado", "cancelado"),
+        .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta),
       supabase.from("turnits_comisiones")
         .select("importe, estado").eq("slug", slug).eq("periodo", periodoActual).neq("estado", "anulada"),
     ]);
@@ -1111,10 +1111,10 @@ app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
     let ingresoBruto = 0, ingresoMp = 0, ingresoMpConDetalle = 0, ingresoOffline = 0;
     let comisionMpReal = 0, comisionTurnitsOnline = 0, turnosMpSinDetalle = 0, turnosMpConDetalle = 0;
     for (const turno of turnosMes || []) {
-      if (turno.estado === "pendiente" || turno.pago_estado !== "aprobado") continue;
+      comisionTurnitsOnline += Number(turno.comision_plataforma || 0);
+      if (turno.estado === "cancelado" || turno.estado === "pendiente" || turno.pago_estado !== "aprobado") continue;
       const montoCobrado = Number(turno.monto_pagado || 0);
       ingresoBruto += montoCobrado;
-      comisionTurnitsOnline += Number(turno.comision_plataforma || 0);
       if (turno.metodo_pago === "mercadopago") {
         ingresoMp += montoCobrado;
         if (turno.comision_mp == null) turnosMpSinDetalle++;
@@ -5997,7 +5997,7 @@ async function actualizarConfigEquipo(slug, equipoId, body) {
   for (const key of ["acepta_transferencia", "acepta_efectivo", "agenda_sin_pagos"]) {
     if (update[key] !== undefined && update[key] !== null && typeof update[key] !== "boolean") return { error: `Valor inválido para ${key}.` };
   }
-  if (update.datos_bancarios !== undefined && update.datos_bancarios !== null && (typeof update.datos_bancarios !== "object" || Array.isArray(update.datos_bancarios))) return { error: "Datos bancarios inválidos." };
+  if (update.datos_bancarios !== undefined && update.datos_bancarios !== null && !validarDatosBancarios(update.datos_bancarios)) return { error: "Datos bancarios inválidos." };
   if (update.agenda_sin_pagos === true) {
     const { data: negocio, error } = await supabase.from("usuarios").select("plan").eq("slug", slug).single();
     if (error) throw error;
@@ -6249,16 +6249,17 @@ app.get("/finanzas/:slug", requireAuth, async (req, res) => {
       return filas;
     };
     const [turnosConsultados, gastosDb, { data: comisiones, error: comisionesError }] = await Promise.all([
-      cargarPaginas(() => branchPanel.from(req, "turnos").select("id, fecha, precio_cobrado, estado, comision_mp, comision_plataforma").eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).not("estado", "in", "(cancelado,pendiente)").order("id", { ascending: true })),
+      cargarPaginas(() => branchPanel.from(req, "turnos").select("id, fecha, precio_cobrado, estado, comision_mp, comision_plataforma").eq("slug", slug).gte("fecha", desde).lte("fecha", hasta).order("id", { ascending: true })),
       cargarPaginas(() => branchPanel.from(req, "finanzas_gastos").select("id, descripcion, categoria, monto, fecha, tipo, recurrente, recurrencia_hasta, created_at").eq("slug", slug).lte("fecha", hasta).order("fecha", { ascending: true })),
       req.sucursalAdmin ? Promise.resolve({data:[],error:null}) : supabase.from("turnits_comisiones").select("importe, estado").eq("slug", slug).eq("periodo", desde).neq("estado", "anulada"),
     ]);
     if (comisionesError) throw comisionesError;
     // Defensa adicional: ningún turno fuera del mes entra en ingresos ni comisiones.
-    const turnos = (turnosConsultados || []).filter(t => {
+    const turnosDelPeriodo = (turnosConsultados || []).filter(t => {
       const fecha = String(t.fecha || "").slice(0, 10);
       return fecha >= desde && fecha <= hasta;
     });
+    const turnos = turnosDelPeriodo.filter(t => t.estado !== "cancelado" && t.estado !== "pendiente");
     const gastos = [];
     for (const g of gastosDb || []) {
       const inicio = String(g.fecha).slice(0, 10);
@@ -6276,7 +6277,7 @@ app.get("/finanzas/:slug", requireAuth, async (req, res) => {
     const porCategoria = {};
     for (const g of gastos) porCategoria[g.categoria] = (porCategoria[g.categoria] || 0) + Number(g.monto || 0);
     const comisionesMercadoPago = (turnos || []).reduce((s, t) => s + Number(t.comision_mp || 0), 0);
-    const comisionesTurnitsOnline = (turnos || []).reduce((s, t) => s + Number(t.comision_plataforma || 0), 0);
+    const comisionesTurnitsOnline = turnosDelPeriodo.reduce((s, t) => s + Number(t.comision_plataforma || 0), 0);
     const comisionesTurnitsOffline = (comisiones || []).reduce((s, c) => s + Number(c.importe || 0), 0);
     const comisionesTurnits = comisionesTurnitsOnline + comisionesTurnitsOffline;
     const comisionesTotales = comisionesMercadoPago + comisionesTurnits;

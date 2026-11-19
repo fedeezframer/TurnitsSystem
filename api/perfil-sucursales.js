@@ -203,6 +203,16 @@ export function crearSucursales({
           },
     };
   };
+  async function contarReservasPorSede(slug, data) {
+    // El turno conserva la sede que tenía al agendarse aunque se mueva al profesional.
+    await Promise.all([data.principal, ...data.sucursales].map(async sede => {
+      const query = supabase.from("turnos").select("id", { count: "exact", head: true }).eq("slug", slug);
+      const { count, error } = sede.id === "principal" ? await query.is("sucursal_id", null) : await query.eq("sucursal_id", sede.id);
+      if (error) throw error;
+      sede.reservas = count;
+    }));
+    return data;
+  }
   const owner = (req, res, next) =>
     req.empleado
       ? res.status(403).json({
@@ -472,7 +482,7 @@ export function crearSucursales({
         user = await negocio(slug);
       let data;
       try {
-        data = await rows(slug);
+        data = await contarReservasPorSede(slug, await rows(slug));
       } catch (e) {
         if (!faltaSchemaSucursales(e)) throw e;
         return res.json({
@@ -573,7 +583,7 @@ export function crearSucursales({
         throw error;
       }
       invalidateCache(slug);
-      res.json({ success: true, id: data, ...(await rows(slug)) });
+      res.json({ success: true, id: data, ...(await contarReservasPorSede(slug, await rows(slug))) });
     }),
   );
   // Se devuelve sólo la asignación pública, nunca correos de acceso ni permisos.

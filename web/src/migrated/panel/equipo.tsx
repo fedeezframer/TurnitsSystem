@@ -36,7 +36,7 @@ function TeamManager_Avatar({
             style={{
                 width: size,
                 height: size,
-                borderRadius: "50%",
+                borderRadius: 6,
                 background: showImg ? "#f1f5f9" : color,
                 display: "flex",
                 alignItems: "center",
@@ -62,7 +62,7 @@ function TeamManager_Avatar({
                     }}
                 />
             ) : (
-                nombre.charAt(0).toUpperCase()
+                nombre.trim().split(/\s+/).slice(0, 2).map(parte => parte.charAt(0).toUpperCase()).join("")
             )}
         </div>
     )
@@ -1435,24 +1435,18 @@ function TeamManager_MiembroCard({
                 alignItems: "center",
                 gap: isMobile ? 10 : 12,
                 padding: isMobile ? "10px" : "12px",
-                borderRadius: 12,
-                background: esDueño
-                    ? accentColor + "0A"
-                    : miembro.activo
-                      ? "#fff"
-                      : "#f8fafc",
-                border: esDueño
-                    ? `1.5px solid ${accentColor}33`
-                    : "1px solid #f1f5f9",
+                borderRadius: 18,
+                background: miembro.activo ? "#fff" : "#f8fafc",
+                border: "1px solid #aaa",
                 opacity: miembro.activo ? 1 : 0.55,
                 transition: "background 0.15s, opacity 0.2s",
             }}
         >
             <TeamManager_Avatar
-                nombre={miembro.nombre}
+                nombre={[miembro.nombre, miembro.apellido].filter(Boolean).join(" ")}
                 color={miembro.color}
                 fotoUrl={miembro.foto_url}
-                size={isMobile ? 38 : 44}
+                size={isMobile ? 40 : 58}
             />
 
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1478,15 +1472,9 @@ function TeamManager_MiembroCard({
                         alignItems: "center",
                     }}
                 >
-                    <TeamManager_RolBadge
-                        rol={esDueño ? "dueño" : miembro.rol}
-                        accentColor={accentColor}
-                    />
-                    {esDueño && (
-                        <span style={{ fontSize: 10, color: "#94a3b8" }}>
-                            Titular de la cuenta
-                        </span>
-                    )}
+                    <span style={{fontSize: 14, color: "#525252"}}>
+                        {esDueño ? "Dueño" : miembro.login_activado ? "Empleado con acceso" : "Colaborador"}
+                    </span>
                     {!esDueño && !miembro.activo && (
                         <span style={{ fontSize: 10, color: "#cbd5e1" }}>
                             inactivo
@@ -1497,7 +1485,7 @@ function TeamManager_MiembroCard({
                     <div
                         style={{ fontSize: 10, color: "#64748b", marginTop: 3 }}
                     >
-                        {miembro.login_email} ·{" "}
+                        {miembro.login_email.replace(/^(.{1,3})[^@]*(@.*)$/, "$1••••$2")} ·{" "}
                         {miembro.login_activado
                             ? "acceso activo"
                             : "invitación pendiente"}
@@ -1561,9 +1549,9 @@ function TeamManager_MiembroCard({
                     title="Editar"
                     onClick={onEdit}
                     style={{
-                        width: isMobile ? 28 : 30,
+                        width: "auto", padding: "0 10px", gap: 4,
                         height: isMobile ? 28 : 30,
-                        borderRadius: 8,
+                        borderRadius: 20,
                         border: "1px solid #e2e8f0",
                         background: "#f8fafc",
                         cursor: "pointer",
@@ -1588,6 +1576,7 @@ function TeamManager_MiembroCard({
                     ) : (
                         "✎"
                     )}
+                    {!isMobile && "Editar"}
                 </button>
 
                 {/* Eliminar — el dueño no se puede eliminar */}

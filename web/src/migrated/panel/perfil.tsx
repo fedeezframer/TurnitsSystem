@@ -68,7 +68,9 @@ async function request(url: string, options: RequestInit = {}) {
     ...options,
     headers: { ...headers(), ...options.headers },
   });
-  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error("No se pudo completar la solicitud (" + r.status + ").");
+  if (!r.headers.get("content-type")?.includes("application/json")) throw new Error("Respuesta inesperada del servidor.");
+  const d = await r.json();
   if (!r.ok || !d.success)
     throw new Error(d.error || "No se pudo completar la solicitud.");
   return d;
@@ -588,7 +590,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
           <div>
             <h2>Sucursales</h2>
             <p className="negocio-muted">
-              Un negocio, una agenda. Organizá a tu equipo por sede.
+              Creá los perfiles de tus sucursales y elegí quién administra cada sede.
             </p>
           </div>
           {locked ? (
@@ -672,7 +674,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               </p>
             )}
             <div className="negocio-stack" style={{ gap: 10 }}>
-              <h3>Miembros de esta sucursal</h3>
+              <h3>Profesionales que trabajan aquí</h3>
               <p className="negocio-muted">
                 Cada profesional trabaja en una sede. Al moverlo, sus reservas
                 anteriores conservan su sucursal.
@@ -896,6 +898,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               >
                 Editar sucursal
               </button>
+              {Number.isInteger(s.reservas) && <span className="sucursal-reservas">{s.reservas.toLocaleString("es-AR")} {s.reservas === 1 ? "reserva" : "reservas"}</span>}
             </article>
           );
         })}

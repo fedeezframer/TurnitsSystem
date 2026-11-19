@@ -171,7 +171,7 @@ function getSlugFromUrl(manualSlug: string): string {
     let fromUrl = ""
     try {
         const path = window.location.pathname || ""
-        const match = path.match(/\/agenda\/([^\/?#]+)/i)
+        const match = path.match(/\/agenda(?:-test)?\/([^\/?#]+)/i)
         if (match && match[1]) fromUrl = decodeURIComponent(match[1])
     } catch {}
 
