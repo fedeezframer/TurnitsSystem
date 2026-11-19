@@ -335,3 +335,5 @@
 }
 
 .sucursal-reservas { justify-self: start; align-self: flex-start; background: #1b681d; color: white; font-weight: 650; border-radius: 20px; padding: 6px 14px; }
+
+.sucursal-foto { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 18px; }

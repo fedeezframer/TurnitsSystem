@@ -204,12 +204,18 @@ export function crearSucursales({
     };
   };
   async function contarReservasPorSede(slug, data) {
+    const fotos = await supabase.from("sucursales").select("id,foto_archivo").eq("slug", slug);
+    if (fotos.error && !faltaSchemaSucursales(fotos.error)) throw fotos.error;
+    data.fotos_habilitadas = !fotos.error && data.mapa_habilitado;
+    const porSede = new Map((fotos.data || []).map(f => [f.id, f.foto_archivo]));
     // El turno conserva la sede que tenía al agendarse aunque se mueva al profesional.
     await Promise.all([data.principal, ...data.sucursales].map(async sede => {
       const query = supabase.from("turnos").select("id", { count: "exact", head: true }).eq("slug", slug);
       const { count, error } = sede.id === "principal" ? await query.is("sucursal_id", null) : await query.eq("sucursal_id", sede.id);
       if (error) throw error;
       sede.reservas = count;
+      const archivo = porSede.get(sede.registro_id || sede.id);
+      sede.foto_url = archivo ? supabase.storage.from("logos").getPublicUrl(slug + "/perfil/" + archivo).data.publicUrl : null;
     }));
     return data;
   }
@@ -556,8 +562,16 @@ export function crearSucursales({
         if (!existing || existing.es_principal)
           fail("Sucursal no encontrada.", 404);
       }
+      const incluyeFoto = Object.hasOwn(b, "foto_url");
+      let fotoArchivo = null;
+      if (incluyeFoto && b.foto_url !== null) {
+        const prefix = supabase.storage.from("logos").getPublicUrl(slug + "/perfil/").data.publicUrl;
+        if (typeof b.foto_url !== "string" || !b.foto_url.startsWith(prefix)) fail("Elegí una imagen de este negocio.");
+        fotoArchivo = b.foto_url.slice(prefix.length);
+        if (!/^[0-9a-f-]{36}\.(jpg|png|webp)$/.test(fotoArchivo)) fail("Imagen inválida.");
+      }
       const { data, error } = await supabase.rpc(
-        mapa ? "guardar_sucursal_mapa" : "guardar_sucursal",
+        incluyeFoto ? "guardar_sucursal_con_foto" : mapa ? "guardar_sucursal_mapa" : "guardar_sucursal",
         {
           p_slug: slug,
           p_id: b.id === "principal" ? null : b.id,
@@ -566,7 +580,8 @@ export function crearSucursales({
           p_activo: b.activo,
           p_admin: b.admin_equipo_id,
           p_miembros: [...new Set(b.miembros)],
-          ...(mapa
+          ...(incluyeFoto ? { p_foto_archivo: fotoArchivo } : {}),
+          ...(mapa || incluyeFoto
             ? {
                 p_principal: b.id === "principal",
                 p_latitud: b.latitud,
