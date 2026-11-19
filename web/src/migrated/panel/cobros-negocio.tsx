@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import {
+  SeccionHeader,
   MercadoPagoConexion_getSlug as getSlug,
   MercadoPagoConexion_getToken as getToken,
 } from "./common";
 import { costos, type Regla } from "./costos";
 import "./cobros-negocio.css";
+import { seccionesPagos } from "./secciones-pagos";
 
 const acreditacion = [
   ["al instante", 6.6],
@@ -18,7 +20,7 @@ const pesos = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 2,
 });
 const planes = { gratis: "Gratis", basico: "Básico", premium: "Premium" };
-const secciones = ["Calcular costos", "Tipo de cobro", "Métodos de pago"];
+
 const metodos = ["Mercado Pago", "Transferencia", "Efectivo"];
 type Config = {
   plan: string;
@@ -57,6 +59,11 @@ async function json(url: string, init: RequestInit = {}) {
   if (data.success === false) throw Error("No se pudo completar la operación.");
   return data;
 }
+function MetodoIcono({indice, logo}: {indice: number, logo?: string}) {
+  const fallback = ["/assets/panel-nav/ix_money-alt.svg", "/assets/panel-nav/ant-design_home-outlined.svg", "/assets/panel-nav/ix_money-alt.svg"];
+  return <span className={"cb-icon cb-icon-" + indice}><img src={logo || fallback[indice]} alt=""/></span>;
+}
+
 function Calculadora({
   config,
   api,
@@ -135,7 +142,7 @@ function Calculadora({
             ))}
         </select>
       </div>
-      <label>
+      <label className="cb-amount">
         Valor a {inverso ? "recibir" : "cobrar"}
         <input
           inputMode="numeric"
@@ -186,7 +193,7 @@ function Calculadora({
           return (
             <article key={m}>
               <h3>
-                {m} {logos[i] && <img src={logos[i]} alt="" />}
+                <MetodoIcono indice={i} logo={logos[i]} /> {m}
               </h3>
               <output>
                 {resultado ? pesos.format(resultado.resultado) : "—"}
@@ -205,12 +212,12 @@ function Calculadora({
   );
 }
 
-export default function CobrosNegocio({ baseUrl, iconos }: any) {
+export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any) {
   const api = baseUrl.replace(/\/+$/, ""),
     slug = encodeURIComponent(getSlug()),
     url = api + "/settings/" + slug + "?vista=cobros";
-  const [tab, setTab] = useState(0),
-    [config, setConfig] = useState<Config | null>(null),
+  const seccion = seccionesPagos.find(s => s.id === vista) || seccionesPagos[0];
+  const [config, setConfig] = useState<Config | null>(null),
     [revision, retry] = useState(0);
   const [draft, setDraft] = useState({
     metodo_pago: "total",
@@ -226,6 +233,7 @@ export default function CobrosNegocio({ baseUrl, iconos }: any) {
     iconos?.logoTransferencia,
     iconos?.logoEfectivo,
   ];
+  useEffect(() => { setNotice(""); }, [vista]);
   useEffect(() => {
     const controller = new AbortController();
     setConfig(null);
@@ -238,11 +246,7 @@ export default function CobrosNegocio({ baseUrl, iconos }: any) {
         const retorno = new URL(window.location.href);
         const estado = retorno.searchParams.get("status");
         if (estado === "mp_success" || estado === "mp_error") {
-          setTab(2);
           setNotice(estado === "mp_success" && s.mp_conectado ? "Cuenta de Mercado Pago vinculada." : "No se pudo completar la vinculación con Mercado Pago.");
-          retorno.searchParams.delete("status");
-          retorno.searchParams.delete("reason");
-          window.history.replaceState(window.history.state, "", retorno);
         }
         setDraft({
           metodo_pago: s.metodo_pago === "sena" ? "sena" : "total",
@@ -298,36 +302,12 @@ export default function CobrosNegocio({ baseUrl, iconos }: any) {
   }
   return (
     <div className="cb-panel">
-      <nav aria-label="Secciones de cobro">
-        {secciones.map((s, i) => (
-          <button
-            key={s}
-            disabled={busy}
-            aria-pressed={tab === i}
-            onClick={() => {
-              setTab(i);
-              setNotice("");
-            }}
-          >
-            {s}
-          </button>
-        ))}
-      </nav>
-      <h1>{secciones[tab]}</h1>
-      <p>
-        {
-          [
-            "Consultá cuánto recibís por cada método de pago.",
-            "Configurá el pago para validar una reserva.",
-            "Configurá dónde recibís los ingresos.",
-          ][tab]
-        }
-      </p>
-      <fieldset disabled={busy} className="cb-card">
-        {tab === 0 && (
+      <SeccionHeader title={seccion.titulo} subtitle={seccion.descripcion} isMobile={isMobile} />
+      <fieldset disabled={busy} aria-label={seccion.titulo} className={"cb-card cb-" + vista}>
+        {vista === "costos" && (
           <Calculadora config={config} api={api} slug={slug} logos={logos} />
         )}
-        {tab === 1 && (
+        {vista === "tipo" && (
           <>
             <h2>Configuración de cobro</h2>
             <div className="cb-line">
@@ -349,6 +329,7 @@ export default function CobrosNegocio({ baseUrl, iconos }: any) {
               <b>
                 {draft.metodo_pago === "sena" ? draft.porcentaje_sena : 100}%
               </b>
+              <small>El mínimo de la seña es 20%.</small>
               <input
                 type="range"
                 min="20"
@@ -367,6 +348,7 @@ export default function CobrosNegocio({ baseUrl, iconos }: any) {
               />
             </label>
             <h2>Agenda sin cobro</h2>
+            <p className="cb-help">Permití reservar sin realizar un pago previo.</p>
             {offline ? (
               <div className="cb-line">
                 {[true, false].map((v) => (
@@ -390,13 +372,14 @@ export default function CobrosNegocio({ baseUrl, iconos }: any) {
             </button>
           </>
         )}
-        {tab === 2 &&
+        {vista === "metodos" &&
           metodos.map((m, i) => (
             <div className="cb-method" key={m}>
               <div>
                 <h2>
-                  {m} {logos[i] && <img src={logos[i]} alt="" />}
+                  <MetodoIcono indice={i} logo={logos[i]} /> {m}
                 </h2>
+                {i > 0 && <p className="cb-help">{i === 1 ? "Revisá el comprobante para aceptar la reserva." : "Aceptá la reserva desde tu agenda."}</p>}
                 {i === 0 ? (
                   <>
                     <p>
@@ -526,7 +509,7 @@ export default function CobrosNegocio({ baseUrl, iconos }: any) {
             </div>
           ))}
       </fieldset>
-      <p role="status">{notice}</p>
+      {notice && <p className="cb-notice" role="status">{notice}</p>}
     </div>
   );
 }

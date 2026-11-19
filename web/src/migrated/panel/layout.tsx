@@ -1,3 +1,4 @@
+import { seccionesPagos, type VistaPagos } from "./secciones-pagos"
 import { useCatalogTransition } from "./catalog-motion"
 import { BackButton } from "../../components/BackButton"
 import { fetchPanelRead } from "../../shared/panel-requests"
@@ -26,10 +27,10 @@ import { SeccionInicio, TurnitsDashboardSidePanel } from "./dashboard"
 import { CopyTurnosButton } from "./inicio"
 import { PerfilNegocio } from "./profile-section"
 import { MisServiciosPanel, ProductosPanel, PromocionesPanel, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, CobrosNegocio, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
-import Consultations from "../../pages/Consultations"
 import { ChatIcon } from "../../components/ChatChrome"
 import "./design-refresh.css"
 
+const Consultations = React.lazy(() => import("../../pages/Consultations"))
 const SetupGuide = React.lazy(() => import("../../components/SetupGuide"))
 const OnboardingNube = React.lazy(() => import("./onboarding").then(module => ({ default: module.OnboardingNube })))
 
@@ -94,7 +95,8 @@ function TurnitsPanel_Inner(props: any) {
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
     const [scheduleView,setScheduleView] = React.useState<"weekly"|"exceptions">("weekly")
-    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(null)
+    const vistaPagos = ["mp_success","mp_error"].includes(searchParams.get("status") || "") ? "metodos" : seccionesPagos.find(s => s.id === searchParams.get("vista"))?.id || "costos"
+    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(seccionActiva === "pagos" ? "pagos" : null)
     const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
     // Arranca oculta y solo se muestra si confirmamos que el plan es
@@ -140,12 +142,20 @@ function TurnitsPanel_Inner(props: any) {
         tryLoad()
     }, [baseUrl])
 
-    const irA = (id: SeccionId) => {
+    const irA = (id: SeccionId, vista?: VistaPagos) => {
         if (branchAdmin && !["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(id)) return
         if (id === "consultas" && (!appConfig.quoteBookingEnabled || !quoteMode || !agendaConsultaPermitida)) return
         setSeccionActiva(id)
         setSearchParams(previous => {
             const next = new URLSearchParams(previous)
+            if (id === "pagos") {
+                next.set("seccion", "pagos")
+                next.set("vista", vista || vistaPagos)
+                next.delete("status")
+                next.delete("reason")
+                return next
+            }
+            next.delete("vista")
             if (id === "consultas") next.set("seccion", "consultas")
             else {
                 next.delete("seccion")
@@ -199,13 +209,11 @@ function TurnitsPanel_Inner(props: any) {
         irA("servicios")
     }
 
-    const renderSubsection = (view: "servicios" | "extras" | "promociones" | "weekly" | "exceptions", label: string, icon: string) => {
-        const schedule = view === "weekly" || view === "exceptions"
-        const selected = schedule ? scheduleView === view && seccionActiva === "horarios" : serviciosVistaInicial === view && seccionActiva === "servicios"
+    const renderSubsection = (view: string, label: string, icon: string, selected: boolean, open: () => void) => {
         return <button
             key={view}
             type="button"
-            onClick={() => { if (view === "weekly" || view === "exceptions") {setScheduleView(view);irA("horarios")} else abrirCatalogo(view) }}
+            onClick={open}
             aria-current={selected ? "page" : undefined}
             style={{
                 display: "flex", alignItems: "center", gap: 10, width: "100%",
@@ -224,7 +232,7 @@ function TurnitsPanel_Inner(props: any) {
         </button>
     }
 
-    const renderNavItems = () => navItemsVisibles.map((item) => (item.id === "servicios" || item.id === "horarios") ? (
+    const renderNavItems = () => navItemsVisibles.map((item) => (item.id === "servicios" || item.id === "horarios" || item.id === "pagos") ? (
         <div key={item.id} style={{width:"100%",padding:0,margin:0,background:"transparent"}}>
             <NavButton item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => setMenuExpandido(current => current === item.id ? null : item.id)} navIconos={navIconos} showChevron chevronDown={menuExpandido === item.id} />
             <AnimatePresence initial={false}>
@@ -237,12 +245,12 @@ function TurnitsPanel_Inner(props: any) {
                     style={{overflow:"hidden"}}
                 >
                     <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
-                        {item.id==="horarios" ? <>
-                            {renderSubsection("weekly","Horario semanal","/assets/panel-nav/hugeicons_time-quarter-02.svg")}
-                            {renderSubsection("exceptions","Excepciones laborales","/assets/panel-nav/fa7-regular_calendar-alt.svg")}
-                        </> : <>{renderSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg")}
-                        {renderSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg")}
-                        {renderSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg")}</>}
+                        {item.id === "pagos" ? seccionesPagos.map(({id,titulo,icono}) => renderSubsection(id,titulo,icono,seccionActiva === "pagos" && vistaPagos === id, () => irA("pagos",id))) : item.id==="horarios" ? <>
+                            {renderSubsection("weekly","Horario semanal","/assets/panel-nav/hugeicons_time-quarter-02.svg", seccionActiva === "horarios" && scheduleView === "weekly", () => {setScheduleView("weekly");irA("horarios")})}
+                            {renderSubsection("exceptions","Excepciones laborales","/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "horarios" && scheduleView === "exceptions", () => {setScheduleView("exceptions");irA("horarios")})}
+                        </> : <>{renderSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg", seccionActiva === "servicios" && serviciosVistaInicial === "servicios", () => abrirCatalogo("servicios"))}
+                        {renderSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg", seccionActiva === "servicios" && serviciosVistaInicial === "extras", () => abrirCatalogo("extras"))}
+                        {renderSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg", seccionActiva === "servicios" && serviciosVistaInicial === "promociones", () => abrirCatalogo("promociones"))}</>}
                     </div>
                     <motion.div
                         aria-hidden="true"
@@ -693,7 +701,7 @@ function TurnitsPanel_Inner(props: any) {
                 </div>}
 
                 {branchAdmin && seccionActiva !== "consultas" && <div style={{padding:"10px 14px",marginBottom:18,borderRadius:12,background:"#edf5ef",color:"#24492b",fontSize:13}}><strong>{branchAdmin.nombre}</strong> · Administración de sucursal</div>}
-                {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <Consultations embedded="panel" onInboxChange={actualizarBandejaMensajes} onExit={() => irA("inicio")} />}
+                {seccionActiva === "consultas" && quoteMode && agendaConsultaPermitida && !branchAdmin && <SectionLoadingBoundary><Consultations embedded="panel" onInboxChange={actualizarBandejaMensajes} onExit={() => irA("inicio")} /></SectionLoadingBoundary>}
                 {seccionActiva === "inicio" && (
                     <>
                     {onboardingListo && !quoteMode && <OwnerOnly><React.Suspense fallback={null}><SetupGuide baseUrl={baseUrl} onNavigate={irA} /></React.Suspense></OwnerOnly>}
@@ -839,7 +847,7 @@ function TurnitsPanel_Inner(props: any) {
                 )}
 
                 {seccionActiva === "pagos" && (
-                    <SectionLoadingBoundary><CobrosNegocio baseUrl={baseUrl} iconos={iconos} /></SectionLoadingBoundary>
+                    <SectionLoadingBoundary><CobrosNegocio vista={vistaPagos} baseUrl={baseUrl} iconos={iconos} isMobile={isMobile} /></SectionLoadingBoundary>
                 )}
 
                 {seccionActiva === "finanzas" && (
