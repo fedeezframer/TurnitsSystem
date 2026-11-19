@@ -98,7 +98,7 @@ function TurnitsPanel_Inner(props: any) {
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
     const [scheduleView,setScheduleView] = React.useState<"weekly"|"exceptions">("weekly")
-    const vistaPagos = ["mp_success","mp_error"].includes(searchParams.get("status") || "") ? "metodos" : seccionesPagos.find(s => s.id === searchParams.get("vista"))?.id || "costos"
+    const vistaPagos = ["mp_success","mp_error"].includes(searchParams.get("status") || "") ? "metodos" : seccionesPagos.find(s => s.id === searchParams.get("vista"))?.id || "metodos"
     const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(["pagos", "equipo", "perfil", "horarios"].includes(seccionActiva) ? seccionActiva : null)
     const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
@@ -260,11 +260,11 @@ function TurnitsPanel_Inner(props: any) {
                 >
                     <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
                         {item.id === "perfil" ? <>
-                            {renderSubsection("negocio", "Perfil del negocio", "/assets/panel-nav/ant-design_home-outlined.svg", seccionActiva === "perfil" && !publicaciones, () => irA("perfil", "negocio"))}
-                            {renderSubsection("publicaciones", "Publicaciones", "/assets/panel-nav/ant-design_product-outlined.svg", seccionActiva === "perfil" && publicaciones, () => irA("perfil", "publicaciones"))}
+                            {renderSubsection("negocio", "Perfil del negocio", "/assets/panel-nav/famicons_share-social-sharp.svg", seccionActiva === "perfil" && !publicaciones, () => irA("perfil", "negocio"))}
+                            {renderSubsection("publicaciones", "Publicaciones", "/assets/panel-nav/boxicons_photo-album.svg", seccionActiva === "perfil" && publicaciones, () => irA("perfil", "publicaciones"))}
                         </> : item.id === "equipo" ? <>
-                            {renderSubsection("miembros", "Miembros", "/assets/panel-nav/iconoven_team-building.svg", seccionActiva === "equipo" && !sucursales, () => irA("equipo", "miembros"))}
-                            {renderSubsection("sucursales", "Sucursales", "/assets/panel-nav/ant-design_home-outlined.svg", seccionActiva === "equipo" && sucursales, () => irA("equipo", "sucursales"))}
+                            {renderSubsection("miembros", "Miembros", "/assets/panel-nav/streamline-ultimate_team-meeting-bold.svg", seccionActiva === "equipo" && !sucursales, () => irA("equipo", "miembros"))}
+                            {renderSubsection("sucursales", "Sucursales", "/assets/panel-nav/famicons_storefront-outline.svg", seccionActiva === "equipo" && sucursales, () => irA("equipo", "sucursales"))}
                         </> : item.id === "pagos" ? seccionesPagos.map(({id,titulo,icono}) => renderSubsection(id,titulo,icono,seccionActiva === "pagos" && vistaPagos === id, () => irA("pagos",id))) : item.id==="horarios" ? <>
                             {renderSubsection("weekly","Horario semanal","/assets/panel-nav/hugeicons_time-quarter-02.svg", seccionActiva === "horarios" && scheduleView === "weekly", () => {setScheduleView("weekly");irA("horarios")})}
                             {renderSubsection("exceptions","Excepciones laborales","/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "horarios" && scheduleView === "exceptions", () => {setScheduleView("exceptions");irA("horarios")})}
