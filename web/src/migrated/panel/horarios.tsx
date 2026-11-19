@@ -418,11 +418,11 @@ function HorariosConfig_Anticipacion({
     }
 
     return <div className="week-notice">
-        <strong>Anticipación de Reserva</strong>
+        <strong>Anticipación de reserva</strong>
         <div className="week-notice-input"><input aria-label="Tiempo de anticipación" inputMode="numeric" value={cantidad} onChange={e=>cambiarCantidad(e.target.value)} onBlur={restaurarCantidad}/>
             <select aria-label="Unidad de anticipación" value={unidad} onChange={e=>cambiarUnidad(e.target.value)}><option value="minutos">min</option><option value="horas">hs</option><option value="dias">días</option></select>
         </div>
-        <small>El tiempo establecido aquí será cuánto antes alguien deba reservar</small>
+        <small>Tiempo mínimo entre la reserva y el inicio del turno.</small>
     </div>
 }
 
@@ -462,15 +462,21 @@ function HorariosConfig_Shell({
     return <div className="week-editor" style={style}>
         <HorariosConfig_Anticipacion minutos={anticipacionMinutos} onChange={onSetAnticipacionMinutos}/>
         <div className="week-days" role="group" aria-label="Día de la semana">
-            {HorariosConfig_DIAS_CONFIG.map(({key,label})=><button key={key} aria-pressed={diaActivo===key} onClick={()=>onSelectDia(key)}>{label}</button>)}
+            {HorariosConfig_DIAS_CONFIG.map(({key,label})=>{
+                const schedule = horarios[key]
+                const summary = !schedule?.activo ? "Cerrado" : schedule.jornada?.[0] && schedule.jornada?.[1] ? schedule.jornada.join("–") : "Por definir"
+                return <button key={key} aria-label={label} aria-description={summary} aria-pressed={diaActivo===key} onClick={()=>onSelectDia(key)}>
+                    <strong>{label}</strong><small>{summary}</small>
+                </button>
+            })}
         </div>
         <hr/>
         <div key={diaActivo}>
             {["jornada","descanso"].map((field,index)=>{
                 const rest = index===1
                 const enabled = day?.activo && (!rest || hasBreak)
-                const title = rest ? "Descanso" : "Horario Fijo"
-                return <section className="week-period" key={field} aria-label={title}>
+                const title = rest ? "Descanso" : "Horario fijo"
+                return <section className="week-period" data-enabled={Boolean(enabled)} key={field} aria-label={title}>
                     <h3>{title}<button type="button" className="week-switch" role="switch" aria-label={rest?"Activar descanso":"Abrir este día"} aria-checked={Boolean(rest?hasBreak:day?.activo)} disabled={rest && (!day?.activo || (!hasBreak && !(end-start>=3)))} onClick={rest?setBreak:()=>onToggle(diaActivo)} /></h3>
                     <div className="week-range">{["De","Hasta"].map((label,i)=><label key={label}>{label}
                         <span className="week-clock" data-display={day?.[field]?.[i] ? day[field][i]+"hs" : undefined}><HorariosConfig_TimeInput value={day?.[field]?.[i]} disabled={!enabled} placeholder={(rest?["13:00hs","15:00hs"]:["10:00hs","21:00hs"])[i]}
@@ -947,9 +953,12 @@ function ExcepcionesConfig({
     const count = Math.ceil((offset + ExcepcionesConfig_getDaysInMonth(curYear,curMonth))/7)*7
     return <section className="schedule-exceptions" ref={containerRef} style={style}>
         <header><div><h2>Excepciones Laborales</h2><p>Marca los días que tus Horarios Semanales cambien</p></div>
-            <nav aria-label="Mes del calendario"><button aria-label="Mes anterior" onClick={prevMonth}>‹</button>
+            <nav aria-label="Mes del calendario">
+                {(curMonth!==today.getMonth() || curYear!==today.getFullYear()) && <button className="exception-today" onClick={()=>{setCurMonth(today.getMonth());setCurYear(today.getFullYear());setSelectedKey(null)}}>Hoy</button>}
+                <button aria-label="Mes anterior" onClick={prevMonth}>‹</button>
                 <strong aria-live="polite">{ExcepcionesConfig_MESES[curMonth]} {curYear}</strong><button aria-label="Mes siguiente" onClick={nextMonth}>›</button></nav>
         </header>
+        <div className="exception-columns" aria-hidden="true">{["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"].map(name=><span key={name}>{name}</span>)}</div>
         <div className="exception-month">{Array.from({length:count},(_,index)=>{
             const date = new Date(curYear,curMonth,index-offset+1)
             const key = ExcepcionesConfig_makeDateKey(date.getFullYear(),date.getMonth(),date.getDate())
@@ -958,9 +967,9 @@ function ExcepcionesConfig({
             const day = weekly[HorariosConfig_DIAS_CONFIG[(date.getDay()+6)%7].key]
             const slots: ExcepcionesConfig_Slot[] = exc ? (exc.type==="custom" ? exc.slots || [] : []) : (day?.activo && day.jornada?.every(Boolean) ? [day.jornada] : [])
             const dateLabel = date.getDate()+" "+ExcepcionesConfig_MESES[date.getMonth()].slice(0,3)
-            return <button key={key} disabled={outside || date<today} data-past={date<today} data-exception={Boolean(exc)} data-outside={outside} aria-pressed={selectedKey===key}
+            return <button key={key} disabled={outside || date<today} aria-current={date.getTime()===today.getTime()?"date":undefined} data-past={date<today} data-exception={Boolean(exc)} data-outside={outside} aria-pressed={selectedKey===key}
                 onClick={()=>setSelectedKey(selectedKey===key?null:key)}>
-                <strong>{dateLabel}<span className="exception-weekday"> · {date.toLocaleDateString("es-AR",{weekday:"short"})}</span></strong>
+                <strong className="exception-date">{dateLabel}<span className="exception-weekday"> · {date.toLocaleDateString("es-AR",{weekday:"short"})}</span></strong>
                 {slots.length ? slots.map(([from,to],i)=><span key={i} className="exception-hours"><span>De </span>{from}<span>hs</span><br/><span>a </span>{to}<span>hs</span></span>) : <span>Cerrado</span>}
             </button>
         })}</div>

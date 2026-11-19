@@ -814,8 +814,8 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title={scheduleView==="weekly"?"Horarios Semanal":"Excepciones Laborales"}
-                            subtitle={scheduleView==="weekly"?"Establece horarios fijos durante la semana":"Marca los días que tus Horarios Semanales cambien"}
+                            title={scheduleView==="weekly"?"Horario semanal":"Excepciones laborales"}
+                            subtitle={scheduleView==="weekly"?"Definí tu jornada y tus descansos para cada día de la semana.":"Ajustá la disponibilidad de una fecha puntual."}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
