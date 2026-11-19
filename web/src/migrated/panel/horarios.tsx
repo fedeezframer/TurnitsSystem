@@ -960,9 +960,9 @@ function ExcepcionesConfig({
             const day = weekly[HorariosConfig_DIAS_CONFIG[(date.getDay()+6)%7].key]
             const slots: ExcepcionesConfig_Slot[] = exc ? (exc.type==="custom" ? exc.slots || [] : []) : (day?.activo && day.jornada?.every(Boolean) ? [day.jornada] : [])
             const dateLabel = date.getDate()+" "+ExcepcionesConfig_MESES[date.getMonth()].slice(0,3)
-            return <button key={key} disabled={outside || date<today} data-exception={Boolean(exc)} data-outside={outside} aria-pressed={selectedKey===key}
+            return <button key={key} disabled={outside || date<today} data-past={date<today} data-exception={Boolean(exc)} data-outside={outside} aria-pressed={selectedKey===key}
                 onClick={()=>setSelectedKey(selectedKey===key?null:key)}>
-                <strong>{dateLabel}</strong>
+                <strong>{dateLabel}<span className="exception-weekday"> · {date.toLocaleDateString("es-AR",{weekday:"short"})}</span></strong>
                 {slots.length ? slots.map(([from,to],i)=><span key={i} className="exception-hours"><span>De </span>{from}<span>hs</span><br/><span>a </span>{to}<span>hs</span></span>) : <span>Cerrado</span>}
             </button>
         })}</div>
