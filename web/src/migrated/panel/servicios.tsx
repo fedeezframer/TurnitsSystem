@@ -1,3 +1,4 @@
+import { PromotionDiscountArrow } from "./PromotionDiscountArrow"
 import { CatalogToolbar } from "./CatalogToolbar"
 import { useCatalogTransition } from "./catalog-motion"
 import "./promociones.css"
@@ -2984,6 +2985,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                     <div>{title("image","Imagen de la promoción")}<small className="catalog-hint">Subí una portada o usá la foto de un elemento incluido.</small><ServiciosManager_ImageUploader size={450} onUploadingChange={setUploadingCover} value={form.imagen_url || fallbackCover(form.items)} onChange={imagen_url=>setForm(prev=>({...prev,imagen_url}))} apiUrl={api} accentColor={accentColor} uploadPath={employeeMode ? `/empleado/${encodeURIComponent(slug)}/extras/upload-imagen` : undefined}/></div>
                     <div className="promo-details"><label>{title("align-left","Descripción")}<small className="catalog-hint">Explicá qué incluye la oferta y sus condiciones.</small><textarea aria-label="Descripción" placeholder="Contá qué incluye y cuándo se puede usar." maxLength={2000} value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label>
                         <div className="promo-prices"><div>{title("dollar","Precio original")}<small className="catalog-hint">Suma de las unidades elegidas.</small><output>{money(original)}</output></div>
+                            <PromotionDiscountArrow original={original} final={final} />
                             <label>{form.descuento_tipo==="porcentaje" ? title("percent","Descuento (%)") : title("dollar","Precio promo")}<small className="catalog-hint">{form.descuento_tipo === "porcentaje" ? "Porcentaje que se descuenta del precio original." : "Total que paga el cliente con la promoción."}</small><span className="promo-money-input">{form.descuento_tipo !== "porcentaje" && <span aria-hidden="true">$</span>}<input required type="number" min="0.01" step="0.01" value={form.valor} placeholder={form.descuento_tipo === "porcentaje" ? "Ej. 15" : "Ej. 30000"} onChange={e=>setForm({...form,valor:e.target.value})}/></span></label></div>
                         {form.descuento_tipo==="porcentaje" && <output>Precio promo {money(final)}</output>}
                         {!branch && !employeeMode && !form.owner_equipo_id && equipo.length>0 && <div>{title("user-check","Profesionales que lo ofrecen")}<small className="catalog-hint">Elegí quiénes pueden realizar todos los servicios incluidos.</small><div className="promo-people">{equipo.map(person=>{

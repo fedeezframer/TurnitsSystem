@@ -1,3 +1,4 @@
+import { PromotionDiscountArrow } from "./PromotionDiscountArrow"
 import { ScheduleTimeInput } from "./ScheduleTimeInput"
 import { PanelDatePicker } from "./PanelDatePicker"
 import { IconOptionPicker } from "./IconOptionPicker"
@@ -127,9 +128,7 @@ export function ClientOfferDraft({bookingId,name,baseUrl,onClose}:{bookingId:str
             viewport?.scrollBy({top:dir*viewport.clientHeight,behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})
         }}><img src={arrow} alt="" width="18" height="18" style={{transform:`rotate(${dir*90}deg)`}}/></button>)}</div>}</div></div></div>
         <div className="offer-fields"><div className="offer-prices"><label>Precio original<strong>{money(total)}</strong></label>
-        <span className="offer-discount"><img src={arrow} alt="" width="22" height="22"/>
-            {Number(price)>0 && Number(price)<total && <small>−{((1-Number(price)/total)*100).toLocaleString("es-AR",{maximumFractionDigits:1})}%</small>}
-        </span><label>Precio de promoción<span className="promo-money-input"><span aria-hidden="true">$</span><input placeholder="0" type="number" min="0" max={total} value={price} onChange={e=>setPrice(e.target.value)} /></span></label>
+        <PromotionDiscountArrow original={total} final={Number(price)} /><label>Precio de promoción<span className="promo-money-input"><span aria-hidden="true">$</span><input placeholder="0" type="number" min="0" max={total} value={price} onChange={e=>setPrice(e.target.value)} /></span></label>
         </div>
         <fieldset className="offer-schedule"><legend>Elección de fecha y hora</legend><button aria-pressed={!fixed} onClick={()=>{setFixed(false);if(validity==="dia")setValidity("semana")}}>Libre</button><button aria-pressed={fixed} onClick={()=>setFixed(true)}>Establecer</button></fieldset>
         {fixed && <>

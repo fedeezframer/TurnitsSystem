@@ -37,7 +37,8 @@
 .promo-intro>div:first-child>div {margin-top:8px}
 .promo-details {align-content:space-between;gap:16px}
 .promo-details textarea {min-height:clamp(100px,13cqw,202px);resize:vertical;border-radius:20px}
-.promo-prices {display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start}
+.promo-prices {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1.35fr);gap:10px;align-items:end}
+.promo-prices > :is(div,label) {min-width:0}
 .promo-prices output {display:block;padding:12px 0}
 .promo-people {display:flex;flex-wrap:wrap;gap:12px;margin-top:8px}
 .promo-people button {position:relative;border:0;border-radius:50%;width:38px;height:38px;padding:0;color:white}

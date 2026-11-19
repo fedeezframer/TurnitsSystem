@@ -5,3 +5,5 @@
 .promo-money-input { display:flex; align-items:center; gap:6px; min-width:0; border:1px solid #aaa; border-radius:28px; padding-inline:12px; }
 .promo-money-input:focus-within { outline:2px solid var(--green); outline-offset:1px; }
 :is(.promo-editor,.client-offer) .promo-money-input input[type=number] { flex:1; min-width:0; width:0; border:0; border-radius:0; padding-inline:0; outline:none; background:transparent; }
+.promotion-discount-arrow {display:grid;justify-items:center;align-content:center;gap:2px;min-height:44px}
+.promotion-discount-arrow small {color:white;background:var(--green, #196b20);border-radius:4px;padding:2px 4px;font-size:12px}
