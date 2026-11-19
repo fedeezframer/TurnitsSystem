@@ -662,7 +662,7 @@
 .svc-row-price { font-weight:700; }
 @media (max-width:700px) { .svc-sort-button { font-size:11px; } .svc-row-price { min-width:62px; } }
 
-.svc-card.product-card { padding-block: 9px !important; }
+.svc-card.product-card { min-height:88px!important; padding-block:9px!important; }
 .catalog-save-state { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:9px 14px; background:#f2f7f2; border:1px solid #cee0ce; border-radius:10px; font-size:13px; font-weight:600; line-height:1.4; }
 .catalog-save-state button { border:0; border-radius:7px; padding:9px 14px; color:white; background:#176b24; cursor:pointer; }
 @media(max-width:700px) {
