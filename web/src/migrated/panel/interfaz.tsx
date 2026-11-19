@@ -25,7 +25,6 @@ function TurnitsGlobalSaveBar({
     const [dirtySections, setDirtySections] = React.useState<string[]>([])
     const [saving, setSaving] = React.useState(false)
     const [error, setError] = React.useState("")
-    const [success, setSuccess] = React.useState(false)
     const [blocker, setBlocker] = React.useState("")
     React.useEffect(() => {
         if (typeof window === "undefined") return
@@ -33,7 +32,6 @@ function TurnitsGlobalSaveBar({
             const manager = TurnitsGlobalSaveManager_get()
             if (e?.detail?.edited) {
                 setError("")
-                setSuccess(false)
             }
             const sections = [
                 ["horarios", "Horarios"],
@@ -53,14 +51,11 @@ function TurnitsGlobalSaveBar({
                 .map(([, label]) => label)
             setDirtySections(sections)
             setDirty(sections.length > 0)
-            if (sections.length) setSuccess(false)
             setBlocker(manager?.getBlocker() || "")
         }
         const onState = (e: any) => setSaving(!!e?.detail?.saving)
         const onSuccess = () => {
             setError("")
-            setSuccess(!TurnitsGlobalSaveManager_get()?.hasDirty())
-            setTimeout(() => setSuccess(false), 2200)
             sync()
         }
         const onError = (e: any) => {
@@ -82,7 +77,7 @@ function TurnitsGlobalSaveBar({
             window.removeEventListener("turnits_global_save_error", onError)
         }
     }, [])
-    if (seccionActiva === "inicio" || (!dirty && !saving && !error && !success))
+    if (seccionActiva === "inicio" || (!dirty && !saving && !error))
         return null
     return (
         <motion.div
@@ -114,21 +109,12 @@ function TurnitsGlobalSaveBar({
                     style={{
                         fontSize: 13,
                         fontWeight: 700,
-                        color: error
-                            ? "#dc2626"
-                            : success
-                              ? accentColor
-                              : "#1e293b",
+                        color: error ? "#dc2626" : "#1e293b",
                     }}
                 >
-                    {error ||
-                        (success
-                            ? "Cambios guardados"
-                            : saving
-                              ? "Guardando cambios…"
-                              : "Hay cambios sin guardar")}
+                    {error || (saving ? "Guardando cambios…" : "Hay cambios sin guardar")}
                 </div>
-                {!error && !success && !saving && (
+                {!error && !saving && (
                     <div
                         style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}
                     >
@@ -139,14 +125,12 @@ function TurnitsGlobalSaveBar({
                 )}
                 {blocker && <div role="status" style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{blocker}</div>}
             </div>
-            {!success && (
-                <div style={{display:"flex",gap:8,marginLeft:"auto",width:isMobile ? "100%" : undefined}}>
+            <div style={{display:"flex",gap:8,marginLeft:"auto",width:isMobile ? "100%" : undefined}}>
                 <button
                     type="button"
                     onClick={() => {
                         if (TurnitsGlobalSaveManager_get()?.discardAll()) {
                             setError("")
-                            setSuccess(false)
                         }
                     }}
                     disabled={saving || !dirty || !!blocker}
@@ -159,7 +143,6 @@ function TurnitsGlobalSaveBar({
                     type="button"
                     onClick={() => {
                         setError("")
-                        setSuccess(false)
                         TurnitsGlobalSaveManager_get()?.saveAll()
                     }}
                     disabled={saving || !dirty || !!blocker}
@@ -189,7 +172,6 @@ function TurnitsGlobalSaveBar({
                     <span style={{ position: "relative", zIndex: 1 }}>{saving ? "Guardando…" : "Guardar cambios"}</span>
                 </motion.button>
                 </div>
-            )}
         </motion.div>
     )
 }

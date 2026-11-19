@@ -1,11 +1,11 @@
 .agenda-section .turnits-section-heading-subtitle {color:#171717!important}
 .agenda-board {display:flex;flex-direction:column;container-type:inline-size;position:relative;box-sizing:border-box;width:100%;min-height:70dvh;padding:clamp(22px,3vw,40px) 5.7%;border:1px solid #b8b8b8;border-radius:clamp(24px,3vw,45px);background:white;color:#101010}
 .agenda-day-grid,.agenda-reservas {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3.4%;row-gap:26px}
-.agenda-day {padding:clamp(14px,1.55cqw,22px);min-height:clamp(245px,30.5cqw,365px);box-sizing:border-box;border-radius:18px;position:relative;isolation:isolate;background:#fbfefb}
+.agenda-day {padding:clamp(14px,1.55cqw,22px);min-height:clamp(245px,30.5cqw,365px);box-sizing:border-box;border:1px solid #dce7dc;border-radius:18px;position:relative;isolation:isolate;background:#fbfefb;box-shadow:0 4px 16px #1723190a}
 .agenda-day-backdrop {position:absolute;inset:0;z-index:-1;overflow:hidden;border-radius:inherit;pointer-events:none}
 .agenda-day-glow {position:absolute;left:-16%;top:20%;width:82%;height:64%;border-radius:44% 58% 39% 66%;background:#b1f3ab;filter:blur(24px)}
 .agenda-day-ribbons {position:absolute;inset:-12%;width:124%;height:124%;fill:none;stroke:#c2edb9;stroke-linecap:round;filter:blur(3px)}
-.agenda-day[data-today=true] {background:#b7f5ae}
+.agenda-day[data-today=true] {background:#b7f5ae;border-color:#91cb88}
 .agenda-day[data-today=true] .agenda-day-glow {left:-4%;top:-19%;width:109%;height:88%;background:#99ed90}
 .agenda-day[data-today=true] .agenda-day-ribbons {stroke:#dcffd4}
 .agenda-day header {display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
