@@ -928,6 +928,7 @@ function TeamManager_MiembroForm({
 
     return (
         <motion.div
+            className="equipo-member-editor"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
@@ -1201,12 +1202,12 @@ function TeamManager_MiembroForm({
             {esDueño && <TeamManager_Field label="Horarios" hint="El titular usa los horarios generales del negocio.">
                 <a className="negocio-button secondary" target="_blank" rel="noreferrer" href={window.location.pathname + "?" + new URLSearchParams({...Object.fromEntries(new URLSearchParams(window.location.search)), seccion:"horarios",vista:"weekly"})}>Horarios establecidos</a>
             </TeamManager_Field>}
-            </section><section>
+            </section><section className="equipo-asignaciones">
             {/* Servicios que ofrece — solo disponible editando (dueño o miembro) */}
             {modoEdicion && miembroId && (
                 <>
                     <div style={{ borderTop: "1px solid #e2e8f0" }} />
-                    <TeamManager_Field
+                    <div className="equipo-asignacion-columna"><TeamManager_Field
                         label="Servicios que ofrece"
                         hint="Solo estos servicios se le van a mostrar al cliente cuando elija a este profesional"
                     >
@@ -1216,10 +1217,10 @@ function TeamManager_MiembroForm({
                             apiUrl={apiUrl}
                             isMobile={isMobile}
                         />
-                    </TeamManager_Field>
-                    <TeamManager_Field label="Promociones que ofrece" hint="Asigná primero los servicios del combo. Estas promociones solo aparecen en los perfiles seleccionados; las privadas del empleado siguen siendo suyas.">
+                    </TeamManager_Field></div>
+                    <div className="equipo-asignacion-columna"><TeamManager_Field label="Promociones que ofrece" hint="Asigná primero los servicios del combo. Estas promociones solo aparecen en los perfiles seleccionados; las privadas del empleado siguen siendo suyas.">
                         <TeamManager_PromocionesVinculadas equipoId={miembroId} accentColor={accentColor} apiUrl={apiUrl} isMobile={isMobile} />
-                    </TeamManager_Field>
+                    </TeamManager_Field></div>
 
                 </>
             )}
