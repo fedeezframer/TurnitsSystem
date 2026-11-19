@@ -1,3 +1,5 @@
+import { ScheduleTimeInput } from "./ScheduleTimeInput"
+import { PanelDatePicker } from "./PanelDatePicker"
 import { IconOptionPicker } from "./IconOptionPicker"
 import * as React from "react"
 import { BackButton } from "../../components/BackButton"
@@ -6,8 +8,8 @@ import { ClientesGrid_getSlug, ClientesGrid_getToken, ServiciosManager_parseDesc
 const categories = {servicios:"Servicios",extras:"Productos",promociones:"Promociones"}
 const arrow = "/assets/panel-nav/akar-icons_arrow-down.svg"
 const categoryOptions = [
-    {id:"servicios", label:categories.servicios, color:"#196b20", icon:"ix_product-management.svg", description:"Servicios disponibles para reservar."},
-    {id:"extras", label:categories.extras, color:"#86521d", icon:"ant-design_product-outlined.svg", description:"Productos para sumar al turno."},
+    {id:"servicios", label:categories.servicios, color:"#196b20", icon:"ant-design_product-outlined.svg", description:"Servicios disponibles para reservar."},
+    {id:"extras", label:categories.extras, color:"#86521d", icon:"ix_product-management.svg", description:"Productos para sumar al turno."},
     {id:"promociones", label:categories.promociones, color:"#6245a0", icon:"hugeicons_sale-tag-01.svg", description:"Promociones de tu catálogo."},
 ]
 type Category = keyof typeof categories
@@ -130,7 +132,10 @@ export function ClientOfferDraft({bookingId,name,baseUrl,onClose}:{bookingId:str
         </span><label>Precio de promoción<span className="promo-money-input"><span aria-hidden="true">$</span><input placeholder="0" type="number" min="0" max={total} value={price} onChange={e=>setPrice(e.target.value)} /></span></label>
         </div>
         <fieldset className="offer-schedule"><legend>Elección de fecha y hora</legend><button aria-pressed={!fixed} onClick={()=>{setFixed(false);if(validity==="dia")setValidity("semana")}}>Libre</button><button aria-pressed={fixed} onClick={()=>setFixed(true)}>Establecer</button></fieldset>
-        {fixed && <><label>Día<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><label>Hora<input type="time" value={time} onChange={e=>setTime(e.target.value)}/></label></>}</div>
+        {fixed && <>
+            <PanelDatePicker value={date} onChange={setDate} forOffer />
+            <label className="offer-time">Hora<ScheduleTimeInput value={time} onChange={value=>setTime(value || "")} placeholder="Ej. 17:30" /></label>
+        </>}</div>
         {selected.length>0 && Object.keys(lines).every(key=>key.startsWith("extras/")) && <p>El cliente elige un servicio y reserva un turno para adquirir estos productos con descuento. El servicio se cobra aparte.</p>}
         <footer className="client-offer-send"><button disabled={sending || !selected.length || !(Number(price)>0 && Number(price)<total) || (fixed && (!date || !time))} onClick={sendOffer}>{sending?"Preparando…":"Enviar promoción"}</button><small>Se abre WhatsApp con el enlace personal de reserva.</small></footer>
         {sendError && <p role="alert">{sendError}</p>}

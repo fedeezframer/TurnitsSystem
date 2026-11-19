@@ -63,3 +63,4 @@
 .offer-prices strong {display:flex;align-items:center;min-height:44px}
 .offer-discount {display:grid;justify-items:center;align-content:center;gap:2px;min-height:44px}
 .offer-discount small {color:white;background:var(--client-green);border-radius:4px;padding:2px 4px;font-size:12px}
+.offer-time {width:8rem}
