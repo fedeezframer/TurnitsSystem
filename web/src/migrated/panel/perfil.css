@@ -565,3 +565,20 @@
 .sucursal-avatar b img { display:block;width:11px;height:11px;object-fit:contain; }
 @media(max-width:740px) { .sucursal-heading-card { align-items:flex-start;padding:18px!important; }.sucursal-heading-copy h3 { font-size:19px!important; }.sucursal-heading-card .negocio-button { flex:0 0 auto;padding:9px 11px;font-size:11px; }.sucursal-listado { grid-template-columns:minmax(0,1fr);gap:13px; }.sucursal-listado article.sucursal-card { min-height:460px;gap:12px;padding:10px!important;border-radius:19px!important; }.sucursal-card-media { border-radius:14px; }.sucursal-listado .sucursal-card-media .sucursal-foto { border-radius:14px; }.sucursal-card-content h2 { font-size:18px!important; }.sucursal-card-actions { grid-template-columns:repeat(2,minmax(0,1fr));gap:7px; }.sucursal-card-actions > .negocio-button { min-height:42px;padding:8px 6px;font-size:10px; } }
 @media(max-width:420px) { .sucursal-heading-card { flex-direction:column; }.sucursal-heading-card .negocio-button { width:100%; }.sucursal-card-badges { top:8px;left:8px;right:8px; }.sucursal-status,.sucursal-principal { min-height:25px;padding:0 8px;font-size:10px; }.sucursal-card-media .sucursal-reservas { right:8px;bottom:8px;min-height:32px;padding:0 9px;gap:5px; }.sucursal-card-actions { grid-template-columns:minmax(0,1fr); }.sucursal-card-actions > .negocio-button:only-child { grid-column:auto; } }
+.sucursal-heading-card { display:flex;justify-content:flex-end;min-height:42px;margin-bottom:2px; }
+.sucursal-heading-card > .negocio-between { justify-content:flex-end;width:100%; }
+.sucursal-heading-card .negocio-button { min-height:42px;padding:9px 16px;border-radius:12px; }
+.sucursal-listado article.sucursal-card { min-height:0; }
+.sucursal-card-body { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;min-width:0;flex:1; }
+.sucursal-card-content { align-content:start; }
+.sucursal-card-content > .negocio-muted { min-height:0; }
+.sucursal-card-team { display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;padding:2px 0; }
+.sucursal-card-team > strong { color:#344639;font-size:11px;font-weight:700; }
+.sucursal-card-team > .negocio-muted { display:-webkit-box;margin:0;overflow:hidden;font-size:10px;line-height:1.4;text-overflow:ellipsis;-webkit-box-orient:vertical;-webkit-line-clamp:2; }
+.sucursal-card-team .sucursal-card-members { align-content:flex-start;max-height:72px;overflow:auto; }
+.sucursal-card-team .sucursal-member-tag { max-width:100%; }
+.sucursal-card-actions { display:flex;justify-content:flex-end;margin-top:auto;padding-top:10px;border-top:1px solid #edf1ed; }
+.sucursal-card-actions > .negocio-button { width:auto;min-width:132px; }
+.sucursal-card-actions > .negocio-button img { width:15px;height:15px;margin-right:6px;object-fit:contain;vertical-align:middle; }
+@media(max-width:740px) { .sucursal-card-body { grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px; }.sucursal-listado article.sucursal-card { min-height:0; }.sucursal-card-team .sucursal-card-members { max-height:66px; } }
+@media(max-width:480px) { .sucursal-card-body { grid-template-columns:minmax(0,1fr);gap:10px; }.sucursal-card-team { padding-top:10px;border-top:1px solid #edf1ed; }.sucursal-card-team .sucursal-card-members { max-height:none; }.sucursal-card-actions { justify-content:stretch; }.sucursal-card-actions > .negocio-button { width:100%; } }
