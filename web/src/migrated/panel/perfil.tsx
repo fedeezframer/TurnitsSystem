@@ -530,7 +530,7 @@ const sucursalVacia = {
   latitud: null as number | null,
   longitud: null as number | null,
 };
-export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
+export function SucursalesNegocio({ baseUrl, iconoCheck }: { baseUrl: string; iconoCheck?: string }) {
   const api = baseUrl.replace(/\/+$/, ""),
     slug = MenuFooter_getSlug();
   const [data, setData] = React.useState<any>(null),
@@ -598,13 +598,12 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
     disabled = locked || !data.habilitado;
   return (
     <div className="negocio-editor negocio-stack">
-      <div
-        className="negocio-card negocio-stack"
-        style={locked ? { opacity: 0.55, filter: "grayscale(1)" } : {}}
-      >
+      {!form && <div className="negocio-card sucursal-heading-card" style={locked ? { opacity: 0.55, filter: "grayscale(1)" } : {}}>
         <div className="negocio-between">
-          <div>
-            <h3>{form ? "Configuración de la sede" : "Sedes del negocio"}</h3>
+          <div className="sucursal-heading-copy">
+            <span className="sucursal-eyebrow">GESTIÓN DEL NEGOCIO</span>
+            <h3>Administrá tus sucursales</h3>
+            <p className="negocio-muted">Organizá cada sede, su equipo y la agenda que ve cada cliente.</p>
           </div>
           {locked ? (
             <TurnitsPlanRequirement premiumOnly />
@@ -628,7 +627,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
             Falta instalar la actualización de Sucursales en la base de datos.
           </p>
         )}
-      </div>
+      </div>}
       {form && (
         <form className="negocio-card negocio-stack sucursal-editor" onSubmit={guardar}>
           <h2>
@@ -725,7 +724,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                       >
                         <span className="sucursal-avatar" style={{background:m.color || "#536357"}}>
                           {m.foto_url ? <img src={m.foto_url} alt=""/> : [m.nombre,m.apellido].filter(Boolean).map(v => v[0]).join("")}
-                          {selected && <b aria-hidden="true">✓</b>}
+                          {selected && <b aria-hidden="true">{iconoCheck && <img src={iconoCheck} alt=""/>}</b>}
                         </span>
                         <span>{m.nombre} {m.apellido}<small>{sede?.nombre || data.principal?.nombre || "Sede principal"}{!m.activo && " · Inactivo"}</small></span>
                       </button>
@@ -740,9 +739,13 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               )}
             </div>
             </section><section className="sucursal-columna">
-            {data.fotos_habilitadas && <label className="negocio-field">Imagen de la sucursal
-              {form.foto_url && <img className="sucursal-foto" src={form.foto_url} alt={"Foto de " + form.nombre}/>}
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; void subirFoto(file); }}/>
+            {data.fotos_habilitadas && <label className="negocio-field sucursal-photo-picker">Imagen de la sucursal
+              <span className="sucursal-photo-preview">
+                <span className="sucursal-photo-empty"><NegocioIcon kind="sucursal"/><strong>Sumá una imagen</strong><small>La tarjeta siempre conserva este espacio</small></span>
+                {form.foto_url && <img src={form.foto_url} alt={"Foto de " + form.nombre} onError={e => { e.currentTarget.style.display = "none"; }}/>}
+              </span>
+              <input className="sucursal-photo-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; void subirFoto(file); }}/>
+              <small className="sucursal-photo-hint">JPG, PNG o WebP · hasta 3 MB</small>
             </label>}
             <label className="negocio-field">
               Encargado de la sucursal
@@ -819,56 +822,44 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
           const miembros = data.equipo.filter(
               (m: any) => (m.sucursal_id || "principal") === s.id,
             ),
-            admin = miembros.find((m: any) => m.id === s.admin_equipo_id);
+            admin = miembros.find((m: any) => m.id === s.admin_equipo_id),
+            reservas = Number.isInteger(s.reservas) ? s.reservas : 0;
           return (
             <article
-              className="negocio-card negocio-stack"
+              className="negocio-card sucursal-card"
               key={s.id}
               style={{ opacity: locked || !s.activo ? 0.55 : 1 }}
             >
-              {s.foto_url && <img className="sucursal-foto" src={s.foto_url} alt={s.nombre}/>}
-              <div className="negocio-between">
-                <NegocioIcon />
-                <span className="negocio-muted">
-                  {s.activo ? "Activa" : "Pausada"}
+              <div className="sucursal-card-media">
+                <div className="sucursal-photo-empty"><NegocioIcon kind="sucursal"/><strong>Sin imagen</strong></div>
+                {s.foto_url && <img className="sucursal-foto" src={s.foto_url} alt={"Imagen de " + s.nombre} onError={e => { e.currentTarget.style.display = "none"; }}/>}
+                <div className="sucursal-card-badges">
+                  <span className="sucursal-status" data-active={!!s.activo}><span aria-hidden="true"/>{s.activo ? "Activa" : "Pausada"}</span>
+                  {s.id === "principal" && <span className="sucursal-principal">Principal</span>}
+                </div>
+                <span className="sucursal-reservas">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>
+                  <strong>{reservas.toLocaleString("es-AR")}</strong><small>{reservas === 1 ? "reserva" : "reservas"}</small>
                 </span>
               </div>
-              <div>
+              <div className="sucursal-card-content">
                 <h2>{s.nombre}</h2>
-                {s.id === "principal" && (
-                  <p className="negocio-muted">Sede principal</p>
-                )}
-                <p className="negocio-muted">
-                  {s.direccion || "Sin dirección configurada"}
-                </p>
+                <p className="negocio-muted">{s.direccion || "Agregá una dirección para que tus clientes ubiquen la sede."}</p>
+                <div className="sucursal-quick-info"><span>{miembros.length} {miembros.length === 1 ? "profesional" : "profesionales"}</span><span>{s.latitud != null && s.longitud != null ? "Ubicación en el mapa" : "Ubicación pendiente"}</span></div>
               </div>
-              <details><summary>Equipo y ubicación</summary>
-              <p className="negocio-muted">
-                {admin
-                  ? `Encargado: ${admin.nombre} ${admin.apellido || ""}`
-                  : "Administrada por el dueño general"}
-              </p>
-              <p className="negocio-muted">
-                {s.latitud != null && s.longitud != null
-                  ? "Ubicación marcada en el mapa"
-                  : "Sin ubicación en el mapa"}
-              </p>
-              <div className="negocio-row">
+              <details className="sucursal-card-details"><summary>Ver equipo y encargado</summary>
+              <div className="sucursal-details-content">
+              <p className="negocio-muted">{admin ? `Encargado: ${admin.nombre} ${admin.apellido || ""}` : "Administrada por el dueño general"}</p>
+              <div className="sucursal-card-members">
                 {miembros.map((m: any) => (
-                  <span
-                    className="negocio-chip"
-                    style={{ cursor: "default" }}
-                    key={m.id}
-                  >
-                    {m.nombre}
-                  </span>
+                  <span className="sucursal-member-tag" key={m.id}>{m.foto_url ? <img src={m.foto_url} alt=""/> : <span style={{background:m.color || "#536357"}}>{[m.nombre,m.apellido].filter(Boolean).map((v:string) => v[0]).join("")}</span>}{m.nombre}</span>
                 ))}
-                {!miembros.length && (
-                  <p className="negocio-muted">Sin integrantes asignados</p>
-                )}
+                {!miembros.length && <p className="negocio-muted">Todavía no hay profesionales asignados.</p>}
               </div>
-              {s.activo && <a className="negocio-button secondary" href={`/agenda/${encodeURIComponent(slug)}?sucursal_id=${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">Abrir agenda de la sede</a>}
+              </div>
               </details>
+              <div className="sucursal-card-actions">
+              {s.activo && <a className="negocio-button secondary" href={`/agenda/${encodeURIComponent(slug)}?sucursal_id=${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">Abrir agenda</a>}
               <button
                 type="button"
                 disabled={
@@ -895,7 +886,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               >
                 Editar sucursal
               </button>
-              {Number.isInteger(s.reservas) && <span className="sucursal-reservas">{s.reservas.toLocaleString("es-AR")} {s.reservas === 1 ? "reserva" : "reservas"}</span>}
+              </div>
             </article>
           );
         })}
@@ -905,7 +896,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
 }
 export function EquipoSecciones(props: any) {
   const branch = useBranchAdmin();
-  return props.sucursales && !branch ? <SucursalesNegocio baseUrl={props.baseUrl}/> : <TeamManager {...props}/>;
+  return props.sucursales && !branch ? <SucursalesNegocio baseUrl={props.baseUrl} iconoCheck={props.iconoCheck}/> : <TeamManager {...props}/>;
 }
 
 export function SucursalEmpleado({
