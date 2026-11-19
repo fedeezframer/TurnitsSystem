@@ -591,6 +591,7 @@ function MercadoPagoConexion(props: any) {
 
     return (
         <div
+            className="pagos-metodos-workspace"
             ref={containerRef}
             style={{ ...MercadoPagoConexion_cardBase, ...style }}
         >
@@ -1516,6 +1517,7 @@ function ConfigPagos(props: any) {
 
     return (
         <div
+            className="pagos-cobro-workspace"
             ref={containerRef}
             style={
                 {

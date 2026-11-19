@@ -3510,6 +3510,12 @@ const ConfigPagos_shimmerCSS = `
     outline: none;
     cursor: pointer;
 }
+.pagos-cobro-workspace { border:1px solid #e4ebe4!important; border-radius:22px!important; box-shadow:0 8px 28px #17231908!important; padding:clamp(18px,2.6vw,30px)!important; }
+.pagos-metodos-workspace { border:1px solid #e4ebe4!important; border-radius:22px!important; box-shadow:0 8px 28px #17231908!important; padding:clamp(18px,2.6vw,30px)!important; }
+.pagos-cobro-workspace input:not([type=range]),.pagos-cobro-workspace select { border-color:#dce5dc!important; border-radius:12px!important; }
+.pagos-cobro-workspace button,.pagos-metodos-workspace button { transition:transform .16s,box-shadow .16s,border-color .16s!important; }
+.pagos-cobro-workspace button:hover:not(:disabled),.pagos-metodos-workspace button:hover:not(:disabled) { box-shadow:0 5px 16px #17231912!important; }
+@media(max-width:560px){.pagos-cobro-workspace,.pagos-metodos-workspace{padding:16px!important;border-radius:18px!important}}
 `
 
 interface ConfigPagos_OpcionMetodoProps {

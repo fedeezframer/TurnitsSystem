@@ -66,6 +66,15 @@
 .cb-rates > div + div { border-left: 1px solid #e0e8dd; }
 .cb-rates strong { display: block; margin-top: 7px; font-size: 20px; color: #19271c; }
 .cb-notice { margin: 14px 0; padding: 12px 15px; border-radius: 10px; background: #f0f5ed; }
+.cb-card { border-color:#e4ebe4; border-radius:22px; box-shadow:0 8px 28px #17231908; }
+.cb-results article { border-color:#e3ebe1; border-radius:18px; background:linear-gradient(145deg,#f7fbf6,#fff); }
+.cb-tipo > label { padding:24px 2px; border-color:#e6ece5; }
+.cb-tipo label b { border-radius:999px; padding:7px 14px; }
+.cb-method { padding-block:26px; }
+.cb-method + .cb-method { border-color:#e6ece5; }
+.cb-detail,.cb-rates { border-color:#e3ebe1; border-radius:16px; }
+.cb-card :is(input:not([type=range]),select) { border-color:#dce5dc; border-radius:12px; }
+.cb-card :is(button[aria-pressed=true],.cb-green,.cb-save) { box-shadow:0 5px 14px #1b6b1a20; }
 @container (max-width: 650px) {
   .cb-results, .cb-method { grid-template-columns: 1fr; }
   .cb-line select { margin-left: 0; }

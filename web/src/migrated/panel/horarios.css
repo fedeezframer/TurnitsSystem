@@ -88,4 +88,18 @@
     .week-periods .week-range label {min-width:0;gap:10px}
 }
 .exception-usual {display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:4px 12px;padding:12px 14px;margin-top:16px;border-radius:10px;background:#f4f7f4;color:#465649;font-size:13px;font-variant-numeric:tabular-nums}
+.week-editor {border-color:#e5ebe5;border-radius:22px;box-shadow:0 8px 28px #17231908;padding:clamp(18px,3vw,34px)}
+.week-notice {background:linear-gradient(115deg,#f5fbf5,#fff);border-color:#e1ece1;border-radius:16px;padding:18px 20px}
+.week-days {gap:9px}
+.week-days button {border-radius:13px;border-color:#e1e7e1;padding:12px;transition:background .16s,border-color .16s,transform .16s}
+.week-days button:hover {border-color:#9ec5a0;transform:translateY(-1px)}
+.week-days button[aria-pressed=true] {background:linear-gradient(135deg,#267c2a,#17641c);border-color:transparent;box-shadow:0 5px 14px #1b691d22}
+.week-period {padding:17px 0 0}
+.week-period h3 {font-size:16px}
+.week-range input {height:44px;border-radius:11px!important;padding-inline:12px}
+.schedule-exceptions {padding:clamp(18px,3vw,30px);border:1px solid #e5ebe5;border-radius:22px;background:#fff;box-shadow:0 8px 28px #17231908}
+.schedule-exceptions header {margin-bottom:24px}
+.exception-month {border-color:#e2e9e2;background:#e2e9e2;gap:1px}
+.exception-month button {transition:background .15s,box-shadow .15s}
+@container(max-width:570px){.schedule-exceptions{padding:14px}.week-period{padding-top:8px}}
 .exception-usual small {grid-column:1/-1}

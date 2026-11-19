@@ -678,22 +678,16 @@ function TeamManager_PromocionesVinculadas({
     }
 
     return (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+        <div className="equipo-ofertas equipo-promociones">
             {error && <span role="alert" style={{width:"100%",fontSize:12,color:"#ef4444"}}>{error}</span>}
             {promociones.map((s) => {
                 const sel = s.vinculado
                 const pending = pendingIds.has(s.id)
                 return (
-                    <div
-                        key={s.id}
-                        style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 5,
-                        }}
-                    >
+                    <div key={s.id} className="equipo-oferta equipo-promocion">
                         <button
                             type="button"
+                            className="equipo-promocion-card"
                             aria-pressed={sel}
                             onClick={() => !pending && toggle(s)}
                             disabled={pending}
@@ -702,23 +696,12 @@ function TeamManager_PromocionesVinculadas({
                                     ? "Este promocion está inactivo"
                                     : undefined
                             }
-                            style={{
-                                padding: isMobile ? "7px 12px" : "6px 13px",
-                                borderRadius: 9,
-                                border: `1.5px solid ${sel ? accentColor : "#e2e8f0"}`,
-                                background: sel ? accentColor : "#fff",
-                                color: sel ? "#fff" : "#475569",
-                                fontSize: isMobile ? 13 : 12,
-                                fontWeight: 700,
-                                cursor: pending ? "wait" : "pointer",
-                                fontFamily:
-                                    "'Inter Display', -apple-system, sans-serif",
-                                transition: "all 0.12s",
-                                opacity: pending ? 0.6 : s.activo ? 1 : 0.55,
-                            }}
+                            style={{ "--equipo-accent": accentColor, opacity: pending ? 0.6 : s.activo ? 1 : 0.65 } as React.CSSProperties}
                         >
-                            {s.nombre} · ${s.precio.toLocaleString("es-AR")}
-                            {!s.activo ? " (inactivo)" : ""}
+                            <span className="equipo-promo-icon" aria-hidden="true">%</span>
+                            <span className="equipo-promo-copy"><strong>{s.nombre}</strong><small>{Array.isArray(s.items) && s.items.length ? `Incluye ${s.items.length} ${s.items.length === 1 ? "servicio" : "servicios"}` : "Promoción del negocio"}{!s.activo ? " · Inactiva" : ""}</small></span>
+                            <b className="equipo-promo-price">${Number(s.precio || 0).toLocaleString("es-AR")}</b>
+                            <span className="equipo-check" aria-hidden="true">{sel ? "✓" : "+"}</span>
                         </button>
                     </div>
                 )
