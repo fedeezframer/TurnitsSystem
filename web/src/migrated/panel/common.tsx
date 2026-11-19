@@ -3157,17 +3157,17 @@ function MercadoPagoConexion_getSlug(): string {
     if (!fromUrl)
         fromUrl = new URLSearchParams(window.location.search).get("u") || ""
     return (
-        fromUrl.toLowerCase().trim() || localStorage.getItem("user_slug") || ""
+        fromUrl.toLowerCase().trim() || safeLocalStorage("user_slug") || ""
     )
 }
 
 function MercadoPagoConexion_getToken(): string {
     if (typeof window === "undefined") return ""
     return (
-        localStorage.getItem("access_token") ||
-        localStorage.getItem("user_token") ||
-        localStorage.getItem("auth_token") ||
-        localStorage.getItem("token") ||
+        safeLocalStorage("access_token") ||
+        safeLocalStorage("user_token") ||
+        safeLocalStorage("auth_token") ||
+        safeLocalStorage("token") ||
         ""
     )
 }

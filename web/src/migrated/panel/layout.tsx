@@ -21,7 +21,7 @@ import { MenuFooter as OwnerMenuFooter, MenuCuentaPagoRetorno, NotificacionesFlo
 import { SeccionInicio, TurnitsDashboardSidePanel } from "./dashboard"
 import { CopyTurnosButton } from "./inicio"
 import { PerfilNegocio } from "./profile-section"
-import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, PagosSettingsGuard, MercadoPagoConexion, ConfigPagos, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
+import { ServiciosManager, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, CobrosNegocio, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
@@ -454,7 +454,7 @@ function TurnitsPanel_Inner(props: any) {
                             accentColor={accentColor}
                             isMobile={isMobile}
                             inline
-                            mostrarToggle={seccionActiva === "pagos"}
+                            mostrarToggle={false}
                             iconoPagosActivos={iconoPagosActivos}
                             iconoAgendaSinPagos={iconoAgendaSinPagos}
                         />
@@ -468,7 +468,7 @@ function TurnitsPanel_Inner(props: any) {
                     baseUrl={baseUrl}
                     accentColor={accentColor}
                     isMobile={isMobile}
-                    mostrarToggle={seccionActiva === "pagos"}
+                    mostrarToggle={false}
                     iconoPagosActivos={iconoPagosActivos}
                     iconoAgendaSinPagos={iconoAgendaSinPagos}
                 />
@@ -661,43 +661,7 @@ function TurnitsPanel_Inner(props: any) {
                 )}
 
                 {seccionActiva === "pagos" && (
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 20,
-                        }}
-                    >
-                        <SeccionHeader
-                            title="Métodos de Pago"
-                            subtitle="Configurá cómo te pagan tus clientes"
-                            isMobile={isMobile}
-                        />
-                        <SectionLoadingBoundary>
-                        <PagosSettingsGuard baseUrl={baseUrl}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: 20,
-                                }}
-                            >
-                                <MercadoPagoConexion
-                                    baseUrl={baseUrl}
-                                    mpClientId={mpClientId}
-                                    logoMP={iconos.logoMercadoPago}
-                                    logoTransferencia={iconos.logoTransferencia}
-                                    logoEfectivo={iconos.logoEfectivo}
-                                />
-                                <ConfigPagos
-                                    baseUrl={baseUrl}
-                                    accentColor={accentColor}
-                                    mpClientId={mpClientId}
-                                />
-                            </div>
-                        </PagosSettingsGuard>
-                        </SectionLoadingBoundary>
-                    </div>
+                    <SectionLoadingBoundary><CobrosNegocio baseUrl={baseUrl} iconos={iconos} /></SectionLoadingBoundary>
                 )}
 
                 {seccionActiva === "finanzas" && (

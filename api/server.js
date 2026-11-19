@@ -39,7 +39,7 @@ if (process.env.APP_ENV === "staging") {
   const webRoot = path.resolve("web/dist");
   app.get("/robots.txt", (_req,res)=>res.type("text/plain").send("User-agent: *\nDisallow: /\n"));
   app.use((req,res,next)=>{
-    if(req.method === "GET" && req.headers.accept?.includes("text/html") && /^\/(?:$|login(?:\/|$)|registro(?:\/|$)|register(?:\/|$)|browse(?:\/|$)|consultas(?:\/|$)|panel(?:\/|$)|agenda(?:\/|$)|perfil(?:\/|$)|planes(?:\/|$)|success(?:\/|$)|sucess(?:\/|$)|pendiente(?:\/|$)|error(?:\/|$)|alert(?:\/|$)|reprogramar(?:\/|$)|terminos(?:\/|$)|privacidad(?:\/|$)|cambiar-)/.test(req.path))return res.sendFile(path.join(webRoot,"index.html"));
+    if(req.method === "GET" && req.headers.accept?.includes("text/html") && /^\/(?:$|login(?:\/|$)|registro(?:\/|$)|register(?:\/|$)|browse(?:\/|$)|consultas(?:\/|$)|panel(?:-test)?(?:\/|$)|agenda(?:-test)?(?:\/|$)|perfil(?:\/|$)|planes(?:\/|$)|success(?:\/|$)|sucess(?:\/|$)|pendiente(?:\/|$)|error(?:\/|$)|alert(?:\/|$)|reprogramar(?:\/|$)|terminos(?:\/|$)|privacidad(?:\/|$)|cambiar-)/.test(req.path))return res.sendFile(path.join(webRoot,"index.html"));
     next();
   });
   app.use(express.static(webRoot,{index:false}));
@@ -300,7 +300,7 @@ function validarDatosBancarios(d) {
   const { banco, titular, cbu, alias } = d;
   if (banco    !== undefined && (typeof banco    !== "string" || banco.length    > 60)) return false;
   if (titular  !== undefined && (typeof titular  !== "string" || titular.length  > 80)) return false;
-  if (cbu   !== undefined && cbu   !== "" && !CBU_REGEX.test(cbu))     return false;
+  if (cbu   !== undefined && cbu   !== "" && (typeof cbu !== "string" || !CBU_REGEX.test(cbu)))     return false;
   if (alias !== undefined && alias !== "" && !ALIAS_REGEX.test(alias)) return false;
   return true;
 }
@@ -645,6 +645,7 @@ function mediosOfflinePermitidos(user) {
 }
 function limitarPagosPorPlan(config) {
   const result={...config};
+  if (result.metodo_pago === "sena") result.porcentaje_sena = Math.max(20, Math.min(100, Math.round(Number(result.porcentaje_sena) || 30)));
   if(!mediosOfflinePermitidos(result)) {
     result.acepta_transferencia=false;result.acepta_efectivo=false;result.datos_bancarios={};result.agenda_sin_pagos=false;
     if(result.metodo_pago === "none" || !result.metodo_pago)result.metodo_pago="total";
@@ -3602,7 +3603,7 @@ app.post("/turnos/reservar", limiterBooking, async (req, res) => {
     const agendaSinPagos = mediosOfflinePermitidos(user) && configReserva.agenda_sin_pagos === true;
     const tieneMP      = !!configReserva.mp_access_token;
     const metodoPagoEfectivo = configReserva.metodo_pago;
-    const requierePago = tieneMP && (metodoPagoEfectivo === "sena" || metodoPagoEfectivo === "total");
+    const requierePago = (tieneMP || configReserva.acepta_transferencia || configReserva.acepta_efectivo) && (metodoPagoEfectivo === "sena" || metodoPagoEfectivo === "total");
 
 
     if (!mediosOfflinePermitidos(user) && !tieneMP) return res.status(403).json({success:false,error:"free_no_payment_method",message:"El negocio debe conectar Mercado Pago para recibir reservas en Gratis o Básico."});
@@ -3851,7 +3852,8 @@ app.post("/turnos/reservar-manual", limiterBooking, (req, res, next) => {
         capacidad=promoReserva.capacidad;
       }
     }catch(e){if(e.promoValidacion)return res.status(400).json({success:false,error:e.message});throw e;}
-    const importeComisionTurnits = 0; // Sin comisión diferida por efectivo o transferencia.
+    const baseComision = precioCobrado + montoExtras;
+    const importeComisionTurnits = baseComision > 0 ? calcularComisionTurnits(baseComision, user.plan, user.estado_suscripcion) : 0;
     const validacionComisionReserva = await validarReservasPorComisiones(slugClean, importeComisionTurnits);
     if (!validacionComisionReserva.permitido) {
       return res.status(403).json({
@@ -4300,7 +4302,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     }
 
     const { data: user, error: userError } = await supabase.from("usuarios")
-      .select("activo, duracion_turno, capacidad_por_turno, plan, telefono, business_name, horarios, excepciones, agenda_sin_pagos").eq("slug", slugClean).maybeSingle();
+      .select("activo, duracion_turno, capacidad_por_turno, plan, estado_suscripcion, telefono, business_name, horarios, excepciones, agenda_sin_pagos").eq("slug", slugClean).maybeSingle();
     if (userError) throw userError;
     if (!user) return res.status(404).json({ success: false, error: "Negocio no encontrado." });
 
@@ -4354,7 +4356,7 @@ app.post("/admin/turnos/manual", requireAuth, async (req, res) => {
     // Comisión de Turnits: los turnos cargados a mano también la suman. Solo
     // si el servicio tiene precio (un turno sin servicio/precio, ej. para
     // bloquear un horario, no genera cargo porque se cobraría el mínimo).
-    const importeComisionTurnits = 0; // Los turnos cargados a mano no generan deuda.
+    const importeComisionTurnits = precio > 0 ? calcularComisionTurnits(precio, user.plan, user.estado_suscripcion) : 0;
     if (importeComisionTurnits > 0) {
       const validacionComision = await validarReservasPorComisiones(slugClean, importeComisionTurnits);
       if (!validacionComision.permitido) {
@@ -4555,6 +4557,21 @@ app.get("/settings/:slug", requireAuth, async (req, res) => {
 
     const diasRestantes = user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
 
+    if (req.query.vista === "cobros") {
+      if (req.sucursalAdmin) return res.status(403).json({ success: false, error: "Solo el titular puede configurar los cobros." });
+      const planes = Object.fromEntries(Object.keys(COMISION_POR_PLAN).map(plan => [plan, {
+        ...configComisionPlan(plan, plan === user.plan ? user.estado_suscripcion : null),
+        mediosOffline: mediosOfflinePermitidos({ plan }),
+      }]));
+      return res.json({ success: true, settings: {
+        plan: user.plan || "gratis", planes, mp_conectado: !!user.mp_access_token,
+        metodo_pago: user.metodo_pago, porcentaje_sena: user.porcentaje_sena,
+        agenda_sin_pagos: mediosOfflinePermitidos(user) && !!user.agenda_sin_pagos,
+        acepta_efectivo: mediosOfflinePermitidos(user) && !!user.acepta_efectivo,
+        acepta_transferencia: mediosOfflinePermitidos(user) && !!user.acepta_transferencia,
+        cbu_final: mediosOfflinePermitidos(user) ? String(user.datos_bancarios?.cbu || "").slice(-4) : "",
+      } });
+    }
     if (req.sucursalAdmin) return res.json({ success: true, settings: {
       slug: user.slug, business_name: `${user.business_name} · ${req.sucursalAdmin.nombre}`,
       nombre_persona: req.empleado.nombre, apellido: req.empleado.apellido,
@@ -4642,8 +4659,8 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
       update.anticipacion_minutos = a;
     }
     if (update.porcentaje_sena !== undefined) {
-      const p = parseInt(update.porcentaje_sena);
-      if (!Number.isFinite(p) || p < 1 || p > 100) return res.status(400).json({ success: false, error: "Porcentaje de seña inválido." });
+      const p = Number(update.porcentaje_sena);
+      if (!Number.isInteger(p) || p < 20 || p > 100) return res.status(400).json({ success: false, error: "Porcentaje de seña inválido." });
       update.porcentaje_sena = p;
     }
     if (update.agenda_sin_pagos !== undefined) {
@@ -4706,6 +4723,13 @@ app.put("/settings/:slug", requireAuth, async (req, res) => {
     }
     if (update.acepta_efectivo !== undefined) {
       update.acepta_efectivo = update.acepta_efectivo === true || update.acepta_efectivo === "true";
+    }
+    if (req.query.vista === "cobros" && update.acepta_transferencia === true) {
+      const { data: actual, error } = await supabase.from("usuarios").select("datos_bancarios").eq("slug", slug).single();
+      if (error) throw error;
+      const banco = { ...actual.datos_bancarios, ...update.datos_bancarios };
+      if (typeof banco.cbu !== "string" || !CBU_REGEX.test(banco.cbu)) return res.status(400).json({ success: false, error: "Ingresá un CBU de 22 dígitos." });
+      if (update.datos_bancarios) update.datos_bancarios = banco;
     }
     if (update.datos_bancarios !== undefined && !validarDatosBancarios(update.datos_bancarios)) {
       return res.status(400).json({ success: false, error: "Datos bancarios inválidos (revisá CBU/alias)." });
@@ -5967,7 +5991,7 @@ async function actualizarConfigEquipo(slug, equipoId, body) {
   if (update.metodo_pago !== undefined && update.metodo_pago !== null && !["none", "sena", "total"].includes(update.metodo_pago)) return { error: "Método de pago inválido." };
   if (update.porcentaje_sena !== undefined && update.porcentaje_sena !== null) {
     const val = Number(update.porcentaje_sena);
-    if (!Number.isInteger(val) || val < 1 || val > 100) return { error: "Porcentaje de seña inválido." };
+    if (!Number.isInteger(val) || val < 20 || val > 100) return { error: "Porcentaje de seña inválido." };
     update.porcentaje_sena = val;
   }
   for (const key of ["acepta_transferencia", "acepta_efectivo", "agenda_sin_pagos"]) {

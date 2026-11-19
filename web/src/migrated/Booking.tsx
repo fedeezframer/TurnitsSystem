@@ -4950,6 +4950,7 @@ function PagoBlock({
     montoPendienteEnLocal,
     accent,
 }: any) {
+    const [avisoCbu, setAvisoCbu] = React.useState("")
     if (metodos.length === 0) return null
     const transferenciaActiva = seleccionado === "transferencia"
     const visibles = transferenciaActiva
@@ -5172,7 +5173,11 @@ function PagoBlock({
                                 {datosBancarios.cbu && (
                                     <span>
                                         <strong>CBU:</strong>{" "}
-                                        {datosBancarios.cbu}
+                                        •••• {String(datosBancarios.cbu).slice(-4)}{" "}
+                                        <button type="button" onClick={async () => {
+                                            try { await navigator.clipboard.writeText(datosBancarios.cbu); setAvisoCbu("CBU copiado") }
+                                            catch { setAvisoCbu("El navegador bloqueó la copia del CBU.") }
+                                        }}>Copiar CBU</button> <small role="status">{avisoCbu}</small>
                                     </span>
                                 )}
                             </div>
