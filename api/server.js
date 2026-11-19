@@ -3160,7 +3160,7 @@ app.get(["/admin/equipo/:id/servicios-disponibles","/empleado/:slug/sucursal/mie
     if (!miembro) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
 
     const [{ data: servicios, error: e1 }, { data: vinculos, error: e2 }] = await Promise.all([
-      branchPanel.from(req, "servicios").select("id, nombre, descripcion, imagen_url, precio, duracion, activo")
+      branchPanel.from(req, "servicios").select("id, nombre, descripcion, precio, duracion, activo, orden")
         .eq("slug", slugClean).or(`owner_equipo_id.is.null,owner_equipo_id.eq.${id}`)
         .order("orden", { ascending: true }).order("created_at", { ascending: true }),
       branchPanel.from(req, "servicio_equipo").select("servicio_id, precio_override, imagen_url_override, orden_override").eq("equipo_id", id),
@@ -3223,6 +3223,17 @@ app.put("/admin/equipo/:id/servicios/:servicio_id", requireAuth, async (req, res
       branchPanel.from(req, "servicios").select("id").eq("id", servicio_id).eq("slug", slug).maybeSingle(),
     ]);
     if (!miembro || !servicio) return res.status(404).json({ success: false, error: "Integrante o servicio no encontrado." });
+    if (Object.hasOwn(req.body || {}, "orden_servicios")) {
+      const ids = req.body.orden_servicios;
+      if (!Array.isArray(ids) || !ids.includes(servicio_id) || ids.length > 10000 ||
+          new Set(ids).size !== ids.length || ids.some(value => typeof value !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)))
+        return res.status(400).json({success:false, error:"Revisá el orden de los servicios."});
+      const result = await supabase.rpc("ordenar_servicios_equipo", {p_slug:slug, p_equipo:id, p_ids:ids});
+      if (result.error) throw result.error;
+      if (!result.data) return res.status(409).json({success:false, error:"Las asignaciones cambiaron. Volvé a abrir este integrante."});
+      invalidateCache(slug);
+      return res.json({success:true});
+    }
     const update = {};
     const { precio_override: precio, imagen_url_override: imagen, orden_override: orden } = req.body || {};
     if (precio !== undefined) {
