@@ -1,3 +1,4 @@
+import "./horarios.css"
 import { ScheduleTimeInput as HorariosConfig_TimeInput } from "./ScheduleTimeInput"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner from "../../components/LoadingRunner"
@@ -321,7 +322,7 @@ function HorariosConfig(props: any) {
 
     if (loading)
         return (
-            <div style={{ ...HorariosConfig_cardBase, ...style }}>
+            <div className="week-loading" style={{ ...HorariosConfig_cardBase, ...style }}>
                 <HorariosConfig_SkeletonHorarios />
                 <style>{HorariosConfig_shimmerCSS}</style>
             </div>
@@ -416,103 +417,13 @@ function HorariosConfig_Anticipacion({
             setCantidad(cantidadValida)
     }
 
-    return (
-        <div
-            style={{
-                display: "flex",
-                flexDirection: isMobile ? "column" : "row",
-                alignItems: isMobile ? "stretch" : "center",
-                justifyContent: "space-between",
-                gap: 14,
-                padding: 16,
-                marginBottom: 18,
-                border: "1px solid #e7e9ee",
-                borderRadius: 14,
-                background: "#fbfcfe",
-                boxSizing: "border-box",
-            }}
-        >
-            <div style={{ minWidth: 0 }}>
-                <div
-                    style={{
-                        fontSize: 14,
-                        fontWeight: 700,
-                        color: "#1e293b",
-                    }}
-                >
-                    Anticipación por turnos
-                </div>
-                <div
-                    style={{
-                        marginTop: 4,
-                        fontSize: 12,
-                        lineHeight: 1.45,
-                        color: "#64748b",
-                    }}
-                >
-                    Definí cuánto antes se pueden reservar. Por ejemplo, 1 día
-                    permite organizar la agenda desde la noche anterior.
-                </div>
-            </div>
-            <div
-                style={{
-                    display: "flex",
-                    gap: 8,
-                    flexShrink: 0,
-                    width: isMobile ? "100%" : 210,
-                }}
-            >
-                <input
-                    type="number"
-                    min={1}
-                    max={Math.floor(43200 / unidades[unidad])}
-                    step={1}
-                    inputMode="numeric"
-                    aria-label="Tiempo de anticipación"
-                    value={cantidad}
-                    onChange={(event) => cambiarCantidad(event.target.value)}
-                    onBlur={restaurarCantidad}
-                    style={{
-                        width: 0,
-                        flex: 1,
-                        minWidth: 0,
-                        height: 42,
-                        padding: "0 12px",
-                        border: "1px solid #dce1e8",
-                        borderRadius: 10,
-                        background: "#fff",
-                        color: "#1e293b",
-                        fontSize: 15,
-                        fontWeight: 700,
-                        fontFamily: "inherit",
-                        boxSizing: "border-box",
-                    }}
-                />
-                <select
-                    aria-label="Unidad de anticipación"
-                    value={unidad}
-                    onChange={(event) => cambiarUnidad(event.target.value)}
-                    style={{
-                        width: 92,
-                        height: 42,
-                        padding: "0 10px",
-                        border: "1px solid #dce1e8",
-                        borderRadius: 10,
-                        background: "#fff",
-                        color: accentColor,
-                        fontSize: 13,
-                        fontWeight: 700,
-                        fontFamily: "inherit",
-                        boxSizing: "border-box",
-                    }}
-                >
-                    <option value="minutos">min</option>
-                    <option value="horas">hs</option>
-                    <option value="dias">días</option>
-                </select>
-            </div>
+    return <div className="week-notice">
+        <strong>Anticipación de Reserva</strong>
+        <div className="week-notice-input"><input aria-label="Tiempo de anticipación" inputMode="numeric" value={cantidad} onChange={e=>cambiarCantidad(e.target.value)} onBlur={restaurarCantidad}/>
+            <select aria-label="Unidad de anticipación" value={unidad} onChange={e=>cambiarUnidad(e.target.value)}><option value="minutos">min</option><option value="horas">hs</option><option value="dias">días</option></select>
         </div>
-    )
+        <small>El tiempo establecido aquí será cuánto antes alguien deba reservar</small>
+    </div>
 }
 
 function HorariosConfig_Shell({
@@ -532,447 +443,45 @@ function HorariosConfig_Shell({
     error,
     style,
 }: any) {
-    const containerRef = React.useRef<HTMLDivElement>(null)
-    const containerWidth = HorariosConfig_useContainerWidth(containerRef)
-    const isMobile = containerWidth < 480
-
-    const dia = horarios[diaActivo]
-    const accentBg = `${accentColor}18`
-
-    return (
-        <div
-            ref={containerRef}
-            style={{ ...HorariosConfig_cardBase, ...style }}
-        >
-            <style>{`
-                ${HorariosConfig_shimmerCSS}
-                .dia-btn:hover { background: #f5f5f5 !important; }
-                .dias-scroll::-webkit-scrollbar { display: none; }
-                .dias-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-            `}</style>
-
-            <HorariosConfig_Anticipacion
-                minutos={anticipacionMinutos}
-                onChange={onSetAnticipacionMinutos}
-                accentColor={accentColor}
-                isMobile={isMobile}
-            />
-
-            {isMobile ? (
-                /* ══════════════ LAYOUT MÓVIL ══════════════ */
-                <div
-                    style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 16,
-                        flex: 1,
-                        minHeight: 0,
-                    }}
-                >
-                    {/* Días: scroll horizontal */}
-                    <div
-                        className="dias-scroll"
-                        style={{
-                            display: "flex",
-                            gap: 6,
-                            overflowX: "auto",
-                            paddingBottom: 4,
-                            flexShrink: 0,
-                        }}
-                    >
-                        {HorariosConfig_DIAS_CONFIG.map(({ key, label }) => {
-                            const sel = diaActivo === key
-                            const isActivo = horarios[key]?.activo
-                            return (
-                                <button
-                                    key={key}
-                                    className="dia-btn"
-                                    onClick={() => onSelectDia(key)}
-                                    style={{
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        alignItems: "center",
-                                        gap: 4,
-                                        padding: "8px 12px",
-                                        borderRadius: 12,
-                                        border: sel
-                                            ? `1.5px solid ${accentColor}`
-                                            : "1.5px solid transparent",
-                                        background: sel ? accentBg : "#f7f7f7",
-                                        cursor: "pointer",
-                                        fontFamily: "'Inter', sans-serif",
-                                        flexShrink: 0,
-                                        whiteSpace: "nowrap",
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            fontSize: 12,
-                                            fontWeight: sel ? 700 : 500,
-                                            color: sel ? accentColor : "#555",
-                                        }}
-                                    >
-                                        {label.slice(0, 3)}
-                                    </span>
-                                    {/* Dot indicador de activo */}
-                                    <div
-                                        style={{
-                                            width: 5,
-                                            height: 5,
-                                            borderRadius: "50%",
-                                            background: isActivo
-                                                ? accentColor
-                                                : "#ddd",
-                                        }}
-                                    />
-                                </button>
-                            )
-                        })}
-                    </div>
-
-                    {/* Panel del día */}
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={diaActivo}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -8 }}
-                            transition={{ duration: 0.15 }}
-                            style={{
-                                flex: 1,
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 16,
-                            }}
-                        >
-                            {/* Header del día */}
-                            <div
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        display: "inline-block",
-                                        padding: "5px 14px",
-                                        background: dia?.activo
-                                            ? accentBg
-                                            : "#f5f5f5",
-                                        color: dia?.activo
-                                            ? accentColor
-                                            : "#bbb",
-                                        borderRadius: 8,
-                                        fontSize: 14,
-                                        fontWeight: 700,
-                                        fontFamily: "'Inter', sans-serif",
-                                        letterSpacing: "0.02em",
-                                    }}
-                                >
-                                    {diaActivo.toUpperCase()}
-                                </span>
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 8,
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            fontSize: 12,
-                                            color: "#999",
-                                            fontFamily: "'Inter', sans-serif",
-                                        }}
-                                    >
-                                        ¿Abrimos?
-                                    </span>
-                                    <HorariosConfig_Toggle
-                                        activo={dia?.activo}
-                                        accentColor={accentColor}
-                                        onToggle={() => onToggle(diaActivo)}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Bloques: en móvil van en columna */}
-                            {dia?.activo ? (
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        gap: 12,
-                                    }}
-                                >
-                                    <HorariosConfig_BloqueHorario
-                                        titulo="Jornada"
-                                        desde={dia.jornada?.[0] || null}
-                                        hasta={dia.jornada?.[1] || null}
-                                        accentColor={accentColor}
-                                        onDesde={(v: string | null) =>
-                                            onSetJornada(diaActivo, 0, v)
-                                        }
-                                        onHasta={(v: string | null) =>
-                                            onSetJornada(diaActivo, 1, v)
-                                        }
-                                        horizontal
-                                    />
-                                    <HorariosConfig_BloqueHorario
-                                        titulo="Descanso"
-                                        opcional
-                                        desde={dia.descanso?.[0] || null}
-                                        hasta={dia.descanso?.[1] || null}
-                                        accentColor={accentColor}
-                                        onDesde={(v: string | null) =>
-                                            onSetDescanso(diaActivo, 0, v)
-                                        }
-                                        onHasta={(v: string | null) =>
-                                            onSetDescanso(diaActivo, 1, v)
-                                        }
-                                        horizontal
-                                    />
-                                </div>
-                            ) : (
-                                <HorariosConfig_DiaDeshabilitado />
-                            )}
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-            ) : (
-                /* ══════════════ LAYOUT DESKTOP (original) ══════════════ */
-                <div style={{ display: "flex", gap: 0, flex: 1, minHeight: 0 }}>
-                    {/* Columna días */}
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 4,
-                            width: 130,
-                            flexShrink: 0,
-                            paddingRight: 16,
-                            borderRight: "1px solid #f0f0f0",
-                        }}
-                    >
-                        {HorariosConfig_DIAS_CONFIG.map(({ key, label }) => {
-                            const sel = diaActivo === key
-                            return (
-                                <button
-                                    key={key}
-                                    className="dia-btn"
-                                    onClick={() => onSelectDia(key)}
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        padding: "9px 12px",
-                                        borderRadius: 10,
-                                        border: sel
-                                            ? `1.5px solid ${accentColor}`
-                                            : "1.5px solid transparent",
-                                        background: sel
-                                            ? accentBg
-                                            : "transparent",
-                                        cursor: "pointer",
-                                        fontFamily: "'Inter', sans-serif",
-                                        width: "100%",
-                                        textAlign: "left" as const,
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            fontSize: 13,
-                                            fontWeight: sel ? 700 : 500,
-                                            color: sel ? accentColor : "#555",
-                                        }}
-                                    >
-                                        {label}
-                                    </span>
-                                </button>
-                            )
-                        })}
-                    </div>
-
-                    {/* Panel derecho */}
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={diaActivo}
-                            initial={{ opacity: 0, x: 10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -10 }}
-                            transition={{ duration: 0.15 }}
-                            style={{
-                                flex: 1,
-                                paddingLeft: 24,
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 20,
-                            }}
-                        >
-                            {/* Header del día */}
-                            <div
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        display: "inline-block",
-                                        padding: "5px 14px",
-                                        background: dia?.activo
-                                            ? accentBg
-                                            : "#f5f5f5",
-                                        color: dia?.activo
-                                            ? accentColor
-                                            : "#bbb",
-                                        borderRadius: 8,
-                                        fontSize: 15,
-                                        fontWeight: 700,
-                                        fontFamily: "'Inter', sans-serif",
-                                        letterSpacing: "0.02em",
-                                    }}
-                                >
-                                    {diaActivo.toUpperCase()}
-                                </span>
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 8,
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            fontSize: 12,
-                                            color: "#999",
-                                            fontFamily: "'Inter', sans-serif",
-                                        }}
-                                    >
-                                        ¿Abrimos?
-                                    </span>
-                                    <HorariosConfig_Toggle
-                                        activo={dia?.activo}
-                                        accentColor={accentColor}
-                                        onToggle={() => onToggle(diaActivo)}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Bloques horarios */}
-                            {dia?.activo ? (
-                                <div
-                                    style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "1fr 1fr",
-                                        gap: 16,
-                                    }}
-                                >
-                                    <HorariosConfig_BloqueHorario
-                                        titulo="Jornada"
-                                        desde={dia.jornada?.[0] || null}
-                                        hasta={dia.jornada?.[1] || null}
-                                        accentColor={accentColor}
-                                        onDesde={(v: string | null) =>
-                                            onSetJornada(diaActivo, 0, v)
-                                        }
-                                        onHasta={(v: string | null) =>
-                                            onSetJornada(diaActivo, 1, v)
-                                        }
-                                    />
-                                    <HorariosConfig_BloqueHorario
-                                        titulo="Descanso"
-                                        opcional
-                                        desde={dia.descanso?.[0] || null}
-                                        hasta={dia.descanso?.[1] || null}
-                                        accentColor={accentColor}
-                                        onDesde={(v: string | null) =>
-                                            onSetDescanso(diaActivo, 0, v)
-                                        }
-                                        onHasta={(v: string | null) =>
-                                            onSetDescanso(diaActivo, 1, v)
-                                        }
-                                    />
-                                </div>
-                            ) : (
-                                <HorariosConfig_DiaDeshabilitado />
-                            )}
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-            )}
-
-            {/* ── FOOTER ── */}
-            {mostrarBotonGuardar && (
-                <div
-                    style={{
-                        marginTop: 20,
-                        paddingTop: 16,
-                        borderTop: "1px solid #f0f0f0",
-                        display: "flex",
-                        alignItems: isMobile ? "stretch" : "center",
-                        flexDirection: isMobile ? "column" : "row",
-                        justifyContent: "space-between",
-                        gap: isMobile ? 10 : 0,
-                    }}
-                >
-                    {error ? (
-                        <span
-                            style={{
-                                fontSize: 12,
-                                color: "#ef4444",
-                                fontFamily: "'Inter', sans-serif",
-                            }}
-                        >
-                            {error}
-                        </span>
-                    ) : guardadoOk ? (
-                        <motion.span
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            style={{
-                                fontSize: 12,
-                                color: accentColor,
-                                fontWeight: 700,
-                                fontFamily: "'Inter', sans-serif",
-                            }}
-                        >
-                            Horarios guardados
-                        </motion.span>
-                    ) : (
-                        <span
-                            style={{
-                                fontSize: 12,
-                                color: "#bbb",
-                                fontFamily: "'Inter', sans-serif",
-                            }}
-                        >
-                            Los cambios se aplicarán al guardar
-                        </span>
-                    )}
-                    <button
-                        onClick={onGuardar}
-                        disabled={guardando}
-                        style={{
-                            padding: "10px 22px",
-                            borderRadius: 10,
-                            border: "none",
-                            background: guardando ? "#ccc" : "#000",
-                            color: "#fff",
-                            fontSize: 13,
-                            fontWeight: 700,
-                            cursor: guardando ? "wait" : "pointer",
-                            fontFamily: "'Inter', sans-serif",
-                            transition: "background 0.2s",
-                            width: isMobile ? "100%" : "auto",
-                        }}
-                    >
-                        {guardando ? "Guardando…" : "Guardar horarios"}
-                    </button>
-                </div>
-            )}
+    const day = horarios[diaActivo]
+    const hasBreak = Boolean(day?.descanso?.some(Boolean))
+    const minutes = (time: string | null) => {
+        if (!time) return NaN
+        const [h,m] = time.split(":").map(Number)
+        return h*60+m
+    }
+    const start = minutes(day?.jornada?.[0]), end = minutes(day?.jornada?.[1])
+    const setBreak = () => {
+        const format = (n:number) => String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0")
+        const third = Math.floor((end-start)/3)
+        const suggested = start < 13*60 && end > 15*60 ? ["13:00","15:00"] : [format(start+third),format(end-third)]
+        const values = hasBreak ? [null,null] : suggested
+        onSetDescanso(diaActivo,0,values[0])
+        onSetDescanso(diaActivo,1,values[1])
+    }
+    return <div className="week-editor" style={style}>
+        <HorariosConfig_Anticipacion minutos={anticipacionMinutos} onChange={onSetAnticipacionMinutos}/>
+        <div className="week-days" role="group" aria-label="Día de la semana">
+            {HorariosConfig_DIAS_CONFIG.map(({key,label})=><button key={key} aria-pressed={diaActivo===key} onClick={()=>onSelectDia(key)}>{label}</button>)}
         </div>
-    )
+        <hr/>
+        <div key={diaActivo}>
+            {["jornada","descanso"].map((field,index)=>{
+                const rest = index===1
+                const enabled = day?.activo && (!rest || hasBreak)
+                const title = rest ? "Descanso" : "Horario Fijo"
+                return <section className="week-period" key={field} aria-label={title}>
+                    <h3>{title}<button type="button" className="week-switch" role="switch" aria-label={rest?"Activar descanso":"Abrir este día"} aria-checked={Boolean(rest?hasBreak:day?.activo)} disabled={rest && (!day?.activo || (!hasBreak && !(end-start>=3)))} onClick={rest?setBreak:()=>onToggle(diaActivo)} /></h3>
+                    <div className="week-range">{["De","Hasta"].map((label,i)=><label key={label}>{label}
+                        <span className="week-clock" data-display={day?.[field]?.[i] ? day[field][i]+"hs" : undefined}><HorariosConfig_TimeInput value={day?.[field]?.[i]} disabled={!enabled} placeholder={(rest?["13:00hs","15:00hs"]:["10:00hs","21:00hs"])[i]}
+                            onChange={v=>(rest?onSetDescanso:onSetJornada)(diaActivo,i,v)}/></span>
+                    </label>)}</div>
+                </section>
+            })}
+        </div>
+        {error && <p role="alert">{error}</p>}
+        {mostrarBotonGuardar && <button className="week-save" disabled={guardando} onClick={onGuardar}>{guardando?"Guardando…":guardadoOk?"Horarios guardados":"Guardar horarios"}</button>}
+    </div>
 }
 
 function HorariosConfig_Toggle({ activo, accentColor, onToggle }: any) {
@@ -1221,7 +730,7 @@ function HorariosConfig_Skel({ width, height, style = {} }: any) {
     )
 }
 
-function ExcepcionesConfig_SkeletonCalendar() { return <LoadingRunner card size="compact" label="Cargando excepciones…" /> }
+function ExcepcionesConfig_SkeletonCalendar() { return <div className="exception-loading"><LoadingRunner card size="compact" label="Cargando excepciones…" /></div> }
 
 function ExcepcionesConfig_DayPanel({
     dayKey,
@@ -1521,8 +1030,13 @@ function ExcepcionesConfig({
     const containerWidth = ExcepcionesConfig_useContainerWidth(containerRef)
     const isMobile = containerWidth < 420
 
-    // Padding adaptativo
-    const pad = isMobile ? 14 : 22
+    const [weekly,setWeekly] = React.useState<Record<string,any>>({})
+    React.useEffect(()=>{
+        const update = (event: Event) => setWeekly((event as CustomEvent).detail)
+        window.addEventListener("horarios_changed",update)
+        window.dispatchEvent(new Event("config_reemitir"))
+        return ()=>window.removeEventListener("horarios_changed",update)
+    },[])
 
     const [loading, setLoading] = React.useState(true)
     const [error, setError] = React.useState("")
@@ -1662,383 +1176,31 @@ function ExcepcionesConfig({
         if (loading) return <ExcepcionesConfig_SkeletonCalendar />
     }
 
-    const startOffset = ExcepcionesConfig_getMonthStart(curYear, curMonth)
-    const totalDays = ExcepcionesConfig_getDaysInMonth(curYear, curMonth)
-    const cells: (number | null)[] = [
-        ...Array(startOffset).fill(null),
-        ...Array.from({ length: totalDays }, (_, i) => i + 1),
-    ]
-
-    // FIX: los "chips" de abajo (fecha + botón × para borrar) ya no
-    // muestran fechas que ya pasaron — no tiene sentido poder "borrar"
-    // un bloqueo/excepción de un día que ya fue, y confundía al usuario.
-    // El calendario de arriba NO se toca: sigue pintando todas las
-    // excepciones (pasadas y futuras) leyendo directo de `exceptions`,
-    // así el historial se mantiene visible ahí.
-    const todayKey = ExcepcionesConfig_makeDateKey(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate()
-    )
-    const excKeys = Object.keys(exceptions)
-        .filter((k) => k >= todayKey)
-        .sort()
-
-    const navBtnStyle: React.CSSProperties = {
-        background: "none",
-        border: "1px solid #e2e8f0",
-        borderRadius: 8,
-        width: 30,
-        height: 30,
-        cursor: "pointer",
-        color: "#64748b",
-        fontSize: 16,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-    }
-
-    const mesLabel = isMobile
-        ? `${ExcepcionesConfig_MESES[curMonth].substring(0, 3)} ${curYear}`
-        : `${ExcepcionesConfig_MESES[curMonth]} ${curYear}`
-
-    const cardStyle: React.CSSProperties = {
-        width: "100%",
-        height: "100%",
-        padding: `${pad}px`, // ← padding adaptativo, no fijo
-        borderRadius: 20,
-        background: "#ffffff",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)",
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: "'Inter Display', -apple-system, sans-serif",
-        boxSizing: "border-box",
-        overflow: "hidden", // ← corta cualquier desborde interno
-        minWidth: 0, // ← evita que flex-children expandan el contenedor
-        ...style,
-    }
-
-    return (
-        <div
-            ref={containerRef}
-            style={{
-                width: "100%",
-                maxWidth: "100%",
-                overflow: "hidden", // ← wrapper también corta
-                boxSizing: "border-box",
-            }}
-        >
-            <div style={cardStyle}>
-                <style>{ExcepcionesConfig_shimmerCSS}</style>
-
-                {/* Header */}
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        alignItems: "center",
-                        marginBottom: 16,
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                        }}
-                    >
-                        <button onClick={prevMonth} style={navBtnStyle}>
-                            ‹
-                        </button>
-                        <span
-                            style={{
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: "#1e293b",
-                                minWidth: isMobile ? 72 : 110,
-                                textAlign: "center",
-                            }}
-                        >
-                            {mesLabel}
-                        </span>
-                        <button onClick={nextMonth} style={navBtnStyle}>
-                            ›
-                        </button>
-                    </div>
-                </div>
-
-                {/* Días semana */}
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-                        gap: isMobile ? 3 : 6,
-                        marginBottom: isMobile ? 3 : 6,
-                    }}
-                >
-                    {["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"].map((d) => (
-                        <div
-                            key={d}
-                            style={{
-                                textAlign: "center",
-                                fontSize: isMobile ? 10 : 11,
-                                fontWeight: 600,
-                                color: "#94a3b8",
-                                padding: "4px 0",
-                                letterSpacing: "0.04em",
-                            }}
-                        >
-                            {d}
-                        </div>
-                    ))}
-                </div>
-
-                {/* Grilla */}
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-                        gap: isMobile ? 3 : 6,
-                    }}
-                >
-                    {cells.map((d, i) => {
-                        if (!d) return <div key={`e-${i}`} />
-                        const key = ExcepcionesConfig_makeDateKey(
-                            curYear,
-                            curMonth,
-                            d
-                        )
-                        const cellDate = new Date(curYear, curMonth, d)
-                        const isPast = cellDate < today
-                        const isToday = cellDate.getTime() === today.getTime()
-                        const exc = exceptions[key]
-                        const isSelected = selectedKey === key
-
-                        return (
-                            <div
-                                key={key}
-                                onClick={() =>
-                                    !isPast &&
-                                    setSelectedKey(isSelected ? null : key)
-                                }
-                                style={{
-                                    aspectRatio: "1",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    borderRadius: isMobile ? 7 : 10,
-                                    border: `1px solid ${isSelected ? accentColor : exc?.type === "block" ? "#ef444466" : exc?.type === "custom" ? "#f9731666" : isToday ? `${accentColor}33` : "#e2e8f0"}`,
-                                    background: isSelected
-                                        ? `${accentColor}15`
-                                        : exc?.type === "block"
-                                          ? "#fef2f2"
-                                          : exc?.type === "custom"
-                                            ? "#fff7ed"
-                                            : isToday
-                                              ? `${accentColor}08`
-                                              : "#ffffff",
-                                    cursor: isPast ? "default" : "pointer",
-                                    opacity: isPast ? 0.3 : 1,
-                                    position: "relative",
-                                    transition: "all 0.12s",
-                                    minHeight: isMobile ? 34 : 52,
-                                    overflow: "hidden",
-                                }}
-                            >
-                                {exc && (
-                                    <div
-                                        style={{
-                                            position: "absolute",
-                                            top: isMobile ? 3 : 5,
-                                            right: isMobile ? 3 : 5,
-                                            width: isMobile ? 5 : 6,
-                                            height: isMobile ? 5 : 6,
-                                            borderRadius: "50%",
-                                            background:
-                                                exc.type === "block"
-                                                    ? "#ef4444"
-                                                    : "#f97316",
-                                        }}
-                                    />
-                                )}
-                                <span
-                                    style={{
-                                        fontSize: isMobile ? 12 : 18,
-                                        fontWeight: 400,
-                                        lineHeight: 1,
-                                        color:
-                                            exc?.type === "block"
-                                                ? "#dc2626"
-                                                : exc?.type === "custom"
-                                                  ? "#ea580c"
-                                                  : isToday
-                                                    ? accentColor
-                                                    : "#1e293b",
-                                    }}
-                                >
-                                    {d}
-                                </span>
-                                {!isMobile && (
-                                    <span
-                                        style={{
-                                            fontSize: 9,
-                                            color: "#cbd5e1",
-                                            marginTop: 2,
-                                        }}
-                                    >
-                                        {ExcepcionesConfig_MESES[curMonth]
-                                            .substring(0, 3)
-                                            .toLowerCase()}
-                                    </span>
-                                )}
-                            </div>
-                        )
-                    })}
-                </div>
-
-                {/* Panel día */}
-                <AnimatePresence>
-                    {selectedKey && (
-                        <ExcepcionesConfig_DayPanel
-                            dayKey={selectedKey}
-                            excepcion={exceptions[selectedKey] ?? null}
-                            accentColor={accentColor}
-                            isMobile={isMobile}
-                            onSave={handleDaySave}
-                            onClose={() => setSelectedKey(null)}
-                        />
-                    )}
-                </AnimatePresence>
-
-                <div
-                    style={{
-                        height: 1,
-                        background: "#f1f5f9",
-                        margin: "16px 0",
-                    }}
-                />
-
-                {/* Leyenda */}
-                <div
-                    style={{
-                        display: "flex",
-                        gap: isMobile ? 8 : 16,
-                        flexWrap: "wrap",
-                        marginBottom: excKeys.length > 0 ? 12 : 0,
-                    }}
-                >
-                    {[
-                        { color: "#ef4444", label: "Día bloqueado" },
-                        { color: "#f97316", label: "Intervalos propios" },
-                        { color: accentColor, label: "Hoy" },
-                    ].map(({ color, label }) => (
-                        <div
-                            key={label}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 5,
-                                fontSize: isMobile ? 10 : 11,
-                                color: "#64748b",
-                            }}
-                        >
-                            <div
-                                style={{
-                                    width: 7,
-                                    height: 7,
-                                    borderRadius: "50%",
-                                    background: color,
-                                    flexShrink: 0,
-                                }}
-                            />
-                            {label}
-                        </div>
-                    ))}
-                </div>
-
-                {/* Chips activos */}
-                {excKeys.length > 0 && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {excKeys.map((k) => {
-                            const exc = exceptions[k]
-                            const [, mm, dd] = k.split("-")
-                            const lbl = `${parseInt(dd)} ${ExcepcionesConfig_MESES[parseInt(mm) - 1].substring(0, 3)}`
-                            const isBlock = exc.type === "block"
-                            return (
-                                <div
-                                    key={k}
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 5,
-                                        padding: "3px 10px",
-                                        borderRadius: 99,
-                                        fontSize: isMobile ? 11 : 12,
-                                        fontWeight: 600,
-                                        background: isBlock
-                                            ? "#fef2f2"
-                                            : "#fff7ed",
-                                        border: `1px solid ${isBlock ? "#ef444444" : "#f9731644"}`,
-                                        color: isBlock ? "#dc2626" : "#ea580c",
-                                    }}
-                                >
-                                    {lbl}
-                                    {exc.type === "custom" && exc.slots?.length
-                                        ? ` (${exc.slots.length})`
-                                        : ""}
-                                    <button
-                                        onClick={() => handleDaySave(k, null)}
-                                        style={{
-                                            background: "none",
-                                            border: "none",
-                                            cursor: "pointer",
-                                            color: "inherit",
-                                            fontSize: 14,
-                                            lineHeight: 1,
-                                            padding: 0,
-                                            opacity: 0.6,
-                                        }}
-                                    >
-                                        ×
-                                    </button>
-                                </div>
-                            )
-                        })}
-                    </div>
-                )}
-
-                {/* Footer */}
-                <div
-                    style={{
-                        marginTop: "auto",
-                        paddingTop: 14,
-                        display: "flex",
-                        justifyContent: "flex-start",
-                    }}
-                >
-                    {error ? (
-                        <span style={{ fontSize: 11, color: "#ef4444" }}>
-                            {error}
-                        </span>
-                    ) : savedOk ? (
-                        <motion.span
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            style={{
-                                fontSize: 11,
-                                color: "#22c55e",
-                                fontWeight: 600,
-                            }}
-                        >
-                            Guardado
-                        </motion.span>
-                    ) : null}
-                </div>
-            </div>
-        </div>
-    )
+    const offset = new Date(curYear,curMonth,1).getDay()
+    const count = Math.ceil((offset + ExcepcionesConfig_getDaysInMonth(curYear,curMonth))/7)*7
+    return <section className="schedule-exceptions" ref={containerRef} style={style}>
+        <header><div><h2>Excepciones Laborales</h2><p>Marca los días que tus Horarios Semanales cambien</p></div>
+            <nav aria-label="Mes del calendario"><button aria-label="Mes anterior" onClick={prevMonth}>‹</button>
+                <strong aria-live="polite">{ExcepcionesConfig_MESES[curMonth]} {curYear}</strong><button aria-label="Mes siguiente" onClick={nextMonth}>›</button></nav>
+        </header>
+        <div className="exception-month">{Array.from({length:count},(_,index)=>{
+            const date = new Date(curYear,curMonth,index-offset+1)
+            const key = ExcepcionesConfig_makeDateKey(date.getFullYear(),date.getMonth(),date.getDate())
+            const outside = date.getMonth()!==curMonth
+            const exc = exceptions[key]
+            const day = weekly[HorariosConfig_DIAS_CONFIG[(date.getDay()+6)%7].key]
+            const slots: ExcepcionesConfig_Slot[] = exc ? (exc.type==="custom" ? exc.slots || [] : []) : (day?.activo && day.jornada?.every(Boolean) ? [day.jornada] : [])
+            const dateLabel = date.getDate()+" "+ExcepcionesConfig_MESES[date.getMonth()].slice(0,3)
+            return <button key={key} disabled={outside || date<today} data-exception={Boolean(exc)} data-outside={outside} aria-pressed={selectedKey===key}
+                onClick={()=>setSelectedKey(selectedKey===key?null:key)}>
+                <strong>{dateLabel}</strong>
+                {slots.length ? slots.map(([from,to],i)=><span key={i} className="exception-hours"><span>De </span>{from}<span>hs</span><br/><span>a </span>{to}<span>hs</span></span>) : <span>Cerrado</span>}
+            </button>
+        })}</div>
+        {selectedKey && <ExcepcionesConfig_DayPanel key={selectedKey} dayKey={selectedKey} excepcion={exceptions[selectedKey] ?? null} accentColor={accentColor} isMobile={isMobile} onSave={handleDaySave} onClose={()=>setSelectedKey(null)}/>}
+        {error && <p role="alert">{error}</p>}
+        {savedOk && <p role="status">Guardado</p>}
+    </section>
 }
 
 export { HorariosConfig_TimeInput, HorariosConfig, HorariosConfig_Anticipacion, HorariosConfig_Shell, HorariosConfig_Toggle, HorariosConfig_DiaDeshabilitado, HorariosConfig_BloqueHorario, HorariosConfig_SkeletonHorarios, HorariosConfig_Skel, ExcepcionesConfig_SkeletonCalendar, ExcepcionesConfig_DayPanel, ExcepcionesConfig }

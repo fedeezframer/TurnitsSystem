@@ -93,6 +93,7 @@ function TurnitsPanel_Inner(props: any) {
     const [mostrarNotificaciones, setMostrarNotificaciones] =
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
+    const [scheduleView,setScheduleView] = React.useState<"weekly"|"exceptions">("weekly")
     const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(null)
     const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
@@ -249,6 +250,15 @@ function TurnitsPanel_Inner(props: any) {
                     />
                 </motion.div>}
             </AnimatePresence>
+        </div>
+    ) : item.id === "horarios" ? (
+        <div key={item.id}>
+            <NavButton item={item} active={seccionActiva==="horarios"} accentColor={accentColor} navIconos={navIconos} showChevron chevronDown={menuExpandido==="horarios"}
+                onClick={()=>{setMenuExpandido(menuExpandido==="horarios"?null:"horarios");if (!isMobile) irA("horarios")}} />
+            {menuExpandido==="horarios" && <div className="schedule-subnav">{(["weekly","exceptions"] as const).map(view=>
+                <button key={view} aria-current={scheduleView===view && seccionActiva==="horarios"?"page":undefined} onClick={()=>{setScheduleView(view);irA("horarios")}}>
+                    {view==="weekly"?"Horario semanal":"Excepciones laborales"}
+                </button>)}</div>}
         </div>
     ) : <NavButton key={item.id} item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => {setMenuExpandido(null);irA(item.id)}} navIconos={navIconos} showChevron={["horarios","pagos","equipo","perfil"].includes(item.id)} />)
 
@@ -801,7 +811,7 @@ function TurnitsPanel_Inner(props: any) {
                 )}
 
                 {seccionActiva === "horarios" && (
-                    <div
+                    <div data-schedule-view={scheduleView}
                         style={{
                             display: "flex",
                             flexDirection: "column",
@@ -809,8 +819,8 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title="Mis Horarios"
-                            subtitle="Definí tu disponibilidad y excepciones"
+                            title={scheduleView==="weekly"?"Horarios Semanal":"Excepciones Laborales"}
+                            subtitle={scheduleView==="weekly"?"Establece horarios fijos durante la semana":"Marca los días que tus Horarios Semanales cambien"}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>

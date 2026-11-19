@@ -1,0 +1,41 @@
+.week-editor,.schedule-exceptions {container-type:inline-size;color:#141614;min-width:0}
+.week-editor {background:white;border:1px solid #aaa;border-radius:clamp(20px,3vw,48px);padding:clamp(20px,3.6vw,55px) clamp(16px,5vw,94px)}
+.week-notice {display:grid;justify-items:start;gap:10px}
+.week-notice strong {font-size:clamp(17px,1.6vw,24px)}
+.week-notice small {color:#575757;font-weight:600}
+.week-notice-input {display:flex;align-items:center;justify-content:center;width:clamp(115px,12vw,172px);border:1px solid #777;border-radius:9px}
+.week-notice-input input,.week-notice-input select {box-sizing:border-box;border:0;background:transparent;color:#555;font:inherit;font-weight:650;height:42px}
+.week-notice-input input {width:6ch;text-align:right}.week-notice-input select {max-width:6ch}
+.week-days {display:flex;flex-wrap:wrap;gap:clamp(6px,2.5cqw,40px);margin-top:clamp(24px,4cqw,64px)}
+.week-days button,.week-save {background:white;border:1px solid #777;color:inherit;border-radius:13px;padding:9px 12px;font:inherit;cursor:pointer}
+.week-days button[aria-pressed=true],.week-save {background:#1b691d;color:white;border-color:#1b691d}
+.week-editor hr {width:48%;margin:24px auto 16px;border:0;border-top:1px solid #ccc}
+.week-period h3 {display:flex;align-items:center;gap:14px;font-size:clamp(25px,3.4cqw,46px);font-weight:500;margin:0 0 22px}
+.week-period+.week-period {margin-top:clamp(24px,4cqw,55px)}
+.week-switch {background:white;border:1px solid #595959;border-radius:24px;width:44px;height:23px;padding:2px;cursor:pointer}
+.week-switch::before {content:"";display:block;width:17px;height:17px;border-radius:50%;background:#555}
+.week-switch[aria-checked=true] {background:#1b691d;border-color:#1b691d}.week-switch[aria-checked=true]::before {background:white;margin-left:auto}
+.week-range {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(10px,2cqw,30px);max-width:690px}
+.week-range label {display:flex;align-items:center;gap:clamp(6px,2cqw,30px)}
+.week-range input {min-width:0;border:1px solid #777!important;background:white!important}
+.week-save {margin-top:18px}
+.schedule-exceptions {margin-top:20px}
+.schedule-exceptions header {display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:clamp(20px,3cqw,44px)}
+.schedule-exceptions h2,.schedule-exceptions p {margin:0}.schedule-exceptions h2 {font-size:clamp(24px,3cqw,36px)}
+.schedule-exceptions nav {display:flex;align-items:center;gap:10px;font-size:13px}
+.schedule-exceptions nav button {background:white;color:inherit;border:1px solid #aaa;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer}
+.exception-month {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;border:1px solid #666;background:#666;border-radius:clamp(15px,3.5cqw,48px);overflow:hidden}
+.exception-month button {display:flex;flex-direction:column;align-items:flex-start;gap:.65em;min-width:0;min-height:clamp(75px,11.4cqw,150px);padding:clamp(5px,1.55cqw,24px);border:0;background:white;color:#151515;font:inherit;font-size:clamp(12px,1.65cqw,24px);text-align:left;cursor:pointer}
+.exception-month button:disabled {cursor:default;opacity:1}
+.exception-month button[data-exception=true] {background:#1d691e;color:white}
+.exception-month button[data-outside=true] {background:#f2f2f2;color:#555}
+.exception-month button:focus-visible,.exception-month button[aria-pressed=true] {outline:3px solid currentColor;outline-offset:-4px}
+@container(max-width:570px){.exception-month button {padding:6px 2px;align-items:center;font-size:clamp(9px,2.5cqw,13px)}.exception-hours span {display:none}.week-range label {flex-direction:column;align-items:start}.week-days button {padding:8px}.week-period h3 {margin-bottom:12px}}
+[data-schedule-view=weekly] :is(.schedule-exceptions,.exception-loading),[data-schedule-view=exceptions] :is(.week-editor,.week-loading),[data-schedule-view] .schedule-exceptions header>div {display:none}
+[data-schedule-view] .schedule-exceptions {margin:0}
+[data-schedule-view] .schedule-exceptions header {justify-content:end;margin-bottom:12px}
+.schedule-subnav {display:grid;margin:0 8px 6px 16px;border-bottom:1px solid #abb2ac}
+.schedule-subnav button {padding:10px 8px;text-align:left;font:inherit;font-size:14px;background:transparent;border:0;color:inherit;cursor:pointer}
+.schedule-subnav button[aria-current=page] {color:#196b20;font-weight:600}
+.week-clock {position:relative;min-width:0;width:100%}
+.week-clock[data-display]:not(:focus-within)::after {content:attr(data-display);position:absolute;inset:1px;display:grid;place-items:center;background:white;border-radius:9px;font-weight:700;pointer-events:none}
