@@ -1292,7 +1292,7 @@ function TeamManager_OwnerFallbackCard({
                 alignItems: "center",
                 gap: isMobile ? 10 : 12,
                 padding: isMobile ? "6px 8px" : "6px 9px",
-                minHeight: isMobile ? 44 : 56,
+                minHeight: 88,
                 borderRadius: 12,
                 background: accentColor + "0A",
                 border: `1.5px solid ${accentColor}33`,
