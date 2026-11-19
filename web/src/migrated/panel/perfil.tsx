@@ -8,6 +8,7 @@ import {
   TurnitsGlobalSaveManager_get,
 } from "./common";
 import { TeamManager, TeamManager_ServiciosVinculados } from "./equipo";
+import { ServiciosManager_RowMenu } from "./servicios";
 import { TurnitsPlanRequirement } from "./shared";
 import "./perfil.css";
 const BranchMap = React.lazy(() => import("../../components/BranchMap").then(m => ({default:m.BranchMap})));
@@ -537,7 +538,10 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
     [error, setError] = React.useState(""),
     [busy, setBusy] = React.useState(false),
     [form, setForm] = React.useState<typeof sucursalVacia | null>(null),
+    [menuId, setMenuId] = React.useState<string | null>(null),
+    [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null),
     [saved, setSaved] = React.useState("");
+  const menuAnchor = React.useRef<HTMLButtonElement>(null);
   const cargar = React.useCallback(
     () => request(`${api}/admin/sucursales/${slug}`).then(setData),
     [api, slug],
@@ -545,6 +549,28 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
   React.useEffect(() => {
     cargar().catch((e) => setError(e.message));
   }, [cargar]);
+  React.useEffect(() => {
+    if (!menuId) return;
+    const outside = (e: PointerEvent) => {
+      if (!(e.target as Element).closest(".svc-row-menu,.sucursal-menu-trigger")) {
+        setMenuId(null);
+        setConfirmDeleteId(null);
+      }
+    };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        menuAnchor.current?.focus();
+        setMenuId(null);
+        setConfirmDeleteId(null);
+      }
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [menuId]);
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     if (!form) return;
@@ -571,6 +597,31 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
     } finally {
       setBusy(false);
     }
+  }
+  async function cambiarEstado(s: any) {
+    const miembros = data.equipo.filter((m: any) => (m.sucursal_id || "principal") === s.id).map((m: any) => m.id);
+    setBusy(true);
+    setError("");
+    try {
+      const payload: any = { id:s.id, nombre:s.nombre, direccion:s.direccion || "", activo:!s.activo, admin_equipo_id:s.admin_equipo_id || null, miembros };
+      if (data.mapa_habilitado) { payload.latitud = s.latitud ?? null; payload.longitud = s.longitud ?? null; }
+      const d = await request(`${api}/admin/sucursales/${slug}`, { method:"PUT", body:JSON.stringify(payload) });
+      setData((p: any) => ({ ...p, ...d }));
+      setSaved(s.activo ? "Sucursal pausada." : "Sucursal reactivada.");
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+  async function eliminarSucursal(id: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await request(`${api}/admin/sucursales/${slug}/${encodeURIComponent(id)}`, { method:"DELETE" });
+      await cargar();
+      setSaved("Sucursal eliminada.");
+      setMenuId(null);
+      setConfirmDeleteId(null);
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
   }
   async function subirFoto(file: File | undefined) {
     if (!file || !form) return;
@@ -879,8 +930,19 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
                   setSaved("");
                 }}
               >
-                {iconoEditar && <img src={iconoEditar} alt="" aria-hidden="true"/>}Editar sucursal
+                {iconoEditar && <img src={iconoEditar} alt="" aria-hidden="true"/>}Editar
               </button>
+              <button type="button" className="sucursal-menu-trigger" ref={menuId === s.id ? menuAnchor : undefined} aria-label={`Opciones de ${s.nombre}`} aria-haspopup="menu" aria-expanded={menuId === s.id} disabled={disabled || busy} onClick={() => { setConfirmDeleteId(null); setMenuId(menuId === s.id ? null : s.id); }}>•••</button>
+              {menuId === s.id && <ServiciosManager_RowMenu anchor={menuAnchor}>
+                {confirmDeleteId === s.id ? <>
+                  <span className="sucursal-delete-confirm">¿Eliminar esta sucursal?</span>
+                  <button type="button" className="is-danger" disabled={busy} onClick={() => eliminarSucursal(s.id)}>Eliminar definitivamente</button>
+                  <button type="button" disabled={busy} onClick={() => setConfirmDeleteId(null)}>Cancelar</button>
+                </> : <>
+                  <button type="button" disabled={busy || (s.id === "principal" && !data.mapa_habilitado)} onClick={() => { setMenuId(null); cambiarEstado(s); }}>{s.activo ? "Pausar" : "Reactivar"}</button>
+                  {s.id !== "principal" && <button type="button" className="is-danger" disabled={busy} onClick={() => setConfirmDeleteId(s.id)}>Eliminar</button>}
+                </>}
+              </ServiciosManager_RowMenu>}
               </div>
             </article>
           );
