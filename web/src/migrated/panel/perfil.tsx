@@ -79,7 +79,7 @@ async function request(url: string, options: RequestInit = {}) {
   return d;
 }
 export { perfilVacio } from "../../shared/profile-draft";
-function UbicacionPerfil({api, slug, direccion}: {api:string; slug:string; direccion:string}) {
+function UbicacionPerfil({api, slug, direccion, onChange}: {api:string; slug:string; direccion:string; onChange:(value:string)=>void}) {
   const [pins,setPins] = React.useState<{id:string; nombre:string; latitud:number; longitud:number}[]>([]);
   const [status,setStatus] = React.useState("Cargando ubicación…");
   React.useEffect(() => {
@@ -98,7 +98,9 @@ function UbicacionPerfil({api, slug, direccion}: {api:string; slug:string; direc
   return <section className="perfil-ubicacion"><h3>Ubicación</h3>
     {pins.length > 0 ? <React.Suspense fallback={<p>Cargando mapa…</p>}><BranchMap pins={pins} compact label="Ubicación de la sede principal"/></React.Suspense> :
       <p className="negocio-muted" role="status">{status || direccion || "Agregá una dirección pública."}</p>}
-    <label className="negocio-button secondary" htmlFor="perfil-direccion">Establecer dirección manualmente</label>
+    <label className="negocio-field">Dirección pública
+      <input value={direccion} maxLength={200} onChange={e=>onChange(e.target.value)} placeholder="Calle, altura y localidad" />
+    </label>
   </section>;
 }
 
@@ -308,18 +310,14 @@ export function PerfilNegocio({
               className="negocio-stack"
             >
               {!publicaciones && <>
-              <section
-                className="negocio-brand-grid"
-                aria-label="Imágenes del perfil"
-              >
+              <section className="perfil-branding" aria-label="Imágenes del perfil">
                 {(
                   [
                     ["foto_perfil_url", "Foto de perfil"],
                     ["banner_url", "Banner"],
                   ] as const
                 ).map(([key, label]) => (
-                  <div className="negocio-brand-upload negocio-stack" key={key}>
-                    <h3>{label}</h3>
+                  <div className={`negocio-brand-upload negocio-stack perfil-brand-card perfil-brand-${key === "banner_url" ? "banner" : "avatar"}`} key={key}>
                     <div
                       className={`negocio-brand-preview${key === "banner_url" ? " negocio-banner-preview" : ""}`}
                     >
@@ -330,41 +328,16 @@ export function PerfilNegocio({
                           shape={formaIcono}
                         /><div className="perfil-identidad"><strong>{form.nombre}</strong><p>{[form.direccion, form.ciudad].filter(Boolean).join(", ")}</p></div></>
                       ) : (
-                        form.banner_url && (
+                        form.banner_url ? (
                           <img src={form.banner_url} alt="Banner del negocio" />
-                        )
+                        ) : <div className="perfil-banner-placeholder"><span>Imagen de portada</span><small>Mostrá la identidad de tu negocio</small></div>
                       )}
-                    </div>
-                    <p className="negocio-muted">
-                      {key === "foto_perfil_url"
-                        ? "Se usa como ícono de tu negocio en el perfil y en la agenda."
-                        : "Una imagen horizontal, sin texto agregado por Turnits."}
-                    </p>
-                    <div className="negocio-row">
-                      <label
-                        className={`negocio-button secondary${uploading || !imagenesHabilitadas ? " is-disabled" : ""}`}
-                      >
-                        {form[key] ? "Cambiar imagen" : "Subir imagen"}
-                        <input
-                          aria-label={`Subir ${label.toLowerCase()}`}
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          hidden
-                          disabled={uploading || !imagenesHabilitadas}
-                          onChange={(e) => subir(e, key)}
-                        />
-                      </label>
-                      {form[key] && (
-                        <button
-                          className="negocio-button secondary"
-                          type="button"
-                          aria-label={`Quitar ${label.toLowerCase()}`}
-                          disabled={uploading || !imagenesHabilitadas}
-                          onClick={() => change(key, "")}
-                        >
-                          Quitar
-                        </button>
-                      )}
+                      <div className="perfil-brand-controls"><strong>{label}</strong>
+                        <label className="negocio-button secondary">{form[key] ? "Cambiar" : "Subir imagen"}
+                          <input aria-label={`Subir ${label.toLowerCase()}`} type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploading || !imagenesHabilitadas} onChange={e=>subir(e,key)} />
+                        </label>
+                        {form[key] && <button className="negocio-button secondary" type="button" disabled={uploading || !imagenesHabilitadas} onClick={()=>change(key,"")}>Quitar</button>}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -375,8 +348,12 @@ export function PerfilNegocio({
                   habilitar el banner, la foto de perfil y la galería ampliada.
                 </p>
               )}
-              <div className="perfil-datos-publicos">
-              <div className="perfil-redes-ubicacion"><section className="negocio-redes-editor negocio-stack">
+              <div className="perfil-editor-grid">
+              <label className="negocio-field perfil-description">
+                <span><strong>Sobre el negocio</strong><small>Contales a tus clientes qué ofrecés y qué hace especial a tu espacio.</small></span>
+                <textarea value={form.descripcion} maxLength={1500} onChange={e=>change("descripcion",e.target.value)} placeholder="Escribí una descripción clara y cercana…" />
+              </label>
+              <section className="negocio-redes-editor negocio-stack perfil-social-card">
                 <div>
                   <h3>Redes sociales</h3>
                   <p className="negocio-muted">
@@ -413,52 +390,8 @@ export function PerfilNegocio({
                     habilitar los nuevos enlaces.
                   </p>
                 )}
-              </section><UbicacionPerfil api={api} slug={slug} direccion={form.direccion}/></div>
-              <label className="negocio-field">
-                Descripción del negocio
-                <textarea
-                  value={form.descripcion}
-                  maxLength={1500}
-                  onChange={(e) => change("descripcion", e.target.value)}
-                  placeholder="Contá qué ofrecés y qué hace especial a tu negocio."
-                />
-              </label>
-              </div>
-              <div className="negocio-grid">
-                {(
-                  [
-                    ["nombre", "Nombre del negocio"],
-                    ["categoria", "Rubro"],
-                    ["ciudad", "Ciudad"],
-                    ["provincia", "Provincia"],
-                    ["direccion", "Dirección pública"],
-                    ["telefono_publico", "Teléfono público"],
-                    ["sitio_web", "Sitio web (https://…)"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label className="negocio-field" key={key}>
-                    {label}
-                    <input
-                      id={key === "direccion" ? "perfil-direccion" : undefined}
-                      value={form[key]}
-                      onChange={(e) => change(key, e.target.value)}
-                      required={key === "nombre"}
-                      maxLength={
-                        key === "nombre"
-                          ? 100
-                          : key === "telefono_publico"
-                            ? 30
-                            : key === "sitio_web"
-                              ? 300
-                              : key === "direccion"
-                                ? 200
-                                : key === "categoria"
-                                  ? 80
-                                  : 100
-                      }
-                    />
-                  </label>
-                ))}
+              </section>
+              <UbicacionPerfil api={api} slug={slug} direccion={form.direccion} onChange={value=>change("direccion",value)}/>
               </div>
               </>}
               {publicaciones && <>
@@ -539,8 +472,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
     [busy, setBusy] = React.useState(false),
     [form, setForm] = React.useState<typeof sucursalVacia | null>(null),
     [menuId, setMenuId] = React.useState<string | null>(null),
-    [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null),
-    [saved, setSaved] = React.useState("");
+    [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const menuAnchor = React.useRef<HTMLButtonElement>(null);
   const cargar = React.useCallback(
     () => request(`${api}/admin/sucursales/${slug}`).then(setData),
@@ -591,7 +523,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
       });
       setData((p: any) => ({ ...p, ...d }));
       setForm(null);
-      setSaved("Sucursal guardada.");
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -607,7 +538,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
       if (data.mapa_habilitado) { payload.latitud = s.latitud ?? null; payload.longitud = s.longitud ?? null; }
       const d = await request(`${api}/admin/sucursales/${slug}`, { method:"PUT", body:JSON.stringify(payload) });
       setData((p: any) => ({ ...p, ...d }));
-      setSaved(s.activo ? "Sucursal pausada." : "Sucursal reactivada.");
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -617,7 +547,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
     try {
       await request(`${api}/admin/sucursales/${slug}/${encodeURIComponent(id)}`, { method:"DELETE" });
       await cargar();
-      setSaved("Sucursal eliminada.");
       setMenuId(null);
       setConfirmDeleteId(null);
     } catch (e: any) { setError(e.message); }
@@ -664,7 +593,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
             onClick={() => {
               setForm({ ...sucursalVacia, miembros: [] });
               setError("");
-              setSaved("");
             }}
           >
             + Nueva sucursal
@@ -853,11 +781,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
           {error}
         </p>
       )}
-      {saved && (
-        <p className="negocio-success" role="status">
-          {saved}
-        </p>
-      )}
       {!form && <div className="negocio-grid sucursal-listado">
         {[
           data.principal || {
@@ -881,8 +804,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
               <div className="sucursal-card-media">
                 <div className="sucursal-photo-empty"><NegocioIcon kind="sucursal"/><strong>Sin imagen</strong></div>
                 {s.foto_url && <img className="sucursal-foto" src={s.foto_url} alt={"Imagen de " + s.nombre} onError={e => { e.currentTarget.style.display = "none"; }}/>}
-                <div className="sucursal-card-badges">
-                  <span className="sucursal-status" data-active={!!s.activo}><span aria-hidden="true"/>{s.activo ? "Activa" : "Pausada"}</span>
+              <div className="sucursal-card-badges">
                   {s.id === "principal" && <span className="sucursal-principal">Principal</span>}
                 </div>
                 <span className="sucursal-reservas">
@@ -929,7 +851,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
                     longitud: s.longitud ?? null,
                   });
                   setError("");
-                  setSaved("");
                 }}
               >
                 {iconoEditar && <img src={iconoEditar} alt="" aria-hidden="true"/>}Editar
