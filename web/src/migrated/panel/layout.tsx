@@ -397,6 +397,13 @@ function TurnitsPanel_Inner(props: any) {
                   al girar el celular. */}
             <style>{`
 .turnits-root{-webkit-text-size-adjust:100%;text-size-adjust:100%;max-width:100%;min-width:0}
+.turnits-panel-content{background-color:#fff!important;background-image:radial-gradient(ellipse 420px 210px at 55% -7%,rgba(231,246,234,.5),transparent 72%),radial-gradient(ellipse 430px 240px at 100% 3%,rgba(241,249,243,.72),transparent 72%),radial-gradient(ellipse 430px 250px at 100% 100%,rgba(232,247,235,.55),transparent 72%)!important}
+.turnits-sidebar{width:280px!important;padding:28px 24px 22px!important;background:linear-gradient(180deg,#fbfcff 0%,#f6f7fb 100%)!important;border-right:1px solid #edf0f3!important}
+.turnits-sidebar-brand{justify-content:flex-start!important;margin:0 0 34px!important;padding-left:12px}
+.turnits-sidebar .turnits-nav-scroll{gap:4px!important}
+.turnits-sidebar .turnits-nav-scroll>button{justify-content:flex-start!important;text-align:left!important;min-height:54px}
+.turnits-sidebar .turnits-nav-scroll>button>svg{margin-left:2px}
+@media(max-width:860px){.turnits-panel-content{background-image:radial-gradient(ellipse 300px 140px at 72% 0,rgba(235,247,237,.55),transparent 72%)!important}}
 @keyframes panel-section-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .turnits-root *{min-width:0}
 @media(max-width:860px){.turnits-root{width:100%;max-width:100%;overflow-x:clip!important}.turnits-root img,.turnits-root video,.turnits-root canvas{max-width:100%}.turnits-root input,.turnits-root textarea,.turnits-root select{max-width:100%;box-sizing:border-box}}
@@ -433,7 +440,7 @@ function TurnitsPanel_Inner(props: any) {
                     className="turnits-sidebar"
                     style={
                         {
-                            width: 400,
+                            width: 280,
                             flexShrink: 0,
                             // Sticky: el menú nunca se mueve con el scroll del
                             // contenido, queda fijo a la altura del viewport.
@@ -693,7 +700,7 @@ function TurnitsPanel_Inner(props: any) {
                         minHeight: isMobile ? "auto" : 0,
                         padding: isMobile
                             ? seccionActiva === "consultas" ? "12px 12px 16px" : "16px 16px calc(100px + env(safe-area-inset-bottom, 0px))"
-                            : 32,
+                            : 40,
                         boxSizing: "border-box",
                         overflow: isMobile ? "visible" : "auto",
                         WebkitOverflowScrolling: isMobile ? undefined : "touch",
@@ -765,11 +772,6 @@ function TurnitsPanel_Inner(props: any) {
                             gap: 20,
                         }}
                     >
-                        <SeccionHeader
-                            title={serviciosVistaInicial === "servicios" ? "Servicios" : serviciosVistaInicial === "extras" ? "Productos" : "Promociones"}
-                            subtitle={serviciosVistaInicial === "servicios" ? "Administrá los servicios que ofrecés a tus clientes" : serviciosVistaInicial === "extras" ? "Administrá los productos adicionales de tu catálogo" : "Creá y organizá tus promociones"}
-                            isMobile={isMobile}
-                        />
                         <SectionLoadingBoundary>
                         {React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
                             baseUrl,

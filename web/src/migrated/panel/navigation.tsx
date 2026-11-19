@@ -358,35 +358,39 @@ function NavButton({
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-start",
-        gap: 11,
-        padding: "9px 12px",
-        borderRadius: 10,
+        gap: 14,
+        width: "100%",
+        minHeight: 54,
+        padding: "10px 16px",
+        borderRadius: 15,
         border: "none",
         background: "transparent",
-        color: active ? "#176b24" : "#2b342d",
-        fontSize: 14,
-        fontWeight: active ? 600 : 450,
-        letterSpacing: "-0.005em",
+        color: active ? accentColor : "#475569",
+        fontSize: 15,
+        fontWeight: active ? 650 : 500,
         cursor: "pointer",
         textAlign: "left",
         overflow: "hidden",
         fontFamily: "inherit",
       }}
     >
+      {active && (
+        <motion.div
+          layoutId="navActivePill"
+          transition={{ type: "spring", stiffness: 420, damping: 34 }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 15,
+            background: `linear-gradient(90deg, ${accentColor}17, ${accentColor}0b)`,
+            border: `1px solid ${accentColor}12`,
+          }}
+        />
+      )}
       <NavGlyph id={item.id} navIconos={navIconos} size={19} strokeWidth={1.6} />
       <span style={{ position: "relative", flex: 1 }}>{item.label}</span>
       {showChevron && (
-        <motion.svg
-          aria-hidden="true"
-          width="11"
-          height="11"
-          viewBox="0 0 12 12"
-          fill="currentColor"
-          style={{ opacity: 0.55 }}
-          initial={false}
-          animate={{rotate:chevronDown === false ? -90 : 0}}
-          transition={{duration:.2,ease:[.22,1,.36,1]}}
-        >
+        <motion.svg aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style={{ opacity: 0.55 }} initial={false} animate={{rotate:chevronDown === false ? -90 : 0}} transition={{duration:.2,ease:[.22,1,.36,1]}}>
           <path d="m2 4 4 4 4-4" />
         </motion.svg>
       )}
