@@ -103,3 +103,75 @@
 .exception-month button {transition:background .15s,box-shadow .15s}
 @container(max-width:570px){.schedule-exceptions{padding:14px}.week-period{padding-top:8px}}
 .exception-usual small {grid-column:1/-1}
+.week-editor {display:grid;gap:22px;padding:clamp(20px,2.6vw,34px);border:1px solid #e4ebe4;border-radius:24px;background:#fff;box-shadow:0 12px 34px #17231908;color:#19231b}
+.week-editor-heading {display:flex;align-items:end;justify-content:space-between;gap:20px}
+.week-editor-heading > div > span,.week-selected-day > div > span {display:block;color:#718071;font-size:10px;font-weight:700;letter-spacing:.1em}
+.week-editor-heading h2 {margin:5px 0 0;color:#18251a;font-size:clamp(20px,2.3vw,27px);letter-spacing:-.7px}
+.week-editor-heading p {max-width:380px;margin:0;color:#748174;font-size:13px;line-height:1.5}
+.week-notice {grid-template-columns:minmax(0,1fr) auto;gap:5px 20px;padding:18px 20px;border-color:#e4ece3;border-radius:18px;background:linear-gradient(115deg,#f4faf3,#fff 72%)}
+.week-notice strong {font-size:15px;color:#233326}
+.week-notice small {font-size:12px;color:#758276}
+.week-notice-input {width:132px;border-color:#d8e3d7;border-radius:12px}
+.week-notice-input input,.week-notice-input select {height:42px;color:#1f2b21}
+.week-days {grid-template-columns:repeat(7,minmax(0,1fr));gap:9px;margin-top:0}
+.week-days button {min-height:70px;gap:8px;padding:11px 10px;border-color:#e5ebe4;border-radius:15px;background:#fff;text-align:center}
+.week-days button strong {font-size:13px;color:#29372b}
+.week-days button small {font-size:10px;color:#7c897d;white-space:nowrap}
+.week-days button[aria-pressed=true] {border-color:#a6cba5;background:linear-gradient(145deg,#edf7ec,#f8fcf7);box-shadow:inset 0 0 0 1px #e0efdf}
+.week-days button[aria-pressed=true] strong {color:#176623}
+.week-days button[aria-pressed=true] small {color:#4f7752}
+.week-selected-day {display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 2px}
+.week-selected-day > div {display:flex;align-items:baseline;gap:9px}
+.week-selected-day > div > span {font-size:9px}
+.week-selected-day strong {color:#1f2c22;font-size:14px}
+.week-selected-day > span {padding:6px 10px;border-radius:999px;background:#edf6ec;color:#23722c;font-size:11px;font-weight:650}
+.week-selected-day > span.is-closed {background:#f3f5f3;color:#758075}
+.week-editor hr {margin:0;border-color:#edf0ed}
+.week-periods {gap:15px}
+.week-periods .week-period,.week-period {max-width:none;margin:0;padding:18px;border:1px solid #e5ebe4;border-radius:18px;background:linear-gradient(145deg,#fff,#fbfdfb)}
+.week-period[data-enabled=false] {background:#f9fbf9}
+.week-periods .week-period + .week-period {padding-left:0;border-left:0}
+.week-period-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.week-period-heading h3 {margin:0;font-size:15px;letter-spacing:-.2px;color:#1e2c20}
+.week-period-heading p {margin:5px 0 0;color:#7b887c;font-size:11px;line-height:1.45}
+.week-period-actions {display:flex;align-items:center;gap:9px;flex-shrink:0}
+.week-period-status {padding:5px 8px;border:1px solid #e4eae3;border-radius:999px;color:#738074;font-size:10px;font-weight:650;white-space:nowrap}
+.week-period[data-enabled=true] .week-period-status {border-color:#d7ead5;background:#eff8ee;color:#23732d}
+.week-switch {width:42px;height:24px;border-color:#d3ddd2;background:#eef1ee}
+.week-switch::before {width:18px;height:18px;background:#fff;box-shadow:0 1px 3px #18251a22}
+.week-switch[aria-checked=true] {background:#23812d;border-color:#23812d}
+.week-switch[aria-checked=true]::before {transform:translateX(18px)}
+.week-range {max-width:none;gap:12px}
+.week-range label {display:grid;gap:7px;color:#68776a;font-size:11px;font-weight:650}
+.week-range input {width:100%;height:44px;padding:0 12px;border:1px solid #e0e7df!important;border-radius:12px!important;background:#fff!important;color:#1b281d!important;font-size:14px;font-weight:650}
+.week-period[data-enabled=false] .week-range input {background:#f3f6f3!important;color:#95a096!important}
+.schedule-exceptions {display:grid;gap:18px;margin-top:0;padding:clamp(20px,2.6vw,32px);border-color:#e4ebe4;border-radius:24px;background:#fff;box-shadow:0 12px 34px #17231908}
+.schedule-exceptions header {align-items:center;margin:0}
+.schedule-exceptions h2 {color:#19271b;font-size:clamp(20px,2.3vw,27px);letter-spacing:-.7px}
+.schedule-exceptions header p {margin-top:6px;color:#758276;font-size:13px}
+.schedule-exceptions nav {gap:9px;color:#455246}
+.schedule-exceptions nav strong {min-width:120px;text-align:center;font-size:13px}
+.schedule-exceptions nav button {width:36px;height:36px;border-color:#e1e8e0;border-radius:11px;color:#354336;font-size:20px}
+.schedule-exceptions nav .exception-today {width:auto;padding:0 12px;border-radius:11px;font-size:12px}
+.exception-columns {margin:0 0 -10px;color:#89958a;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.exception-columns span {padding-inline:12px}
+.exception-legend {display:flex;align-items:center;gap:16px;color:#68766a;font-size:11px}
+.exception-legend span {display:inline-flex;align-items:center;gap:6px}
+.exception-legend i {width:9px;height:9px;border-radius:50%;background:#73ad72}
+.exception-legend i.is-today {background:#fff;border:2px solid #23752c}
+.exception-legend small {margin-left:auto;color:#89958a;font-size:11px}
+.exception-month {grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;border:0;background:transparent;border-radius:0;overflow:visible}
+.exception-month button {position:relative;min-height:clamp(82px,8.2cqw,112px);gap:10px;padding:12px;border:1px solid #e7ece6;border-radius:15px;background:#fff;color:#29362b;font-size:12px;transition:border-color .15s,background .15s,box-shadow .15s,transform .15s}
+.exception-month button[data-exception=true] {border-color:#b8d6b7;background:linear-gradient(145deg,#f0f8ef,#fbfdfb);color:#246c2a}
+.exception-month button[data-exception=true]::after {content:"";position:absolute;top:12px;right:12px;width:7px;height:7px;border-radius:50%;background:#39843e}
+.exception-month button[data-outside=true] {border-color:transparent;background:#fafbfa;color:#aab2aa}
+.exception-month button[data-past=true] {border-color:transparent;background:#f7f8f7;color:#a1aaa1}
+.exception-month button[aria-current=date] {box-shadow:inset 0 0 0 1px #2c7c34}
+.exception-month button[aria-current=date] .exception-date {background:transparent;color:#1d7028;padding:0;margin:0}
+.exception-month button[aria-pressed=true] {border-color:#2b7a32;box-shadow:0 0 0 2px #2b7a3218}
+.exception-hours {color:inherit;font-size:11px;line-height:1.55}
+.exception-closed {color:#79857a;font-size:11px}
+.week-save {margin:0;padding:11px 18px;border:0;border-radius:12px;background:linear-gradient(120deg,#287d2e,#1a6721);box-shadow:0 5px 15px #1b691d1c;font-weight:650}
+@container(min-width:720px) { .week-periods {gap:15px}.week-periods .week-period + .week-period {padding-left:18px} }
+@container(max-width:720px) { .week-editor-heading {align-items:start;flex-direction:column;gap:6px}.week-days {grid-template-columns:repeat(4,minmax(0,1fr))}.week-periods {grid-template-columns:minmax(0,1fr);gap:10px}.week-periods .week-period + .week-period {padding-left:14px;border-left:0}.week-period {padding:14px}.exception-legend {flex-wrap:wrap}.exception-legend small {flex-basis:100%;margin-left:0}.exception-month button {min-height:82px;padding:9px}.schedule-exceptions header {align-items:start} }
+@container(max-width:480px) { .week-editor {gap:16px;padding:16px}.week-notice {grid-template-columns:1fr;padding:15px}.week-notice-input {grid-column:1;grid-row:3;width:100%;margin-top:4px}.week-days {grid-template-columns:repeat(2,minmax(0,1fr))}.week-days button {min-height:62px}.week-period-heading {align-items:start;flex-direction:column}.week-period-actions {width:100%;justify-content:space-between}.week-range {grid-template-columns:1fr}.schedule-exceptions {gap:14px;padding:15px}.schedule-exceptions header {flex-direction:column;align-items:stretch}.schedule-exceptions nav {justify-content:space-between}.exception-month {grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.exception-month button {min-height:74px}.exception-weekday {font-size:10px}.exception-columns {display:none} }

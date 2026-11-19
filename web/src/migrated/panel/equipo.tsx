@@ -1291,7 +1291,8 @@ function TeamManager_OwnerFallbackCard({
                 display: "flex",
                 alignItems: "center",
                 gap: isMobile ? 10 : 12,
-                padding: isMobile ? "10px" : "12px",
+                padding: isMobile ? "6px 8px" : "6px 9px",
+                minHeight: isMobile ? 44 : 56,
                 borderRadius: 12,
                 background: accentColor + "0A",
                 border: `1.5px solid ${accentColor}33`,
@@ -1301,7 +1302,7 @@ function TeamManager_OwnerFallbackCard({
             <TeamManager_Avatar
                 nombre={nombreCompleto}
                 color={accentColor}
-                size={isMobile ? 38 : 44}
+                size={isMobile ? 30 : 40}
             />
 
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1390,7 +1391,7 @@ function TeamManager_MiembroCard({
                 display: "flex",
                 alignItems: "center",
                 gap: isMobile ? 10 : 12,
-                padding: isMobile ? "10px" : "12px",
+                padding: isMobile ? "6px 8px" : "6px 9px",
                 borderRadius: 18,
                 background: miembro.activo ? "#fff" : "#f8fafc",
                 border: "1px solid #aaa",
@@ -1402,7 +1403,7 @@ function TeamManager_MiembroCard({
                 nombre={[miembro.nombre, miembro.apellido].filter(Boolean).join(" ")}
                 color={miembro.color}
                 fotoUrl={miembro.foto_url}
-                size={isMobile ? 40 : 58}
+                size={isMobile ? 30 : 40}
             />
 
             <div style={{ flex: 1, minWidth: 0 }}>
