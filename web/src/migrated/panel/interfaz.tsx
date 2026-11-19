@@ -44,6 +44,7 @@ function TurnitsGlobalSaveBar({
                 ["pagos", "Pagos"],
                 ["tema", "Tema"],
                 ["perfil", "Perfil"],
+                ["equipo", "Equipo"],
                 ["browse", "Offers"],
             ]
                 .filter(([key]) =>

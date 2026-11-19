@@ -13,10 +13,19 @@ import {
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
-import { ServiciosManager_parseDesc, TeamManager_getSlug, TeamManager_getToken, TeamManager_COLORES, TeamManager_ServicioAsignable, TeamManager_NetoData, TeamManager_PERIODOS_NETO, TeamManager_fmtPesos, TeamManager_FORM_EMPTY, TeamManager_FormData, TeamManager_ROLES, TeamManager_OwnerFallback, TeamManager_Miembro, TeamManager_cardBase, TeamManager_shimmerCSS, TeamManager_useContainerWidth, TurnitsLockedStyle, SeccionId } from "./common"
+import { ServiciosManager_parseDesc, TeamManager_getSlug, TeamManager_getToken, TeamManager_COLORES, TeamManager_ServicioAsignable, TeamManager_NetoData, TeamManager_PERIODOS_NETO, TeamManager_fmtPesos, TeamManager_FORM_EMPTY, TeamManager_FormData, TeamManager_ROLES, TeamManager_OwnerFallback, TeamManager_Miembro, TeamManager_cardBase, TeamManager_shimmerCSS, TeamManager_useContainerWidth, TurnitsLockedStyle, SeccionId, TurnitsGlobalSaveManager_get } from "./common"
 import { Turnits_ImageAdjustDialog } from "./servicios"
 import { TurnitsPlanRequirement } from "./shared"
 import { TeamManager_PlaceholderIcon } from "./temas"
+
+function TeamManager_formatPhone(value?: string) {
+    const digits = String(value || "").replace(/\D/g, "")
+    const number = digits.startsWith("54") ? digits.slice(2) : digits
+    const mobile = number.startsWith("9") && number.length === 11
+    const national = mobile ? number.slice(1) : number
+    if (national.length !== 10) return value || ""
+    return `+54 ${mobile ? "9 " : ""}${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`
+}
 
 function TeamManager_Avatar({
     nombre,
@@ -161,17 +170,15 @@ function TeamManager_FotoUploader({
                     onClick={() => setMenuFotoAbierto((abierto) => !abierto)}
                     style={{ "--equipo-foto-color": color } as React.CSSProperties}
                 >
-                    {uploading ? (
-                        <span className="equipo-foto-spinner" />
-                    ) : showImg ? (
-                        <img
-                            src={value}
-                            alt=""
-                            onError={() => setImgError(true)}
-                        />
-                    ) : (
-                        (nombre || "?").charAt(0).toUpperCase()
-                    )}
+                    <span className="equipo-foto-image">
+                        {uploading ? (
+                            <span className="equipo-foto-spinner" />
+                        ) : showImg ? (
+                            <img src={value} alt="" onError={() => setImgError(true)} />
+                        ) : (
+                            (nombre || "?").charAt(0).toUpperCase()
+                        )}
+                    </span>
                     <span className="equipo-foto-dots" aria-hidden="true">···</span>
                 </button>
 
@@ -497,7 +504,7 @@ function TeamManager_ServiciosVinculados({
             const photo = s.imagen_url_override || imagen
             return <div key={s.id} className="equipo-oferta">
                 <button type="button" aria-pressed={s.vinculado} disabled={savingOrder || pendingIds.has(s.id)} onClick={() => toggle(s)}>
-                    <span aria-hidden="true" className="equipo-check">{s.vinculado ? "✓" : ""}</span>
+                    <span aria-hidden="true" className="equipo-check">{s.vinculado && <img src="/assets/panel-nav/akar-icons_check.svg" alt="" />}</span>
                     {photo && <img src={photo} alt="" loading="lazy"/>}
                     <span><strong>{s.nombre}</strong><small>{descripcion || "Sin descripción"}{s.activo ? "" : " · Inactivo"}</small></span>
                     <b>{quoteMode ? "A presupuestar" : TeamManager_fmtPesos(s.precio_override ?? s.precio)}</b>
@@ -648,7 +655,7 @@ function TeamManager_PromocionesVinculadas({
                             <span className="equipo-promo-icon" aria-hidden="true">%</span>
                             <span className="equipo-promo-copy"><strong>{s.nombre}</strong><small>{Array.isArray(s.items) && s.items.length ? `Incluye ${s.items.length} ${s.items.length === 1 ? "servicio" : "servicios"}` : "Promoción del negocio"}{!s.activo ? " · Inactiva" : ""}</small></span>
                             <b className="equipo-promo-price">${Number(s.precio || 0).toLocaleString("es-AR")}</b>
-                            <span className="equipo-check" aria-hidden="true">{sel ? "✓" : "+"}</span>
+                            <span className="equipo-check" aria-hidden="true">{sel ? <img src="/assets/panel-nav/akar-icons_check.svg" alt="" /> : "+"}</span>
                         </button>
                     </div>
                 )
@@ -870,8 +877,33 @@ function TeamManager_MiembroForm({
 }) {
     const branch = useBranchAdmin()
     const [form, setForm] = React.useState<TeamManager_FormData>(initial)
+    const onSubmitRef = React.useRef(onSubmit)
+    onSubmitRef.current = onSubmit
     const set = (key: keyof TeamManager_FormData) => (val: string) =>
         setForm((p) => ({ ...p, [key]: val }))
+
+    React.useEffect(() => {
+        if (!modoEdicion || !miembroId) return
+        const manager = TurnitsGlobalSaveManager_get()
+        manager?.setBaseline("equipo", initial)
+        const unregister = manager?.registerSaveHandler("equipo", async (draft: TeamManager_FormData) => onSubmitRef.current(draft))
+        const discarded = () => setForm(initial)
+        window.addEventListener("turnits_global_discarded", discarded)
+        return () => {
+            unregister?.()
+            window.removeEventListener("turnits_global_discarded", discarded)
+        }
+    }, [modoEdicion, miembroId])
+
+    React.useEffect(() => {
+        if (modoEdicion && miembroId)
+            TurnitsGlobalSaveManager_get()?.markDirty("equipo", form)
+    }, [form, modoEdicion, miembroId])
+
+    const cancelar = () => {
+        if (modoEdicion && miembroId) TurnitsGlobalSaveManager_get()?.clear("equipo")
+        onCancel()
+    }
 
     return (
         <motion.div
@@ -913,7 +945,7 @@ function TeamManager_MiembroForm({
                           ? "Editar miembro"
                           : "Nuevo miembro"}
                 </span>
-                <BackButton onClick={onCancel} aria-label="Cerrar" />
+                <BackButton onClick={cancelar} aria-label="Cerrar" />
             </div>
 
             <div className="equipo-identidad">
@@ -944,7 +976,7 @@ function TeamManager_MiembroForm({
                     accentColor={accentColor}
                 />
                 {(contacto?.email || form.login_email) && <p className="negocio-muted">{(contacto?.email || form.login_email).replace(/^(.{1,3})[^@]*(@.*)$/, "$1••••$2")}</p>}
-                {contacto?.telefono && <p className="negocio-muted">{contacto.telefono}</p>}
+                {contacto?.telefono && <p className="negocio-muted">{TeamManager_formatPhone(contacto.telefono)}</p>}
             </div>
 
             </div>
@@ -1188,7 +1220,7 @@ function TeamManager_MiembroForm({
             )}
 
             {/* Botones */}
-            <div
+            {!modoEdicion && <div
                 style={{
                     display: "flex",
                     gap: 8,
@@ -1231,7 +1263,7 @@ function TeamManager_MiembroForm({
                           ? "Guardar cambios"
                           : "Agregar miembro"}
                 </motion.button>
-            </div>
+            </div>}
         </motion.div>
     )
 }
@@ -2016,6 +2048,7 @@ function TeamManager(props: any) {
             setFormError("")
         } catch (e: any) {
             setFormError(e.message || "Error al guardar")
+            throw e
         }
         setGuardando(false)
     }

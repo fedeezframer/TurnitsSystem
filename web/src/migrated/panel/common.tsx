@@ -91,7 +91,7 @@ function Turnits_useElementWidth(
     return width
 }
 
-type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios" | "productos" | "promociones"
+type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios" | "productos" | "promociones" | "equipo"
 
 type TurnitsGlobalPending = Record<string, any>
 
@@ -218,6 +218,7 @@ function TurnitsGlobalSaveManager_get() {
         let saving = false
         let inFlight: TurnitsGlobalPending = {}
         const blockers: Record<string, string> = {}
+        const saveHandlers: Partial<Record<TurnitsGlobalSaveSection, (data: any) => Promise<void>>> = {}
 
         const getSlug = () => {
             let fromUrl = ""
@@ -247,6 +248,10 @@ function TurnitsGlobalSaveManager_get() {
         w.__turnitsGlobalSaveManager = {
             configure(nextBaseUrl?: string) {
                 if (nextBaseUrl) baseUrl = nextBaseUrl
+            },
+            registerSaveHandler(section: TurnitsGlobalSaveSection, handler: (data: any) => Promise<void>) {
+                saveHandlers[section] = handler
+                return () => { if (saveHandlers[section] === handler) delete saveHandlers[section] }
             },
             isSaving() {
                 return saving
@@ -470,6 +475,21 @@ function TurnitsGlobalSaveManager_get() {
                 if (current.pagos !== undefined)
                     tasks.push(saveSettings("pagos", current.pagos))
 
+                if (current.equipo !== undefined) {
+                    const handler = saveHandlers.equipo
+                    tasks.push((async () => {
+                        try {
+                            if (!handler) throw new Error("Abrí la edición del integrante para guardar sus cambios.")
+                            await handler(current.equipo)
+                            savedData.equipo = current.equipo
+                            results.equipo = true
+                        } catch (e: any) {
+                            results.equipo = false
+                            errors.equipo = e.message || "No se pudo guardar el integrante."
+                        }
+                    })())
+                }
+
                 if (current.tema !== undefined) {
                     tasks.push(
                         (async () => {
@@ -660,7 +680,7 @@ function TurnitsGlobalSaveManager_get() {
                     window.dispatchEvent(
                         new CustomEvent("turnits_global_save_error", {
                             detail: {
-                                error: failed.map((key) => `${({ perfil: "Perfil", tema: "Temas", productos: "Productos", promociones: "Promociones" } as Record<string, string>)[key] || key}: ${errors[key] || "No se pudo guardar."}`).join(" "),
+                                error: failed.map((key) => `${({ perfil: "Perfil", equipo: "Equipo", tema: "Temas", productos: "Productos", promociones: "Promociones" } as Record<string, string>)[key] || key}: ${errors[key] || "No se pudo guardar."}`).join(" "),
                                 failed,
                             },
                         })

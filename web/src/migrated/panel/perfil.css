@@ -480,6 +480,10 @@
 .equipo-foto-control { position:relative; width:56px;height:56px;flex:0 0 56px; }
 .equipo-foto-avatar { position:relative;display:grid;place-items:center;width:56px;height:56px;padding:0;overflow:visible;border:0;border-radius:50%;background:var(--equipo-foto-color,#23802c);color:#fff;font:800 20px "Inter Display",sans-serif;cursor:pointer;box-shadow:0 2px 8px #1723191c; }
 .equipo-foto-avatar > img { width:100%;height:100%;border-radius:50%;object-fit:cover; }
+.equipo-foto-avatar { width:56px!important;height:56px!important;min-height:56px!important;aspect-ratio:1/1; }
+.equipo-foto-image { position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;border-radius:50%; }
+.equipo-foto-image > img { position:absolute;inset:0;display:block;width:100%;height:100%;max-width:none;max-height:none;object-fit:cover;border-radius:50%; }
+.equipo-foto-image .equipo-foto-spinner { position:relative; }
 .equipo-foto-dots { position:absolute;right:-3px;bottom:-2px;display:grid;place-items:center;width:23px;height:23px;border:2px solid white;border-radius:50%;background:#26332a;color:#fff;font-size:15px;line-height:8px;letter-spacing:-1px; }
 .equipo-foto-menu { position:absolute;z-index:20;top:calc(100% + 7px);left:0;display:grid;min-width:142px;gap:3px;padding:5px;border:1px solid #e3eae3;border-radius:12px;background:#fff;box-shadow:0 10px 26px #17231920; }
 .equipo-foto-menu button { width:100%;padding:8px 10px;border:0;border-radius:8px;background:white;color:#26332a;text-align:left;font:600 12px "Inter Display",sans-serif;cursor:pointer; }
@@ -495,3 +499,6 @@
 .equipo-orden > div button:hover:not(:disabled) { background:#f2f8f2; }
 .equipo-orden > div button:disabled { opacity:.4;cursor:default; }
 @media(max-width:520px) { .equipo-foto-control,.equipo-foto-avatar{width:48px;height:48px}.equipo-foto-control{flex-basis:48px}.equipo-member-editor .equipo-identidad{padding:14px;gap:8px} }
+@media(max-width:520px) { .equipo-foto-avatar {width:48px!important;height:48px!important;min-height:48px!important} }
+.equipo-check img { display:block;width:12px;height:12px;object-fit:contain; }
+.equipo-member-editor .equipo-check { font-size:0; }
