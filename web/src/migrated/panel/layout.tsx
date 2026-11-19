@@ -226,7 +226,7 @@ function TurnitsPanel_Inner(props: any) {
 
     const renderNavItems = () => navItemsVisibles.map((item) => (item.id === "servicios" || item.id === "horarios") ? (
         <div key={item.id} style={{width:"100%",padding:0,margin:0,background:"transparent"}}>
-            <NavButton item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === item.id ? null : item.id);if (item.id==="horarios" && !isMobile) irA("horarios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === item.id} />
+            <NavButton item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => setMenuExpandido(current => current === item.id ? null : item.id)} navIconos={navIconos} showChevron chevronDown={menuExpandido === item.id} />
             <AnimatePresence initial={false}>
                 {menuExpandido === item.id && <motion.div
                     key={item.id+"-submenu"}
