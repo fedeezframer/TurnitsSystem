@@ -1206,7 +1206,7 @@ function TeamManager_MiembroForm({
             {/* Servicios que ofrece — solo disponible editando (dueño o miembro) */}
             {modoEdicion && miembroId && (
                 <>
-                    <div style={{ borderTop: "1px solid #e2e8f0" }} />
+                    <div className="equipo-asignaciones-divider" aria-hidden="true" />
                     <div className="equipo-asignacion-columna"><TeamManager_Field
                         label="Servicios que ofrece"
                         hint="Solo estos servicios se le van a mostrar al cliente cuando elija a este profesional"

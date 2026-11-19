@@ -453,6 +453,7 @@
 .equipo-member-editor .equipo-detalle > section:first-child { gap:18px; padding:20px; border:1px solid #e7ede7; border-radius:18px; background:#fff; }
 .equipo-member-editor .equipo-detalle > section:last-child { display:block; min-width:0; }
 .equipo-asignaciones { display:grid!important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.equipo-asignaciones-divider { grid-column:1/-1; width:100%; border-top:1px solid #e7ede7; }
 .equipo-asignacion-columna { min-width:0; padding:18px; border:1px solid #e5ece5; border-radius:18px; background:linear-gradient(155deg,#fff,#fbfdfb); }
 .equipo-asignacion-columna > div { gap:8px!important; }
 .equipo-asignacion-columna > div > label { color:#26352a!important; font-size:12px!important; letter-spacing:.045em; }
