@@ -168,7 +168,9 @@ function TurnitsGlobalSaveBar({
                         border: "none",
                         boxSizing: "border-box",
                         minWidth: isMobile ? 0 : 124,
-                        background: dirty && !saving && !blocker ? accentColor : "#e2e8f0",
+                        background: dirty && !saving && !blocker ? `linear-gradient(115deg, ${accentColor} 0%, ${accentColor} 62%, rgba(255,255,255,0.18) 100%)` : "#e2e8f0",
+                        backgroundSize: "180% 180%",
+                        backgroundPosition: "0% 50%",
                         color: dirty && !saving && !blocker ? "#fff" : "#94a3b8",
                         fontSize: isMobile ? 11 : 12,
                         fontWeight: 700,
@@ -177,9 +179,13 @@ function TurnitsGlobalSaveBar({
                         whiteSpace: "nowrap",
                         flexShrink: 0,
                         flex: isMobile ? 1 : undefined,
+                        position: "relative",
+                        overflow: "hidden",
                     }}
+                    whileHover={dirty && !saving && !blocker ? { backgroundPosition: "100% 50%", filter: "brightness(1.035)" } : undefined}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
                 >
-                    {saving ? "Guardando…" : "Guardar cambios"}
+                    <span style={{ position: "relative", zIndex: 1 }}>{saving ? "Guardando…" : "Guardar cambios"}</span>
                 </motion.button>
                 </div>
             )}

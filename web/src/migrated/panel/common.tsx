@@ -127,6 +127,7 @@ const TURNITS_PAGOS_CAMPOS = [
     "acepta_transferencia",
     "acepta_efectivo",
     "datos_bancarios",
+    "agenda_sin_pagos",
 ]
 
 function TurnitsGlobalSave_pagosDiff(candidate: any, base: any) {
@@ -3313,6 +3314,7 @@ function Pagos_baselineDesdeSettings(s: any) {
               ? "total"
               : "none",
         porcentaje_sena: Number(s?.porcentaje_sena ?? 30),
+        agenda_sin_pagos: s?.agenda_sin_pagos === true,
         acepta_transferencia: !!s?.acepta_transferencia,
         acepta_efectivo: !!s?.acepta_efectivo,
         datos_bancarios: {

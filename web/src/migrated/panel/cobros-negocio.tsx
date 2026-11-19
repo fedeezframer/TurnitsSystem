@@ -3,6 +3,8 @@ import {
   SeccionHeader,
   MercadoPagoConexion_getSlug as getSlug,
   MercadoPagoConexion_getToken as getToken,
+  Pagos_baselineDesdeSettings,
+  TurnitsGlobalSaveManager_get,
 } from "./common";
 import { costos, type Regla } from "./costos";
 import "./cobros-negocio.css";
@@ -228,6 +230,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
     [editBank, editar] = useState(false),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
+  const bankDraftStart = React.useRef<any>(null);
   const logos = [
     iconos?.logoMercadoPago,
     iconos?.logoTransferencia,
@@ -242,19 +245,33 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
       .then(({ settings: s }) => {
         if (!s?.planes?.[s.plan])
           throw Error("Configuración de pagos incompleta.");
-        setConfig(s);
+        const manager = TurnitsGlobalSaveManager_get();
+        const baseline = Pagos_baselineDesdeSettings(s);
+        manager?.setBaseline("pagos", baseline);
+        const pending = manager?.getPending("pagos") || {};
+        const pagosActuales = {
+          ...baseline,
+          ...pending,
+          datos_bancarios: { ...baseline.datos_bancarios, ...pending.datos_bancarios },
+        };
+        (window as any).getPagosConfig = () => pagosActuales;
+        setConfig({
+          ...s,
+          ...pagosActuales,
+          cbu_final: pagosActuales.datos_bancarios.cbu?.slice(-4) || s.cbu_final,
+        });
         const retorno = new URL(window.location.href);
         const estado = retorno.searchParams.get("status");
         if (estado === "mp_success" || estado === "mp_error") {
           setNotice(estado === "mp_success" && s.mp_conectado ? "Cuenta de Mercado Pago vinculada." : "No se pudo completar la vinculación con Mercado Pago.");
         }
         setDraft({
-          metodo_pago: s.metodo_pago === "sena" ? "sena" : "total",
+          metodo_pago: pagosActuales.metodo_pago === "sena" ? "sena" : "total",
           porcentaje_sena: Math.min(
             100,
-            Math.max(20, Number(s.porcentaje_sena) || 20),
+            Math.max(20, Number(pagosActuales.porcentaje_sena) || 20),
           ),
-          agenda_sin_pagos: s.agenda_sin_pagos === true,
+          agenda_sin_pagos: pagosActuales.agenda_sin_pagos === true,
         });
       })
       .catch((e) => {
@@ -262,6 +279,30 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
       });
     return () => controller.abort();
   }, [url, revision]);
+  useEffect(() => {
+    const onSaved = (event: any) => {
+      if (event.detail?.section !== "pagos") return;
+      const saved = event.detail.data || {};
+      setConfig((current) => current ? {
+        ...current,
+        ...saved,
+        cbu_final: saved.datos_bancarios?.cbu?.slice(-4) || current.cbu_final,
+      } : current);
+      setDraft((current) => ({
+        ...current,
+        metodo_pago: saved.metodo_pago === "sena" ? "sena" : "total",
+        porcentaje_sena: Math.min(100, Math.max(20, Number(saved.porcentaje_sena) || 20)),
+        agenda_sin_pagos: saved.agenda_sin_pagos === true,
+      }));
+      setCbu("");
+      editar(false);
+      bankDraftStart.current = null;
+      setNotice("Guardado");
+    };
+    window.addEventListener("turnits_global_saved", onSaved);
+    return () => window.removeEventListener("turnits_global_saved", onSaved);
+  }, []);
+  useEffect(() => () => TurnitsGlobalSaveManager_get()?.setBlocker("pagos", ""), []);
   if (!config)
     return (
       <p role="status">
@@ -272,20 +313,23 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
       </p>
     );
   const offline = config.planes[config.plan].mediosOffline;
-  async function guardar(body: object, cambios: Partial<Config>) {
-    setBusy(true);
-    setNotice("Guardando…");
-    try {
-      await json(url, { method: "PUT", body: JSON.stringify(body) });
-      setConfig((c) => ({ ...c, ...cambios }));
-      setNotice("Guardado");
-      setCbu("");
-      editar(false);
-    } catch (e) {
-      setNotice(e.message);
-    } finally {
-      setBusy(false);
+  function publicarPagos(cambios: Record<string, any>) {
+    const actual = (window as any).getPagosConfig?.() || Pagos_baselineDesdeSettings(config);
+    const siguiente = { ...actual, ...cambios };
+    if (cambios.datos_bancarios) {
+      siguiente.datos_bancarios = { ...actual.datos_bancarios, ...cambios.datos_bancarios };
     }
+    (window as any).getPagosConfig = () => siguiente;
+    window.dispatchEvent(new CustomEvent("pagos_changed", { detail: siguiente }));
+    setConfig((current) => current ? {
+      ...current,
+      ...cambios,
+      ...(cambios.datos_bancarios ? { cbu_final: cambios.datos_bancarios.cbu?.slice(-4) || "" } : {}),
+    } : current);
+  }
+  function actualizarBorradorPagos(next: typeof draft) {
+    setDraft(next);
+    publicarPagos(next);
   }
   async function conectar() {
     setBusy(true);
@@ -317,7 +361,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                   aria-pressed={draft.metodo_pago === m}
                   onClick={() => {
                     setNotice("");
-                    setDraft({ ...draft, metodo_pago: m });
+                    actualizarBorradorPagos({ ...draft, metodo_pago: m });
                   }}
                 >
                   {i ? "Totalidad" : "Seña"}
@@ -340,7 +384,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                 }
                 onChange={(e) => {
                   setNotice("");
-                  setDraft({
+                  actualizarBorradorPagos({
                     ...draft,
                     porcentaje_sena: Number(e.target.value),
                   });
@@ -357,7 +401,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                     aria-pressed={draft.agenda_sin_pagos === v}
                     onClick={() => {
                       setNotice("");
-                      setDraft({ ...draft, agenda_sin_pagos: v });
+                      actualizarBorradorPagos({ ...draft, agenda_sin_pagos: v });
                     }}
                   >
                     {v ? "Sí" : "No"}
@@ -367,9 +411,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
             ) : (
               <small>Necesitas mejorar tu plan</small>
             )}
-            <button className="cb-save" onClick={() => guardar(draft, draft)}>
-              Guardar configuración
-            </button>
+            <small className="cb-help">Los cambios se guardan con «Guardar cambios» en el panel.</small>
           </>
         )}
         {vista === "metodos" &&
@@ -413,29 +455,26 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                           maxLength={22}
                           value={cbu}
                           onChange={(e) => {
-                            if (/^\d*$/.test(e.target.value))
-                              setCbu(e.target.value);
+                            if (!/^\d*$/.test(e.target.value)) return;
+                            const value = e.target.value;
+                            setCbu(value);
+                            TurnitsGlobalSaveManager_get()?.setBlocker(
+                              "pagos",
+                              value.length === 22 ? "" : "Ingresá los 22 dígitos del CBU para guardar los cambios."
+                            );
+                            if (value.length === 22) {
+                              publicarPagos({ acepta_transferencia: true, datos_bancarios: { cbu: value } });
+                            } else if (bankDraftStart.current) {
+                              publicarPagos(bankDraftStart.current);
+                            }
                           }}
                         />
-                        <button
-                          disabled={cbu.length !== 22}
-                          onClick={() =>
-                            guardar(
-                              {
-                                acepta_transferencia: true,
-                                datos_bancarios: { cbu },
-                              },
-                              {
-                                acepta_transferencia: true,
-                                cbu_final: cbu.slice(-4),
-                              },
-                            )
-                          }
-                        >
-                          Guardar CBU
-                        </button>
+                        <small className="cb-help">Se guarda con «Guardar cambios» en el panel.</small>
                         <button
                           onClick={() => {
+                            if (bankDraftStart.current) publicarPagos(bankDraftStart.current);
+                            TurnitsGlobalSaveManager_get()?.setBlocker("pagos", "");
+                            bankDraftStart.current = null;
                             editar(false);
                             setCbu("");
                           }}
@@ -444,25 +483,21 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                         </button>
                       </>
                     ) : (
-                      <button className="cb-bank" onClick={() => editar(true)}>
+                      <button className="cb-bank" onClick={() => {
+                        const current = (window as any).getPagosConfig?.() || Pagos_baselineDesdeSettings(config);
+                        bankDraftStart.current = {
+                          datos_bancarios: current.datos_bancarios,
+                          acepta_transferencia: current.acepta_transferencia,
+                        };
+                        editar(true);
+                      }}>
                         {config.cbu_final ? "Cambiar CBU" : "Vincular un CBU"}{" "}
                         ↗
                       </button>
                     )}
                     {config.cbu_final && !editBank && (
                       <button
-                        onClick={() =>
-                          guardar(
-                            {
-                              acepta_transferencia:
-                                !config.acepta_transferencia,
-                            },
-                            {
-                              acepta_transferencia:
-                                !config.acepta_transferencia,
-                            },
-                          )
-                        }
+                        onClick={() => publicarPagos({ acepta_transferencia: !config.acepta_transferencia })}
                       >
                         {config.acepta_transferencia
                           ? "Deshabilitar"
@@ -474,12 +509,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                 ) : (
                   <button
                     className="cb-green"
-                    onClick={() =>
-                      guardar(
-                        { acepta_efectivo: !config.acepta_efectivo },
-                        { acepta_efectivo: !config.acepta_efectivo },
-                      )
-                    }
+                    onClick={() => publicarPagos({ acepta_efectivo: !config.acepta_efectivo })}
                   >
                     {config.acepta_efectivo ? "Deshabilitar" : "Habilitar"}{" "}
                     efectivo
