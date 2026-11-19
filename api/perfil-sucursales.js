@@ -62,6 +62,16 @@ export function validarPerfil(body) {
     throw new Error("Revisá la publicación y las fotos.");
   data.publicado = body.publicado;
   data.fotos = [...new Set(body.fotos)];
+  if (Object.hasOwn(body, "titulos_fotos")) {
+    const titles = body.titulos_fotos;
+    if (!titles || typeof titles !== "object" || Array.isArray(titles))
+      throw new Error("Revisá los títulos de las publicaciones.");
+    const photos = new Set(data.fotos);
+    const entries = Object.entries(titles);
+    if (entries.some(([url, title]) => !photos.has(url) || typeof title !== "string" || title.length > 120))
+      throw new Error("Cada título debe corresponder a una foto y tener hasta 120 caracteres.");
+    data.titulos_fotos = Object.fromEntries(entries.map(([url, title]) => [url, title.trim()]).filter(([, title]) => title));
+  }
   for (const key of ["foto_perfil_url", "banner_url"]) {
     if (!Object.hasOwn(body, key)) continue;
     if (typeof body[key] !== "string") throw new Error("Imagen inválida.");
@@ -141,10 +151,13 @@ export function crearSucursales({
       return q.maybeSingle();
     };
     let result = await consultar(
-        campos + ",redes_sociales,foto_perfil_url,banner_url",
+        campos + ",redes_sociales,foto_perfil_url,banner_url,titulos_fotos",
       ),
       redes_habilitadas = true,
       imagenes_habilitadas = true;
+    if (result.error && faltaSchemaSucursales(result.error)) {
+      result = await consultar(campos + ",redes_sociales,foto_perfil_url,banner_url");
+    }
     if (result.error && faltaSchemaSucursales(result.error)) {
       imagenes_habilitadas = false;
       result = await consultar(campos + ",redes_sociales");

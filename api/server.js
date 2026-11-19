@@ -3160,7 +3160,7 @@ app.get(["/admin/equipo/:id/servicios-disponibles","/empleado/:slug/sucursal/mie
     if (!miembro) return res.status(404).json({ success: false, error: "Integrante no encontrado." });
 
     const [{ data: servicios, error: e1 }, { data: vinculos, error: e2 }] = await Promise.all([
-      branchPanel.from(req, "servicios").select("id, nombre, precio, duracion, activo")
+      branchPanel.from(req, "servicios").select("id, nombre, descripcion, imagen_url, precio, duracion, activo")
         .eq("slug", slugClean).or(`owner_equipo_id.is.null,owner_equipo_id.eq.${id}`)
         .order("orden", { ascending: true }).order("created_at", { ascending: true }),
       branchPanel.from(req, "servicio_equipo").select("servicio_id, precio_override, imagen_url_override, orden_override").eq("equipo_id", id),
