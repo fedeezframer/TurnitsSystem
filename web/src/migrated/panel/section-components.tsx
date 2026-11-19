@@ -29,6 +29,7 @@ export const HorariosConfig = deferred(() =>
 export const ExcepcionesConfig = deferred(() =>
   import("./horarios").then((m) => ({ default: m.ExcepcionesConfig })),
 );
+export const CobrosNegocio = deferred(() => import("./cobros-negocio"));
 export const PagosSettingsGuard = deferred(() =>
   import("./pagos").then((m) => ({ default: m.PagosSettingsGuard })),
 );

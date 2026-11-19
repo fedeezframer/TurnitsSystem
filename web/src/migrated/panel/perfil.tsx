@@ -69,7 +69,9 @@ async function request(url: string, options: RequestInit = {}) {
     ...options,
     headers: { ...headers(), ...options.headers },
   });
-  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error("No se pudo completar la solicitud (" + r.status + ").");
+  if (!r.headers.get("content-type")?.includes("application/json")) throw new Error("Respuesta inesperada del servidor.");
+  const d = await r.json();
   if (!r.ok || !d.success)
     throw new Error(d.error || "No se pudo completar la solicitud.");
   return d;
@@ -527,6 +529,7 @@ const sucursalVacia = {
   id: null as string | null,
   nombre: "",
   direccion: "",
+  foto_url: null as string | null,
   activo: true,
   admin_equipo_id: null as string | null,
   miembros: [] as string[],
@@ -558,10 +561,10 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
         method: "PUT",
         body: JSON.stringify(
           data.mapa_habilitado
-            ? form
+            ? Object.fromEntries(Object.entries(form).filter(([key]) => key !== "foto_url" || data.fotos_habilitadas))
             : Object.fromEntries(
                 Object.entries(form).filter(
-                  ([key]) => !["latitud", "longitud"].includes(key),
+                  ([key]) => !["latitud", "longitud", "foto_url"].includes(key),
                 ),
               ),
         ),
@@ -574,6 +577,26 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
     } finally {
       setBusy(false);
     }
+  }
+  async function subirFoto(file: File | undefined) {
+    if (!file || !form) return;
+    if (file.size > 3 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Elegí una imagen JPG, PNG o WebP de hasta 3 MB.");
+      return;
+    }
+    const body = new FormData();
+    body.append("foto", file);
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(api + "/admin/perfil/" + encodeURIComponent(slug) + "/foto", {
+        method: "POST", headers: {Authorization: "Bearer " + MenuFooter_getToken()}, body
+      });
+      if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) throw Error("No se pudo subir la foto.");
+      const d = await res.json();
+      if (!d.success || !d.url) throw Error("La carga de la foto quedó incompleta.");
+      setForm(prev => prev && ({...prev, foto_url:d.url}));
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
   }
   if (!data)
     return error ? <p className="negocio-error" role="alert">{error}</p> : <LoadingRunner card label="Cargando sucursales…" />;
@@ -589,7 +612,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
           <div>
             <h2>Sucursales</h2>
             <p className="negocio-muted">
-              Un negocio, una agenda. Organizá a tu equipo por sede.
+              Creá los perfiles de tus sucursales y elegí quién administra cada sede.
             </p>
           </div>
           {locked ? (
@@ -650,6 +673,10 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                 />
               </label>
             </div>
+            {data.fotos_habilitadas && <label className="negocio-field">Imagen de la sucursal
+              {form.foto_url && <img className="sucursal-foto" src={form.foto_url} alt={"Foto de " + form.nombre}/>}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; void subirFoto(file); }}/>
+            </label>}
             <React.Suspense
               fallback={<InlineLoading label="Cargando mapa…" />}
             >
@@ -673,7 +700,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               </p>
             )}
             <div className="negocio-stack" style={{ gap: 10 }}>
-              <h3>Miembros de esta sucursal</h3>
+              <h3>Profesionales que trabajan aquí</h3>
               <p className="negocio-muted">
                 Cada profesional trabaja en una sede. Al moverlo, sus reservas
                 anteriores conservan su sucursal.
@@ -827,6 +854,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               key={s.id}
               style={{ opacity: locked || !s.activo ? 0.55 : 1 }}
             >
+              {s.foto_url && <img className="sucursal-foto" src={s.foto_url} alt={s.nombre}/>}
               <div className="negocio-between">
                 <NegocioIcon />
                 <span className="negocio-muted">
@@ -879,6 +907,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                     id: s.id,
                     nombre: s.nombre,
                     direccion: s.direccion,
+                    foto_url: s.foto_url || null,
                     activo: s.activo,
                     admin_equipo_id: s.admin_equipo_id,
                     miembros: miembros.map((m: any) => m.id),
@@ -891,6 +920,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               >
                 Editar sucursal
               </button>
+              {Number.isInteger(s.reservas) && <span className="sucursal-reservas">{s.reservas.toLocaleString("es-AR")} {s.reservas === 1 ? "reserva" : "reservas"}</span>}
             </article>
           );
         })}

@@ -770,6 +770,7 @@ function MercadoPagoConexion(props: any) {
                                         ? "#e2e8f0"
                                         : "#ef4444",
                                 }}
+                                type="password" inputMode="numeric" autoComplete="off"
                                 placeholder="CBU (22 dígitos)"
                                 value={datosBancarios.cbu}
                                 onChange={(e) =>

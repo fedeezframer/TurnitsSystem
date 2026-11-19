@@ -57,7 +57,9 @@ function RenewRoute() {
 function BookingRoute() {
   const { slug: pathSlug } = useParams()
   const location = useLocation()
-  const slug = (pathSlug || new URLSearchParams(location.search).get("u") || localStorage.getItem("user_slug") || "").trim().toLowerCase()
+  let slug = pathSlug || new URLSearchParams(location.search).get("u") || ""
+  if (!slug) { try { slug = localStorage.getItem("user_slug") || "" } catch {} }
+  slug = slug.trim().toLowerCase()
   const [business, setBusiness] = React.useState<any>(null)
   const [error, setError] = React.useState(false)
   const [retry, setRetry] = React.useState(0)
@@ -65,6 +67,7 @@ function BookingRoute() {
     if (!slug) return
     const controller = new AbortController(); setBusiness(null); setError(false)
     fetch(`${appConfig.apiUrl}/negocio/${encodeURIComponent(slug)}`, { signal: controller.signal, cache: "no-store" }).then(async response => {
+      if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) throw Error("Negocio no disponible")
       const data = await response.json()
       if (!response.ok || !data.success || !data.negocio) throw Error("Negocio no disponible")
       if (!controller.signal.aborted) setBusiness({ ...data.negocio, suspendido: data.suspendido })
@@ -125,8 +128,8 @@ export default function App() {
     <Route path="/reprogramar" element={<Reschedule />} />
     <Route path="/login-test" element={<Navigate to={`/login${window.location.search}`} replace />} />
     <Route path="/register-test" element={<Navigate to={`/registro/negocio${window.location.search}`} replace />} />
-    <Route path="/panel-test" element={<PanelRoute />} />
-    <Route path="/agenda-test" element={<BookingRoute />} />
+    <Route path="/panel-test/:slug?" element={<PanelRoute />} />
+    <Route path="/agenda-test/:slug?" element={<BookingRoute />} />
     <Route path="/test" element={<AnimationTest />} />
     <Route path="/success" element={<Receipt />} />
     <Route path="/sucess" element={<Receipt />} />
