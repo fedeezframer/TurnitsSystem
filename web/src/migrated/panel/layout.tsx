@@ -85,6 +85,7 @@ function TurnitsPanel_Inner(props: any) {
     // ─── Estado de navegación (reemplaza las variantes de Framer) ─────────
     const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() => {
         if (searchParams.get("onboarding") !== "mp" && (searchParams.get("seccion") === "pagos" || ["mp_success", "mp_error"].includes(searchParams.get("status") || ""))) return "pagos"
+        if (searchParams.get("seccion") === "horarios") return "horarios"
         if (!branchAdmin && searchParams.get("seccion") === "perfil") return "perfil"
         if (searchParams.get("seccion") === "equipo") return "equipo"
         return searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
@@ -98,7 +99,7 @@ function TurnitsPanel_Inner(props: any) {
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
     const [scheduleView,setScheduleView] = React.useState<"weekly"|"exceptions">("weekly")
     const vistaPagos = ["mp_success","mp_error"].includes(searchParams.get("status") || "") ? "metodos" : seccionesPagos.find(s => s.id === searchParams.get("vista"))?.id || "costos"
-    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(["pagos", "equipo", "perfil"].includes(seccionActiva) ? seccionActiva : null)
+    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(["pagos", "equipo", "perfil", "horarios"].includes(seccionActiva) ? seccionActiva : null)
     const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
     // Arranca oculta y solo se muestra si confirmamos que el plan es

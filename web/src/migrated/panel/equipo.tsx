@@ -923,7 +923,9 @@ function TeamManager_MiembroForm({
     modoEdicion,
     isMobile,
     esDueño = false,
+    contacto,
 }: {
+    contacto?: {email?:string; telefono?:string}
     initial?: TeamManager_FormData
     accentColor: string
     apiUrl: string
@@ -1010,6 +1012,8 @@ function TeamManager_MiembroForm({
                     rol={esDueño ? "dueño" : form.rol}
                     accentColor={accentColor}
                 />
+                {(contacto?.email || form.login_email) && <p className="negocio-muted">{(contacto?.email || form.login_email).replace(/^(.{1,3})[^@]*(@.*)$/, "$1••••$2")}</p>}
+                {contacto?.telefono && <p className="negocio-muted">{contacto.telefono}</p>}
             </div>
 
             </div>
@@ -1211,7 +1215,9 @@ function TeamManager_MiembroForm({
                 </>
             )}
 
-            {esDueño && <p className="negocio-muted">El titular usa los horarios generales del negocio.</p>}
+            {esDueño && <TeamManager_Field label="Horarios" hint="El titular usa los horarios generales del negocio.">
+                <a className="negocio-button secondary" target="_blank" rel="noreferrer" href={window.location.pathname + "?" + new URLSearchParams({...Object.fromEntries(new URLSearchParams(window.location.search)), seccion:"horarios",vista:"weekly"})}>Horarios establecidos</a>
+            </TeamManager_Field>}
             </section><section>
             {/* Servicios que ofrece — solo disponible editando (dueño o miembro) */}
             {modoEdicion && miembroId && (
@@ -1879,6 +1885,7 @@ function TeamManager(props: any) {
 
     const [loading, setLoading] = React.useState(true)
     const [esPremium, setEsPremium] = React.useState(false)
+    const [ownerContact,setOwnerContact] = React.useState<{email?:string;telefono?:string}>({})
     const [businessName, setBusinessName] = React.useState("")
     const [planEquipo,setPlanEquipo]=React.useState("gratis")
     const [equipo, setEquipo] = React.useState<TeamManager_Miembro[]>([])
@@ -1953,6 +1960,7 @@ function TeamManager(props: any) {
 
                 const settingsData = await respuestaEquipo(settingsRes)
                 const cfg = settingsData?.settings || {}
+                if (!branch) setOwnerContact({email:cfg.email,telefono:cfg.telefono})
                 setBusinessName(cfg.business_name || "")
                 setPlanEquipo(cfg.plan || "gratis")
                 setEsPremium(cfg.plan === "basico" || cfg.plan === "premium")
@@ -2353,6 +2361,7 @@ function TeamManager(props: any) {
                                 initial={initialEditar}
                                 accentColor={accentColor}
                                 apiUrl={api}
+                                contacto={ownerContact}
                                 miembroId={dueño.id}
                                 esDueño
                                 onSubmit={handleEditar}

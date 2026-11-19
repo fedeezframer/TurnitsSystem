@@ -411,3 +411,13 @@
 .perfil-datos-publicos .negocio-grid {grid-template-columns:1fr}
 .perfil-workspace .perfil-business-avatar {width:clamp(68px,8vw,110px);height:clamp(68px,8vw,110px);flex-shrink:0}
 @media(max-width:800px){.perfil-datos-publicos{grid-template-columns:minmax(0,1fr)}}
+.sucursal-columna { display:flex; min-width:0; flex-direction:column; gap:18px; }
+.sucursal-columna > .negocio-grid { grid-template-columns:1fr; }
+.sucursal-columna .negocio-field input[type=file] { max-width:100%; }
+.sucursal-profesionales { display:flex; flex-wrap:wrap; gap:8px; }
+.sucursal-profesionales button { text-align:left; }
+.sucursal-profesionales small { display:block; color:#536357; }
+.sucursal-avatar { position:relative; display:grid; place-items:center; width:38px; height:38px; border-radius:50%; color:white; }
+.sucursal-avatar img { width:100%; height:100%; border-radius:inherit; object-fit:cover; }
+.sucursal-avatar b { position:absolute; right:-2px; bottom:-2px; width:16px; height:16px; background:white; color:#196a29; border:1px solid; border-radius:50%; text-align:center; font-size:11px; }
+.sucursal-editor fieldset > .negocio-row { grid-column:1/-1; }

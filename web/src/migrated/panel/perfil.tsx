@@ -604,10 +604,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
       >
         <div className="negocio-between">
           <div>
-            <h3>Sedes del negocio</h3>
-            <p className="negocio-muted">
-              Creá los perfiles de tus sucursales y elegí quién administra cada sede.
-            </p>
+            <h3>{form ? "Configuración de la sede" : "Sedes del negocio"}</h3>
           </div>
           {locked ? (
             <TurnitsPlanRequirement premiumOnly />
@@ -615,7 +612,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
             <button
               type="button"
               className="negocio-button"
-              disabled={disabled || busy}
+              disabled={disabled || busy || !!form}
               onClick={() => {
                 setForm({ ...sucursalVacia, miembros: [] });
                 setError("");
@@ -646,7 +643,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
             disabled={busy}
             style={{ border: 0, padding: 0, margin: 0 }}
           >
-            <div className="negocio-grid">
+            <section className="sucursal-columna"><div className="negocio-grid">
               <label className="negocio-field">
                 Nombre de la sucursal
                 <input
@@ -667,10 +664,6 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                 />
               </label>
             </div>
-            {data.fotos_habilitadas && <label className="negocio-field">Imagen de la sucursal
-              {form.foto_url && <img className="sucursal-foto" src={form.foto_url} alt={"Foto de " + form.nombre}/>}
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; void subirFoto(file); }}/>
-            </label>}
             <React.Suspense
               fallback={<InlineLoading label="Cargando mapa…" />}
             >
@@ -702,7 +695,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                   ? " Para quitar a alguien de la principal, asignalo desde otra sede."
                   : " Los que quites vuelven a la sede principal."}
               </p>
-              <div className="negocio-grid">
+              <div className="sucursal-profesionales">
                 {data.equipo
                   .filter((m: any) => form.id === "principal" || !m.es_dueño)
                   .map((m: any) => {
@@ -730,36 +723,11 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                           })
                         }
                       >
-                        {m.foto_url ? (
-                          <img src={m.foto_url} alt="" />
-                        ) : (
-                          <span
-                            style={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: "50%",
-                              background: m.color || "#64748b",
-                            }}
-                          />
-                        )}
-                        <span>
-                          {m.nombre} {m.apellido}
-                          <small
-                            style={{
-                              display: "block",
-                              fontSize: 11,
-                              color: "#64748b",
-                            }}
-                          >
-                            {sede?.nombre ||
-                              data.principal?.nombre ||
-                              "Sede principal"}
-                            {!m.activo ? " · Inactivo" : ""}
-                          </small>
+                        <span className="sucursal-avatar" style={{background:m.color || "#536357"}}>
+                          {m.foto_url ? <img src={m.foto_url} alt=""/> : [m.nombre,m.apellido].filter(Boolean).map(v => v[0]).join("")}
+                          {selected && <b aria-hidden="true">✓</b>}
                         </span>
-                        <span style={{ marginLeft: "auto" }}>
-                          {selected ? "Asignado" : "+"}
-                        </span>
+                        <span>{m.nombre} {m.apellido}<small>{sede?.nombre || data.principal?.nombre || "Sede principal"}{!m.activo && " · Inactivo"}</small></span>
                       </button>
                     );
                   })}
@@ -771,6 +739,11 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                 </p>
               )}
             </div>
+            </section><section className="sucursal-columna">
+            {data.fotos_habilitadas && <label className="negocio-field">Imagen de la sucursal
+              {form.foto_url && <img className="sucursal-foto" src={form.foto_url} alt={"Foto de " + form.nombre}/>}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; void subirFoto(file); }}/>
+            </label>}
             <label className="negocio-field">
               Encargado de la sucursal
               <select
@@ -814,6 +787,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
               />
               Sucursal habilitada para reservas
             </label>
+            </section>
             <div className="negocio-row">
               <button className="negocio-button">
                 {busy ? "Guardando…" : "Guardar sucursal"}
