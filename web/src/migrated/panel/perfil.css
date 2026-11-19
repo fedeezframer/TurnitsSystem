@@ -511,11 +511,6 @@
 .equipo-listado .tm-card > div:nth-child(2) > div:nth-child(3) { margin-top:1px!important;font-size:9px!important;line-height:11px; }
 @media(max-width:700px) { .equipo-listado .tm-card { min-height:88px!important;padding:4px 7px!important;gap:7px!important;flex-wrap:wrap!important; }.equipo-listado .tm-card > div:nth-child(2) > div:first-child {font-size:18px!important;line-height:22px!important;letter-spacing:-.35px!important;color:#111827!important}.equipo-listado .tm-card > div:nth-child(2) > div:nth-child(2) span:first-child {font-size:11px!important;line-height:12px} }
 
-.sucursal-heading-card { display:flex;align-items:center;justify-content:space-between;gap:18px;padding:22px 26px!important;border-radius:20px!important;background:linear-gradient(115deg,#f3faf3,#fff 72%)!important; }
-.sucursal-heading-copy { display:grid;gap:6px;min-width:0; }
-.sucursal-eyebrow { color:#32803b;font-size:10px;font-weight:750;letter-spacing:.12em; }
-.sucursal-heading-copy h3 { color:#172319;font-size:22px!important;letter-spacing:-.55px; }
-.sucursal-heading-copy .negocio-muted { max-width:620px; }
 .sucursal-listado { grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));align-items:stretch;gap:16px; }
 .sucursal-listado article.sucursal-card { display:flex;flex-direction:column;align-items:stretch;gap:14px;min-width:0;min-height:480px;padding:12px!important;overflow:hidden;border:1px solid #e1e9e1!important;border-radius:22px!important;background:#fff;box-shadow:0 5px 20px #182d1908;transition:transform .16s,border-color .16s,box-shadow .16s; }
 .sucursal-listado article.sucursal-card:hover { border-color:#bdd5bd!important;box-shadow:0 12px 28px #182d1912;transform:translateY(-2px); }
@@ -563,11 +558,12 @@
 .sucursal-photo-hint { color:#748176;font-size:10px;font-weight:400; }
 .sucursal-avatar b { display:grid;place-items:center;width:20px;height:20px;border:1.5px solid #25813a;background:#fff;color:#176b24;font-size:0; }
 .sucursal-avatar b img { display:block;width:11px;height:11px;object-fit:contain; }
-@media(max-width:740px) { .sucursal-heading-card { align-items:flex-start;padding:18px!important; }.sucursal-heading-copy h3 { font-size:19px!important; }.sucursal-heading-card .negocio-button { flex:0 0 auto;padding:9px 11px;font-size:11px; }.sucursal-listado { grid-template-columns:minmax(0,1fr);gap:13px; }.sucursal-listado article.sucursal-card { min-height:460px;gap:12px;padding:10px!important;border-radius:19px!important; }.sucursal-card-media { border-radius:14px; }.sucursal-listado .sucursal-card-media .sucursal-foto { border-radius:14px; }.sucursal-card-content h2 { font-size:18px!important; }.sucursal-card-actions { grid-template-columns:repeat(2,minmax(0,1fr));gap:7px; }.sucursal-card-actions > .negocio-button { min-height:42px;padding:8px 6px;font-size:10px; } }
-@media(max-width:420px) { .sucursal-heading-card { flex-direction:column; }.sucursal-heading-card .negocio-button { width:100%; }.sucursal-card-badges { top:8px;left:8px;right:8px; }.sucursal-status,.sucursal-principal { min-height:25px;padding:0 8px;font-size:10px; }.sucursal-card-media .sucursal-reservas { right:8px;bottom:8px;min-height:32px;padding:0 9px;gap:5px; }.sucursal-card-actions { grid-template-columns:minmax(0,1fr); }.sucursal-card-actions > .negocio-button:only-child { grid-column:auto; } }
-.sucursal-heading-card { display:flex;justify-content:flex-end;min-height:42px;margin-bottom:2px; }
-.sucursal-heading-card > .negocio-between { justify-content:flex-end;width:100%; }
-.sucursal-heading-card .negocio-button { min-height:42px;padding:9px 16px;border-radius:12px; }
+@media(max-width:740px) { .sucursal-listado { grid-template-columns:minmax(0,1fr);gap:13px; }.sucursal-listado article.sucursal-card { min-height:460px;gap:12px;padding:10px!important;border-radius:19px!important; }.sucursal-card-media { border-radius:14px; }.sucursal-listado .sucursal-card-media .sucursal-foto { border-radius:14px; }.sucursal-card-content h2 { font-size:18px!important; }.sucursal-card-actions { grid-template-columns:repeat(2,minmax(0,1fr));gap:7px; }.sucursal-card-actions > .negocio-button { min-height:42px;padding:8px 6px;font-size:10px; } }
+@media(max-width:420px) { .sucursal-card-badges { top:8px;left:8px;right:8px; }.sucursal-status,.sucursal-principal { min-height:25px;padding:0 8px;font-size:10px; }.sucursal-card-media .sucursal-reservas { right:8px;bottom:8px;min-height:32px;padding:0 9px;gap:5px; }.sucursal-card-actions { grid-template-columns:minmax(0,1fr); }.sucursal-card-actions > .negocio-button:only-child { grid-column:auto; } }
+.sucursal-section-top { display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0; }
+.sucursal-section-top .turnits-section-heading { min-width:0;margin:0!important; }
+.sucursal-section-top .negocio-button { flex:0 0 auto;min-height:42px;padding:9px 16px;border-radius:12px; }
+@media(max-width:520px) { .sucursal-section-top { align-items:flex-start;gap:10px; }.sucursal-section-top .turnits-section-heading-title { font-size:25px!important; }.sucursal-section-top .turnits-section-heading-subtitle { max-width:250px;font-size:13px!important; }.sucursal-section-top .negocio-button { min-height:38px;padding:8px 10px;font-size:11px;white-space:nowrap; } }
 .sucursal-listado article.sucursal-card { min-height:0; }
 .sucursal-card-body { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;min-width:0;flex:1; }
 .sucursal-card-content { align-content:start; }
