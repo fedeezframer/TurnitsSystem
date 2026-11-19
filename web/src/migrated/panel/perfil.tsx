@@ -932,7 +932,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
               >
                 {iconoEditar && <img src={iconoEditar} alt="" aria-hidden="true"/>}Editar
               </button>
-              <button type="button" className="sucursal-menu-trigger" ref={menuId === s.id ? menuAnchor : undefined} aria-label={`Opciones de ${s.nombre}`} aria-haspopup="menu" aria-expanded={menuId === s.id} disabled={disabled || busy} onClick={() => { setConfirmDeleteId(null); setMenuId(menuId === s.id ? null : s.id); }}>•••</button>
+              <button type="button" className="sucursal-menu-trigger" ref={menuId === s.id ? menuAnchor : undefined} aria-label={`Opciones de ${s.nombre}`} aria-haspopup="menu" aria-expanded={menuId === s.id} disabled={disabled || busy} onClick={() => { setConfirmDeleteId(null); setMenuId(menuId === s.id ? null : s.id); }}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
               {menuId === s.id && <ServiciosManager_RowMenu anchor={menuAnchor}>
                 {confirmDeleteId === s.id ? <>
                   <span className="sucursal-delete-confirm">¿Eliminar esta sucursal?</span>
