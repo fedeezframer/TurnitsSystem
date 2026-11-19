@@ -70,7 +70,10 @@ function TurnitsPanel_Inner(props: any) {
 
     // ─── Estado de navegación (reemplaza las variantes de Framer) ─────────
     const [seccionActiva, setSeccionActiva] =
-        React.useState<SeccionId>("inicio")
+        React.useState<SeccionId>(() => {
+            const resultado = new URLSearchParams(window.location.search).get("status")
+            return !branchAdmin && ["mp_success", "mp_error"].includes(resultado) ? "pagos" : "inicio"
+        })
     const [mostrarNotificaciones, setMostrarNotificaciones] =
         React.useState(false)
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)

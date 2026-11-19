@@ -7031,10 +7031,9 @@ app.get("/admin/equipo/:id/neto", requireAuth, async (req, res) => {
     const turnos = [];
     for (let pagina = 0; pagina < 20; pagina++) {
       const { data: lote, error: turnosError } = await branchPanel.from(req, "turnos")
-        .select("id, estado, precio_cobrado, metodo_pago, comision_mp, comision_plataforma")
+        .select("id, estado, precio_cobrado, metodo_pago, comision_mp, comision_plataforma, turnits_comisiones(importe,estado)")
         .eq("slug", miembro.slug).eq("equipo_id", id)
         .gte("fecha", desde).lte("fecha", hasta)
-        .neq("estado", "cancelado")
         .order("id", { ascending: true })
         .range(pagina * 1000, pagina * 1000 + 999);
       if (turnosError) throw turnosError;
@@ -7044,11 +7043,14 @@ app.get("/admin/equipo/:id/neto", requireAuth, async (req, res) => {
 
     let bruto = 0, comisionMp = 0, comisionPlataforma = 0, sinComision = 0, cantidad = 0;
     for (const t of turnos) {
-      if (t.estado === "pendiente") continue;
+      const cargo = t.turnits_comisiones;
+      const cargos = Array.isArray(cargo) ? cargo : cargo ? [cargo] : [];
+      comisionPlataforma += Number(t.comision_plataforma || 0);
+      for (const fila of cargos) if (fila.estado !== "anulada") comisionPlataforma += Number(fila.importe || 0);
+      if (t.estado === "pendiente" || t.estado === "cancelado") continue;
       cantidad += 1;
       bruto              += Number(t.precio_cobrado || 0);
       comisionMp         += Number(t.comision_mp || 0);
-      comisionPlataforma += Number(t.comision_plataforma || 0);
       if (t.metodo_pago === "mercadopago" && t.comision_mp == null) sinComision += 1;
     }
 

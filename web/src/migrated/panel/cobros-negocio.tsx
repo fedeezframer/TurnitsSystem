@@ -45,7 +45,9 @@ async function json(url: string, init: RequestInit = {}) {
   });
   if (!res.ok)
     throw Error(
-      res.status === 401
+      res.status === 503 && res.headers.get("X-Turnits-Environment") === "staging" && url.includes("/mp/connect/")
+        ? "Staging tiene deshabilitada la vinculación real con Mercado Pago."
+        : res.status === 401
         ? "Tu sesión venció."
         : "El servidor rechazó la operación (" + res.status + ").",
     );
@@ -233,15 +235,22 @@ export default function CobrosNegocio({ baseUrl, iconos }: any) {
         if (!s?.planes?.[s.plan])
           throw Error("Configuración de pagos incompleta.");
         setConfig(s);
+        const retorno = new URL(window.location.href);
+        const estado = retorno.searchParams.get("status");
+        if (estado === "mp_success" || estado === "mp_error") {
+          setTab(2);
+          setNotice(estado === "mp_success" && s.mp_conectado ? "Cuenta de Mercado Pago vinculada." : "No se pudo completar la vinculación con Mercado Pago.");
+          retorno.searchParams.delete("status");
+          retorno.searchParams.delete("reason");
+          window.history.replaceState(window.history.state, "", retorno);
+        }
         setDraft({
           metodo_pago: s.metodo_pago === "sena" ? "sena" : "total",
           porcentaje_sena: Math.min(
             100,
             Math.max(20, Number(s.porcentaje_sena) || 20),
           ),
-          agenda_sin_pagos:
-            s.agenda_sin_pagos ||
-            (s.planes[s.plan].mediosOffline && s.metodo_pago === "none"),
+          agenda_sin_pagos: s.agenda_sin_pagos === true,
         });
       })
       .catch((e) => {
