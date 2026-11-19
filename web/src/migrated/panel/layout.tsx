@@ -199,12 +199,13 @@ function TurnitsPanel_Inner(props: any) {
         irA("servicios")
     }
 
-    const renderServiceSubsection = (view: "servicios" | "extras" | "promociones", label: string, icon: string) => {
-        const selected = serviciosVistaInicial === view && seccionActiva === "servicios"
+    const renderSubsection = (view: "servicios" | "extras" | "promociones" | "weekly" | "exceptions", label: string, icon: string) => {
+        const schedule = view === "weekly" || view === "exceptions"
+        const selected = schedule ? scheduleView === view && seccionActiva === "horarios" : serviciosVistaInicial === view && seccionActiva === "servicios"
         return <button
             key={view}
             type="button"
-            onClick={() => abrirCatalogo(view)}
+            onClick={() => { if (view === "weekly" || view === "exceptions") {setScheduleView(view);irA("horarios")} else abrirCatalogo(view) }}
             aria-current={selected ? "page" : undefined}
             style={{
                 display: "flex", alignItems: "center", gap: 10, width: "100%",
@@ -223,12 +224,12 @@ function TurnitsPanel_Inner(props: any) {
         </button>
     }
 
-    const renderNavItems = () => navItemsVisibles.map((item) => item.id === "servicios" ? (
+    const renderNavItems = () => navItemsVisibles.map((item) => (item.id === "servicios" || item.id === "horarios") ? (
         <div key={item.id} style={{width:"100%",padding:0,margin:0,background:"transparent"}}>
-            <NavButton item={item} active={seccionActiva === "servicios"} accentColor={accentColor} onClick={() => setMenuExpandido(menuExpandido === "servicios" ? null : "servicios")} navIconos={navIconos} showChevron chevronDown={menuExpandido === "servicios"} />
+            <NavButton item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => {setMenuExpandido(menuExpandido === item.id ? null : item.id);if (item.id==="horarios" && !isMobile) irA("horarios")}} navIconos={navIconos} showChevron chevronDown={menuExpandido === item.id} />
             <AnimatePresence initial={false}>
-                {menuExpandido === "servicios" && <motion.div
-                    key="servicios-submenu"
+                {menuExpandido === item.id && <motion.div
+                    key={item.id+"-submenu"}
                     initial={{height:0,opacity:0,y:-7}}
                     animate={{height:"auto",opacity:1,y:0}}
                     exit={{height:0,opacity:0,y:-5}}
@@ -236,9 +237,12 @@ function TurnitsPanel_Inner(props: any) {
                     style={{overflow:"hidden"}}
                 >
                     <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
-                        {renderServiceSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg")}
-                        {renderServiceSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg")}
-                        {renderServiceSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg")}
+                        {item.id==="horarios" ? <>
+                            {renderSubsection("weekly","Horario semanal","/assets/panel-nav/hugeicons_time-quarter-02.svg")}
+                            {renderSubsection("exceptions","Excepciones laborales","/assets/panel-nav/fa7-regular_calendar-alt.svg")}
+                        </> : <>{renderSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg")}
+                        {renderSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg")}
+                        {renderSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg")}</>}
                     </div>
                     <motion.div
                         aria-hidden="true"
@@ -250,15 +254,6 @@ function TurnitsPanel_Inner(props: any) {
                     />
                 </motion.div>}
             </AnimatePresence>
-        </div>
-    ) : item.id === "horarios" ? (
-        <div key={item.id}>
-            <NavButton item={item} active={seccionActiva==="horarios"} accentColor={accentColor} navIconos={navIconos} showChevron chevronDown={menuExpandido==="horarios"}
-                onClick={()=>{setMenuExpandido(menuExpandido==="horarios"?null:"horarios");if (!isMobile) irA("horarios")}} />
-            {menuExpandido==="horarios" && <div className="schedule-subnav">{(["weekly","exceptions"] as const).map(view=>
-                <button key={view} aria-current={scheduleView===view && seccionActiva==="horarios"?"page":undefined} onClick={()=>{setScheduleView(view);irA("horarios")}}>
-                    {view==="weekly"?"Horario semanal":"Excepciones laborales"}
-                </button>)}</div>}
         </div>
     ) : <NavButton key={item.id} item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => {setMenuExpandido(null);irA(item.id)}} navIconos={navIconos} showChevron={["horarios","pagos","equipo","perfil"].includes(item.id)} />)
 

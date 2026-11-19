@@ -740,279 +740,48 @@ function ExcepcionesConfig_DayPanel({
     onSave,
     onClose,
 }: ExcepcionesConfig_DayPanelProps) {
-    const [type, setType] = React.useState<ExcepcionesConfig_ExcType | null>(
-        excepcion?.type ?? null
-    )
-    const [slots, setSlots] = React.useState<ExcepcionesConfig_Slot[]>(
-        excepcion?.slots ?? []
-    )
-    const [desde, setDesde] = React.useState("09:00")
-    const [hasta, setHasta] = React.useState("18:00")
-    const [slotError, setSlotError] = React.useState("")
-
-    const [y, m, d] = dayKey.split("-")
-    const label = `${parseInt(d)} de ${ExcepcionesConfig_MESES[parseInt(m) - 1]} ${y}`
-
-    const handleAddSlot = () => {
-        if (desde && hasta) {
-            setSlots((prev) => [...prev, [desde, hasta]])
-            setSlotError("")
+    const dialog = React.useRef<HTMLDialogElement>(null)
+    const titleId = React.useId()
+    const [type,setType] = React.useState(excepcion?.type ?? null)
+    const [slots,setSlots] = React.useState<ExcepcionesConfig_Slot[]>(excepcion?.slots?.length ? excepcion.slots : [["09:00","18:00"]])
+    const [error,setError] = React.useState("")
+    React.useLayoutEffect(()=>{
+        const node = dialog.current
+        node?.showModal()
+        return () => node?.close()
+    },[])
+    function apply() {
+        if (type === "custom" && slots.some(([from,to])=>!from || !to || from>=to)) {
+            setError("Completá cada intervalo con una hora de fin posterior al inicio.")
+            return
         }
+        onSave(dayKey,type==="custom" ? {type,slots} : type ? {type} : null)
     }
-    const handleRemoveSlot = (i: number) =>
-        setSlots((prev) => prev.filter((_, idx) => idx !== i))
-
-    const handleApply = () => {
-        if (!type) {
-            onSave(dayKey, null)
-            return
-        }
-        if (type === "block") {
-            onSave(dayKey, { type: "block" })
-            return
-        }
-        const pendiente: ExcepcionesConfig_Slot | null =
-            desde && hasta ? [desde, hasta] : null
-        const finalSlots: ExcepcionesConfig_Slot[] =
-            pendiente && slots.length === 0
-                ? [pendiente]
-                : pendiente && slots[slots.length - 1]?.[0] !== desde
-                  ? [...slots, pendiente]
-                  : slots
-        if (finalSlots.length === 0) {
-            setSlotError("Agregá al menos un intervalo de atención.")
-            return
-        }
-        setSlotError("")
-        onSave(dayKey, { type: "custom", slots: finalSlots })
-    }
-
-    const optStyle = (active: boolean, color: string): React.CSSProperties => ({
-        flex: 1,
-        padding: isMobile ? "8px 4px" : "10px 8px",
-        borderRadius: 10,
-        border: `1.5px solid ${active ? color + "66" : "#e2e8f0"}`,
-        background: active ? color + "10" : "#f8fafc",
-        cursor: "pointer",
-        fontSize: isMobile ? 11 : 12,
-        fontWeight: 600,
-        color: active ? color : "#94a3b8",
-        textAlign: "center",
-        lineHeight: 1.4,
-        fontFamily: "'Inter Display', -apple-system, sans-serif",
-        transition: "all 0.15s",
-    })
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.18 }}
-            style={{
-                marginTop: 12,
-                padding: isMobile ? "12px" : "16px",
-                borderRadius: 14,
-                border: "1px solid #f1f5f9",
-                background: "#fafcff",
-            }}
-        >
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    marginBottom: 14,
-                }}
-            >
-                <div>
-                    <div
-                        style={{
-                            fontSize: 14,
-                            fontWeight: 700,
-                            color: "#1e293b",
-                        }}
-                    >
-                        {label}
-                    </div>
-                    {!isMobile && (
-                        <div
-                            style={{
-                                fontSize: 11,
-                                color: "#94a3b8",
-                                marginTop: 2,
-                            }}
-                        >
-                            Podés definir uno o más intervalos de atención
-                        </div>
-                    )}
-                </div>
-                <BackButton onClick={onClose} aria-label="Cerrar" />
+    const date = new Date(dayKey+"T12:00:00")
+    return <dialog className="exception-editor" ref={dialog} aria-labelledby={titleId}
+        onCancel={event=>{event.preventDefault();onClose()}}
+        onClick={event=>{if(event.target===event.currentTarget) onClose()}}>
+        <div className="exception-sheet">
+            <div className="exception-heading"><div><small>Disponibilidad del día</small>
+                <h2 id={titleId}>{date.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</h2></div>
+                <BackButton onClick={onClose} aria-label="Cerrar"/>
             </div>
-
-            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-                <button
-                    style={optStyle(type === "block", "#ef4444")}
-                    onClick={() => setType("block")}
-                >
-                    {isMobile ? "Bloqueado" : "Día bloqueado"}
-                </button>
-                <button
-                    style={optStyle(type === "custom", "#f97316")}
-                    onClick={() => setType("custom")}
-                >
-                    {isMobile ? "Intervalos" : "Intervalos propios"}
-                </button>
-                <button
-                    style={optStyle(type === null, "#64748b")}
-                    onClick={() => setType(null)}
-                >
-                    Normal
-                </button>
+            <div className="exception-options" role="group" aria-label="Disponibilidad">
+                {([{id:null,label:"Horario habitual"},{id:"block",label:"Día bloqueado"},{id:"custom",label:"Intervalos propios"}] as const).map(option=>
+                    <button key={option.label} aria-pressed={type===option.id} onClick={()=>{setType(option.id);setError("")}}>{option.label}</button>)}
             </div>
-
-            {type === "custom" && (
-                <div style={{ marginBottom: 12 }}>
-                    {slots.map((s, i) => (
-                        <div
-                            key={i}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                padding: "6px 10px",
-                                background: "#fff7ed",
-                                borderRadius: 8,
-                                marginBottom: 6,
-                                fontSize: 13,
-                                color: "#ea580c",
-                                fontVariantNumeric: "tabular-nums",
-                            }}
-                        >
-                            <span>
-                                {s[0]} → {s[1]}
-                            </span>
-                            <button
-                                onClick={() => handleRemoveSlot(i)}
-                                style={{
-                                    background: "none",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    color: "#ef4444",
-                                    fontSize: 14,
-                                    lineHeight: 1,
-                                    padding: 0,
-                                }}
-                            >
-                                ×
-                            </button>
-                        </div>
-                    ))}
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: 8,
-                            alignItems: "flex-end",
-                            marginBottom: 10,
-                        }}
-                    >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <label
-                                style={{
-                                    fontSize: 11,
-                                    color: "#64748b",
-                                    display: "block",
-                                    marginBottom: 4,
-                                }}
-                            >
-                                Desde
-                            </label>
-                            <input
-                                type="time"
-                                value={desde}
-                                onChange={(e) => setDesde(e.target.value)}
-                                style={ExcepcionesConfig_timeInputStyle}
-                            />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <label
-                                style={{
-                                    fontSize: 11,
-                                    color: "#64748b",
-                                    display: "block",
-                                    marginBottom: 4,
-                                }}
-                            >
-                                Hasta
-                            </label>
-                            <input
-                                type="time"
-                                value={hasta}
-                                onChange={(e) => setHasta(e.target.value)}
-                                style={ExcepcionesConfig_timeInputStyle}
-                            />
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleAddSlot}
-                        style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            color: "#ea580c",
-                            fontSize: 12,
-                            fontFamily:
-                                "'Inter Display', -apple-system, sans-serif",
-                            fontWeight: 600,
-                            padding: 0,
-                        }}
-                    >
-                        + Agregar otro intervalo
-                    </button>
-                </div>
-            )}
-
-            <div
-                style={{
-                    display: "flex",
-                    gap: 8,
-                    justifyContent: "flex-end",
-                    alignItems: "center",
-                    marginTop: 8,
-                }}
-            >
-                {slotError && (
-                    <span
-                        style={{
-                            fontSize: 11,
-                            color: "#ef4444",
-                            marginRight: "auto",
-                        }}
-                    >
-                        {slotError}
-                    </span>
-                )}
-
-                <button
-                    onClick={handleApply}
-                    style={{
-                        padding: "7px 14px",
-                        borderRadius: 8,
-                        border: "none",
-                        background: "#1e293b",
-                        color: "#fff",
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontFamily:
-                            "'Inter Display', -apple-system, sans-serif",
-                    }}
-                >
-                    Aplicar
-                </button>
-            </div>
-        </motion.div>
-    )
+            {type==="custom" && <div className="exception-intervals">
+                {slots.map((slot,index)=><div key={index} className="exception-interval">
+                    {(["De","Hasta"] as const).map((label,column)=><label key={label}>{label}<input type="time" value={slot[column]}
+                        onChange={e=>{const updated: ExcepcionesConfig_Slot=[...slot];updated[column]=e.target.value;setSlots(slots.map((s,i)=>i===index?updated:s));setError("")}}/></label>)}
+                    {slots.length>1 && <button aria-label={"Quitar intervalo "+(index+1)} onClick={()=>setSlots(slots.filter((_,i)=>i!==index))}>×</button>}
+                </div>)}
+                <button className="exception-add" onClick={()=>setSlots([...slots,["",""]])}>+ Agregar otro intervalo</button>
+            </div>}
+            {error && <p role="alert">{error}</p>}
+            <footer><button className="week-save" onClick={apply}>Aplicar</button></footer>
+        </div>
+    </dialog>
 }
 
 function ExcepcionesConfig({
