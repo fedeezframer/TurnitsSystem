@@ -302,7 +302,7 @@ function TurnitsGlobalSaveManager_get() {
                         pending = next
                         TurnitsGlobalSave_safeWrite(pending)
                     } else if (
-                        TurnitsGlobalSave_partialEqual(pending[section], data)
+                        section === "perfil" ? TurnitsGlobalSave_stable(pending.perfil) === TurnitsGlobalSave_stable(data) : TurnitsGlobalSave_partialEqual(pending[section], data)
                     ) {
                         const next = { ...pending }
                         delete next[section]
@@ -344,7 +344,7 @@ function TurnitsGlobalSaveManager_get() {
                 const equalToBaseline =
                     baseline[section] !== undefined &&
                     inFlight[section] === undefined &&
-                    (section === "excepciones"
+                    (section === "excepciones" || section === "perfil"
                         ? TurnitsGlobalSave_stable(data) ===
                           TurnitsGlobalSave_stable(baseline[section])
                         : TurnitsGlobalSave_partialEqual(
@@ -509,7 +509,8 @@ function TurnitsGlobalSaveManager_get() {
                                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                                 body: JSON.stringify(body),
                             })
-                            const d = await res.json().catch(() => ({}))
+                            if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) throw new Error("No se pudo guardar el perfil (" + res.status + ").")
+                            const d = await res.json()
                             if (!res.ok || !d.success) throw new Error(d.error || "Error al guardar el perfil.")
                             savedData.perfil = perfilDraft(d.perfil || body,
                                 Object.hasOwn(current.perfil, "redes_sociales"),
@@ -3664,16 +3665,16 @@ function TeamManager_getSlug(): string {
     if (!fromUrl)
         fromUrl = new URLSearchParams(window.location.search).get("u") || ""
     return (
-        fromUrl.toLowerCase().trim() || localStorage.getItem("user_slug") || ""
+        fromUrl.toLowerCase().trim() || safeLocalStorage("user_slug") || ""
     )
 }
 
 function TeamManager_getToken(): string {
     if (typeof window === "undefined") return ""
     return (
-        localStorage.getItem("access_token") ||
-        localStorage.getItem("user_token") ||
-        localStorage.getItem("token") ||
+        safeLocalStorage("access_token") ||
+        safeLocalStorage("user_token") ||
+        safeLocalStorage("token") ||
         ""
     )
 }
@@ -3713,6 +3714,11 @@ interface TeamManager_FormData {
 }
 
 interface TeamManager_ServicioAsignable {
+    descripcion?: string
+    orden?: number
+    orden_override?: number | null
+    precio_override?: number | null
+    imagen_url_override?: string | null
     id: string
     nombre: string
     precio: number
@@ -3896,16 +3902,16 @@ function MenuFooter_getSlug(): string {
     if (!fromUrl)
         fromUrl = new URLSearchParams(window.location.search).get("u") || ""
     return (
-        fromUrl.toLowerCase().trim() || localStorage.getItem("user_slug") || ""
+        fromUrl.toLowerCase().trim() || safeLocalStorage("user_slug") || ""
     )
 }
 
 function MenuFooter_getToken(): string {
     if (typeof window === "undefined") return ""
     return (
-        localStorage.getItem("access_token") ||
-        localStorage.getItem("user_token") ||
-        localStorage.getItem("auth_token") ||
+        safeLocalStorage("access_token") ||
+        safeLocalStorage("user_token") ||
+        safeLocalStorage("auth_token") ||
         ""
     )
 }

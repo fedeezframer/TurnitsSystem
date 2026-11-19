@@ -13,7 +13,7 @@ import {
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
-import { TeamManager_getSlug, TeamManager_getToken, TeamManager_COLORES, TeamManager_ServicioAsignable, TeamManager_NetoData, TeamManager_PERIODOS_NETO, TeamManager_fmtPesos, TeamManager_FORM_EMPTY, TeamManager_FormData, TeamManager_ROLES, TeamManager_OwnerFallback, TeamManager_Miembro, TeamManager_cardBase, TeamManager_shimmerCSS, TeamManager_useContainerWidth, TurnitsLockedStyle, SeccionId } from "./common"
+import { ServiciosManager_parseDesc, TeamManager_getSlug, TeamManager_getToken, TeamManager_COLORES, TeamManager_ServicioAsignable, TeamManager_NetoData, TeamManager_PERIODOS_NETO, TeamManager_fmtPesos, TeamManager_FORM_EMPTY, TeamManager_FormData, TeamManager_ROLES, TeamManager_OwnerFallback, TeamManager_Miembro, TeamManager_cardBase, TeamManager_shimmerCSS, TeamManager_useContainerWidth, TurnitsLockedStyle, SeccionId } from "./common"
 import { Turnits_ImageAdjustDialog } from "./servicios"
 import { TurnitsPlanRequirement } from "./shared"
 import { TeamManager_PlaceholderIcon } from "./temas"
@@ -109,7 +109,7 @@ function TeamManager_FotoUploader({
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,
             })
-            const data = await res.json()
+            const data = await respuestaEquipo(res)
             if (!res.ok || !data.success)
                 throw new Error(data.error || "Error al subir la foto")
             onChange(data.url)
@@ -399,6 +399,14 @@ function TeamManager_TmInput({
     )
 }
 
+async function respuestaEquipo(res: Response) {
+    if (!res.ok) throw new Error("No se pudo completar el cambio (" + res.status + ").")
+    if (!res.headers.get("content-type")?.includes("application/json")) throw new Error("Respuesta inesperada del servidor.")
+    const data = await res.json()
+    if (!data.success) throw new Error(data.error || "No se pudo completar la solicitud.")
+    return data
+}
+
 function TeamManager_ServiciosVinculados({
     equipoId,
     accentColor,
@@ -413,6 +421,9 @@ function TeamManager_ServiciosVinculados({
     routePrefix?: string
 }) {
     const [loading, setLoading] = React.useState(true)
+    const branch = useBranchAdmin()
+    const [savingOrder, setSavingOrder] = React.useState(false)
+    const [changeError, setChangeError] = React.useState("")
     const quoteMode = useQuoteMode(apiUrl)
     const [servicios, setServicios] = React.useState<
         TeamManager_ServicioAsignable[]
@@ -430,7 +441,7 @@ function TeamManager_ServiciosVinculados({
             `${apiUrl}${routePrefix}/${equipoId}/servicios-disponibles?slug=${slug}`,
             { headers: { Authorization: `Bearer ${token}` } }
         )
-            .then((r) => r.json())
+            .then(respuestaEquipo)
             .then((data) => {
                 if (!activo) return
                 if (data.success) setServicios(data.servicios || [])
@@ -455,6 +466,7 @@ function TeamManager_ServiciosVinculados({
         const token = TeamManager_getToken()
         const nuevoEstado = !servicio.vinculado
 
+        setChangeError("")
         setPendingIds((p) => new Set(p).add(servicio.id))
         setServicios((prev) =>
             prev.map((s) =>
@@ -479,8 +491,9 @@ function TeamManager_ServiciosVinculados({
                           headers: { Authorization: `Bearer ${token}` },
                       }
                   )
-            if (!res.ok) throw new Error()
+            await respuestaEquipo(res)
         } catch {
+            setChangeError("No se pudo guardar la asignación. Volvé a intentarlo.")
             setServicios((prev) =>
                 prev.map((s) =>
                     s.id === servicio.id
@@ -512,51 +525,46 @@ function TeamManager_ServiciosVinculados({
         )
     }
 
-    return (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {servicios.map((s) => {
-                const sel = s.vinculado
-                const pending = pendingIds.has(s.id)
-                return (
-                    <div
-                        key={s.id}
-                        style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 5,
-                        }}
-                    >
-                        <button
-                            onClick={() => !pending && toggle(s)}
-                            disabled={pending}
-                            title={
-                                !s.activo
-                                    ? "Este servicio está inactivo"
-                                    : undefined
-                            }
-                            style={{
-                                padding: isMobile ? "7px 12px" : "6px 13px",
-                                borderRadius: 9,
-                                border: `1.5px solid ${sel ? accentColor : "#e2e8f0"}`,
-                                background: sel ? accentColor : "#fff",
-                                color: sel ? "#fff" : "#475569",
-                                fontSize: isMobile ? 13 : 12,
-                                fontWeight: 700,
-                                cursor: pending ? "wait" : "pointer",
-                                fontFamily:
-                                    "'Inter Display', -apple-system, sans-serif",
-                                transition: "all 0.12s",
-                                opacity: pending ? 0.6 : s.activo ? 1 : 0.55,
-                            }}
-                        >
-                            {s.nombre} · {quoteMode ? "A presupuestar" : `$${s.precio.toLocaleString("es-AR")}`}
-                            {!s.activo ? " (inactivo)" : ""}
-                        </button>
-                    </div>
-                )
-            })}
-        </div>
-    )
+    const sorted = [...servicios].sort((a,b) => Number(b.vinculado) - Number(a.vinculado) ||
+        (a.orden_override ?? a.orden ?? 0) - (b.orden_override ?? b.orden ?? 0))
+    const assigned = sorted.filter(s => s.vinculado)
+    const move = async (i: number, delta: number) => {
+        const ids = assigned.map(s => s.id)
+        const id = ids[i]
+        const dest = i + delta
+        if (dest < 0 || dest >= ids.length || savingOrder) return
+        ;[ids[i], ids[dest]] = [ids[dest], ids[i]]
+        setSavingOrder(true)
+        setChangeError("")
+        try {
+            await respuestaEquipo(await fetch(`${apiUrl}/admin/equipo/${equipoId}/servicios/${id}`, {
+                method: "PUT", headers: {"Content-Type":"application/json", Authorization: `Bearer ${TeamManager_getToken()}`},
+                body: JSON.stringify({slug:TeamManager_getSlug(), orden_servicios:ids})
+            }))
+            const ranks = new Map(ids.map((key,index) => [key,index]))
+            setServicios(prev => prev.map(s => ranks.has(s.id) ? {...s, orden_override:ranks.get(s.id)} : s))
+        } catch (e: any) { setChangeError(e.message) }
+        finally { setSavingOrder(false) }
+    }
+    return <div className="equipo-ofertas">
+        {changeError && <p role="alert">{changeError}</p>}
+        {sorted.map((s,i) => {
+            const {imagen, descripcion} = ServiciosManager_parseDesc(s.descripcion || "")
+            const photo = s.imagen_url_override || imagen
+            return <div key={s.id} className="equipo-oferta">
+                <button type="button" aria-pressed={s.vinculado} disabled={savingOrder || pendingIds.has(s.id)} onClick={() => toggle(s)}>
+                    <span aria-hidden="true" className="equipo-check">{s.vinculado ? "✓" : ""}</span>
+                    {photo && <img src={photo} alt="" loading="lazy"/>}
+                    <span><strong>{s.nombre}</strong><small>{descripcion || "Sin descripción"}{s.activo ? "" : " · Inactivo"}</small></span>
+                    <b>{quoteMode ? "A presupuestar" : TeamManager_fmtPesos(s.precio_override ?? s.precio)}</b>
+                </button>
+                {s.vinculado && !branch && routePrefix === "/admin/equipo" && assigned.length > 1 && <div className="equipo-orden">
+                    <button aria-label={`Subir ${s.nombre}`} disabled={i===0 || savingOrder || pendingIds.size>0} onClick={() => move(i,-1)}>↑</button>
+                    <button aria-label={`Bajar ${s.nombre}`} disabled={i===assigned.length-1 || savingOrder || pendingIds.size>0} onClick={() => move(i,1)}>↓</button>
+                </div>}
+            </div>
+        })}
+    </div>
 }
 
 function TeamManager_PromocionesVinculadas({
@@ -587,7 +595,7 @@ function TeamManager_PromocionesVinculadas({
             `${apiUrl}/admin/equipo/${equipoId}/promociones-disponibles?slug=${slug}`,
             { headers: { Authorization: `Bearer ${token}` } }
         )
-            .then((r) => r.json())
+            .then(respuestaEquipo)
             .then((data) => {
                 if (!activo) return
                 if (data.success) setPromociones(data.promociones || [])
@@ -638,7 +646,7 @@ function TeamManager_PromocionesVinculadas({
                           headers: { Authorization: `Bearer ${token}` },
                       }
                   )
-            const data=await res.json().catch(()=>({}));if (!res.ok || !data.success) throw new Error(data.error || "No se pudo cambiar la asignación.")
+            await respuestaEquipo(res)
         } catch (e: any) {
             setError(e.message || "No se pudo cambiar la asignación.")
             setPromociones((prev) =>
@@ -745,7 +753,7 @@ function TeamManager_MetricaNeto({
             `${apiUrl}/admin/equipo/${equipoId}/neto?periodo=${periodo}&slug=${slug}`,
             { headers: { Authorization: `Bearer ${token}` }, cache: "no-cache" }
         )
-            .then((r) => r.json())
+            .then(respuestaEquipo)
             .then((d) => {
                 if (!activo) return
                 if (d.success) setData(d)
@@ -941,8 +949,8 @@ function TeamManager_MiembroForm({
             transition={{ duration: 0.2 }}
             style={{
                 ["--tm-accent" as any]: accentColor,
-                background: "#f8fafc",
-                borderRadius: 14,
+                background: "#fff",
+                borderRadius: 22,
                 border: "1px solid #e2e8f0",
                 padding: isMobile ? "14px" : "18px",
                 display: "flex",
@@ -975,6 +983,7 @@ function TeamManager_MiembroForm({
                 <BackButton onClick={onCancel} aria-label="Cerrar" />
             </div>
 
+            <div className="equipo-identidad">
             {/* Foto de perfil */}
             <TeamManager_FotoUploader
                 value={form.foto_url}
@@ -1003,6 +1012,8 @@ function TeamManager_MiembroForm({
                 />
             </div>
 
+            </div>
+            <div className="equipo-detalle"><section>
             {/* Nombre + Apellido */}
             <div
                 style={{
@@ -1097,7 +1108,7 @@ function TeamManager_MiembroForm({
             )}
 
             </OwnerOnly>{/* Color */}
-            <TeamManager_Field label="Color identificador">
+            <TeamManager_Field label="Color de perfil">
                 <TeamManager_ColorPicker
                     value={form.color}
                     onChange={(c) => setForm((p) => ({ ...p, color: c }))}
@@ -1200,6 +1211,8 @@ function TeamManager_MiembroForm({
                 </>
             )}
 
+            {esDueño && <p className="negocio-muted">El titular usa los horarios generales del negocio.</p>}
+            </section><section>
             {/* Servicios que ofrece — solo disponible editando (dueño o miembro) */}
             {modoEdicion && miembroId && (
                 <>
@@ -1228,6 +1241,7 @@ function TeamManager_MiembroForm({
                 </span>
             )}
 
+            </section></div>
             {error && (
                 <span
                     style={{ fontSize: 12, color: "#ef4444", fontWeight: 500 }}
@@ -1388,6 +1402,7 @@ function TeamManager_MiembroCard({
     onDelete: () => void
     isMobile: boolean
 }) {
+    const [actionsOpen, setActionsOpen] = React.useState(false)
     const [confirmDelete, setConfirmDelete] = React.useState(false)
     const branch = useBranchAdmin()
     const locked = !!branch && miembro.es_dueño
@@ -1473,8 +1488,45 @@ function TeamManager_MiembroCard({
                     flexShrink: 0,
                 }}
             >
-                {/* Toggle activo / disponible — el dueño no se puede desactivar */}
-                {!esDueño && !ownBranchAccess && (
+                {/* Editar — siempre disponible, incluso para el dueño */}
+                <button
+                    className="tm-btn-icon"
+                    title="Editar" aria-label={`Editar a ${miembro.nombre}`}
+                    onClick={onEdit}
+                    style={{
+                        width: "auto", padding: "0 10px", gap: 4,
+                        height: isMobile ? 28 : 30,
+                        borderRadius: 20,
+                        border: "1px solid #e2e8f0",
+                        background: "#f8fafc",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: isMobile ? 12 : 13,
+                        color: "#64748b",
+                        transition: "opacity 0.15s",
+                    }}
+                >
+                    {iconoEditar ? (
+                        <img
+                            src={iconoEditar}
+                            alt=""
+                            style={{
+                                width: isMobile ? 14 : 16,
+                                height: isMobile ? 14 : 16,
+                                objectFit: "contain",
+                            }}
+                        />
+                    ) : (
+                        "✎"
+                    )}
+                    Editar
+                </button>
+
+                {!esDueño && !ownBranchAccess && <button type="button" className="equipo-mas" aria-label={`Opciones de ${miembro.nombre}`} aria-expanded={actionsOpen} onClick={() => {setActionsOpen(!actionsOpen);setConfirmDelete(false)}}>•••</button>}
+                                {/* Toggle activo / disponible — el dueño no se puede desactivar */}
+                {actionsOpen && !esDueño && !ownBranchAccess && (
                     <button
                         className="tm-btn-icon"
                         title={miembro.activo ? "Desactivar" : "Activar"}
@@ -1515,44 +1567,8 @@ function TeamManager_MiembroCard({
                     </button>
                 )}
 
-                {/* Editar — siempre disponible, incluso para el dueño */}
-                <button
-                    className="tm-btn-icon"
-                    title="Editar"
-                    onClick={onEdit}
-                    style={{
-                        width: "auto", padding: "0 10px", gap: 4,
-                        height: isMobile ? 28 : 30,
-                        borderRadius: 20,
-                        border: "1px solid #e2e8f0",
-                        background: "#f8fafc",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: isMobile ? 12 : 13,
-                        color: "#64748b",
-                        transition: "opacity 0.15s",
-                    }}
-                >
-                    {iconoEditar ? (
-                        <img
-                            src={iconoEditar}
-                            alt=""
-                            style={{
-                                width: isMobile ? 14 : 16,
-                                height: isMobile ? 14 : 16,
-                                objectFit: "contain",
-                            }}
-                        />
-                    ) : (
-                        "✎"
-                    )}
-                    {!isMobile && "Editar"}
-                </button>
-
                 {/* Eliminar — el dueño no se puede eliminar */}
-                {!esDueño && !ownBranchAccess &&
+                {actionsOpen && !esDueño && !ownBranchAccess &&
                     (confirmDelete ? (
                         <div style={{ display: "flex", gap: 3 }}>
                             <button
@@ -1863,6 +1879,7 @@ function TeamManager(props: any) {
 
     const [loading, setLoading] = React.useState(true)
     const [esPremium, setEsPremium] = React.useState(false)
+    const [businessName, setBusinessName] = React.useState("")
     const [planEquipo,setPlanEquipo]=React.useState("gratis")
     const [equipo, setEquipo] = React.useState<TeamManager_Miembro[]>([])
     const [ownerFallback, setOwnerFallback] =
@@ -1871,7 +1888,7 @@ function TeamManager(props: any) {
     const [formError, setFormError] = React.useState("")
     const [aviso, setAviso] = React.useState("")
     const [guardando, setGuardando] = React.useState(false)
-    const [mostrarForm, setMostrarForm] = React.useState(false)
+    const [mostrarForm, setMostrarForm] = React.useState(() => !branch && new URLSearchParams(window.location.search).get("nuevo") === "1")
     const [editando, setEditando] = React.useState<TeamManager_Miembro | null>(
         null
     )
@@ -1934,12 +1951,13 @@ function TeamManager(props: any) {
                     return
                 }
 
-                const settingsData = await settingsRes.json().catch(() => ({}))
+                const settingsData = await respuestaEquipo(settingsRes)
                 const cfg = settingsData?.settings || {}
+                setBusinessName(cfg.business_name || "")
                 setPlanEquipo(cfg.plan || "gratis")
                 setEsPremium(cfg.plan === "basico" || cfg.plan === "premium")
 
-                const equipoData = await equipoRes.json()
+                const equipoData = await respuestaEquipo(equipoRes)
                 const listaEquipo: TeamManager_Miembro[] =
                     equipoData.equipo || []
                 setEquipo(listaEquipo)
@@ -1997,7 +2015,7 @@ function TeamManager(props: any) {
                     puede_crear_servicios: form.puede_crear_servicios,
                 }),
             })
-            const data = await res.json()
+            const data = await respuestaEquipo(res)
             if (!res.ok || !data.success)
                 throw new Error(data.error || `Error ${res.status}`)
             setEquipo((p) => [...p, data.miembro])
@@ -2049,7 +2067,7 @@ function TeamManager(props: any) {
                           }),
                 }),
             })
-            const data = await res.json()
+            const data = await respuestaEquipo(res)
             if (!res.ok || !data.success)
                 throw new Error(data.error || `Error ${res.status}`)
             setEquipo((p) =>
@@ -2081,8 +2099,9 @@ function TeamManager(props: any) {
                 },
                 body: JSON.stringify({ slug, activo: nuevo }),
             })
-            if (!res.ok) throw new Error()
+            await respuestaEquipo(res)
         } catch {
+            setError("No se pudo actualizar el integrante. Volvé a intentarlo.")
             // Revertir si falla
             setEquipo((p) =>
                 p.map((m) =>
@@ -2106,8 +2125,9 @@ function TeamManager(props: any) {
                     headers: { Authorization: `Bearer ${token}` },
                 }
             )
-            if (!res.ok) throw new Error()
+            await respuestaEquipo(res)
         } catch {
+            setError("No se pudo actualizar el integrante. Volvé a intentarlo.")
             // Revertir
             setEquipo((p) =>
                 [...p, miembro].sort((a, b) =>
@@ -2199,7 +2219,7 @@ function TeamManager(props: any) {
 
     return (
         <div
-            ref={containerRef}
+            className="equipo-listado" ref={containerRef}
             style={{
                 ...TeamManager_cardBase,
                 padding: isMobile ? "16px" : "22px",
@@ -2226,7 +2246,7 @@ function TeamManager(props: any) {
                             letterSpacing: "-0.3px",
                         }}
                     >
-                        Equipo
+                        {businessName || "Miembros"}
                     </div>
                     <div
                         style={{
@@ -2313,15 +2333,14 @@ function TeamManager(props: any) {
             <div
                 style={{
                     flex: 1,
-                    overflowY: "auto",
-                    display: "flex",
+                    display: mostrarForm ? "none" : "flex",
                     flexDirection: "column",
                     gap: isMobile ? 5 : 6,
                 }}
             >
                 {/* Tarjeta del dueño: real y editable si ya existe la fila
                     en `equipo`; si no, fallback no editable desde /settings. */}
-                {dueño ? (
+                {dueño && (!editando || editando.id === dueño.id) ? (
                     editando?.id === dueño.id ? (
                         <motion.div
                             key={dueño.id + "-edit"}
@@ -2365,7 +2384,7 @@ function TeamManager(props: any) {
                         />
                     )
                 ) : (
-                    ownerFallback && (
+                    !editando && ownerFallback && (
                         <TeamManager_OwnerFallbackCard
                             owner={ownerFallback}
                             accentColor={accentColor}
@@ -2374,7 +2393,7 @@ function TeamManager(props: any) {
                     )
                 )}
 
-                {miembros.length === 0 && !mostrarForm && (
+                {miembros.length === 0 && !mostrarForm && !editando && (
                     <div
                         style={{
                             flex: 1,
@@ -2398,7 +2417,7 @@ function TeamManager(props: any) {
                 )}
 
                 <AnimatePresence mode="popLayout">
-                    {miembros.map((miembro) =>
+                    {miembros.filter(m => !editando || m.id === editando.id).map((miembro) =>
                         editando?.id === miembro.id ? (
                             <motion.div
                                 key={miembro.id + "-edit"}

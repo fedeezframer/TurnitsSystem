@@ -394,7 +394,7 @@ export function PerfilContenido({
       {photos.length > 0 && <section className="perfil-inline-publications" aria-labelledby="perfil-inline-publications-title">
         <div className="perfil-inline-section-heading"><h2 id="perfil-inline-publications-title">Publicaciones</h2><span>{photos.length}</span></div>
         <div className="perfil-publications-grid" id="perfil-inline-gallery">
-          {photos.slice(0, expanded ? photos.length : 6).map((url: string, index: number) => <PublicationPhoto key={`${url}-${index}`} src={url} name={name} index={index} onOpen={() => setPhoto({ src: url, alt: `Publicación ${index + 1} de ${name}` })} />)}
+          {photos.slice(0, expanded ? photos.length : 6).map((url: string, index: number) => <PublicationPhoto key={`${url}-${index}`} src={url} caption={perfil.titulos_fotos?.[url]} name={name} index={index} onOpen={() => setPhoto({ src: url, alt: perfil.titulos_fotos?.[url] || `Publicación ${index + 1} de ${name}` })} />)}
         </div>
         {photos.length > 6 && <button type="button" className="perfil-publications-more" aria-expanded={expanded} aria-controls="perfil-inline-gallery" onClick={() => setExpanded(value => !value)}>{expanded ? "Ver menos" : "Ver más publicaciones"}</button>}
       </section>}
@@ -434,11 +434,13 @@ export function PerfilContenido({
 
 function PublicationPhoto({
   src,
+  caption,
   name,
   index,
   onOpen,
 }: {
   src: string;
+  caption?: string;
   name: string;
   index: number;
   onOpen: () => void;
@@ -466,9 +468,10 @@ function PublicationPhoto({
         src={src}
         loading="lazy"
         decoding="async"
-        alt={`Publicación ${index + 1} de ${name}`}
+        alt={caption || `Publicación ${index + 1} de ${name}`}
         onError={() => setFailed(true)}
       />
+      {caption && <span className="publicacion-caption">{caption}</span>}
     </button>
   );
 }
@@ -522,12 +525,13 @@ export function PerfilPublicaciones({
               <PublicationPhoto
                 key={`${url}-${index}`}
                 src={url}
+                caption={perfil.titulos_fotos?.[url]}
                 name={name}
                 index={index}
                 onOpen={() =>
                   setPhoto({
                     src: url,
-                    alt: `Publicación ${index + 1} de ${name}`,
+                    alt: perfil.titulos_fotos?.[url] || `Publicación ${index + 1} de ${name}`,
                   })
                 }
               />

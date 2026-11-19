@@ -980,3 +980,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.perfil-publication-open { position:relative; }
+.perfil-publication-open .publicacion-caption { position:absolute; top:8px; left:8px; max-width:calc(100% - 16px); border-radius:100px; background:white; color:#171b17; font-size:14px; padding:6px 12px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }

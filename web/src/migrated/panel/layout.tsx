@@ -85,6 +85,8 @@ function TurnitsPanel_Inner(props: any) {
     // ─── Estado de navegación (reemplaza las variantes de Framer) ─────────
     const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() => {
         if (searchParams.get("onboarding") !== "mp" && (searchParams.get("seccion") === "pagos" || ["mp_success", "mp_error"].includes(searchParams.get("status") || ""))) return "pagos"
+        if (!branchAdmin && searchParams.get("seccion") === "perfil") return "perfil"
+        if (searchParams.get("seccion") === "equipo") return "equipo"
         return searchParams.get("seccion") === "consultas" ? "consultas" : "inicio"
     })
     const [agendaConsultaPermitida, setAgendaConsultaPermitida] = React.useState(false)
@@ -96,7 +98,7 @@ function TurnitsPanel_Inner(props: any) {
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
     const [scheduleView,setScheduleView] = React.useState<"weekly"|"exceptions">("weekly")
     const vistaPagos = ["mp_success","mp_error"].includes(searchParams.get("status") || "") ? "metodos" : seccionesPagos.find(s => s.id === searchParams.get("vista"))?.id || "costos"
-    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(seccionActiva === "pagos" ? "pagos" : null)
+    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(["pagos", "equipo", "perfil"].includes(seccionActiva) ? seccionActiva : null)
     const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
     // Arranca oculta y solo se muestra si confirmamos que el plan es
@@ -142,15 +144,26 @@ function TurnitsPanel_Inner(props: any) {
         tryLoad()
     }, [baseUrl])
 
-    const irA = (id: SeccionId, vista?: VistaPagos) => {
+    const publicaciones = searchParams.get("vista") === "publicaciones"
+    const sucursales = !branchAdmin && searchParams.get("vista") === "sucursales"
+    const irA = (id: SeccionId, vista?: VistaPagos | "negocio" | "publicaciones" | "miembros" | "sucursales") => {
         if (branchAdmin && !["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(id)) return
         if (id === "consultas" && (!appConfig.quoteBookingEnabled || !quoteMode || !agendaConsultaPermitida)) return
         setSeccionActiva(id)
         setSearchParams(previous => {
             const next = new URLSearchParams(previous)
+            next.delete("nuevo")
             if (id === "pagos") {
                 next.set("seccion", "pagos")
                 next.set("vista", vista || vistaPagos)
+                next.delete("status")
+                next.delete("reason")
+                return next
+            }
+            if (id === "perfil" || id === "equipo") {
+                next.set("seccion", id)
+                next.set("vista", vista || (id === "perfil" ? "negocio" : "miembros"))
+                next.delete("id")
                 next.delete("status")
                 next.delete("reason")
                 return next
@@ -232,7 +245,7 @@ function TurnitsPanel_Inner(props: any) {
         </button>
     }
 
-    const renderNavItems = () => navItemsVisibles.map((item) => (item.id === "servicios" || item.id === "horarios" || item.id === "pagos") ? (
+    const renderNavItems = () => navItemsVisibles.map((item) => (item.id === "servicios" || item.id === "horarios" || item.id === "pagos" || item.id === "perfil" || (item.id === "equipo" && !branchAdmin)) ? (
         <div key={item.id} style={{width:"100%",padding:0,margin:0,background:"transparent"}}>
             <NavButton item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => setMenuExpandido(current => current === item.id ? null : item.id)} navIconos={navIconos} showChevron chevronDown={menuExpandido === item.id} />
             <AnimatePresence initial={false}>
@@ -245,7 +258,13 @@ function TurnitsPanel_Inner(props: any) {
                     style={{overflow:"hidden"}}
                 >
                     <div style={{display:"flex",flexDirection:"column",gap:0,padding:"2px 0 0 16px"}}>
-                        {item.id === "pagos" ? seccionesPagos.map(({id,titulo,icono}) => renderSubsection(id,titulo,icono,seccionActiva === "pagos" && vistaPagos === id, () => irA("pagos",id))) : item.id==="horarios" ? <>
+                        {item.id === "perfil" ? <>
+                            {renderSubsection("negocio", "Perfil del negocio", "/assets/panel-nav/ant-design_home-outlined.svg", seccionActiva === "perfil" && !publicaciones, () => irA("perfil", "negocio"))}
+                            {renderSubsection("publicaciones", "Publicaciones", "/assets/panel-nav/ant-design_product-outlined.svg", seccionActiva === "perfil" && publicaciones, () => irA("perfil", "publicaciones"))}
+                        </> : item.id === "equipo" ? <>
+                            {renderSubsection("miembros", "Miembros", "/assets/panel-nav/iconoven_team-building.svg", seccionActiva === "equipo" && !sucursales, () => irA("equipo", "miembros"))}
+                            {renderSubsection("sucursales", "Sucursales", "/assets/panel-nav/ant-design_home-outlined.svg", seccionActiva === "equipo" && sucursales, () => irA("equipo", "sucursales"))}
+                        </> : item.id === "pagos" ? seccionesPagos.map(({id,titulo,icono}) => renderSubsection(id,titulo,icono,seccionActiva === "pagos" && vistaPagos === id, () => irA("pagos",id))) : item.id==="horarios" ? <>
                             {renderSubsection("weekly","Horario semanal","/assets/panel-nav/hugeicons_time-quarter-02.svg", seccionActiva === "horarios" && scheduleView === "weekly", () => {setScheduleView("weekly");irA("horarios")})}
                             {renderSubsection("exceptions","Excepciones laborales","/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "horarios" && scheduleView === "exceptions", () => {setScheduleView("exceptions");irA("horarios")})}
                         </> : <>{renderSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg", seccionActiva === "servicios" && serviciosVistaInicial === "servicios", () => abrirCatalogo("servicios"))}
@@ -906,12 +925,12 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title="Mi Equipo"
-                            subtitle="Gestioná a las personas que trabajan con vos"
+                            title={sucursales ? "Sucursales" : "Equipo"}
+                            subtitle={sucursales ? "Administrá las sedes y sus profesionales." : "Gestioná a las personas que trabajan con vos."}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
-                        <EquipoSecciones
+                        <EquipoSecciones sucursales={sucursales}
                             baseUrl={baseUrl}
                             accentColor={accentColor}
                             iconoVacioUrl={iconos.equipoVacio}
@@ -922,7 +941,7 @@ function TurnitsPanel_Inner(props: any) {
                         </SectionLoadingBoundary>
                     </div>
                 )}
-                {seccionActiva === "perfil" && <PerfilNegocio baseUrl={baseUrl} isMobile={isMobile}/>}
+                {seccionActiva === "perfil" && <PerfilNegocio publicaciones={publicaciones} baseUrl={baseUrl} isMobile={isMobile}/>}
             </div>
 
             <OwnerOnly><TurnitsDashboardSidePanel

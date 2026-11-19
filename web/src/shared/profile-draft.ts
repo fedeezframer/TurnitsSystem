@@ -11,6 +11,7 @@ export const perfilVacio = {
   instagram: "",
   sitio_web: "",
   redes_sociales: {} as Record<string, string>,
+  titulos_fotos: {} as Record<string, string>,
   fotos: [] as string[],
   foto_perfil_url: "",
   banner_url: "",

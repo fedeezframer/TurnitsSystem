@@ -10,6 +10,7 @@ import {
 import { TeamManager, TeamManager_ServiciosVinculados } from "./equipo";
 import { TurnitsPlanRequirement } from "./shared";
 import "./perfil.css";
+const BranchMap = React.lazy(() => import("../../components/BranchMap").then(m => ({default:m.BranchMap})));
 const LocationPicker = React.lazy(() =>
   import("../../components/BranchMap").then((m) => ({
     default: m.LocationPicker,
@@ -77,10 +78,35 @@ async function request(url: string, options: RequestInit = {}) {
   return d;
 }
 export { perfilVacio } from "../../shared/profile-draft";
+function UbicacionPerfil({api, slug, direccion}: {api:string; slug:string; direccion:string}) {
+  const [pins,setPins] = React.useState<{id:string; nombre:string; latitud:number; longitud:number}[]>([]);
+  const [status,setStatus] = React.useState("Cargando ubicación…");
+  React.useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${api}/sucursales/${encodeURIComponent(slug)}`, {signal:controller.signal})
+      .then(async r => {
+        if (!r.ok || !r.headers.get("content-type")?.includes("application/json")) throw new Error();
+        const d = await r.json();
+        if (!d.success || !Array.isArray(d.sucursales)) throw new Error();
+        const principal = d.sucursales.find((s:any) => s.id === "principal");
+        setPins(principal && Number.isFinite(principal.latitud) && Number.isFinite(principal.longitud) ? [principal] : []);
+        setStatus("");
+      }).catch(() => { if (!controller.signal.aborted) setStatus("No se pudo cargar el mapa."); });
+    return () => controller.abort();
+  },[api,slug]);
+  return <section className="perfil-ubicacion"><h3>Ubicación</h3>
+    {pins.length > 0 ? <React.Suspense fallback={<p>Cargando mapa…</p>}><BranchMap pins={pins} compact label="Ubicación de la sede principal"/></React.Suspense> :
+      <p className="negocio-muted" role="status">{status || direccion || "Agregá una dirección pública."}</p>}
+    <label className="negocio-button secondary" htmlFor="perfil-direccion">Establecer dirección manualmente</label>
+  </section>;
+}
+
 export function PerfilNegocio({
   baseUrl,
   isMobile,
+  publicaciones = false,
 }: {
+  publicaciones?: boolean;
   baseUrl: string;
   isMobile: boolean;
 }) {
@@ -215,8 +241,9 @@ export function PerfilNegocio({
           headers: { Authorization: `Bearer ${MenuFooter_getToken()}` },
           body,
         });
+        if (!r.ok || !r.headers.get("content-type")?.includes("application/json")) throw new Error("No se pudo subir la foto.");
         const d = await r.json();
-        if (!r.ok || !d.success)
+        if (!d.success)
           throw new Error(d.error || "No se pudo subir la foto.");
         updateDraft((f) =>
           destino === "fotos"
@@ -272,21 +299,14 @@ export function PerfilNegocio({
               e.preventDefault();
               TurnitsGlobalSaveManager_get()?.saveAll();
             }}
-            className="negocio-card negocio-stack"
+            className="negocio-card negocio-stack perfil-workspace"
           >
-            <div className="negocio-between">
-              <div>
-                <h2>Presentá tu negocio</h2>
-                <p className="negocio-muted">
-                  Completá sólo los datos que quieras mostrar a tus clientes.
-                </p>
-              </div>
-            </div>
             <fieldset
               disabled={!habilitado || busy}
               style={{ border: 0, padding: 0, margin: 0 }}
               className="negocio-stack"
             >
+              {!publicaciones && <>
               <section
                 className="negocio-brand-grid"
                 aria-label="Imágenes del perfil"
@@ -303,11 +323,11 @@ export function PerfilNegocio({
                       className={`negocio-brand-preview${key === "banner_url" ? " negocio-banner-preview" : ""}`}
                     >
                       {key === "foto_perfil_url" ? (
-                        <BusinessAvatar
+                        <><BusinessAvatar
                           name={form.nombre || "Negocio"}
                           src={form.foto_perfil_url}
                           shape={formaIcono}
-                        />
+                        /><div className="perfil-identidad"><strong>{form.nombre}</strong><p>{[form.direccion, form.ciudad].filter(Boolean).join(", ")}</p></div></>
                       ) : (
                         form.banner_url && (
                           <img src={form.banner_url} alt="Banner del negocio" />
@@ -354,51 +374,8 @@ export function PerfilNegocio({
                   habilitar el banner, la foto de perfil y la galería ampliada.
                 </p>
               )}
-              <div className="negocio-grid">
-                {(
-                  [
-                    ["nombre", "Nombre del negocio"],
-                    ["categoria", "Rubro"],
-                    ["ciudad", "Ciudad"],
-                    ["provincia", "Provincia"],
-                    ["direccion", "Dirección pública"],
-                    ["telefono_publico", "Teléfono público"],
-                    ["sitio_web", "Sitio web (https://…)"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label className="negocio-field" key={key}>
-                    {label}
-                    <input
-                      value={form[key]}
-                      onChange={(e) => change(key, e.target.value)}
-                      required={key === "nombre"}
-                      maxLength={
-                        key === "nombre"
-                          ? 100
-                          : key === "telefono_publico"
-                            ? 30
-                            : key === "sitio_web"
-                              ? 300
-                              : key === "direccion"
-                                ? 200
-                                : key === "categoria"
-                                  ? 80
-                                  : 100
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-              <label className="negocio-field">
-                Acerca del negocio
-                <textarea
-                  value={form.descripcion}
-                  maxLength={1500}
-                  onChange={(e) => change("descripcion", e.target.value)}
-                  placeholder="Contá qué ofrecés y qué hace especial a tu negocio."
-                />
-              </label>
-              <section className="negocio-redes-editor negocio-stack">
+              <div className="perfil-datos-publicos">
+              <div className="perfil-redes-ubicacion"><section className="negocio-redes-editor negocio-stack">
                 <div>
                   <h3>Redes sociales</h3>
                   <p className="negocio-muted">
@@ -435,60 +412,77 @@ export function PerfilNegocio({
                     habilitar los nuevos enlaces.
                   </p>
                 )}
-              </section>
-              <div className="negocio-stack" style={{ gap: 10 }}>
-                <div className="negocio-between">
-                  <h3>Publicaciones</h3>
-                  <label
-                    className="negocio-button secondary"
-                    style={{
-                      opacity: uploading ? 0.45 : 1,
-                    }}
-                  >
-                    {" "}
-                    {uploading ? "Subiendo…" : "+ Agregar fotos"}
+              </section><UbicacionPerfil api={api} slug={slug} direccion={form.direccion}/></div>
+              <label className="negocio-field">
+                Descripción del negocio
+                <textarea
+                  value={form.descripcion}
+                  maxLength={1500}
+                  onChange={(e) => change("descripcion", e.target.value)}
+                  placeholder="Contá qué ofrecés y qué hace especial a tu negocio."
+                />
+              </label>
+              </div>
+              <div className="negocio-grid">
+                {(
+                  [
+                    ["nombre", "Nombre del negocio"],
+                    ["categoria", "Rubro"],
+                    ["ciudad", "Ciudad"],
+                    ["provincia", "Provincia"],
+                    ["direccion", "Dirección pública"],
+                    ["telefono_publico", "Teléfono público"],
+                    ["sitio_web", "Sitio web (https://…)"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label className="negocio-field" key={key}>
+                    {label}
                     <input
-                      aria-label="Agregar fotos a la galería"
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      hidden
-                      multiple
-                      disabled={uploading}
-                      onChange={(e) => subir(e)}
+                      id={key === "direccion" ? "perfil-direccion" : undefined}
+                      value={form[key]}
+                      onChange={(e) => change(key, e.target.value)}
+                      required={key === "nombre"}
+                      maxLength={
+                        key === "nombre"
+                          ? 100
+                          : key === "telefono_publico"
+                            ? 30
+                            : key === "sitio_web"
+                              ? 300
+                              : key === "direccion"
+                                ? 200
+                                : key === "categoria"
+                                  ? 80
+                                  : 100
+                      }
                     />
                   </label>
-                </div>
-                <p className="negocio-muted">
-                  Estas fotos se muestran en las publicaciones de tu perfil.
-                  Sin límite de cantidad. Podés seleccionar varias a la vez.
-                  JPG, PNG o WebP, hasta 3 MB por imagen.
-                </p>
-                {uploadProgress && (
-                  <p role="status" className="negocio-muted">
-                    {uploadProgress}
-                  </p>
-                )}
-                <div className="negocio-gallery">
+                ))}
+              </div>
+              </>}
+              {publicaciones && <>
+                <p className="negocio-muted">JPG, PNG o WebP de hasta 3 MB por foto.</p>
+                {uploadProgress && <p role="status">{uploadProgress}</p>}
+                <div className="publicacion-grid">
+                  <label className="publicacion-upload">
+                    <span aria-hidden="true">＋</span>{uploading ? "Subiendo…" : "Subir foto"}
+                    <input aria-label="Subir fotos" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={uploading} onChange={e => subir(e)} />
+                  </label>
                   {form.fotos.map((url, i) => (
-                    <div className="negocio-photo" key={url}>
-                      <img src={url} alt={`Foto ${i + 1}`} loading="lazy" />
-                      <button
-                        type="button"
-                        aria-label={`Quitar foto ${i + 1}`}
-                        disabled={uploading}
-                        onClick={() =>
-                          change(
-                            "fotos",
-                            form.fotos.filter((x) => x !== url),
-                          )
-                        }
-                      >
-                        ×
-                      </button>
-                    </div>
+                    <article className="publicacion-tile" key={url}>
+                      <img src={url} alt={form.titulos_fotos[url] || `Publicación ${i + 1}`} loading="lazy" />
+                      <input aria-label={`Título de la publicación ${i + 1}`} maxLength={120}
+                        placeholder="Agregar título" value={form.titulos_fotos[url] || ""}
+                        onChange={e => change("titulos_fotos", {...form.titulos_fotos, [url]: e.target.value})}/>
+                      <button type="button" aria-label={`Quitar foto ${i + 1}`} disabled={uploading} onClick={() => updateDraft(f => {
+                        const titles = {...f.titulos_fotos};
+                        delete titles[url];
+                        return {...f, titulos_fotos: titles, fotos: f.fotos.filter(photo => photo !== url)};
+                      })}>×</button>
+                    </article>
                   ))}
                 </div>
-              </div>
+              </>}
               <label className="negocio-toggle">
                 <input
                   type="checkbox"
@@ -610,7 +604,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
       >
         <div className="negocio-between">
           <div>
-            <h2>Sucursales</h2>
+            <h3>Sedes del negocio</h3>
             <p className="negocio-muted">
               Creá los perfiles de tus sucursales y elegí quién administra cada sede.
             </p>
@@ -639,7 +633,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
         )}
       </div>
       {form && (
-        <form className="negocio-card negocio-stack" onSubmit={guardar}>
+        <form className="negocio-card negocio-stack sucursal-editor" onSubmit={guardar}>
           <h2>
             {form.id === "principal"
               ? "Editar sede principal"
@@ -803,6 +797,10 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                   ))}
               </select>
             </label>
+            <div className="negocio-row">
+              <a className="negocio-button secondary" target="_blank" rel="noreferrer" href={window.location.pathname + "?" + new URLSearchParams({...Object.fromEntries(new URLSearchParams(window.location.search)),seccion:"equipo",vista:"miembros",nuevo:"1"})}>Crear acceso nuevo</a>
+              <button type="button" className="negocio-button secondary" onClick={() => cargar().catch(e => setError(e.message))}>Actualizar profesionales</button>
+            </div>
             <p className="negocio-muted">
               El encargado usa su acceso de empleado para ver los turnos de esta
               sede, aprobar pagos manuales pendientes y gestionar sus miembros.
@@ -835,7 +833,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
           {saved}
         </p>
       )}
-      <div className="negocio-grid">
+      {!form && <div className="negocio-grid sucursal-listado">
         {[
           data.principal || {
             ...sucursalVacia,
@@ -870,6 +868,7 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                   {s.direccion || "Sin dirección configurada"}
                 </p>
               </div>
+              <details><summary>Equipo y ubicación</summary>
               <p className="negocio-muted">
                 {admin
                   ? `Encargado: ${admin.nombre} ${admin.apellido || ""}`
@@ -894,6 +893,8 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
                   <p className="negocio-muted">Sin integrantes asignados</p>
                 )}
               </div>
+              {s.activo && <a className="negocio-button secondary" href={`/agenda/${encodeURIComponent(slug)}?sucursal_id=${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">Abrir agenda de la sede</a>}
+              </details>
               <button
                 type="button"
                 disabled={
@@ -924,41 +925,13 @@ export function SucursalesNegocio({ baseUrl }: { baseUrl: string }) {
             </article>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }
 export function EquipoSecciones(props: any) {
   const branch = useBranchAdmin();
-  const [tab, setTab] = React.useState("miembros");
-  if (branch) return <TeamManager {...props}/>;
-  return (
-    <div className="negocio-editor negocio-stack">
-      <div
-        className="negocio-tabs"
-        role="tablist"
-        aria-label="Organización del equipo"
-      >
-        {(["miembros", "sucursales"] as const).map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
-          >
-            <NegocioIcon kind={id === "miembros" ? "equipo" : "sucursal"} />
-            {id === "miembros" ? "Miembros" : "Sucursales"}
-          </button>
-        ))}
-      </div>
-      {tab === "miembros" ? (
-        <TeamManager {...props} />
-      ) : (
-        <SucursalesNegocio baseUrl={props.baseUrl} />
-      )}
-    </div>
-  );
+  return props.sucursales && !branch ? <SucursalesNegocio baseUrl={props.baseUrl}/> : <TeamManager {...props}/>;
 }
 
 export function SucursalEmpleado({
