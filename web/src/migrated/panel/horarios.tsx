@@ -767,7 +767,8 @@ function ExcepcionesConfig_DayPanel({
                 <BackButton onClick={onClose} aria-label="Cerrar"/>
             </div>
             <div className="exception-options" role="group" aria-label="Disponibilidad">
-                {([{id:null,label:"Horario habitual"},{id:"block",label:"Día bloqueado"},{id:"custom",label:"Intervalos propios"}] as const).map(option=>
+                {(excepcion || type) && <button aria-pressed={type===null} onClick={()=>{setType(null);setError("")}}>Horario habitual</button>}
+                {([{id:"block",label:"Día bloqueado"},{id:"custom",label:"Intervalos propios"}] as const).map(option=>
                     <button key={option.label} aria-pressed={type===option.id} onClick={()=>{setType(option.id);setError("")}}>{option.label}</button>)}
             </div>
             {type==="custom" && <div className="exception-intervals">
@@ -809,7 +810,6 @@ function ExcepcionesConfig({
 
     const [loading, setLoading] = React.useState(true)
     const [error, setError] = React.useState("")
-    const [savedOk, setSavedOk] = React.useState(false)
     const [curYear, setCurYear] = React.useState(today.getFullYear())
     const [curMonth, setCurMonth] = React.useState(today.getMonth())
     const [exceptions, setExceptions] =
@@ -836,11 +836,9 @@ function ExcepcionesConfig({
     React.useEffect(() => {
         if (typeof window === "undefined") return
         const onSaved = () => {
-            setSavedOk(true)
             excepcionesGuardadasRef.current = JSON.parse(
                 JSON.stringify(exceptions)
             )
-            setTimeout(() => setSavedOk(false), 3000)
         }
         window.addEventListener("config_saved", onSaved)
         return () => window.removeEventListener("config_saved", onSaved)
@@ -968,7 +966,6 @@ function ExcepcionesConfig({
         })}</div>
         {selectedKey && <ExcepcionesConfig_DayPanel key={selectedKey} dayKey={selectedKey} excepcion={exceptions[selectedKey] ?? null} accentColor={accentColor} isMobile={isMobile} onSave={handleDaySave} onClose={()=>setSelectedKey(null)}/>}
         {error && <p role="alert">{error}</p>}
-        {savedOk && <p role="status">Guardado</p>}
     </section>
 }
 
