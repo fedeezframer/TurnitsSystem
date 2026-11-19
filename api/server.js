@@ -5304,21 +5304,6 @@ app.get("/admin/equipo/:slug", requireAuth, async (req, res) => {
   }
 });
 
-async function enviarInvitacionEquipo(miembro, token, slug) {
-  if (!APPS_SCRIPT_URL) return false;
-  try {
-    const {data} = await supabase.from("usuarios").select("business_name").eq("slug", slug).maybeSingle();
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method:"POST", headers:{"Content-Type":"text/plain"}, signal:AbortSignal.timeout(15000),
-      body:JSON.stringify({action:"teamInvitation", email:miembro.login_email, nombre:[miembro.nombre, miembro.apellido].filter(Boolean).join(" "),
-        resetUrl:WEB_URL + "/cambiar-contraseña?token=" + encodeURIComponent(token), businessName:data?.business_name || "el negocio"})
-    });
-    if (!response.ok || !response.headers.get("content-type")?.includes("json")) return false;
-    const result = await response.json();
-    return result.success === true || result.ok === true || result.status === "ok";
-  } catch { return false; }
-}
-
 app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, sucursalesApp.equipoMiddleware, async (req, res) => {
   try {
     const { slug, nombre, apellido, color, rol, foto_url } = req.body;
@@ -5393,8 +5378,23 @@ app.post(["/admin/equipo","/empleado/:slug/sucursal/miembros"], requireAuth, suc
     }]).select("id, slug, nombre, apellido, color, rol, activo, created_at, foto_url, es_dueño, login_email, login_activado, puede_configurar_horarios, puede_recibir_pagos_personales, puede_crear_servicios").single();
 
     if (error) throw error;
-    const enviado = loginEmail && await enviarInvitacionEquipo(data, loginResetToken, slugClean);
-    res.status(201).json({ success: true, miembro: data, invitacion_enviada: Boolean(enviado) });
+    if (loginEmail && APPS_SCRIPT_URL) {
+      const resetUrl = `${WEB_URL}/cambiar-contraseña?token=${loginResetToken}`;
+      const { data: negocio } = await supabase.from("usuarios")
+        .select("business_name").eq("slug", slugClean).maybeSingle();
+      fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({
+          action: "teamInvitation",
+          email: loginEmail,
+          nombre: `${data.nombre}${data.apellido ? ` ${data.apellido}` : ""}`,
+          resetUrl,
+          businessName: negocio?.business_name || "el negocio",
+        }),
+      }).catch((e) => console.error("Error enviando invitación al equipo:", e.message));
+    }
+    res.status(201).json({ success: true, miembro: data, invitacion_enviada: Boolean(loginEmail && APPS_SCRIPT_URL) });
   } catch (e) {
     res.status(500).json({ success: false, error: "No se pudo crear el miembro del equipo." });
   }
@@ -5413,29 +5413,6 @@ app.put(["/admin/equipo/:id","/empleado/:slug/sucursal/miembros/:id"], requireAu
       return res.status(403).json({success:false,error:"Sólo podés editar los datos de otros miembros de tu sucursal. Los permisos los define el dueño general."});
     }
 
-    if (Object.hasOwn(req.body, "invitar_email")) {
-      const email = String(req.body.invitar_email || "").trim().toLowerCase();
-      if (actual.es_dueño || req.sucursalAdmin) return res.status(403).json({success:false,error:"Sólo el titular puede invitar a un colaborador."});
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254)
-        return res.status(400).json({success:false,error:"Revisá el correo electrónico."});
-      const checks = await Promise.all([
-        supabase.from("usuarios").select("id").eq("email",email).limit(1),
-        supabase.from("admins").select("id").eq("email",email).limit(1),
-        supabase.from("equipo").select("id").eq("login_email",email).neq("id",id).limit(1),
-        supabase.from("usuarios").select("plan").eq("slug",slugClean).single()
-      ]);
-      if (checks.some(r=>r.error)) throw new Error("Error al verificar el acceso");
-      if (!planTieneFuncionesPremium(checks[3].data.plan)) return res.status(403).json({success:false,error:"Tu plan no habilita accesos de equipo."});
-      if (checks.slice(0,3).some(r=>r.data.length)) return res.status(409).json({success:false,error:"Ese correo ya tiene una cuenta."});
-      const token = crypto.randomUUID();
-      const {data: miembro,error} = await supabase.from("equipo").update({login_email:email,login_reset_token:token,login_reset_token_expiry:new Date(Date.now()+86400000).toISOString()})
-        .eq("id",id).eq("slug",slugClean).eq("login_activado",false).eq("es_dueño",false).select("nombre,apellido,login_email").maybeSingle();
-      if (error?.code === "23505") return res.status(409).json({success:false,error:"Ese correo ya tiene una cuenta."});
-      if (error) throw error;
-      if (!miembro) return res.status(409).json({success:false,error:"Este integrante ya activó su cuenta."});
-      const enviado = await enviarInvitacionEquipo(miembro,token,slugClean);
-      return res.json({success:true,invitacion_enviada:enviado});
-    }
     if (actual.es_dueño) {
       if (rol !== undefined && rol !== "dueño") {
         return res.status(400).json({ success: false, error: "No podés cambiar el rol del titular de la cuenta." });
