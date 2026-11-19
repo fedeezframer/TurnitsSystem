@@ -446,7 +446,7 @@
 @media(max-width:520px) { .equipo-promocion-card { grid-template-columns:38px minmax(0,1fr) 24px; gap:9px!important; padding:10px!important; }.equipo-promo-icon { width:36px;height:36px }.equipo-promocion-card .equipo-promo-price { grid-column:2; grid-row:2; justify-self:start; }.equipo-promocion-card .equipo-check { grid-column:3;grid-row:1/3 } }
 .equipo-member-editor { border-color:#e3eae3!important; border-radius:24px!important; box-shadow:0 14px 40px #1723190b; padding:clamp(20px,2.4vw,34px)!important; gap:22px!important; }
 .equipo-member-editor > div:first-child { padding-bottom:16px; border-bottom:1px solid #e8eee8; color:#172319; font-size:20px!important; letter-spacing:-.45px; }
-.equipo-member-editor .equipo-identidad { align-items:center; gap:18px; border:0; border-radius:18px; padding:18px 20px; background:linear-gradient(115deg,#f3faf3,#fbfdfb 65%,#fff); }
+.equipo-member-editor .equipo-identidad { align-items:center; gap:8px; border:0; border-radius:18px; padding:18px 20px; background:linear-gradient(115deg,#f3faf3,#fbfdfb 65%,#fff); }
 .equipo-identidad > div:last-child > div:first-child { font-size:18px!important; letter-spacing:-.35px; }
 .equipo-identidad .negocio-muted { margin:5px 0 0; font-size:12px; }
 .equipo-member-editor .equipo-detalle { grid-template-columns:minmax(280px,.85fr) minmax(0,1.65fr); gap:clamp(22px,2.4vw,36px); }
@@ -477,3 +477,21 @@
 .equipo-member-editor > div:last-of-type { padding-top:14px; border-top:1px solid #e8eee8; }
 @media(max-width:1120px) { .equipo-member-editor .equipo-detalle { grid-template-columns:minmax(250px,.8fr) minmax(0,1.2fr); } .equipo-asignaciones { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:740px) { .equipo-member-editor { padding:16px!important;gap:16px!important; }.equipo-member-editor .equipo-detalle { grid-template-columns:minmax(0,1fr); }.equipo-member-editor .equipo-detalle > section:first-child { padding:16px; }.equipo-asignaciones { grid-template-columns:minmax(0,1fr); }.equipo-asignacion-columna { padding:14px; } }
+.equipo-foto-control { position:relative; width:56px;height:56px;flex:0 0 56px; }
+.equipo-foto-avatar { position:relative;display:grid;place-items:center;width:56px;height:56px;padding:0;overflow:visible;border:0;border-radius:50%;background:var(--equipo-foto-color,#23802c);color:#fff;font:800 20px "Inter Display",sans-serif;cursor:pointer;box-shadow:0 2px 8px #1723191c; }
+.equipo-foto-avatar > img { width:100%;height:100%;border-radius:50%;object-fit:cover; }
+.equipo-foto-dots { position:absolute;right:-3px;bottom:-2px;display:grid;place-items:center;width:23px;height:23px;border:2px solid white;border-radius:50%;background:#26332a;color:#fff;font-size:15px;line-height:8px;letter-spacing:-1px; }
+.equipo-foto-menu { position:absolute;z-index:20;top:calc(100% + 7px);left:0;display:grid;min-width:142px;gap:3px;padding:5px;border:1px solid #e3eae3;border-radius:12px;background:#fff;box-shadow:0 10px 26px #17231920; }
+.equipo-foto-menu button { width:100%;padding:8px 10px;border:0;border-radius:8px;background:white;color:#26332a;text-align:left;font:600 12px "Inter Display",sans-serif;cursor:pointer; }
+.equipo-foto-menu button:hover { background:#f2f8f2; }
+.equipo-foto-menu button[role=menuitem]:last-child { color:#a34343; }
+.equipo-foto-spinner { width:18px;height:18px;border:2px solid #ffffff66;border-top-color:#fff;border-radius:50%;animation:tm-spin .7s linear infinite; }
+.equipo-orden { position:relative;display:block;align-self:center;flex:0 0 32px; }
+.equipo-orden > summary { display:grid;place-items:center;width:32px;height:32px;border:1px solid #e1e8e1;border-radius:50%;background:#fff;color:#344237;cursor:pointer;font-size:19px;line-height:10px;letter-spacing:-1px;list-style:none; }
+.equipo-orden > summary::-webkit-details-marker { display:none; }
+.equipo-orden[open] > summary { border-color:#8fb892;background:#f1f8f1;color:#176421; }
+.equipo-orden > div { position:absolute;z-index:10;top:calc(100% + 5px);right:0;display:grid;min-width:108px;gap:3px;padding:5px;border:1px solid #e3eae3;border-radius:11px;background:#fff;box-shadow:0 8px 22px #1723191c; }
+.equipo-orden > div button { width:100%;height:auto;padding:7px 9px;border:0;border-radius:7px;background:white;color:#26332a;text-align:left;cursor:pointer; }
+.equipo-orden > div button:hover:not(:disabled) { background:#f2f8f2; }
+.equipo-orden > div button:disabled { opacity:.4;cursor:default; }
+@media(max-width:520px) { .equipo-foto-control,.equipo-foto-avatar{width:48px;height:48px}.equipo-foto-control{flex-basis:48px}.equipo-member-editor .equipo-identidad{padding:14px;gap:8px} }

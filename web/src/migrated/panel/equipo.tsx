@@ -85,6 +85,7 @@ function TeamManager_FotoUploader({
     const [uploading, setUploading] = React.useState(false)
     const [imgError, setImgError] = React.useState(false)
     const [cropFile, setCropFile] = React.useState<File | null>(null)
+    const [menuFotoAbierto, setMenuFotoAbierto] = React.useState(false)
     const inputRef = React.useRef<HTMLInputElement>(null)
 
     const uploadFile = async (file: File) => {
@@ -149,86 +150,38 @@ function TeamManager_FotoUploader({
                     }}
                 />
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div
-                    onClick={() => !uploading && inputRef.current?.click()}
-                    style={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: "50%",
-                        background: showImg ? "#f1f5f9" : color,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "#fff",
-                        fontWeight: 800,
-                        fontSize: 20,
-                        cursor: uploading ? "not-allowed" : "pointer",
-                        overflow: "hidden",
-                        flexShrink: 0,
-                        boxShadow: showImg ? "none" : `0 2px 8px ${color}44`,
-                    }}
+            <div className="equipo-foto-control">
+                <button
+                    type="button"
+                    className="equipo-foto-avatar"
+                    aria-label="Acciones de foto de perfil"
+                    aria-expanded={menuFotoAbierto}
+                    aria-haspopup="menu"
+                    disabled={uploading}
+                    onClick={() => setMenuFotoAbierto((abierto) => !abierto)}
+                    style={{ "--equipo-foto-color": color } as React.CSSProperties}
                 >
                     {uploading ? (
-                        <div
-                            style={{
-                                width: 18,
-                                height: 18,
-                                border: "2px solid #ffffff66",
-                                borderTop: "2px solid #fff",
-                                borderRadius: "50%",
-                                animation: "tm-spin 0.7s linear infinite",
-                            }}
-                        />
+                        <span className="equipo-foto-spinner" />
                     ) : showImg ? (
                         <img
                             src={value}
                             alt=""
                             onError={() => setImgError(true)}
-                            style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                            }}
                         />
                     ) : (
                         (nombre || "?").charAt(0).toUpperCase()
                     )}
-                </div>
+                    <span className="equipo-foto-dots" aria-hidden="true">···</span>
+                </button>
 
-                <div
-                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                >
-                    <span
-                        style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: "#64748b",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                        }}
-                    >
-                        Foto de perfil
-                    </span>
-                    <div style={{ display: "flex", gap: 6 }}>
+                {menuFotoAbierto && <div className="equipo-foto-menu" role="menu" aria-label="Acciones de foto">
                         <button
+                            type="button"
+                            role="menuitem"
                             className="turnits-image-action"
-                            onClick={() =>
-                                !uploading && inputRef.current?.click()
-                            }
+                            onClick={() => { setMenuFotoAbierto(false); inputRef.current?.click() }}
                             disabled={uploading}
-                            style={{
-                                padding: "6px 12px",
-                                borderRadius: 8,
-                                border: "1.5px solid #e2e8f0",
-                                background: "#f8fafc",
-                                color: "#64748b",
-                                fontSize: 11.5,
-                                fontWeight: 700,
-                                cursor: uploading ? "not-allowed" : "pointer",
-                                fontFamily:
-                                    "'Inter Display', -apple-system, sans-serif",
-                            }}
                         >
                             {uploading
                                 ? "Subiendo…"
@@ -238,28 +191,18 @@ function TeamManager_FotoUploader({
                         </button>
                         {showImg && (
                             <button
+                                type="button"
+                                role="menuitem"
                                 onClick={() => {
                                     onChange("")
                                     setImgError(false)
-                                }}
-                                style={{
-                                    padding: "6px 10px",
-                                    borderRadius: 8,
-                                    border: "1.5px solid #fee2e2",
-                                    background: "#fff5f5",
-                                    color: "#ef4444",
-                                    fontSize: 11.5,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    fontFamily:
-                                        "'Inter Display', -apple-system, sans-serif",
+                                    setMenuFotoAbierto(false)
                                 }}
                             >
                                 Quitar
                             </button>
                         )}
-                    </div>
-                </div>
+                </div>}
 
                 <input
                     ref={inputRef}
@@ -548,7 +491,8 @@ function TeamManager_ServiciosVinculados({
     }
     return <div className="equipo-ofertas">
         {changeError && <p role="alert">{changeError}</p>}
-        {sorted.map((s,i) => {
+        {sorted.map((s) => {
+            const assignedIndex = assigned.findIndex((item) => item.id === s.id)
             const {imagen, descripcion} = ServiciosManager_parseDesc(s.descripcion || "")
             const photo = s.imagen_url_override || imagen
             return <div key={s.id} className="equipo-oferta">
@@ -558,10 +502,13 @@ function TeamManager_ServiciosVinculados({
                     <span><strong>{s.nombre}</strong><small>{descripcion || "Sin descripción"}{s.activo ? "" : " · Inactivo"}</small></span>
                     <b>{quoteMode ? "A presupuestar" : TeamManager_fmtPesos(s.precio_override ?? s.precio)}</b>
                 </button>
-                {s.vinculado && !branch && routePrefix === "/admin/equipo" && assigned.length > 1 && <div className="equipo-orden">
-                    <button aria-label={`Subir ${s.nombre}`} disabled={i===0 || savingOrder || pendingIds.size>0} onClick={() => move(i,-1)}>↑</button>
-                    <button aria-label={`Bajar ${s.nombre}`} disabled={i===assigned.length-1 || savingOrder || pendingIds.size>0} onClick={() => move(i,1)}>↓</button>
-                </div>}
+                {s.vinculado && !branch && routePrefix === "/admin/equipo" && assigned.length > 1 && <details className="equipo-orden">
+                    <summary aria-label={`Ordenar ${s.nombre}`} title="Ordenar servicio">···</summary>
+                    <div role="menu">
+                        <button type="button" role="menuitem" disabled={assignedIndex===0 || savingOrder || pendingIds.size>0} onClick={(e) => { e.currentTarget.closest("details")?.removeAttribute("open"); move(assignedIndex,-1) }}>Subir</button>
+                        <button type="button" role="menuitem" disabled={assignedIndex===assigned.length-1 || savingOrder || pendingIds.size>0} onClick={(e) => { e.currentTarget.closest("details")?.removeAttribute("open"); move(assignedIndex,1) }}>Bajar</button>
+                    </div>
+                </details>}
             </div>
         })}
     </div>
