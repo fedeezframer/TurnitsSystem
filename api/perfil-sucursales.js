@@ -576,6 +576,32 @@ export function crearSucursales({
       res.json({ success: true, id: data, ...(await rows(slug)) });
     }),
   );
+  app.delete(
+    "/admin/sucursales/:slug/:id",
+    requireAuth,
+    owner,
+    asyncRoute(async (req, res) => {
+      const slug = cleanSlug(req.params.slug),
+        id = req.params.id;
+      if (!premium(await negocio(slug)))
+        fail("Sucursales requiere Premium vigente.", 403);
+      if (!UUID.test(id)) fail("Sucursal no encontrada.", 404);
+      const { data, error } = await supabase
+        .from("sucursales")
+        .delete()
+        .eq("slug", slug)
+        .eq("id", id)
+        .eq("es_principal", false)
+        .select("id")
+        .maybeSingle();
+      if (error?.code === "23503")
+        fail("No se puede eliminar: todavía tiene profesionales o turnos asociados.", 409);
+      if (error) throw error;
+      if (!data) fail("Sucursal no encontrada.", 404);
+      invalidateCache(slug);
+      res.json({ success: true, id: data.id });
+    }),
+  );
   // Se devuelve sólo la asignación pública, nunca correos de acceso ni permisos.
   app.get(
     "/sucursales/:slug",

@@ -1814,7 +1814,7 @@ function ServiciosManager_ServicioCard({
 // Menú "..." de cada fila. Se dibuja en un portal con posición fija, así no lo
 // recortan los contenedores de la lista ni lo tapa la barra inferior, y se abre
 // hacia arriba cuando abajo no hay lugar (últimas filas).
-function ServiciosManager_RowMenu({ anchor, children }: { anchor: React.RefObject<HTMLElement | null>; children: React.ReactNode }) {
+export function ServiciosManager_RowMenu({ anchor, children }: { anchor: React.RefObject<HTMLElement | null>; children: React.ReactNode }) {
     const ref = React.useRef<HTMLDivElement>(null)
     const [pos, setPos] = React.useState<{ top: number; right: number } | null>(null)
     const place = React.useCallback(() => {
