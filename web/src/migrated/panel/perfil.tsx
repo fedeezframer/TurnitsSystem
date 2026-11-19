@@ -530,7 +530,7 @@ const sucursalVacia = {
   latitud: null as number | null,
   longitud: null as number | null,
 };
-export function SucursalesNegocio({ baseUrl, iconoCheck }: { baseUrl: string; iconoCheck?: string }) {
+export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUrl: string; iconoCheck?: string; iconoEditar?: string }) {
   const api = baseUrl.replace(/\/+$/, ""),
     slug = MenuFooter_getSlug();
   const [data, setData] = React.useState<any>(null),
@@ -598,13 +598,8 @@ export function SucursalesNegocio({ baseUrl, iconoCheck }: { baseUrl: string; ic
     disabled = locked || !data.habilitado;
   return (
     <div className="negocio-editor negocio-stack">
-      {!form && <div className="negocio-card sucursal-heading-card" style={locked ? { opacity: 0.55, filter: "grayscale(1)" } : {}}>
+      {!form && <div className="sucursal-heading-card" style={locked ? { opacity: 0.55, filter: "grayscale(1)" } : {}}>
         <div className="negocio-between">
-          <div className="sucursal-heading-copy">
-            <span className="sucursal-eyebrow">GESTIÓN DEL NEGOCIO</span>
-            <h3>Administrá tus sucursales</h3>
-            <p className="negocio-muted">Organizá cada sede, su equipo y la agenda que ve cada cliente.</p>
-          </div>
           {locked ? (
             <TurnitsPlanRequirement premiumOnly />
           ) : (
@@ -842,13 +837,14 @@ export function SucursalesNegocio({ baseUrl, iconoCheck }: { baseUrl: string; ic
                   <strong>{reservas.toLocaleString("es-AR")}</strong><small>{reservas === 1 ? "reserva" : "reservas"}</small>
                 </span>
               </div>
+              <div className="sucursal-card-body">
               <div className="sucursal-card-content">
                 <h2>{s.nombre}</h2>
                 <p className="negocio-muted">{s.direccion || "Agregá una dirección para que tus clientes ubiquen la sede."}</p>
                 <div className="sucursal-quick-info"><span>{miembros.length} {miembros.length === 1 ? "profesional" : "profesionales"}</span><span>{s.latitud != null && s.longitud != null ? "Ubicación en el mapa" : "Ubicación pendiente"}</span></div>
               </div>
-              <details className="sucursal-card-details"><summary>Ver equipo y encargado</summary>
-              <div className="sucursal-details-content">
+              <div className="sucursal-card-team">
+              <strong>Equipo y encargado</strong>
               <p className="negocio-muted">{admin ? `Encargado: ${admin.nombre} ${admin.apellido || ""}` : "Administrada por el dueño general"}</p>
               <div className="sucursal-card-members">
                 {miembros.map((m: any) => (
@@ -857,9 +853,8 @@ export function SucursalesNegocio({ baseUrl, iconoCheck }: { baseUrl: string; ic
                 {!miembros.length && <p className="negocio-muted">Todavía no hay profesionales asignados.</p>}
               </div>
               </div>
-              </details>
+              </div>
               <div className="sucursal-card-actions">
-              {s.activo && <a className="negocio-button secondary" href={`/agenda/${encodeURIComponent(slug)}?sucursal_id=${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">Abrir agenda</a>}
               <button
                 type="button"
                 disabled={
@@ -884,7 +879,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck }: { baseUrl: string; ic
                   setSaved("");
                 }}
               >
-                Editar sucursal
+                {iconoEditar && <img src={iconoEditar} alt="" aria-hidden="true"/>}Editar sucursal
               </button>
               </div>
             </article>
@@ -896,7 +891,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck }: { baseUrl: string; ic
 }
 export function EquipoSecciones(props: any) {
   const branch = useBranchAdmin();
-  return props.sucursales && !branch ? <SucursalesNegocio baseUrl={props.baseUrl} iconoCheck={props.iconoCheck}/> : <TeamManager {...props}/>;
+  return props.sucursales && !branch ? <SucursalesNegocio baseUrl={props.baseUrl} iconoCheck={props.iconoCheck} iconoEditar={props.iconoEditar}/> : <TeamManager {...props}/>;
 }
 
 export function SucursalEmpleado({
