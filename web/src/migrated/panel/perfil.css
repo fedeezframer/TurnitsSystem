@@ -450,7 +450,7 @@
 .equipo-identidad > div:last-child > div:first-child { font-size:18px!important; letter-spacing:-.35px; }
 .equipo-identidad .negocio-muted { margin:5px 0 0; font-size:12px; }
 .perfil-branding {
-  --media-height:clamp(145px,16vw,250px);
+  --media-height:clamp(130px,14.4vw,225px);
   display:grid;
   grid-template-columns:minmax(var(--media-height),1fr) minmax(0,2.8fr);
   gap:clamp(20px,4vw,64px);
