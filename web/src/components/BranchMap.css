@@ -109,6 +109,22 @@
   border-radius: 18px;
   background: #f7faf8;
 }
+.tn-address-editor {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.tn-address-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.tn-address-fields .negocio-field:last-child {
+  grid-column: 1 / -1;
+}
+.tn-address-search {
+  justify-self: start;
+}
 .tn-location-picker .tn-branch-map {
   border-radius: 14px;
   box-shadow: 0 8px 24px #172c3c18;
@@ -231,6 +247,12 @@
   outline-offset: 3px;
 }
 @media (max-width: 600px) {
+  .tn-address-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tn-address-fields .negocio-field:last-child {
+    grid-column: auto;
+  }
   .tn-branch-map-compact .tn-map-surface {
     height: 175px;
   }

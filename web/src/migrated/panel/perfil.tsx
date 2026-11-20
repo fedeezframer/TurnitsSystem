@@ -1,4 +1,5 @@
 import { BackButton } from "../../components/BackButton"
+import { LocationEditor, type LocationValue } from "../../components/LocationEditor";
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
@@ -11,12 +12,6 @@ import { TeamManager, TeamManager_ServiciosVinculados } from "./equipo";
 import { ServiciosManager_RowMenu } from "./servicios";
 import { TurnitsPlanRequirement } from "./shared";
 import "./perfil.css";
-const BranchMap = React.lazy(() => import("../../components/BranchMap").then(m => ({default:m.BranchMap})));
-const LocationPicker = React.lazy(() =>
-  import("../../components/BranchMap").then((m) => ({
-    default: m.LocationPicker,
-  })),
-);
 import "./perfil-publico.css";
 import { SOCIAL_LINKS } from "../../shared/socials.js";
 import { perfilVacio, perfilDraft } from "../../shared/profile-draft";
@@ -78,28 +73,52 @@ async function request(url: string, options: RequestInit = {}) {
   return d;
 }
 export { perfilVacio } from "../../shared/profile-draft";
-function UbicacionPerfil({api, slug, direccion, onChange}: {api:string; slug:string; direccion:string; onChange:(value:string)=>void}) {
-  const [pins,setPins] = React.useState<{id:string; nombre:string; latitud:number; longitud:number}[]>([]);
-  const [status,setStatus] = React.useState("Cargando ubicación…");
+function UbicacionPerfil({api, slug}: {api:string; slug:string}) {
+  const [data, setData] = React.useState<any>(null);
+  const [selected, setSelected] = React.useState("principal");
+  const [place, setPlace] = React.useState<LocationValue>({ direccion: "", latitud: null, longitud: null });
+  const [status, setStatus] = React.useState("Cargando ubicación…");
+  const [busy, setBusy] = React.useState(false);
   React.useEffect(() => {
-    const controller = new AbortController();
-    fetch(`${api}/sucursales/${encodeURIComponent(slug)}`, {signal:controller.signal})
-      .then(async r => {
-        if (!r.ok || !r.headers.get("content-type")?.includes("application/json")) throw new Error();
-        const d = await r.json();
-        if (!d.success || !Array.isArray(d.sucursales)) throw new Error();
-        const principal = d.sucursales.find((s:any) => s.id === "principal");
-        setPins(principal && Number.isFinite(principal.latitud) && Number.isFinite(principal.longitud) ? [principal] : []);
-        setStatus("");
-      }).catch(() => { if (!controller.signal.aborted) setStatus("No se pudo cargar el mapa."); });
-    return () => controller.abort();
-  },[api,slug]);
+    let alive = true;
+    request(`${api}/admin/sucursales/${slug}`).then((result) => {
+      if (!alive) return;
+      setData(result);
+      setPlace(result.principal || { direccion: "", latitud: null, longitud: null });
+      setStatus("");
+    }).catch((error) => { if (alive) setStatus(error.message); });
+    return () => { alive = false; };
+  }, [api, slug]);
+  const branches = data ? [data.principal, ...data.sucursales].filter(Boolean) : [];
+  const current = branches.find((branch:any) => branch.id === selected) || branches[0];
+  async function save() {
+    if (!data || !current) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      const miembros = data.equipo.filter((member:any) => (member.sucursal_id || "principal") === current.id).map((member:any) => member.id);
+      const result = await request(`${api}/admin/sucursales/${slug}`, { method: "PUT", body: JSON.stringify({
+        id: current.id, nombre: current.id === "principal" && !data.sucursales.length ? "Local" : current.nombre,
+        direccion: place.direccion, latitud: place.latitud, longitud: place.longitud,
+        activo: current.activo, admin_equipo_id: current.admin_equipo_id, miembros,
+      }) });
+      setData((previous:any) => ({ ...previous, ...result }));
+      setStatus("Ubicación guardada en el perfil público.");
+    } catch (error:any) { setStatus(error.message); }
+    finally { setBusy(false); }
+  }
   return <section className="perfil-ubicacion"><h3>Ubicación</h3>
-    {pins.length > 0 ? <React.Suspense fallback={<p>Cargando mapa…</p>}><BranchMap pins={pins} compact label="Ubicación de la sede principal"/></React.Suspense> :
-      <p className="negocio-muted" role="status">{status || direccion || "Agregá una dirección pública."}</p>}
-    <label className="negocio-field">Dirección pública
-      <input value={direccion} maxLength={200} onChange={e=>onChange(e.target.value)} placeholder="Calle, altura y localidad" />
-    </label>
+    <p className="negocio-muted">{data && !data.sucursales.length ? "Local" : "Elegí la sede que querés ubicar."}</p>
+    {branches.length > 1 && <select aria-label="Sede para editar ubicación" value={selected} onChange={(event) => {
+      const branch = branches.find((item:any) => item.id === event.target.value);
+      setSelected(event.target.value);
+      if (branch) setPlace({ direccion: branch.direccion || "", latitud: branch.latitud ?? null, longitud: branch.longitud ?? null });
+      setStatus("");
+    }}>{branches.map((branch:any) => <option key={branch.id} value={branch.id}>{branch.nombre}</option>)}</select>}
+    {data?.mapa_habilitado && <LocationEditor key={selected} value={place} onChange={setPlace} disabled={busy} />}
+    {data?.mapa_habilitado && <button type="button" className="negocio-button" disabled={busy || !place.direccion.trim() || place.latitud === null || place.longitud === null} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar ubicación"}</button>}
+    <p className="negocio-muted">Las fotos de tu local se cargan en <a href={`${window.location.pathname}?seccion=perfil&vista=publicaciones`}>Publicaciones</a>.</p>
+    {status && <p className="negocio-muted" role="status">{status}</p>}
   </section>;
 }
 
@@ -355,7 +374,7 @@ export function PerfilNegocio({
               <div className="perfil-editor-grid">
               <section className="perfil-details-card">
                 <h1>{form.nombre || "Tu negocio"}</h1>
-                <UbicacionPerfil api={api} slug={slug} direccion={form.direccion} onChange={value=>change("direccion",value)}/>
+                <UbicacionPerfil api={api} slug={slug}/>
                 <label className="negocio-field perfil-description">
                   <span><strong>Descripción</strong><small>Contales a tus clientes qué ofrecés y qué hace especial a tu espacio.</small></span>
                   <textarea value={form.descripcion} maxLength={1500} onChange={e=>change("descripcion",e.target.value)} placeholder="Escribí una descripción clara y cercana…" />
@@ -479,42 +498,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
     [busy, setBusy] = React.useState(false),
     [form, setForm] = React.useState<typeof sucursalVacia | null>(null),
     [menuId, setMenuId] = React.useState<string | null>(null),
-    [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null),
-    [locationStatus, setLocationStatus] = React.useState("");
-  const lookupId = React.useRef(0);
-  async function locateAddress(address: string) {
-    if (!address.trim() || !data?.mapa_habilitado) return;
-    const current = ++lookupId.current;
-    setLocationStatus("Buscando dirección…");
-    try {
-      const query = new URLSearchParams({ q: `${address}, Argentina`, format: "jsonv2", limit: "1" });
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${query}`, { headers: { "Accept-Language": "es-AR" }, referrerPolicy: "strict-origin-when-cross-origin" });
-      if (!response.ok) throw new Error();
-      const [place] = await response.json();
-      if (current !== lookupId.current) return;
-      if (!place) { setLocationStatus("No encontramos esa dirección. Marcá el punto en el mapa."); return; }
-      setForm((previous) => previous ? { ...previous, latitud: Number(place.lat), longitud: Number(place.lon) } : previous);
-      setLocationStatus("Punto ubicado. Revisalo antes de guardar.");
-    } catch { if (current === lookupId.current) setLocationStatus("No pudimos buscar la dirección. Podés marcar el punto manualmente."); }
-  }
-  async function locatePoint(point: { latitud: number; longitud: number } | null) {
-    const current = ++lookupId.current;
-    setForm((previous) => previous ? { ...previous, latitud: point?.latitud ?? null, longitud: point?.longitud ?? null } : previous);
-    if (!point) { setLocationStatus(""); return; }
-    setLocationStatus("Buscando calle…");
-    try {
-      const query = new URLSearchParams({ lat: String(point.latitud), lon: String(point.longitud), format: "jsonv2", zoom: "18", addressdetails: "1" });
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${query}`, { headers: { "Accept-Language": "es-AR" }, referrerPolicy: "strict-origin-when-cross-origin" });
-      if (!response.ok) throw new Error();
-      const place = await response.json();
-      if (current !== lookupId.current) return;
-      const road = place.address?.road || place.address?.pedestrian || place.address?.residential;
-      if (!road) { setLocationStatus("Punto marcado. Completá la dirección manualmente."); return; }
-      const address = [road, place.address?.house_number, place.address?.city || place.address?.town || place.address?.village].filter(Boolean).join(", ");
-      setForm((previous) => previous ? { ...previous, direccion: address } : previous);
-      setLocationStatus("Dirección sugerida. Revisala antes de guardar.");
-    } catch { if (current === lookupId.current) setLocationStatus("Punto marcado. Completá la dirección manualmente."); }
-  }
+    [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const menuAnchor = React.useRef<HTMLButtonElement>(null);
   const cargar = React.useCallback(
     () => request(`${api}/admin/sucursales/${slug}`).then(setData),
@@ -670,31 +654,8 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
                   onChange={(e) => setForm({ ...form, nombre: e.target.value })}
                 />
               </label>
-              <label className="negocio-field">
-                Dirección
-                <input
-                  maxLength={200}
-                  value={form.direccion}
-                  onChange={(e) => {
-                    lookupId.current++;
-                    setLocationStatus("");
-                    setForm({ ...form, direccion: e.target.value });
-                  }}
-                  onBlur={(e) => locateAddress(e.target.value)}
-                />
-              </label>
             </div>
-            <React.Suspense
-              fallback={<InlineLoading label="Cargando mapa…" />}
-            >
-              <LocationPicker
-                latitud={form.latitud}
-                longitud={form.longitud}
-                disabled={busy || !data.mapa_habilitado}
-                onChange={locatePoint}
-              />
-            </React.Suspense>
-            {locationStatus && <p className="negocio-muted" role="status">{locationStatus}</p>}
+            <LocationEditor key={form.id || "new"} value={form} onChange={(location) => setForm((previous) => previous ? { ...previous, ...location } : previous)} disabled={busy || !data.mapa_habilitado} />
             {!data.mapa_habilitado && (
               <p className="negocio-muted">
                 Falta instalar la actualización de mapas para guardar
