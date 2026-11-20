@@ -322,11 +322,11 @@ export function PerfilNegocio({
                       className={`negocio-brand-preview${key === "banner_url" ? " negocio-banner-preview" : ""}`}
                     >
                       {key === "foto_perfil_url" ? (
-                        <><BusinessAvatar
+                        <BusinessAvatar
                           name={form.nombre || "Negocio"}
                           src={form.foto_perfil_url}
                           shape={formaIcono}
-                        /><div className="perfil-identidad"><strong>{form.nombre}</strong><p>{[form.direccion, form.ciudad].filter(Boolean).join(", ")}</p></div></>
+                        />
                       ) : (
                         form.banner_url ? (
                           <img src={form.banner_url} alt="Banner del negocio" />
@@ -349,10 +349,14 @@ export function PerfilNegocio({
                 </p>
               )}
               <div className="perfil-editor-grid">
-              <label className="negocio-field perfil-description">
-                <span><strong>Sobre el negocio</strong><small>Contales a tus clientes qué ofrecés y qué hace especial a tu espacio.</small></span>
-                <textarea value={form.descripcion} maxLength={1500} onChange={e=>change("descripcion",e.target.value)} placeholder="Escribí una descripción clara y cercana…" />
-              </label>
+              <section className="perfil-details-card">
+                <h1>{form.nombre || "Tu negocio"}</h1>
+                <UbicacionPerfil api={api} slug={slug} direccion={form.direccion} onChange={value=>change("direccion",value)}/>
+                <label className="negocio-field perfil-description">
+                  <span><strong>Descripción</strong><small>Contales a tus clientes qué ofrecés y qué hace especial a tu espacio.</small></span>
+                  <textarea value={form.descripcion} maxLength={1500} onChange={e=>change("descripcion",e.target.value)} placeholder="Escribí una descripción clara y cercana…" />
+                </label>
+              </section>
               <section className="negocio-redes-editor negocio-stack perfil-social-card">
                 <div>
                   <h3>Redes sociales</h3>
@@ -391,7 +395,6 @@ export function PerfilNegocio({
                   </p>
                 )}
               </section>
-              <UbicacionPerfil api={api} slug={slug} direccion={form.direccion} onChange={value=>change("direccion",value)}/>
               </div>
               </>}
               {publicaciones && <>
