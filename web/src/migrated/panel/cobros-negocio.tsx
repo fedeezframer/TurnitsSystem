@@ -348,6 +348,11 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
     <div className="cb-panel">
       <SeccionHeader title={seccion.titulo} subtitle={seccion.descripcion} isMobile={isMobile} />
       <fieldset disabled={busy} aria-label={seccion.titulo} className={"cb-card cb-" + vista}>
+        <div className="cb-hero" aria-hidden="true">
+          <span>PAGOS · {vista === "costos" ? "SIMULADOR" : "CONFIGURACIÓN"}</span>
+          <strong>{seccion.titulo}</strong>
+          <small>{seccion.descripcion}</small>
+        </div>
         {vista === "costos" && (
           <Calculadora config={config} api={api} slug={slug} logos={logos} />
         )}
