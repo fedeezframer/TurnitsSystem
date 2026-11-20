@@ -912,7 +912,6 @@ function TurnitsPanel_Inner(props: any) {
                             baseUrl={baseUrl}
                             accentColor={accentColor}
                             quoteMode={quoteMode}
-                            onOpenProfile={() => irA("perfil")}
                         />
                         </SectionLoadingBoundary>
                     </div>

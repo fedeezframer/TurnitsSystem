@@ -3,6 +3,7 @@ import { IconOptionPicker } from "./IconOptionPicker"
 import { BackButton } from "../../components/BackButton"
 import * as React from "react"
 import LoadingRunner from "../../components/LoadingRunner"
+import "./finanzas.css"
 import {
     useState,
     useEffect,
@@ -314,10 +315,10 @@ function FinanzasPanel({
         .join(", ")
     const card: React.CSSProperties = {
         background: "#fff",
-        border: "1px solid #e5eaf0",
-        borderRadius: 18,
-        padding: 20,
-        boxShadow: "0 2px 8px rgba(15,23,42,.025)",
+        border: "1px solid #dfe8dd",
+        borderRadius: 20,
+        padding: 22,
+        boxShadow: "0 6px 20px rgba(23,35,25,.06)",
     }
     const button: React.CSSProperties = {
         border: "none",
@@ -329,7 +330,7 @@ function FinanzasPanel({
         cursor: "pointer",
     }
     return (
-        <div
+        <div className="fin-panel"
             style={{
                 display: "flex",
                 flexDirection: "column",
@@ -337,7 +338,7 @@ function FinanzasPanel({
                 color: "#172033",
             }}
         >
-            <div
+            <div className="fin-toolbar"
                 style={{
                     ...card,
                     display: "flex",
@@ -347,16 +348,7 @@ function FinanzasPanel({
                     flexWrap: "wrap",
                 }}
             >
-                <div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>
-                        Resumen financiero
-                    </div>
-                    <div
-                        style={{ color: "#738096", fontSize: 13, marginTop: 4 }}
-                    >
-                        Ingresos brutos de turnos menos gastos registrados.
-                    </div>
-                </div>
+                <span>Período del resumen</span>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <FinanzasMonthPicker value={mes} onChange={setMes} />
                     <button onClick={abrirNuevo} style={button}>
@@ -416,7 +408,7 @@ function FinanzasPanel({
                                     : "#b91c1c",
                             ],
                         ].map(([label, value, color]: any) => (
-                            <div key={label} style={card}>
+                            <div className="fin-kpi" key={label} style={card}>
                                 <div style={{ fontSize: 13, color: "#738096" }}>
                                     {label}
                                 </div>
@@ -445,7 +437,7 @@ function FinanzasPanel({
                             gap: 16,
                         }}
                     >
-                        <div
+                        <div className="fin-distribution"
                             style={{
                                 ...card,
                                 display: "flex",
@@ -575,7 +567,7 @@ function FinanzasPanel({
                                 {balance < 0 && <p style={{fontSize:12,color:"#b73535",lineHeight:1.5}}>Los gastos superan el valor de los turnos en {money(-balance)}. Los porcentajes pueden sumar más del 100%.</p>}
                             </div>
                         </div>
-                        <div style={card}>
+                        <div className="fin-indicators" style={card}>
                             <div style={{ fontWeight: 700, fontSize: 16 }}>Indicadores</div>
                             <div style={{ color: "#738096", fontSize: 12, marginTop: 5 }}>Para evaluar los costos y la rentabilidad del período.</div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,210px),1fr))", gap: 12, marginTop: 16 }}>
@@ -587,7 +579,7 @@ function FinanzasPanel({
                                     ["Costos variables", indicadores.variables, "Otros gastos y comisiones asociados a la actividad del período."],
                                     ["Comisiones sobre ingresos", indicadores.comisionIngresos == null ? null : indicadores.comisionIngresos.toLocaleString("es-AR",{maximumFractionDigits:1}) + "%", "Comisiones de Turnits y Mercado Pago sobre el valor completo de los turnos, no sólo sobre las señas."],
                                 ].map(([label, value, help]: any) => (
-                                    <div key={label} style={{ padding: 15, background: "#f8fafc", borderRadius: 12, minWidth: 0 }}>
+                                    <div className="fin-indicator" key={label} style={{ padding: 15, background: "#f8fafc", borderRadius: 12, minWidth: 0 }}>
                                         <div style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>{label}</div>
                                         <div style={{ fontSize: 23, fontWeight: 720, marginTop: 8, color: value != null && parseFloat(String(value)) < 0 ? "#b91c1c" : "#172033", overflowWrap: "anywhere" }}>{value == null ? "—" : typeof value === "number" ? money(value) : value}</div>
                                         <div style={{ color: "#738096", fontSize: 11, lineHeight: 1.5, marginTop: 7 }}>{help}</div>
@@ -596,7 +588,7 @@ function FinanzasPanel({
                             </div>
                         </div>
                     </div>
-                    <div style={card}>
+                    <div className="fin-expenses" style={card}>
                         <div
                             style={{
                                 display: "flex",

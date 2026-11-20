@@ -24,27 +24,6 @@
   line-height: 1.5;
   margin-top: 6px;
 }
-.te-photo-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: #f5f8f6;
-  padding: 13px 15px;
-  border-radius: 12px;
-  font-size: 12px;
-  color: #64748b;
-}
-.te-photo-note button {
-  background: transparent;
-  border: 0;
-  color: #197128;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-}
 .te-fields {
   border: 0;
   padding: 0;

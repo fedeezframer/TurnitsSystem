@@ -19,7 +19,6 @@ import { UploadPlaceholderIcon } from "./inicio";
 import { useQuoteMode } from "../../shared/agenda-mode";
 import {
   CARD_SHAPES,
-  ICON_SHAPES,
   appearanceChanges,
 } from "../../shared/appearance.js";
 import "./temas.css";
@@ -28,13 +27,11 @@ function ThemeEditor({
   baseUrl = appConfig.apiUrl,
   accentColor = "#197128",
   style,
-  onOpenProfile,
   quoteMode: quoteModeProp,
 }: {
   baseUrl?: string;
   accentColor?: string;
   style?: React.CSSProperties;
-  onOpenProfile?: () => void;
   quoteMode?: boolean;
 }) {
   const api = baseUrl.replace(/\/+$/, "");
@@ -167,13 +164,6 @@ function ThemeEditor({
         </div>
         {!enabled && <TurnitsPlanRequirement />}
       </div>
-      {!quoteMode && <div className="te-photo-note">
-        {onOpenProfile && (
-          <button type="button" onClick={onOpenProfile}>
-            Editar foto
-          </button>
-        )}
-      </div>}
       <fieldset
         disabled={!enabled}
         style={!enabled ? TurnitsLockedStyle : undefined}
@@ -224,12 +214,6 @@ function ThemeEditor({
               "Se aplica a las tarjetas de la agenda y del perfil público.",
               CARD_SHAPES,
             ],
-            [
-              "forma_icono",
-              "Forma del ícono",
-              "Usa la foto cargada en Perfil.",
-              ICON_SHAPES,
-            ],
           ] as const
         ).map(([key, title, hint, options]) => (
           <section className="te-section" key={key}>
@@ -248,11 +232,11 @@ function ThemeEditor({
                 >
                   <span
                     aria-hidden="true"
-                    className={`te-shape-sample${key === "forma_icono" ? " te-icon-sample" : ""}`}
+                    className="te-shape-sample"
                     style={{
                       borderRadius:
                         option.radius ||
-                        (key === "forma_icono" ? "12px" : "6px"),
+                        "6px",
                     }}
                   />
                   {option.label}
