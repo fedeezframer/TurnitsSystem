@@ -66,6 +66,7 @@ const db = {
       nombre: "Principal",
       es_principal: true,
       activo: true,
+      admin_equipo_id: null,
     },
   ],
   turnos: [
@@ -604,6 +605,7 @@ const cleanSlug = (s) =>
   );
   db.sucursales[0].activo = true;
   db.usuarios[0].plan = "basico";
+  const currentPrincipal = db.sucursales.find((s) => s.es_principal);
   assert.equal(
     (await auth(req("GET", "/admin/equipo/fede", { slug }))).code,
     403,
@@ -647,6 +649,31 @@ const cleanSlug = (s) =>
     4,
     "owner retains all branches",
   );
+  db.usuarios[0].plan = "basico";
+  const localReq = req("PUT", "/admin/sucursales/fede", { slug }, {
+    id: "principal", nombre: "Local", direccion: "San Martín 100, Córdoba, Córdoba",
+    activo: currentPrincipal.activo, admin_equipo_id: currentPrincipal.admin_equipo_id,
+    miembros: db.equipo.filter((e) => !e.sucursal_id).map((e) => e.id),
+    latitud: -31.4, longitud: -64.2,
+  });
+  localReq.headers.authorization = ownerReq.headers.authorization;
+  const localResult = await call("PUT /admin/sucursales/:slug", localReq);
+  assert.equal(localResult.code, 200, JSON.stringify(localResult.body));
+  assert.equal(db.sucursales.find((s) => s.es_principal).direccion, localReq.body.direccion);
+  const publicLocal = await call("GET /sucursales/:slug", req("GET", "/sucursales/fede", { slug }));
+  assert.equal(publicLocal.body.sucursales.length, 1);
+  assert.equal(publicLocal.body.sucursales[0].nombre, "Local");
+  const extraReq = req("PUT", "/admin/sucursales/fede", { slug }, { ...localReq.body, id: north });
+  extraReq.headers.authorization = ownerReq.headers.authorization;
+  assert.equal((await call("PUT /admin/sucursales/:slug", extraReq)).code, 403);
+  const savedPrincipal = db.sucursales.find((s) => s.es_principal);
+  db.sucursales = db.sucursales.filter((s) => !s.es_principal);
+  const createLocalReq = req("PUT", "/admin/sucursales/fede", { slug }, { ...localReq.body, admin_equipo_id: null });
+  createLocalReq.headers.authorization = ownerReq.headers.authorization;
+  const newLocal = await call("PUT /admin/sucursales/:slug", createLocalReq);
+  assert.equal(newLocal.code, 200, JSON.stringify(newLocal.body));
+  assert.equal(db.sucursales.find((s) => s.es_principal).direccion, localReq.body.direccion);
+  db.sucursales = db.sucursales.filter((s) => !s.es_principal).concat(savedPrincipal);
   console.log(
     "PASS branch API: real auth/resolver/guards/handlers; two branches+principal, historical appointments, catalog/team scope, notification snapshot, expense writes, config masking, forbidden payments/catalog/roles, revoked/paused/moved/downgraded admin, owner and employee regressions. In-memory data; no real writes.",
   );

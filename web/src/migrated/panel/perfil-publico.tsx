@@ -149,7 +149,10 @@ export function PerfilContenido({
   }, [slug]);
   const main = locations.find((s) => s.id === "principal") || locations[0],
     [locationId, setLocationId] = React.useState(""),
-    location = locations.find((s) => s.id === locationId) || main;
+    selectedLocation = locations.find((s) => s.id === locationId) || main,
+    location = selectedLocation && locations.length === 1 && selectedLocation.id === "principal"
+      ? { ...selectedLocation, nombre: "Local" }
+      : selectedLocation;
   const pins = React.useMemo(
     () =>
       location
@@ -164,8 +167,9 @@ export function PerfilContenido({
         : [],
     [location],
   );
+  const locationParts = location?.direccion?.split(",").map((part) => part.trim()) || [];
   const name = perfil.nombre || "Nombre del negocio",
-    city = [perfil.ciudad, perfil.provincia].filter(Boolean).join(", "),
+    city = locationParts.length >= 3 ? locationParts.slice(-2).join(", ") : [perfil.ciudad, perfil.provincia].filter(Boolean).join(", "),
     socials = enlacesPublicos(perfil),
     hasDetails =
       perfil.descripcion ||
@@ -310,11 +314,11 @@ export function PerfilContenido({
                 </span>
               </div>
             )}
-            {(location?.direccion || perfil.direccion) && (
+            {location?.direccion && (
               <p
-                className={`perfil-address${location ? " perfil-visually-hidden" : ""}`}
+                className="perfil-address"
               >
-                {location?.direccion || perfil.direccion}
+                {location.direccion}
               </p>
             )}
           </div>

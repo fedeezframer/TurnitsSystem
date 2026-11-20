@@ -489,6 +489,7 @@
 .perfil-ubicacion { display:grid; gap:12px; align-content:start; min-width:0; }
 .perfil-ubicacion h3 { margin:0; }
 .perfil-ubicacion .negocio-field { margin-top:4px; }
+.perfil-ubicacion .tn-address-fields .negocio-field { justify-self:stretch; min-width:0; }
 .perfil-workspace .publicacion-grid { gap:18px; }
 .perfil-workspace .publicacion-upload { min-height:230px; aspect-ratio:1/1; border:1.5px dashed #aac6a9; background:radial-gradient(ellipse at 50% 25%,#f1f8f0,#fff 70%); color:#276b2d; transition:border-color .18s,background .18s,transform .18s; }
 .perfil-workspace .publicacion-upload:hover { border-color:#4c9a50; background:#f2f9f1; transform:translateY(-2px); }
