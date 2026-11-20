@@ -497,7 +497,8 @@ export function crearSucursales({
     owner,
     asyncRoute(async (req, res) => {
       const slug = cleanSlug(req.params.slug);
-      if (!premium(await negocio(slug)))
+      const esPremium = premium(await negocio(slug));
+      if (!esPremium && req.body?.id !== "principal")
         fail("Sucursales requiere Premium vigente.", 403);
       const b = req.body || {};
       if (
@@ -535,6 +536,29 @@ export function crearSucursales({
         fail(
           "Marcá una ubicación válida en el mapa o quitá ambas coordenadas.",
         );
+      if (!esPremium) {
+        const { data: principal, error: lookupError } = await supabase
+          .from("sucursales")
+          .select("id")
+          .eq("slug", slug)
+          .eq("es_principal", true)
+          .maybeSingle();
+        if (lookupError) throw lookupError;
+        const fields = {
+          nombre: principal ? undefined : "Local",
+          direccion: b.direccion.trim(),
+          latitud: b.latitud,
+          longitud: b.longitud,
+          updated_at: new Date().toISOString(),
+        };
+        const operation = principal
+          ? supabase.from("sucursales").update({ direccion: fields.direccion, latitud: fields.latitud, longitud: fields.longitud, updated_at: fields.updated_at }).eq("id", principal.id).eq("slug", slug).eq("es_principal", true)
+          : supabase.from("sucursales").insert({ slug, es_principal: true, activo: true, ...fields });
+        const { error: saveError } = await operation;
+        if (saveError) throw saveError;
+        invalidateCache(slug);
+        return res.json({ success: true, ...(await rows(slug)) });
+      }
       if (b.id && b.id !== "principal") {
         const { data: existing, error: existingError } = await supabase
           .from("sucursales")

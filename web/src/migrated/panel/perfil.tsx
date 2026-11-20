@@ -305,7 +305,7 @@ export function PerfilNegocio({
                 {(
                   [
                     ["foto_perfil_url", "Foto de perfil"],
-                    ["banner_url", "Banner del perfil"],
+                    ["banner_url", "Banner"],
                   ] as const
                 ).map(([key, label]) => (
                   <div className={`negocio-brand-upload negocio-stack perfil-brand-card perfil-brand-${key === "banner_url" ? "banner" : "avatar"}`} key={key}>
@@ -322,20 +322,13 @@ export function PerfilNegocio({
                           <img src={form.banner_url} alt="Banner del negocio" />
                         ) : null
                       )}
-                      <details className="perfil-media-actions">
-                        <summary aria-label={`Editar ${label.toLowerCase()}`}>
-                          {key === "foto_perfil_url" ? <img src="/assets/framer/ant-design_edit-filled.svg" alt="" /> : <>
-                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M7 18H6a4.5 4.5 0 0 1-.6-9 7 7 0 0 1 13.2-1A5 5 0 0 1 18 18h-1M12 19V10m-3 3 3-3 3 3"/></svg>
-                            {form[key] ? "Cambiar imagen" : "Subir imagen"}
-                          </>}
-                        </summary>
-                        <div className="perfil-media-menu">
-                        <label className="negocio-button secondary">{form[key] ? "Cambiar" : "Subir imagen"}
-                          <input aria-label={`Subir ${label.toLowerCase()}`} type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading || !imagenesHabilitadas} onChange={e=>{e.currentTarget.closest("details")?.removeAttribute("open"); subir(e,key);}} />
-                        </label>
-                        {form[key] && <button className="negocio-button secondary" type="button" disabled={uploading || !imagenesHabilitadas} onClick={()=>change(key,"")}>Quitar</button>}
-                        </div>
-                      </details>
+                    </div>
+                    <p className="negocio-muted">{key === "foto_perfil_url" ? "Se usa como ícono de tu negocio en el perfil y en la agenda." : "Una imagen horizontal, sin texto agregado por Turnits."}</p>
+                    <div className="negocio-row perfil-media-buttons">
+                      <label className="negocio-button secondary">{form[key] ? "Cambiar imagen" : "Subir imagen"}
+                        <input aria-label={`Subir ${label.toLowerCase()}`} type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading || !imagenesHabilitadas} onChange={e=>subir(e,key)} />
+                      </label>
+                      {form[key] && <button className="negocio-button secondary" type="button" disabled={uploading || !imagenesHabilitadas} onClick={()=>change(key,"")}>Quitar</button>}
                     </div>
                   </div>
                 ))}

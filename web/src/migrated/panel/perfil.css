@@ -459,19 +459,21 @@
 .equipo-identidad > div:last-child > div:first-child { font-size:18px!important; letter-spacing:-.35px; }
 .equipo-identidad .negocio-muted { margin:5px 0 0; font-size:12px; }
 .perfil-branding {
-  --media-height:clamp(104px,11.52vw,180px);
   display:grid;
-  grid-template-columns:minmax(var(--media-height),1fr) minmax(0,2.8fr);
-  gap:clamp(20px,4vw,64px);
-  align-items:end;
+  grid-template-columns:minmax(0,0.8fr) minmax(0,1.2fr);
+  gap:18px;
+  align-items:stretch;
 }
-.perfil-brand-card h3 { margin:0; font-size:clamp(20px,2vw,32px); letter-spacing:-.035em; }
-.perfil-brand-avatar h3 { text-align:center; }
-.perfil-media-preview { position:relative; height:var(--media-height); }
-.perfil-brand-avatar .perfil-media-preview { width:var(--media-height); margin:auto; }
-.perfil-brand-avatar .perfil-business-avatar { width:100%; height:100%; border:0; box-sizing:border-box; }
-.perfil-brand-banner .perfil-media-preview { border-radius:clamp(22px,3vw,46px); background:linear-gradient(110deg,#83ce87,#71ed69 35%,#a3e39e); }
+.perfil-workspace .perfil-brand-card { min-width:0; padding:20px; border:1px solid #e4eae6; border-radius:17px; background:#f8faf9; gap:14px; }
+.perfil-brand-card h3 { margin:0; font-size:16px; letter-spacing:0; }
+.perfil-brand-card .negocio-muted { margin:0; min-height:24px; }
+.perfil-media-preview { display:flex; align-items:center; justify-content:center; height:144px; overflow:hidden; border-radius:13px; background:#edf2ee; }
+.perfil-brand-avatar .perfil-business-avatar { width:88px; height:88px; flex-shrink:0; }
+.perfil-brand-banner .perfil-media-preview { background:#edf2ee; }
 .perfil-media-preview > img { width:100%; height:100%; object-fit:cover; border-radius:inherit; }
+.perfil-media-buttons { display:flex; gap:10px; }
+.perfil-media-buttons label { position:relative; overflow:hidden; cursor:pointer; }
+.perfil-media-buttons input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
 .perfil-media-actions { position:absolute; right:3%; bottom:6%; z-index:1; }
 .perfil-brand-avatar .perfil-media-actions { right:9%; bottom:5%; }
 .perfil-media-actions summary { display:flex; gap:8px; align-items:center; justify-content:center; min-height:38px; box-sizing:border-box; padding:6px 18px; list-style:none; cursor:pointer; border:2px solid #172019; border-radius:99px; background:white; color:#172019; font:inherit; font-weight:650; }

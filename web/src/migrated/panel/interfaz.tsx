@@ -42,6 +42,7 @@ function TurnitsGlobalSaveBar({
                 ["pagos", "Pagos"],
                 ["tema", "Tema"],
                 ["perfil", "Perfil"],
+                ["sucursales", "Local / Sucursales"],
                 ["equipo", "Equipo"],
                 ["browse", "Offers"],
             ]
