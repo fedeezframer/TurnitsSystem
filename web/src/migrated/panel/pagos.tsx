@@ -15,6 +15,7 @@ import { createPortal } from "react-dom"
 import { MercadoPagoConexion_cardBase, MercadoPagoConexion_globalCSS, Turnits_useElementWidth, MercadoPagoConexion_EstadoConexion, MercadoPagoConexion_MetodoPago, MercadoPagoConexion_DatosBancarios, MercadoPagoConexion_getSlug, MercadoPagoConexion_getToken, TurnitsGlobalSaveManager_get, Pagos_baselineDesdeSettings, MercadoPagoConexion_solicitarUrlOAuth, MercadoPagoConexion_emitPagosChanged, MercadoPagoConexion_CBU_REGEX, MercadoPagoConexion_ALIAS_REGEX, MercadoPagoConexion_inputStyle, ConfigPagos_cardBase, ConfigPagos_shimmerCSS, ConfigPagos_OpcionMetodoProps, ConfigPagos_getSlug, ConfigPagos_getToken, ConfigPagos_useContainerWidth, ConfigPagos_MetodoPago, ConfigPagos_SENA_MINIMA } from "./common"
 import { TurnitsPlanRequirement } from "./shared"
 import { UploadPlaceholderIcon } from "./inicio"
+import "./pagos.css"
 
 function MercadoPagoConexion_Skeleton() { return <LoadingRunner card size="compact" label="Cargando medios de pago…" /> }
 
@@ -116,7 +117,8 @@ const MercadoPagoConexion_MetodoCard = ({
 }) => (
     <div
         onClick={onClickCard}
-        className={onClickCard ? "pg-card-mp" : undefined}
+        className={`pg-method-card${onClickCard ? " pg-card-mp" : ""}`}
+        data-active={activo}
         style={{
             border: `1.5px solid ${
                 destacado
@@ -598,7 +600,7 @@ function MercadoPagoConexion(props: any) {
             <style>{MercadoPagoConexion_globalCSS}</style>
 
             {/* ── Header ── */}
-            <div style={{ marginBottom: 18 }}>
+            <div className="pg-section-heading" style={{ marginBottom: 18 }}>
                 <div
                     style={{
                         fontSize: 16,
@@ -1018,6 +1020,8 @@ function ConfigPagos_OpcionMetodo({
 }: ConfigPagos_OpcionMetodoProps) {
     return (
         <div
+            className="pg-charge-option"
+            data-active={activo}
             onClick={locked ? undefined : onClick}
             style={{
                 position: "relative",
@@ -1530,7 +1534,7 @@ function ConfigPagos(props: any) {
             <style>{ConfigPagos_shimmerCSS}</style>
 
             {/* Header */}
-            <div style={{ marginBottom: 16 }}>
+            <div className="pg-section-heading" style={{ marginBottom: 16 }}>
                 <div
                     style={{
                         fontSize: 16,
