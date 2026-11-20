@@ -207,3 +207,5 @@
 .exception-month button[data-exception=true] {border-color:#b8d69f;background:#edf7e3;color:#315f22}
 .exception-month button[aria-pressed=true] {border-color:#8eb858;box-shadow:0 0 0 2px #a7d84940}
 @container(max-width:720px){.week-editor-heading{align-items:flex-start;padding:18px}.schedule-exceptions header{gap:14px}}
+[data-schedule-view] .week-editor-heading {display:none}
+[data-schedule-view] .schedule-exceptions header {padding:0;border:0;border-radius:0;background:transparent}
