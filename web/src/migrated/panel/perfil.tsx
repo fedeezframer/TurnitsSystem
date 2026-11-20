@@ -479,7 +479,42 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
     [busy, setBusy] = React.useState(false),
     [form, setForm] = React.useState<typeof sucursalVacia | null>(null),
     [menuId, setMenuId] = React.useState<string | null>(null),
-    [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
+    [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null),
+    [locationStatus, setLocationStatus] = React.useState("");
+  const lookupId = React.useRef(0);
+  async function locateAddress(address: string) {
+    if (!address.trim() || !data?.mapa_habilitado) return;
+    const current = ++lookupId.current;
+    setLocationStatus("Buscando dirección…");
+    try {
+      const query = new URLSearchParams({ q: `${address}, Argentina`, format: "jsonv2", limit: "1" });
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${query}`, { headers: { "Accept-Language": "es-AR" }, referrerPolicy: "strict-origin-when-cross-origin" });
+      if (!response.ok) throw new Error();
+      const [place] = await response.json();
+      if (current !== lookupId.current) return;
+      if (!place) { setLocationStatus("No encontramos esa dirección. Marcá el punto en el mapa."); return; }
+      setForm((previous) => previous ? { ...previous, latitud: Number(place.lat), longitud: Number(place.lon) } : previous);
+      setLocationStatus("Punto ubicado. Revisalo antes de guardar.");
+    } catch { if (current === lookupId.current) setLocationStatus("No pudimos buscar la dirección. Podés marcar el punto manualmente."); }
+  }
+  async function locatePoint(point: { latitud: number; longitud: number } | null) {
+    const current = ++lookupId.current;
+    setForm((previous) => previous ? { ...previous, latitud: point?.latitud ?? null, longitud: point?.longitud ?? null } : previous);
+    if (!point) { setLocationStatus(""); return; }
+    setLocationStatus("Buscando calle…");
+    try {
+      const query = new URLSearchParams({ lat: String(point.latitud), lon: String(point.longitud), format: "jsonv2", zoom: "18", addressdetails: "1" });
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${query}`, { headers: { "Accept-Language": "es-AR" }, referrerPolicy: "strict-origin-when-cross-origin" });
+      if (!response.ok) throw new Error();
+      const place = await response.json();
+      if (current !== lookupId.current) return;
+      const road = place.address?.road || place.address?.pedestrian || place.address?.residential;
+      if (!road) { setLocationStatus("Punto marcado. Completá la dirección manualmente."); return; }
+      const address = [road, place.address?.house_number, place.address?.city || place.address?.town || place.address?.village].filter(Boolean).join(", ");
+      setForm((previous) => previous ? { ...previous, direccion: address } : previous);
+      setLocationStatus("Dirección sugerida. Revisala antes de guardar.");
+    } catch { if (current === lookupId.current) setLocationStatus("Punto marcado. Completá la dirección manualmente."); }
+  }
   const menuAnchor = React.useRef<HTMLButtonElement>(null);
   const cargar = React.useCallback(
     () => request(`${api}/admin/sucursales/${slug}`).then(setData),
@@ -640,9 +675,12 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
                 <input
                   maxLength={200}
                   value={form.direccion}
-                  onChange={(e) =>
-                    setForm({ ...form, direccion: e.target.value })
-                  }
+                  onChange={(e) => {
+                    lookupId.current++;
+                    setLocationStatus("");
+                    setForm({ ...form, direccion: e.target.value });
+                  }}
+                  onBlur={(e) => locateAddress(e.target.value)}
                 />
               </label>
             </div>
@@ -653,15 +691,10 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
                 latitud={form.latitud}
                 longitud={form.longitud}
                 disabled={busy || !data.mapa_habilitado}
-                onChange={(point) =>
-                  setForm({
-                    ...form,
-                    latitud: point?.latitud ?? null,
-                    longitud: point?.longitud ?? null,
-                  })
-                }
+                onChange={locatePoint}
               />
             </React.Suspense>
+            {locationStatus && <p className="negocio-muted" role="status">{locationStatus}</p>}
             {!data.mapa_habilitado && (
               <p className="negocio-muted">
                 Falta instalar la actualización de mapas para guardar

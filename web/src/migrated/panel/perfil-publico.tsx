@@ -253,7 +253,7 @@ export function PerfilContenido({
               >
                 {locations.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.nombre}
+                    {s.nombre}{s.direccion ? ` · ${s.direccion}` : ""}
                   </option>
                 ))}
               </select>

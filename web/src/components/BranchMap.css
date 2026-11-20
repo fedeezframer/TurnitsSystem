@@ -103,6 +103,16 @@
   gap: 12px;
   min-width: 0;
 }
+.tn-location-picker {
+  padding: 14px;
+  border: 1px solid #dce7df;
+  border-radius: 18px;
+  background: #f7faf8;
+}
+.tn-location-picker .tn-branch-map {
+  border-radius: 14px;
+  box-shadow: 0 8px 24px #172c3c18;
+}
 .tn-map-actions {
   display: flex;
   align-items: center;

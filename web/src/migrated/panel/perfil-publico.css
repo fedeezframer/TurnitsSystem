@@ -759,12 +759,18 @@
   font-size: 12px;
   user-select: none;
 }
-.negocio-social-input > svg {
+.negocio-social-input > svg,
+.negocio-social-input > img {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
   color: #607668;
   pointer-events: none;
+}
+.negocio-social-input > img,
+.perfil-social-icon img {
+  display: block;
+  object-fit: contain;
 }
 .negocio-social-input > input {
   min-width: 0;
@@ -952,7 +958,8 @@
     height: 31px;
     border-radius: 9px;
   }
-  .perfil-social-icon svg {
+  .perfil-social-icon svg,
+  .perfil-social-icon img {
     width: 19px;
     height: 19px;
   }

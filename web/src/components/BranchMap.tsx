@@ -333,7 +333,7 @@ export function LocationPicker({
         <span className="tn-map-note">
           {pins.length
             ? "Ubicación marcada. Guardá la sucursal para aplicar el cambio."
-            : "La dirección escrita no fija un punto automáticamente."}
+            : "Escribí la dirección y salí del campo para ubicar el punto."}
         </span>
         {pins.length > 0 && (
           <button

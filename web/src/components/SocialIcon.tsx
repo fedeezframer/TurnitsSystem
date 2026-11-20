@@ -1,6 +1,16 @@
 import * as React from "react";
 import whatsappLogo from "./whatsapp-icon.svg";
 export function SocialIcon({ name }: { name: string }) {
+  const profileIcons: Record<string, string> = {
+    instagram: "akar-icons_instagram-fill.svg",
+    facebook: "bxl_facebook.svg",
+    tiktok: "akar-icons_tiktok-fill.svg",
+    youtube: "ant-design_youtube-outlined.svg",
+    x: "bi_twitter-x.svg",
+    linkedin: "akar-icons_linkedin-fill.svg",
+  };
+  if (profileIcons[name])
+    return <img width="22" height="22" src={`/assets/social/${profileIcons[name]}`} alt="" aria-hidden="true" />;
   if (name === "whatsapp") return <img src={whatsappLogo} width="22" height="22" alt="" aria-hidden="true" />;
   return (
     <svg
