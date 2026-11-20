@@ -117,6 +117,7 @@ function UbicacionPerfil({api, slug}: {api:string; slug:string}) {
     }}>{branches.map((branch:any) => <option key={branch.id} value={branch.id}>{branch.nombre}</option>)}</select>}
     {data?.mapa_habilitado && <LocationEditor key={selected} value={place} onChange={setPlace} disabled={busy} />}
     {data?.mapa_habilitado && <button type="button" className="negocio-button" disabled={busy || !place.direccion.trim() || place.latitud === null || place.longitud === null} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar ubicación"}</button>}
+    <p className="negocio-muted">Las fotos de tu local se cargan en <a href={`${window.location.pathname}?seccion=perfil&vista=publicaciones`}>Publicaciones</a>.</p>
     {status && <p className="negocio-muted" role="status">{status}</p>}
   </section>;
 }
