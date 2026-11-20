@@ -526,9 +526,10 @@ export function crearSucursales({
     owner,
     asyncRoute(async (req, res) => {
       const slug = cleanSlug(req.params.slug);
-      if (!premium(await negocio(slug)))
-        fail("Sucursales requiere Premium vigente.", 403);
+      const hasPremium = premium(await negocio(slug));
       const b = req.body || {};
+      if (!hasPremium && b.id !== "principal")
+        fail("Las sucursales adicionales requieren Premium vigente.", 403);
       if (
         (b.id !== null && b.id !== "principal" && !UUID.test(b.id)) ||
         typeof b.nombre !== "string" ||
@@ -545,6 +546,14 @@ export function crearSucursales({
         fail("Revisá el nombre, la dirección y los miembros de la sucursal.");
       if (b.admin_equipo_id && !b.miembros.includes(b.admin_equipo_id))
         fail("El encargado debe estar asignado a la sucursal.");
+      if (!hasPremium) {
+        const current = await rows(slug);
+        const members = current.equipo.filter((e) => !e.sucursal_id).map((e) => e.id);
+        if (b.nombre !== "Local" || b.activo !== current.principal.activo ||
+            b.admin_equipo_id !== current.principal.admin_equipo_id ||
+            b.miembros.length !== members.length || b.miembros.some((id) => !members.includes(id)))
+          fail("Sólo podés editar la ubicación de tu local.", 403);
+      }
       const mapa =
         Object.hasOwn(b, "latitud") ||
         Object.hasOwn(b, "longitud") ||
@@ -574,6 +583,21 @@ export function crearSucursales({
         if (existingError) throw existingError;
         if (!existing || existing.es_principal)
           fail("Sucursal no encontrada.", 404);
+      }
+      if (!hasPremium) {
+        const current = await rows(slug);
+        const location = {
+          nombre: "Local",
+          direccion: b.direccion.trim(),
+          latitud: b.latitud,
+          longitud: b.longitud,
+        };
+        const result = current.principal.registro_id
+          ? await supabase.from("sucursales").update(location).eq("slug", slug).eq("id", current.principal.registro_id).eq("es_principal", true)
+          : await supabase.from("sucursales").insert({ slug, ...location, activo: true, es_principal: true });
+        if (result.error) throw result.error;
+        invalidateCache(slug);
+        return res.json({ success: true, ...(await contarReservasPorSede(slug, await rows(slug))) });
       }
       const incluyeFoto = Object.hasOwn(b, "foto_url");
       let fotoArchivo = null;
@@ -621,7 +645,6 @@ export function crearSucursales({
       const slug = cleanSlug(req.params.slug),
         user = await negocio(slug);
       if (!isActivo(user.activo)) fail("Negocio no disponible.", 404);
-      if (!premium(user)) return res.json({ success: true, sucursales: [] });
       let data;
       try {
         data = await rows(slug);
@@ -633,7 +656,7 @@ export function crearSucursales({
         return res.json({ success: true, sucursales: [] });
       const publicas = [
         ...(data.principal.activo ? [data.principal] : []),
-        ...data.sucursales.filter((s) => s.activo),
+        ...(premium(user) ? data.sucursales.filter((s) => s.activo) : []),
       ];
       res.json({
         success: true,
