@@ -91,7 +91,7 @@ function Turnits_useElementWidth(
     return width
 }
 
-type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios" | "productos" | "promociones" | "equipo"
+type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios" | "productos" | "promociones" | "equipo" | "sucursales"
 
 type TurnitsGlobalPending = Record<string, any>
 
@@ -486,6 +486,20 @@ function TurnitsGlobalSaveManager_get() {
                         } catch (e: any) {
                             results.equipo = false
                             errors.equipo = e.message || "No se pudo guardar el integrante."
+                        }
+                    })())
+                }
+                if (current.sucursales !== undefined) {
+                    const handler = saveHandlers.sucursales
+                    tasks.push((async () => {
+                        try {
+                            if (!handler) throw new Error("Abrí la sucursal para guardar sus cambios.")
+                            await handler(current.sucursales)
+                            savedData.sucursales = current.sucursales
+                            results.sucursales = true
+                        } catch (e: any) {
+                            results.sucursales = false
+                            errors.sucursales = e.message || "No se pudo guardar la sucursal."
                         }
                     })())
                 }

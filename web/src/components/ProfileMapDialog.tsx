@@ -7,9 +7,13 @@ const BranchMap = React.lazy(() =>
 );
 export function ProfileMapDialog({
   location,
+  locations,
+  onSelect,
   onClose,
 }: {
   location: MapBranch;
+  locations: MapBranch[];
+  onSelect: (id: string) => void;
   onClose: () => void;
 }) {
   const ref = React.useRef<HTMLDialogElement>(null),
@@ -24,17 +28,10 @@ export function ProfileMapDialog({
       document.body.style.overflow = overflow;
     };
   }, []);
-  const pins = React.useMemo(
-    () => [
-      {
-        id: location.id,
-        nombre: location.nombre,
-        latitud: location.latitud!,
-        longitud: location.longitud!,
-      },
-    ],
-    [location],
-  );
+  const pins = React.useMemo(() => locations.map((branch) => ({
+    id: branch.id, nombre: locations.length === 1 && branch.id === "principal" ? "Local" : branch.nombre,
+    latitud: branch.latitud!, longitud: branch.longitud!,
+  })), [locations]);
   return createPortal(
     <dialog
       className="perfil-map-dialog"
@@ -72,6 +69,7 @@ export function ProfileMapDialog({
         <BranchMap
           pins={pins}
           selected={location.id}
+          onSelect={onSelect}
           expanded
           label={`Mapa ampliado de ${location.nombre}`}
         />

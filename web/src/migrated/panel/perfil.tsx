@@ -1,5 +1,5 @@
 import { BackButton } from "../../components/BackButton"
-import { LocationEditor, type LocationValue } from "../../components/LocationEditor";
+import { LocationEditor } from "../../components/LocationEditor";
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
@@ -10,8 +10,8 @@ import {
 } from "./common";
 import { TeamManager, TeamManager_ServiciosVinculados } from "./equipo";
 import { ServiciosManager_RowMenu } from "./servicios";
-import { TurnitsPlanRequirement } from "./shared";
 import "./perfil.css";
+const BranchMap = React.lazy(() => import("../../components/BranchMap").then((m) => ({ default: m.BranchMap })));
 import "./perfil-publico.css";
 import { SOCIAL_LINKS } from "../../shared/socials.js";
 import { perfilVacio, perfilDraft } from "../../shared/profile-draft";
@@ -74,51 +74,26 @@ async function request(url: string, options: RequestInit = {}) {
 }
 export { perfilVacio } from "../../shared/profile-draft";
 function UbicacionPerfil({api, slug}: {api:string; slug:string}) {
-  const [data, setData] = React.useState<any>(null);
+  const [branches, setBranches] = React.useState<any[]>([]);
   const [selected, setSelected] = React.useState("principal");
-  const [place, setPlace] = React.useState<LocationValue>({ direccion: "", latitud: null, longitud: null });
-  const [status, setStatus] = React.useState("Cargando ubicación…");
-  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState("Cargando ubicaciones…");
   React.useEffect(() => {
-    let alive = true;
-    request(`${api}/admin/sucursales/${slug}`).then((result) => {
-      if (!alive) return;
-      setData(result);
-      setPlace(result.principal || { direccion: "", latitud: null, longitud: null });
-      setStatus("");
-    }).catch((error) => { if (alive) setStatus(error.message); });
-    return () => { alive = false; };
+    const controller = new AbortController();
+    fetch(`${api}/sucursales/${encodeURIComponent(slug)}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error();
+        const result = await response.json();
+        if (!result.success || !Array.isArray(result.sucursales)) throw new Error();
+        if (!controller.signal.aborted) { setBranches(result.sucursales.filter((s:any) => Number.isFinite(s.latitud) && Number.isFinite(s.longitud))); setStatus(""); }
+      }).catch(() => { if (!controller.signal.aborted) setStatus("No pudimos cargar el mapa."); });
+    return () => controller.abort();
   }, [api, slug]);
-  const branches = data ? [data.principal, ...data.sucursales].filter(Boolean) : [];
-  const current = branches.find((branch:any) => branch.id === selected) || branches[0];
-  async function save() {
-    if (!data || !current) return;
-    setBusy(true);
-    setStatus("");
-    try {
-      const miembros = data.equipo.filter((member:any) => (member.sucursal_id || "principal") === current.id).map((member:any) => member.id);
-      const result = await request(`${api}/admin/sucursales/${slug}`, { method: "PUT", body: JSON.stringify({
-        id: current.id, nombre: current.id === "principal" && !data.sucursales.length ? "Local" : current.nombre,
-        direccion: place.direccion, latitud: place.latitud, longitud: place.longitud,
-        activo: current.activo, admin_equipo_id: current.admin_equipo_id, miembros,
-      }) });
-      setData((previous:any) => ({ ...previous, ...result }));
-      setStatus("Ubicación guardada en el perfil público.");
-    } catch (error:any) { setStatus(error.message); }
-    finally { setBusy(false); }
-  }
+  const pins = branches.map((s:any) => ({ id:s.id, nombre: branches.length === 1 && s.id === "principal" ? "Local" : s.nombre, latitud:s.latitud, longitud:s.longitud }));
   return <section className="perfil-ubicacion"><h3>Ubicación</h3>
-    <p className="negocio-muted">{data && !data.sucursales.length ? "Local" : "Elegí la sede que querés ubicar."}</p>
-    {branches.length > 1 && <select aria-label="Sede para editar ubicación" value={selected} onChange={(event) => {
-      const branch = branches.find((item:any) => item.id === event.target.value);
-      setSelected(event.target.value);
-      if (branch) setPlace({ direccion: branch.direccion || "", latitud: branch.latitud ?? null, longitud: branch.longitud ?? null });
-      setStatus("");
-    }}>{branches.map((branch:any) => <option key={branch.id} value={branch.id}>{branch.nombre}</option>)}</select>}
-    {data?.mapa_habilitado && <LocationEditor key={selected} value={place} onChange={setPlace} disabled={busy} />}
-    {data?.mapa_habilitado && <button type="button" className="negocio-button" disabled={busy || !place.direccion.trim() || place.latitud === null || place.longitud === null} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar ubicación"}</button>}
-    <p className="negocio-muted">Las fotos de tu local se cargan en <a href={`${window.location.pathname}?seccion=perfil&vista=publicaciones`}>Publicaciones</a>.</p>
-    {status && <p className="negocio-muted" role="status">{status}</p>}
+    {pins.length ? <React.Suspense fallback={<p className="negocio-muted">Cargando mapa…</p>}>
+      <BranchMap pins={pins} selected={selected} onSelect={setSelected} label="Ubicaciones del negocio" />
+    </React.Suspense> : <p className="negocio-muted" role="status">{status || "Configurá tu local en Sucursales para mostrarlo acá."}</p>}
+    {branches.length > 1 && <div className="perfil-sede-lista">{branches.map((s:any) => <button type="button" key={s.id} aria-pressed={selected === s.id} onClick={() => setSelected(s.id)}>{s.nombre}<small>{s.direccion}</small></button>)}</div>}
   </section>;
 }
 
@@ -507,6 +482,33 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
   React.useEffect(() => {
     cargar().catch((e) => setError(e.message));
   }, [cargar]);
+  const formKey = form ? form.id || "nueva" : null;
+  React.useEffect(() => {
+    if (!formKey || !form) return;
+    const manager = TurnitsGlobalSaveManager_get();
+    const pending = manager?.getPending("sucursales");
+    manager?.setBaseline("sucursales", form);
+    if (pending?.id === form.id) setForm({ ...form, ...pending });
+    const unregister = manager?.registerSaveHandler("sucursales", async (draft: typeof sucursalVacia) => {
+      if (draft.direccion && (draft.latitud === null || draft.longitud === null))
+        throw new Error("Marcá la dirección en el mapa antes de guardar.");
+      const result = await request(`${api}/admin/sucursales/${slug}`, {
+        method: "PUT",
+        body: JSON.stringify(data.mapa_habilitado
+          ? Object.fromEntries(Object.entries(draft).filter(([key]) => key !== "foto_url" || data.fotos_habilitadas))
+          : Object.fromEntries(Object.entries(draft).filter(([key]) => !["latitud", "longitud", "foto_url"].includes(key)))),
+      });
+      setData((previous:any) => ({ ...previous, ...result }));
+      setForm(null);
+    });
+    const discard = () => setForm(null);
+    window.addEventListener("turnits_global_discarded", discard);
+    return () => { unregister?.(); window.removeEventListener("turnits_global_discarded", discard); };
+  }, [formKey, api, slug, data?.mapa_habilitado, data?.fotos_habilitadas]);
+  React.useEffect(() => {
+    if (form) TurnitsGlobalSaveManager_get()?.markDirty("sucursales", form);
+  }, [form]);
+  const closeEditor = () => { TurnitsGlobalSaveManager_get()?.clear("sucursales"); setForm(null); };
   React.useEffect(() => {
     if (!menuId) return;
     const outside = (e: PointerEvent) => {
@@ -529,44 +531,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
       document.removeEventListener("keydown", escape);
     };
   }, [menuId]);
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form) return;
-    setBusy(true);
-    setError("");
-    try {
-      const d = await request(`${api}/admin/sucursales/${slug}`, {
-        method: "PUT",
-        body: JSON.stringify(
-          data.mapa_habilitado
-            ? Object.fromEntries(Object.entries(form).filter(([key]) => key !== "foto_url" || data.fotos_habilitadas))
-            : Object.fromEntries(
-                Object.entries(form).filter(
-                  ([key]) => !["latitud", "longitud", "foto_url"].includes(key),
-                ),
-              ),
-        ),
-      });
-      setData((p: any) => ({ ...p, ...d }));
-      setForm(null);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function cambiarEstado(s: any) {
-    const miembros = data.equipo.filter((m: any) => (m.sucursal_id || "principal") === s.id).map((m: any) => m.id);
-    setBusy(true);
-    setError("");
-    try {
-      const payload: any = { id:s.id, nombre:s.nombre, direccion:s.direccion || "", activo:!s.activo, admin_equipo_id:s.admin_equipo_id || null, miembros };
-      if (data.mapa_habilitado) { payload.latitud = s.latitud ?? null; payload.longitud = s.longitud ?? null; }
-      const d = await request(`${api}/admin/sucursales/${slug}`, { method:"PUT", body:JSON.stringify(payload) });
-      setData((p: any) => ({ ...p, ...d }));
-    } catch (e: any) { setError(e.message); }
-    finally { setBusy(false); }
-  }
   async function eliminarSucursal(id: string) {
     setBusy(true);
     setError("");
@@ -601,17 +565,15 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
   if (!data)
     return error ? <p className="negocio-error" role="alert">{error}</p> : <LoadingRunner card label="Cargando sucursales…" />;
   const locked = !data.premium,
-    disabled = locked || !data.habilitado;
+    disabled = !data.habilitado;
   return (
     <div className="negocio-editor negocio-stack">
       <div className="sucursal-section-top">
         <div className="turnits-section-heading">
-          <h1 className="turnits-section-heading-title">Sucursales</h1>
-          <p className="turnits-section-heading-subtitle">Administrá las sedes y sus profesionales.</p>
+          <h1 className="turnits-section-heading-title">{locked ? "Local" : "Sucursales"}</h1>
+          <p className="turnits-section-heading-subtitle">{locked ? "Configurá la ubicación de tu local." : "Administrá las sedes y sus profesionales."}</p>
         </div>
-        {!form && (locked ? (
-          <TurnitsPlanRequirement premiumOnly />
-        ) : (
+        {!form && (locked ? null : (
           <button
             type="button"
             className="negocio-button"
@@ -630,15 +592,19 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
           Falta instalar la actualización de Sucursales en la base de datos.
         </p>
       )}
-      {form && (
-        <form className="negocio-card negocio-stack sucursal-editor" onSubmit={guardar}>
-          <h2>
+      {form && locked ? <section className="negocio-card negocio-stack sucursal-editor">
+        <div className="sucursal-editor-head"><h2>Local</h2><BackButton disabled={busy} onClick={closeEditor} aria-label="Volver" /></div>
+        <LocationEditor key="local" value={form} onChange={(location) => setForm((previous) => previous ? { ...previous, ...location } : previous)} disabled={busy || !data.mapa_habilitado} />
+        <p className="negocio-muted">Los cambios de ubicación se guardan desde «Guardar cambios».</p>
+      </section> : form && (
+        <form className="negocio-card negocio-stack sucursal-editor" onSubmit={(event) => event.preventDefault()}>
+          <div className="sucursal-editor-head"><h2>
             {form.id === "principal"
               ? "Editar sede principal"
               : form.id
                 ? "Editar sucursal"
                 : "Nueva sucursal"}
-          </h2>
+          </h2><BackButton disabled={busy} onClick={closeEditor} aria-label="Volver" /></div>
           <fieldset
             className="negocio-stack"
             disabled={busy}
@@ -768,12 +734,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
               Sucursal habilitada para reservas
             </label>
             </section>
-            <div className="negocio-row">
-              <button className="negocio-button">
-                {busy ? "Guardando…" : "Guardar sucursal"}
-              </button>
-              <BackButton disabled={busy} onClick={() => setForm(null)} aria-label="Volver" />
-            </div>
           </fieldset>
         </form>
       )}
@@ -800,7 +760,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
             <article
               className="negocio-card sucursal-card"
               key={s.id}
-              style={{ opacity: locked || !s.activo ? 0.55 : 1 }}
+              style={{ opacity: !s.activo ? 0.55 : 1 }}
             >
               <div className="sucursal-card-media">
                 <div className="sucursal-photo-empty"><NegocioIcon kind="sucursal"/><strong>Sin imagen</strong></div>
@@ -815,7 +775,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
               </div>
               <div className="sucursal-card-body">
               <div className="sucursal-card-content">
-                <h2>{s.nombre}</h2>
+                <h2>{locked && s.id === "principal" ? "Local" : s.nombre}</h2>
                 <p className="negocio-muted">{s.direccion || "Agregá una dirección para que tus clientes ubiquen la sede."}</p>
                 <div className="sucursal-quick-info"><span>{miembros.length} {miembros.length === 1 ? "profesional" : "profesionales"}</span><span>{s.latitud != null && s.longitud != null ? "Ubicación en el mapa" : "Ubicación pendiente"}</span></div>
               </div>
@@ -836,13 +796,14 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
                 disabled={
                   disabled ||
                   busy ||
+                  (locked && s.id !== "principal") ||
                   (s.id === "principal" && !data.mapa_habilitado)
                 }
                 className="negocio-button secondary"
                 onClick={() => {
                   setForm({
                     id: s.id,
-                    nombre: s.nombre,
+                    nombre: locked && s.id === "principal" ? "Local" : s.nombre,
                     direccion: s.direccion,
                     foto_url: s.foto_url || null,
                     activo: s.activo,
@@ -856,16 +817,13 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
               >
                 {iconoEditar && <img src={iconoEditar} alt="" aria-hidden="true"/>}Editar
               </button>
-              <button type="button" className="sucursal-menu-trigger" ref={menuId === s.id ? menuAnchor : undefined} aria-label={`Opciones de ${s.nombre}`} aria-haspopup="menu" aria-expanded={menuId === s.id} disabled={disabled || busy} onClick={() => { setConfirmDeleteId(null); setMenuId(menuId === s.id ? null : s.id); }}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+              {!locked && s.id !== "principal" && <button type="button" className="sucursal-menu-trigger" ref={menuId === s.id ? menuAnchor : undefined} aria-label={`Opciones de ${s.nombre}`} aria-haspopup="menu" aria-expanded={menuId === s.id} disabled={disabled || busy} onClick={() => { setConfirmDeleteId(null); setMenuId(menuId === s.id ? null : s.id); }}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>}
               {menuId === s.id && <ServiciosManager_RowMenu anchor={menuAnchor}>
                 {confirmDeleteId === s.id ? <>
                   <span className="sucursal-delete-confirm">¿Eliminar esta sucursal?</span>
                   <button type="button" className="is-danger" disabled={busy} onClick={() => eliminarSucursal(s.id)}>Eliminar definitivamente</button>
                   <button type="button" disabled={busy} onClick={() => setConfirmDeleteId(null)}>Cancelar</button>
-                </> : <>
-                  <button type="button" disabled={busy || (s.id === "principal" && !data.mapa_habilitado)} onClick={() => { setMenuId(null); cambiarEstado(s); }}>{s.activo ? "Pausar" : "Reactivar"}</button>
-                  {s.id !== "principal" && <button type="button" className="is-danger" disabled={busy} onClick={() => setConfirmDeleteId(s.id)}>Eliminar</button>}
-                </>}
+                </> : <button type="button" className="is-danger" disabled={busy} onClick={() => setConfirmDeleteId(s.id)}>Eliminar</button>}
               </ServiciosManager_RowMenu>}
               </div>
             </article>

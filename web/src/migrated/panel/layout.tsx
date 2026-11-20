@@ -262,6 +262,7 @@ function TurnitsPanel_Inner(props: any) {
                         {item.id === "perfil" ? <>
                             {renderSubsection("negocio", "Perfil del negocio", "/assets/panel-nav/famicons_share-social-sharp.svg", seccionActiva === "perfil" && !publicaciones, () => irA("perfil", "negocio"))}
                             {renderSubsection("publicaciones", "Publicaciones", "/assets/panel-nav/boxicons_photo-album.svg", seccionActiva === "perfil" && publicaciones, () => irA("perfil", "publicaciones"))}
+                            {!equipoDisponible && renderSubsection("local", "Local", "/assets/panel-nav/famicons_storefront-outline.svg", seccionActiva === "equipo" && sucursales, () => irA("equipo", "sucursales"))}
                         </> : item.id === "equipo" ? <>
                             {renderSubsection("miembros", "Miembros", "/assets/panel-nav/streamline-ultimate_team-meeting-bold.svg", seccionActiva === "equipo" && !sucursales, () => irA("equipo", "miembros"))}
                             {renderSubsection("sucursales", "Sucursales", "/assets/panel-nav/famicons_storefront-outline.svg", seccionActiva === "equipo" && sucursales, () => irA("equipo", "sucursales"))}

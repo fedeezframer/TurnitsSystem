@@ -110,6 +110,15 @@ const manager = vm.runInNewContext(
   await manager.saveAll();
   assert.equal(requests[0].body.precio, 0, "quote-mode service does not require a fixed price");
   assert.equal(manager.hasDirty(), false);
+  let savedBranch;
+  manager.setBaseline("sucursales", { id: "principal", direccion: "Anterior" });
+  const unregisterBranch = manager.registerSaveHandler("sucursales", async (draft) => { savedBranch = draft; });
+  manager.markDirty("sucursales", { id: "principal", direccion: "San Martín 123, Córdoba, Córdoba" });
+  assert(manager.isDirty("sucursales"));
+  await manager.saveAll();
+  assert.equal(savedBranch.direccion, "San Martín 123, Córdoba, Córdoba");
+  assert.equal(manager.isDirty("sucursales"), false);
+  unregisterBranch();
   console.log(
     "PASS discard: clears all pending sections and scoped storage, preserves baseline/other users, emits reset without requests, blocked during uploads and in-flight save. Real manager; no external writes.",
   );

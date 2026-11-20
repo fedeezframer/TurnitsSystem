@@ -315,6 +315,9 @@
   color: white;
   font-weight: 700;
   object-fit: cover;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
 }
 @media (max-width: 600px) {
   .negocio-grid {
@@ -418,7 +421,13 @@
 .sucursal-profesionales button { text-align:left; }
 .sucursal-profesionales small { display:block; color:#536357; }
 .sucursal-avatar { position:relative; display:grid; place-items:center; width:38px; height:38px; border-radius:50%; color:white; }
-.sucursal-avatar img { width:100%; height:100%; border-radius:inherit; object-fit:cover; }
+.sucursal-avatar > img { display:block; width:38px; height:38px; max-width:38px; max-height:38px; aspect-ratio:1; border-radius:50%; object-fit:cover; }
+.sucursal-editor-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.sucursal-editor-head h2 { margin:0; }
+.perfil-sede-lista { display:flex; flex-wrap:wrap; gap:8px; }
+.perfil-sede-lista button { padding:9px 12px; border:1px solid #d7e5d9; border-radius:11px; background:#fff; color:#25442c; font:inherit; text-align:left; cursor:pointer; }
+.perfil-sede-lista button[aria-pressed="true"] { border-color:#36864b; background:#eef8ef; }
+.perfil-sede-lista small { display:block; margin-top:3px; color:#66776a; }
 .sucursal-avatar b { position:absolute; right:-2px; bottom:-2px; width:16px; height:16px; background:white; color:#196a29; border:1px solid; border-radius:50%; text-align:center; font-size:11px; }
 .sucursal-editor fieldset > .negocio-row { grid-column:1/-1; }
 .negocio-card { border-color:#e4ebe4; border-radius:22px; box-shadow:0 8px 28px #17231908; padding:clamp(18px,2.5vw,30px); }

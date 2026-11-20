@@ -153,23 +153,18 @@ export function PerfilContenido({
     location = selectedLocation && locations.length === 1 && selectedLocation.id === "principal"
       ? { ...selectedLocation, nombre: "Local" }
       : selectedLocation;
-  const pins = React.useMemo(
-    () =>
-      location
-        ? [
-            {
-              id: location.id,
-              nombre: location.nombre,
-              latitud: location.latitud!,
-              longitud: location.longitud!,
-            },
-          ]
-        : [],
-    [location],
-  );
+  const pins = React.useMemo(() => locations.map((branch) => ({
+    id: branch.id,
+    nombre: locations.length === 1 && branch.id === "principal" ? "Local" : branch.nombre,
+    latitud: branch.latitud!,
+    longitud: branch.longitud!,
+  })), [locations]);
   const locationParts = location?.direccion?.split(",").map((part) => part.trim()) || [];
+  const tierraDelFuego = "Tierra del Fuego, Antártida e Islas del Atlántico Sur";
   const name = perfil.nombre || "Nombre del negocio",
-    city = locationParts.length >= 3 ? locationParts.slice(-2).join(", ") : [perfil.ciudad, perfil.provincia].filter(Boolean).join(", "),
+    city = location?.direccion?.endsWith(`, ${tierraDelFuego}`) && locationParts.length >= 4
+      ? `${locationParts.at(-3)}, ${tierraDelFuego}`
+      : locationParts.length >= 3 ? locationParts.slice(-2).join(", ") : [perfil.ciudad, perfil.provincia].filter(Boolean).join(", "),
     socials = enlacesPublicos(perfil),
     hasDetails =
       perfil.descripcion ||
@@ -249,19 +244,6 @@ export function PerfilContenido({
           </div>
           <div className="perfil-location">
             <h2>Ubicación</h2>
-            {locations.length > 1 && (
-              <select
-                aria-label="Sucursal del mapa del perfil"
-                value={location?.id || ""}
-                onChange={(e) => setLocationId(e.target.value)}
-              >
-                {locations.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nombre}{s.direccion ? ` · ${s.direccion}` : ""}
-                  </option>
-                ))}
-              </select>
-            )}
             {location ? (
               <React.Suspense
                 fallback={
@@ -274,6 +256,7 @@ export function PerfilContenido({
                   <BranchMap
                     pins={pins}
                     selected={location.id}
+                    onSelect={setLocationId}
                     compact
                     label={`Ubicación de ${location.nombre}`}
                   />
@@ -330,6 +313,8 @@ export function PerfilContenido({
       {mapOpen && location && (
         <ProfileMapDialog
           location={location}
+          locations={locations}
+          onSelect={setLocationId}
           onClose={() => setMapOpen(false)}
         />
       )}

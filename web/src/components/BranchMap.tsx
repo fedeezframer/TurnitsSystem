@@ -272,16 +272,6 @@ export function LocationPicker({
   const geo = useDeviceLocation(),
     change = React.useRef(onChange);
   change.current = onChange;
-  const [coordinates, setCoordinates] = React.useState({
-    latitud: latitud == null ? "" : String(latitud),
-    longitud: longitud == null ? "" : String(longitud),
-  });
-  React.useEffect(() => {
-    setCoordinates({
-      latitud: latitud == null ? "" : String(latitud),
-      longitud: longitud == null ? "" : String(longitud),
-    });
-  }, [latitud, longitud]);
   React.useEffect(() => {
     if (geo.position && !disabled) change.current(geo.position);
   }, [geo.position]);
@@ -332,7 +322,7 @@ export function LocationPicker({
       <div className="tn-map-actions">
         <span className="tn-map-note">
           {pins.length
-            ? "Ubicación marcada. Guardá la sucursal para aplicar el cambio."
+            ? "Ubicación marcada. Usá «Guardar cambios» para aplicarla."
             : "Escribí la dirección y salí del campo para ubicar el punto."}
         </span>
         {pins.length > 0 && (
@@ -351,49 +341,6 @@ export function LocationPicker({
           {geo.error}
         </p>
       )}
-      <details className="tn-map-note">
-        <summary>Ingresar coordenadas</summary>
-        <div className="tn-coordinate-fields">
-          {(["latitud", "longitud"] as const).map((key) => (
-            <label key={key}>
-              {key === "latitud" ? "Latitud" : "Longitud"}
-              <input
-                aria-label={
-                  key === "latitud"
-                    ? "Latitud de la sucursal"
-                    : "Longitud de la sucursal"
-                }
-                type="number"
-                step="any"
-                disabled={disabled}
-                min={key === "latitud" ? -90 : -180}
-                max={key === "latitud" ? 90 : 180}
-                value={coordinates[key]}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === "") {
-                    setCoordinates({ latitud: "", longitud: "" });
-                    onChange(null);
-                    return;
-                  }
-                  const next = { ...coordinates, [key]: value };
-                  setCoordinates(next);
-                  const point = {
-                    latitud: Number(next.latitud),
-                    longitud: Number(next.longitud),
-                  };
-                  if (
-                    next.latitud !== "" &&
-                    next.longitud !== "" &&
-                    validPoint(point)
-                  )
-                    onChange(point);
-                }}
-              />
-            </label>
-          ))}
-        </div>
-      </details>
     </div>
   );
 }
