@@ -22,7 +22,6 @@ import { SOCIAL_LINKS } from "../../shared/socials.js";
 import { perfilVacio, perfilDraft } from "../../shared/profile-draft";
 import { SocialProfileField } from "../../components/SocialProfileField";
 import { BusinessAvatar } from "../../components/BusinessAvatar";
-import type { IconShape } from "../../shared/appearance.js";
 
 export function NegocioIcon({
   kind = "sucursal",
@@ -119,7 +118,6 @@ export function PerfilNegocio({
     [habilitado, setHabilitado] = React.useState(false),
     [redesHabilitadas, setRedesHabilitadas] = React.useState(false),
     [imagenesHabilitadas, setImagenesHabilitadas] = React.useState(false),
-    [formaIcono, setFormaIcono] = React.useState<IconShape>("original"),
     [loading, setLoading] = React.useState(true),
     [busy, setBusy] = React.useState(false),
     [uploading, setUploading] = React.useState(false),
@@ -174,7 +172,6 @@ export function PerfilNegocio({
           setHabilitado(d.habilitado);
           setRedesHabilitadas(!!d.redes_habilitadas);
           setImagenesHabilitadas(!!d.imagenes_habilitadas);
-          setFormaIcono(d.tema?.forma_icono || "original");
         }
       })
       .catch((e) => alive && setError(e.message))
@@ -314,30 +311,37 @@ export function PerfilNegocio({
                 {(
                   [
                     ["foto_perfil_url", "Foto de perfil"],
-                    ["banner_url", "Banner"],
+                    ["banner_url", "Banner del perfil"],
                   ] as const
                 ).map(([key, label]) => (
                   <div className={`negocio-brand-upload negocio-stack perfil-brand-card perfil-brand-${key === "banner_url" ? "banner" : "avatar"}`} key={key}>
-                    <div
-                      className={`negocio-brand-preview${key === "banner_url" ? " negocio-banner-preview" : ""}`}
-                    >
+                    <h3>{label}</h3>
+                    <div className="perfil-media-preview">
                       {key === "foto_perfil_url" ? (
                         <BusinessAvatar
                           name={form.nombre || "Negocio"}
                           src={form.foto_perfil_url}
-                          shape={formaIcono}
+                          shape="circular"
                         />
                       ) : (
                         form.banner_url ? (
                           <img src={form.banner_url} alt="Banner del negocio" />
-                        ) : <div className="perfil-banner-placeholder"><span>Imagen de portada</span><small>Mostrá la identidad de tu negocio</small></div>
+                        ) : null
                       )}
-                      <div className="perfil-brand-controls"><strong>{label}</strong>
+                      <details className="perfil-media-actions">
+                        <summary aria-label={`Editar ${label.toLowerCase()}`}>
+                          {key === "foto_perfil_url" ? <img src="/assets/framer/ant-design_edit-filled.svg" alt="" /> : <>
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M7 18H6a4.5 4.5 0 0 1-.6-9 7 7 0 0 1 13.2-1A5 5 0 0 1 18 18h-1M12 19V10m-3 3 3-3 3 3"/></svg>
+                            {form[key] ? "Cambiar imagen" : "Subir imagen"}
+                          </>}
+                        </summary>
+                        <div className="perfil-media-menu">
                         <label className="negocio-button secondary">{form[key] ? "Cambiar" : "Subir imagen"}
-                          <input aria-label={`Subir ${label.toLowerCase()}`} type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploading || !imagenesHabilitadas} onChange={e=>subir(e,key)} />
+                          <input aria-label={`Subir ${label.toLowerCase()}`} type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading || !imagenesHabilitadas} onChange={e=>{e.currentTarget.closest("details")?.removeAttribute("open"); subir(e,key);}} />
                         </label>
                         {form[key] && <button className="negocio-button secondary" type="button" disabled={uploading || !imagenesHabilitadas} onClick={()=>change(key,"")}>Quitar</button>}
-                      </div>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 ))}
