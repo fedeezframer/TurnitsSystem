@@ -1,4 +1,6 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
+import "./BranchMap.css";
 import localidades from "../generated/argentina-localidades.json";
 
 const LocationPicker = React.lazy(() => import("./BranchMap").then((m) => ({ default: m.LocationPicker })));
@@ -25,30 +27,40 @@ function SearchSelect({ label, value, options, disabled, onChange }: {
   label: string; value: string; options: string[]; disabled: boolean; onChange: (value: string) => void;
 }) {
   const [open, setOpen] = React.useState(false), [query, setQuery] = React.useState("");
-  const root = React.useRef<HTMLDivElement>(null), search = React.useRef<HTMLInputElement>(null);
+  const [position, setPosition] = React.useState<React.CSSProperties>({});
+  const root = React.useRef<HTMLDivElement>(null), popover = React.useRef<HTMLDivElement>(null), search = React.useRef<HTMLInputElement>(null);
   const listId = React.useId();
   React.useEffect(() => {
     if (!open) return;
     search.current?.focus();
-    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const place = () => {
+      const box = root.current?.getBoundingClientRect();
+      if (!box) return;
+      const width = Math.min(Math.max(box.width, 280), window.innerWidth - 24);
+      setPosition({ position: "fixed", width, left: Math.max(12, Math.min(box.left, window.innerWidth - width - 12)), top: Math.max(12, Math.min(box.bottom + 6, window.innerHeight - 260)), zIndex: 10050 });
+    };
+    place();
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node) && !popover.current?.contains(event.target as Node)) setOpen(false); };
     document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => { document.removeEventListener("pointerdown", outside); window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
   }, [open]);
   const visible = options.filter((option) => normalize(option).includes(normalize(query))).slice(0, 80);
   return <div className="tn-search-select" ref={root}>
     <span className="tn-search-label">{label}</span>
     <button type="button" className="tn-search-trigger" disabled={disabled} aria-expanded={open} aria-controls={listId}
       onClick={() => { setQuery(""); setOpen(!open); }}>
-      <span className={value ? "" : "tn-search-placeholder"}>{value || `Seleccionar ${label.toLowerCase()}`}</span><span aria-hidden="true">⌄</span>
+      <span className={value ? "" : "tn-search-placeholder"}>{value || `Seleccionar ${label.toLowerCase()}`}</span>
     </button>
-    {open && <div className="tn-search-popover" id={listId}>
+    {open && createPortal(<div className="tn-search-popover" id={listId} ref={popover} style={position}>
       <input ref={search} aria-label={`Buscar ${label.toLowerCase()}`} placeholder={`Buscar ${label.toLowerCase()}…`}
         value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }} />
       <div className="tn-search-options" role="listbox" aria-label={label}>
         {visible.length ? visible.map((option) => <button type="button" role="option" aria-selected={option === value} key={option}
           onClick={() => { onChange(option); setOpen(false); }}>{option}</button>) : <p>No hay resultados.</p>}
       </div>
-    </div>}
+    </div>, document.body)}
   </div>;
 }
 

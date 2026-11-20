@@ -29,6 +29,7 @@ import { PerfilNegocio } from "./profile-section"
 import { MisServiciosPanel, ProductosPanel, PromocionesPanel, ClientesGrid, AgendaPanel, HorariosConfig, ExcepcionesConfig, CobrosNegocio, FinanzasPanel, ThemeEditor, EquipoSecciones } from "./section-components"
 import { ChatIcon } from "../../components/ChatChrome"
 import "./design-refresh.css"
+import "./panel-controls.css"
 
 const Consultations = React.lazy(() => import("../../pages/Consultations"))
 const SetupGuide = React.lazy(() => import("../../components/SetupGuide"))

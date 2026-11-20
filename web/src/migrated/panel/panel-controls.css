@@ -1,0 +1,34 @@
+:is(.turnits-root,.fin-exp-dialog,.client-offer,.exception-editor,.tn-planes-dialog) select {
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  max-width:100%;
+  min-height:44px;
+  padding:10px 42px 10px 13px!important;
+  border:1px solid #cfded2!important;
+  border-radius:12px!important;
+  background-color:#fff!important;
+  background-image:url('/assets/panel-nav/boxicons_arrow-down-filled.svg')!important;
+  background-repeat:no-repeat!important;
+  background-size:20px!important;
+  background-position:right 12px center!important;
+  color:#1e3827;
+  box-shadow:0 2px 8px #1c3d2510;
+  cursor:pointer;
+}
+:is(.turnits-root,.fin-exp-dialog,.client-offer,.exception-editor,.tn-planes-dialog) select:hover:not(:disabled),:is(.turnits-root,.fin-exp-dialog,.client-offer,.exception-editor,.tn-planes-dialog) select:focus-visible { border-color:#39834c!important; }
+:is(.turnits-root,.fin-exp-dialog,.client-offer,.exception-editor,.tn-planes-dialog) select:focus-visible { outline:3px solid #39834c44; outline-offset:2px; }
+:is(.turnits-root,.fin-exp-dialog,.client-offer,.exception-editor,.tn-planes-dialog) select:disabled { opacity:.55; cursor:default; }
+:is(.turnits-root,.fin-exp-dialog,.client-offer,.exception-editor,.tn-planes-dialog) select option { color:#1e3827; background:#fff; }
+
+@keyframes panel-overlay-in { from { opacity:0; } to { opacity:1; } }
+@keyframes panel-sheet-in { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+:is(.fin-exp-overlay,.panel-modal-overlay,.tn-planes-overlay,.turnits-mobile-menu-sheet) { animation:panel-overlay-in .2s ease-out both; }
+:is(.fin-exp-dialog,.panel-modal-dialog,.exception-sheet) { animation:panel-sheet-in .23s cubic-bezier(.2,.8,.2,1) both; }
+:is(.fin-exp-overlay,.panel-modal-overlay)[data-closing="true"] { pointer-events:none; animation:panel-overlay-in .18s ease-in reverse both; }
+.fin-exp-overlay[data-closing="true"] .fin-exp-dialog,.panel-modal-overlay[data-closing="true"] .panel-modal-dialog { animation:panel-sheet-in .18s ease-in reverse both; }
+:is(.exception-editor,.agenda-day-dialog,.client-offer)[open] { transition:opacity .2s ease,transform .2s ease,display .2s allow-discrete,overlay .2s allow-discrete; opacity:1; transform:translateY(0) scale(1); }
+:is(.exception-editor,.agenda-day-dialog,.client-offer):not([open]) { opacity:0; transform:translateY(12px) scale(.985); }
+@starting-style { :is(.exception-editor,.agenda-day-dialog,.client-offer)[open] { opacity:0; transform:translateY(12px) scale(.985); } }
+:is(.exception-editor,.agenda-day-dialog,.client-offer)::backdrop { background:rgba(15,23,42,.38); backdrop-filter:blur(4px); transition:opacity .2s ease,display .2s allow-discrete,overlay .2s allow-discrete; }
+@starting-style { :is(.exception-editor,.agenda-day-dialog,.client-offer)[open]::backdrop { opacity:0; } }
+@media(prefers-reduced-motion:reduce){:is(.fin-exp-overlay,.panel-modal-overlay,.tn-planes-overlay,.turnits-mobile-menu-sheet,.fin-exp-dialog,.panel-modal-dialog,.tn-planes-dialog,.agenda-turno-modal,.exception-sheet,.client-offer,.agenda-day-dialog){animation:none!important;transition:none!important}}

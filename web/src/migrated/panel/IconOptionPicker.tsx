@@ -1,6 +1,7 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import { BackButton } from "../../components/BackButton"
+import { useOverlayPresence } from "./useOverlayPresence"
 import { FINANZAS_PICKER_CSS } from "./common"
 
 export function IconOptionPicker({ title, heading, help, icon, value, options, onChange, disabled = false }: {
@@ -14,6 +15,7 @@ export function IconOptionPicker({ title, heading, help, icon, value, options, o
     disabled?: boolean
 }) {
     const [open, setOpen] = React.useState(false)
+    const presence = useOverlayPresence(open)
     const trigger = React.useRef<HTMLButtonElement>(null)
     const dialog = React.useRef<HTMLDivElement>(null)
     const id = React.useId()
@@ -55,7 +57,7 @@ export function IconOptionPicker({ title, heading, help, icon, value, options, o
             trigger.current?.focus()
         }
     }, [open])
-    const overlay = open ? <div className="fin-exp-overlay" onClick={event => { if (event.target === event.currentTarget) setOpen(false) }}>
+    const overlay = presence.visible ? <div className="fin-exp-overlay" data-closing={presence.closing} onClick={event => { if (event.target === event.currentTarget) setOpen(false) }}>
         <div className="fin-exp-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-heading`} aria-describedby={`${id}-help`}>
             <div className="fin-exp-header">
                 <div><h2 id={`${id}-heading`}>{heading}</h2><p id={`${id}-help`}>{help}</p></div>
@@ -76,7 +78,7 @@ export function IconOptionPicker({ title, heading, help, icon, value, options, o
         <button className="fin-exp-trigger" type="button" ref={trigger} disabled={disabled} aria-labelledby={`${id}-label ${id}-value`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
             <span style={{display:"flex",color:selected?.color || "#64748b",flexShrink:0}}>{icon(selected?.id || "", 18)}</span>
             <span className="fin-exp-selected-label" id={`${id}-value`}>{selected?.label || "Elegir una opción"}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" aria-hidden="true" style={{flexShrink:0}}><path d="m6 9 6 6 6-6" /></svg>
+            <img src="/assets/panel-nav/boxicons_arrow-down-filled.svg" width="20" height="20" alt="" aria-hidden="true" style={{flexShrink:0}} />
         </button>
         {overlay && typeof document !== "undefined" ? createPortal(overlay, trigger.current?.closest("dialog") || document.body) : null}
     </div>

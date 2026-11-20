@@ -1,10 +1,12 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import { BackButton } from "../../components/BackButton"
+import { useOverlayPresence } from "./useOverlayPresence"
 import { FINANZAS_PICKER_CSS, FINANZAS_FECHA_CSS, finanzasFechaISO, finanzasFechaParse } from "./common"
 
 export function PanelDatePicker({ value, onChange, disabled = false, forOffer = false }: { value: string; onChange: (value: string) => void; disabled?: boolean; forOffer?: boolean }) {
     const [open,setOpen] = React.useState(false)
+    const presence = useOverlayPresence(open)
     const [month,setMonth] = React.useState(() => finanzasFechaParse(value))
     const [focused,setFocused] = React.useState(value || finanzasFechaISO(new Date()))
     const trigger = React.useRef<HTMLButtonElement>(null)
@@ -38,7 +40,7 @@ export function PanelDatePicker({ value, onChange, disabled = false, forOffer = 
     React.useEffect(() => {
         if (open) dialog.current?.querySelector<HTMLButtonElement>(`[data-date="${focused}"]`)?.focus()
     }, [open,focused,month])
-    const overlay = open ? <div className="fin-exp-overlay" onClick={event => {if(event.target === event.currentTarget)close()}}>
+    const overlay = presence.visible ? <div className="fin-exp-overlay" data-closing={presence.closing} onClick={event => {if(event.target === event.currentTarget)close()}}>
         <div className="fin-exp-dialog fin-date-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-heading`}>
             <div className="fin-exp-header"><div><h2 id={`${id}-heading`}>{forOffer ? "Día de la promoción" : "Fecha del gasto"}</h2><p>{forOffer ? "Elegí el día del turno que vas a ofrecer." : "Elegí cuándo se realizó este gasto."}</p></div><BackButton onClick={close} aria-label="Cerrar calendario" /></div>
             <div className="fin-date-body">
@@ -70,7 +72,7 @@ export function PanelDatePicker({ value, onChange, disabled = false, forOffer = 
         <button className="fin-exp-trigger" type="button" ref={trigger} disabled={disabled} aria-labelledby={`${id}-label ${id}-value`} aria-haspopup="dialog" aria-expanded={open} onClick={() => {const current=finanzasFechaParse(value);setMonth(current);setFocused(finanzasFechaISO(current));setOpen(true)}}>
             <span style={{display:"flex",color:"#1b6b1a",flexShrink:0}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4M16 3v4M4 11h16M9 16h6"/></svg></span>
             <span className="fin-exp-selected-label" id={`${id}-value`}>{value ? finanzasFechaParse(value).toLocaleDateString("es-AR",{day:"numeric",month:"short",year:"numeric"}) : forOffer ? "Elegí un día" : "Elegir fecha"}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" aria-hidden="true" style={{flexShrink:0}}><path d="m6 9 6 6 6-6" /></svg>
+            <img src="/assets/panel-nav/boxicons_arrow-down-filled.svg" width="20" height="20" alt="" aria-hidden="true" style={{flexShrink:0}} />
         </button>
         {overlay && typeof document !== "undefined" ? createPortal(overlay,trigger.current?.closest("dialog") || document.body) : null}
     </div>

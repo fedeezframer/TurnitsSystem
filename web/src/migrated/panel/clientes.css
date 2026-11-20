@@ -27,6 +27,10 @@
 .offer-items {margin-top:10px;max-height:240px;overflow:auto;scrollbar-width:none}
 .offer-items::-webkit-scrollbar {display:none}
 .offer-item-list {display:grid;gap:8px}
+.offer-loading {display:grid;gap:8px;width:100%}
+.offer-loading span {display:block;height:52px;border-radius:12px;background:linear-gradient(100deg,#edf2eb 20%,#f8faf7 40%,#edf2eb 60%);background-size:200% 100%;animation:offer-shimmer 1.3s linear infinite}
+@keyframes offer-shimmer {to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.offer-loading span{animation:none}}
 .offer-item {padding:8px 10px;border:1px solid #a6aea6;border-radius:16px;justify-content:space-between}
 .offer-item[data-selected=true] {border-color:var(--client-green);color:var(--client-green)}
 .offer-item>button {display:flex;align-items:center;gap:10px;text-align:left;min-width:0;background:none;border:0;color:inherit;cursor:pointer}

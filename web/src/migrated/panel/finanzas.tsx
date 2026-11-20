@@ -3,6 +3,7 @@ import { IconOptionPicker } from "./IconOptionPicker"
 import { BackButton } from "../../components/BackButton"
 import * as React from "react"
 import LoadingRunner from "../../components/LoadingRunner"
+import { useOverlayPresence } from "./useOverlayPresence"
 import "./finanzas.css"
 import {
     useState,
@@ -48,6 +49,7 @@ function FinanzasExpensePicker({ title, value, options, onChange, disabled = fal
 
 function FinanzasMonthPicker({ value, onChange, disabled = false }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
     const [open,setOpen] = React.useState(false)
+    const presence = useOverlayPresence(open)
     const [month,setMonth] = React.useState(() => finanzasFechaParse(value + "-01"))
     const [focused,setFocused] = React.useState(value ? value + "-01" : finanzasFechaISO(new Date()).slice(0,7) + "-01")
     const trigger = React.useRef<HTMLButtonElement>(null)
@@ -81,7 +83,7 @@ function FinanzasMonthPicker({ value, onChange, disabled = false }: { value: str
     React.useEffect(() => {
         if (open) dialog.current?.querySelector<HTMLButtonElement>(`[data-date="${focused}"]`)?.focus()
     }, [open,focused,month])
-    const overlay = open ? <div className="fin-exp-overlay" onClick={event => {if(event.target === event.currentTarget)close()}}>
+    const overlay = presence.visible ? <div className="fin-exp-overlay" data-closing={presence.closing} onClick={event => {if(event.target === event.currentTarget)close()}}>
         <div className="fin-exp-dialog fin-date-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-heading`}>
             <div className="fin-exp-header"><div><h2 id={`${id}-heading`}>Mes del resumen</h2><p>Elegí el período que querés consultar.</p></div><BackButton onClick={close} aria-label="Cerrar calendario" /></div>
             <div className="fin-date-body">
@@ -112,7 +114,7 @@ function FinanzasMonthPicker({ value, onChange, disabled = false }: { value: str
         <button className="fin-exp-trigger fin-month-trigger" type="button" ref={trigger} disabled={disabled} aria-labelledby={`${id}-label ${id}-value`} aria-haspopup="dialog" aria-expanded={open} onClick={() => {const current=finanzasFechaParse(value + "-01");setMonth(current);setFocused(finanzasFechaISO(current));setOpen(true)}}>
             <span style={{display:"flex",color:"#1b6b1a",flexShrink:0}}><FinanzasGastoIcon kind="fijo" size={18} /></span>
             <span className="fin-exp-selected-label" id={`${id}-value`}>{value ? finanzasFechaParse(value + "-01").toLocaleDateString("es-AR",{month:"long",year:"numeric"}) : "Elegir mes"}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" aria-hidden="true" style={{flexShrink:0}}><path d="m6 9 6 6 6-6" /></svg>
+            <img src="/assets/panel-nav/boxicons_arrow-down-filled.svg" width="20" height="20" alt="" aria-hidden="true" style={{flexShrink:0}} />
         </button>
         {overlay && typeof document !== "undefined" ? createPortal(overlay,document.body) : null}
     </div>
@@ -131,6 +133,7 @@ function FinanzasPanel({
     const [error, setError] = React.useState("")
     const [guardando, setGuardando] = React.useState(false)
     const [modal, setModal] = React.useState(false)
+    const modalPresence = useOverlayPresence(modal)
     const overlayRef = React.useRef<HTMLDivElement>(null)
     useLayoutEffect(() => {
         const viewport = window.visualViewport
@@ -695,8 +698,10 @@ function FinanzasPanel({
                     </div>
                 </>
             )}
-            {modal && createPortal(
+            {modalPresence.visible && createPortal(
                 <div
+                    className="panel-modal-overlay"
+                    data-closing={modalPresence.closing}
                     ref={overlayRef}
                     role="dialog"
                     aria-modal="true"
@@ -713,6 +718,7 @@ function FinanzasPanel({
                     }}
                 >
                     <div
+                        className="panel-modal-dialog"
                         style={{
                             ...card,
                             width: "min(100%,520px)",
