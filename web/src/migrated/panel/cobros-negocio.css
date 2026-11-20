@@ -86,11 +86,11 @@
 }
 
 .cb-card { gap:20px; padding:clamp(16px,2.8cqw,30px); border-color:#e1e9df; border-radius:25px; background:#f7f9f6; box-shadow:0 16px 38px #1421180b; }
-.cb-hero { display:grid; gap:7px; min-width:0; padding:clamp(22px,3cqw,32px); border-radius:21px; background:#18221c; color:#fff; overflow:hidden; position:relative; }
+.cb-hero { display:grid; gap:7px; min-width:0; padding:clamp(22px,3cqw,32px); border:1px solid #dce9d3; border-radius:21px; background:linear-gradient(120deg,#edf7e5,#f9fcf6 72%); color:#1d2c20; overflow:hidden; position:relative; }
 .cb-hero::after { content:""; position:absolute; right:-28px; top:-80px; width:240px; height:240px; border-radius:50%; background:radial-gradient(circle,#b8eb4d52 0,#b8eb4d16 55%,transparent 72%); }
-.cb-hero span { color:#bce77b; font-size:10px; font-weight:750; letter-spacing:.15em; }
+.cb-hero span { color:#4d7c35; font-size:10px; font-weight:750; letter-spacing:.15em; }
 .cb-hero strong { font-size:clamp(26px,3.5cqw,38px); line-height:1.05; letter-spacing:-.045em; }
-.cb-hero small { max-width:540px; color:#d0dbd0; font-size:13px; }
+.cb-hero small { max-width:540px; color:#607260; font-size:13px; }
 .cb-metodos { gap:12px; }
 .cb-method { gap:22px; padding:22px; border:1px solid #dfe7dd; border-radius:19px; background:#fff; box-shadow:0 5px 17px #17231909; }
 .cb-method:first-child,.cb-method:last-child { padding-block:22px; }

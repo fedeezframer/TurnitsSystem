@@ -9,6 +9,7 @@ import {
 import { costos, type Regla } from "./costos";
 import "./cobros-negocio.css";
 import { seccionesPagos } from "./secciones-pagos";
+import LoadingRunner from "../../components/LoadingRunner";
 
 const acreditacion = [
   ["al instante", 6.6],
@@ -304,14 +305,11 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
   }, []);
   useEffect(() => () => TurnitsGlobalSaveManager_get()?.setBlocker("pagos", ""), []);
   if (!config)
-    return (
+    return notice ? (
       <p role="status">
-        {notice || "Cargando configuración de cobros…"}{" "}
-        {notice && (
-          <button onClick={() => retry(revision + 1)}>Reintentar</button>
-        )}
+        {notice}{" "}<button onClick={() => retry(revision + 1)}>Reintentar</button>
       </p>
-    );
+    ) : <LoadingRunner card size="compact" label="Cargando configuración de cobros…" />;
   const offline = config.planes[config.plan].mediosOffline;
   function publicarPagos(cambios: Record<string, any>) {
     const actual = (window as any).getPagosConfig?.() || Pagos_baselineDesdeSettings(config);
