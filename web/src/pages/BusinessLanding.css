@@ -103,8 +103,10 @@
 
 .bl-promo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
 .bl-promo{display:flex;flex-direction:column;gap:12px;min-width:0;padding:10px;border:1px solid #dce8dc;border-radius:17px;background:#fff;transition:border-color .2s,transform .2s}
+.bl-promo-today{border-color:var(--bl-ink);background:color-mix(in srgb,var(--bl-color) 7%,#fff);box-shadow:0 7px 22px #173b1b14}
 .bl-promo:hover{transform:translateY(-2px);border-color:var(--bl-ink)}
 .bl-promo-img{position:relative;aspect-ratio:1.25;overflow:hidden;border-radius:11px;background:#ecf1eb}
+.bl-promo-today-badge{position:absolute;top:8px;left:8px;z-index:1;padding:6px 8px;border-radius:7px;background:var(--bl-ink);color:#fff;font-size:11px;font-weight:800}
 .bl-promo-img>img:first-child{display:block;width:100%;height:100%;object-fit:cover}
 .bl-promo-products{position:absolute;top:8px;right:8px;display:flex;max-width:52%;gap:4px}
 .bl-promo-products img{width:42px;height:42px;border:3px solid #fff;border-radius:50%;background:#fff;object-fit:cover}
