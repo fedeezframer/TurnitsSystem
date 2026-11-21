@@ -341,7 +341,7 @@ export default function BusinessLanding() {
       <div className="bl-wrap">
         <header className="bl-bar">
           <span>{headline.text}</span>
-          {headline.href.startsWith("#") ? <a className="bl-reserve" href={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></a> : <Link className="bl-reserve" to={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>}
+          {headline.href.startsWith("#") ? <a className="bl-reserve" href={headline.href}>{headline.action}</a> : <Link className="bl-reserve" to={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>}
         </header>
 
         <section className={`bl-hero${banner ? " bl-hero-with-banner" : ""}`}>
@@ -399,7 +399,7 @@ export default function BusinessLanding() {
           </div>
         </section>}
 
-        {members.length > 0 && services.length > 0 && <section className="bl-section bl-availability"><div className="bl-section-heading"><div><h2>Tu próximo turno, más cerca</h2><p>Una vista rápida de los horarios de nuestro equipo.</p></div><Link to={`/agenda/${enc}`}>Ver agenda <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></div><div className="bl-list">{rankedMembers.slice(0, 6).map((member) => {
+        {members.length > 0 && services.length > 0 && <section className="bl-section bl-availability"><div className="bl-section-heading"><div><h2>Tu próximo turno, más cerca</h2><p>Una vista rápida de los horarios de nuestro equipo.</p></div><Link to={`/agenda/${enc}`}>Ver agenda</Link></div><div className="bl-list">{rankedMembers.slice(0, 6).map((member) => {
           const next = availability[member.id], initials = `${member.nombre?.[0] || ""}${member.apellido?.[0] || ""}`.toUpperCase()
           const memberColor = /^#[0-9a-f]{6}$/i.test(member.color || "") ? member.color : color
           return <Link className="bl-member" key={member.id} to={`/agenda/${enc}?equipo_id=${encodeURIComponent(member.id)}`}>
@@ -418,19 +418,19 @@ export default function BusinessLanding() {
           </article>
         })}</div></section>}
 
-        {works.length > 0 && <section id="bl-works" className="bl-section bl-works"><div className="bl-section-heading"><div><h2>Trabajos que hablan por sí solos</h2><p>Explorá resultados reales y reservá el servicio que te gusta.</p></div>{works.length > 4 && <Link to={`/perfil/${enc}/publicaciones`}>Ver todos <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>}</div><div className="bl-work-list">{works.slice(0, 4).map(({ url, post, description }) => {
+        {works.length > 0 && <section id="bl-works" className="bl-section bl-works"><div className="bl-section-heading"><div><h2>Trabajos que hablan por sí solos</h2><p>Explorá resultados reales y reservá el servicio que te gusta.</p></div>{works.length > 4 && <Link to={`/perfil/${enc}/publicaciones`}>Ver todos</Link>}</div><div className="bl-work-list">{works.slice(0, 4).map(({ url, post, description }) => {
           const linked = services.find(service => service.id === post?.servicio_id)
           return <article className="bl-work" key={url}><div className="bl-work-photo"><img src={url} alt={description || "Trabajo realizado por el negocio"} loading="lazy" style={{ objectPosition: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%`, transform: `scale(${post?.zoom ?? 1})`, transformOrigin: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%` }} /></div><div className="bl-work-copy">{linked && <span>{linked.nombre}</span>}{description && <p>{description}</p>}<Link to={`/agenda/${enc}${linked ? `?servicio_id=${encodeURIComponent(linked.id)}` : ""}`}>Reservar {linked ? "este servicio" : "turno"} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></div></article>
         })}</div></section>}
 
         {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><div className="bl-section-heading"><div><h2>Más para vos, por menos</h2><p>Combos y beneficios para tu próxima visita.</p></div></div><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
 
-        {reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} {reviews.cantidad === 1 ? "reseña" : "reseñas"}</p></div><Link to={`/perfil/${enc}`}>Ver reseñas <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></div><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></article>)}</div></section>}
+        {reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} {reviews.cantidad === 1 ? "reseña" : "reseñas"}</p></div><Link to={`/perfil/${enc}`}>Ver reseñas</Link></div><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></article>)}</div></section>}
 
-        <section className="bl-final-cta"><span>Tu lugar te espera</span><h2>¿Ya sabés cuándo venís?</h2><p>Elegí el servicio y reservá en pocos pasos.</p><Link to={`/agenda/${enc}`}>Encontrar mi turno <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></section>
+        <section className="bl-final-cta"><span>Tu lugar te espera</span><h2>¿Ya sabés cuándo venís?</h2><p>Elegí el servicio y reservá en pocos pasos.</p><Link to={`/agenda/${enc}`}>Encontrar mi turno</Link></section>
 
         {whatsappLink && <section className="bl-section bl-contact"><div><h2>¿Te quedó alguna duda?</h2><p>Escribinos y te ayudamos a elegir.</p></div><a href={whatsappLink} target="_blank" rel="noopener noreferrer">Consultar por WhatsApp <img src={whatsappLogo} alt="" /></a></section>}
-        <section className="bl-signup"><span>Para negocios</span><p>Hacé crecer tu agenda con Turnits.</p><Link to="/registro/negocio">Crear mi agenda <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></section>
+        <section className="bl-signup"><span>Para negocios</span><p>Hacé crecer tu agenda con Turnits.</p><Link to="/registro/negocio">Crear mi agenda</Link></section>
 
         <footer className="bl-footer"><img src="/assets/turnits-logo-completo.png" alt="Turnits" /></footer>
       </div>
