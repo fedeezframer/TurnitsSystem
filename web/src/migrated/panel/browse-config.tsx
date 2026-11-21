@@ -119,7 +119,8 @@ export default function BrowseBusiness({
           <p>
             Ofrecé horarios sin ocupar durante los 30 minutos anteriores al
             cierre de reservas. Se respeta la antelación de cada profesional y
-            sólo se publica si Mercado Pago está conectado.
+            sólo se publica si Mercado Pago está conectado. Podés limitar cada
+            Offer a días y franjas horarias concretas.
           </p>
           <p>
             Durante los primeros 15 minutos de la oferta se aplica el 60% de la
@@ -216,6 +217,7 @@ export default function BrowseBusiness({
                     equipo_id: "",
                     precio_minimo: 0,
                     activo: false,
+                    franjas: [],
                   },
                 ],
               }))

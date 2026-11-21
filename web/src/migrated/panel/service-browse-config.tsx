@@ -70,7 +70,7 @@ export default function ServiceBrowseConfig({
   };
   const toggleMember = (member: any, selected: boolean) => {
     update(d => ({ ...d, offers: selected
-      ? [...d.offers, { id: crypto.randomUUID(), servicio_id: serviceId, equipo_id: member.id, precio_minimo: Number(minimum), activo: enableOffer }]
+      ? [...d.offers, { id: crypto.randomUUID(), servicio_id: serviceId, equipo_id: member.id, precio_minimo: Number(minimum), activo: enableOffer, franjas: [] }]
       : d.offers.filter((o: any) => !(o.servicio_id === serviceId && o.equipo_id === member.id)) }));
   };
   return (
@@ -88,7 +88,7 @@ export default function ServiceBrowseConfig({
                 update(d => ({
                   ...d,
                   offers: !offers.length && enabled && members.length
-                    ? [...d.offers, { id: crypto.randomUUID(), servicio_id: serviceId, equipo_id: members[0].id, precio_minimo: 0, activo: true }]
+                    ? [...d.offers, { id: crypto.randomUUID(), servicio_id: serviceId, equipo_id: members[0].id, precio_minimo: 0, activo: true, franjas: [] }]
                     : d.offers.filter((o: any) => enabled || o.servicio_id !== serviceId || o.precio_minimo > 0)
                         .map((o: any) => o.servicio_id === serviceId ? { ...o, activo: enabled } : o),
                 }));
