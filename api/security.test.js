@@ -11,16 +11,21 @@ const secret = "test-only-secret-that-is-not-used-outside-this-process";
 const first = "11111111-1111-4111-8111-111111111111";
 const second = "22222222-2222-4222-8222-222222222222";
 const other = "33333333-3333-4333-8333-333333333333";
+const groupFirst = "44444444-4444-4444-8444-444444444444";
+const groupSecond = "55555555-5555-4555-8555-555555555555";
 const tables = {
   turnos: [
     { id: first, slug: "test-a", consumidor_id: "alice", payment_id: "100", nombre: "Test", email: "fixture@example.invalid", telefono: "123456789", precio_cobrado: 100, monto_pagado: 25 },
     { id: second, slug: "test-a", consumidor_id: "bob", payment_id: "200", precio_cobrado: 200, monto_pagado: 200 },
     { id: other, slug: "test-b", consumidor_id: "bob", payment_id: "300" },
+    { id: groupFirst, slug: "test-a", consumidor_id: "alice", payment_id: "400", grupo_reserva_id: "group-a", grupo_reserva_orden: 0, servicio_nombre: "Corte", precio_cobrado: 100, monto_pagado: 100 },
+    { id: groupSecond, slug: "test-a", consumidor_id: "alice", payment_id: null, grupo_reserva_id: "group-a", grupo_reserva_orden: 1, servicio_nombre: "Barba", precio_cobrado: 50, monto_pagado: 50 },
   ],
   pagos_pendientes: [
     { id: "pending-a", slug: "test-a", payment_id: "100" },
     { id: "pending-offer", slug: "test-a", browse_turno_id: first },
     { id: "pending-unpaid", slug: "test-a" },
+    { id: "pending-group", slug: "test-a", payment_id: "400" },
   ],
   usuarios: [{ id: "owner-a", slug: "test-a", activo: true }, { id: "disabled-owner", slug: "disabled", activo: false }],
 };
@@ -30,6 +35,12 @@ const supabase = { from(table) {
   return {
     select(value) { columns = value.split(","); return this; },
     eq(key, value) { filters.push([key, value]); return this; },
+    order() { return this; },
+    then(resolve, reject) {
+      queryCount++;
+      return Promise.resolve({ data: tables[table].filter(item => filters.every(([key, value]) => item[key] === value))
+        .map(item => Object.fromEntries(columns.filter(key => key in item).map(key => [key, item[key]]))), error: null }).then(resolve, reject);
+    },
     async maybeSingle() {
       queryCount++;
       const row = tables[table].find(item => filters.every(([key, value]) => item[key] === value));
@@ -86,6 +97,15 @@ test("signed payment return cannot be reused for another payment", async () => {
   assert.equal((await request("/turnos/by-payment?slug=test-a&payment_id=100", null, { "x-receipt-token": token })).status, 200);
   assert.equal((await request("/turnos/by-payment?slug=test-a&payment_id=200", null, { "x-receipt-token": token })).status, 404);
   assert.equal((await request(path(second), null, { "x-receipt-token": token })).status, 404);
+});
+test("one signed group return lists only its appointments", async () => {
+  const token = receipt.issue({ slug: "test-a", pendingId: "pending-group" });
+  const response = await request("/turnos/by-payment?slug=test-a&payment_id=400", null, { "x-receipt-token": token });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body.turnos.map(turno => turno.id), [groupFirst, groupSecond]);
+  for (const turno of body.turnos) for (const key of ["email", "telefono", "consumidor_id", "payment_id"]) assert.equal(key in turno, false);
+  assert.equal((await request("/turnos/by-payment?slug=test-a&payment_id=100", null, { "x-receipt-token": token })).status, 404);
 });
 test("offer return is bound to the preexisting booking and unpaid returns disclose nothing", async () => {
   const token = receipt.issue({ slug: "test-a", pendingId: "pending-offer" });

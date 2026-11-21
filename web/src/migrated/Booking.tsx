@@ -104,6 +104,18 @@ interface Servicio {
     precio: number
     capacidad: number
 }
+interface BasketItem {
+    id: string
+    servicio_id: string
+    servicio_nombre: string
+    equipo_id: string | null
+    equipo_nombre: string | null
+    fecha: string
+    hora: string
+    precio: number
+    duracion: number
+    promocion_id: string | null
+}
 interface Profesional {
     id: string
     nombre: string
@@ -872,6 +884,18 @@ export default function BookingFlow(props: any) {
     const [verMasDias, setVerMasDias] = React.useState(false)
     const [fecha, setFecha] = React.useState<string>("")
     const [hora, setHora] = React.useState<string>("")
+    const [basket, setBasket] = React.useState<BasketItem[]>([])
+    const [groupMode, setGroupMode] = React.useState(false)
+    const [basketOpen, setBasketOpen] = React.useState(false)
+    const activeBasketId = React.useRef<string | null>(null)
+    React.useEffect(()=>{
+        if(!basketOpen)return
+        const previous=document.body.style.overflow
+        document.body.style.overflow="hidden"
+        const close=(event:KeyboardEvent)=>{if(event.key==="Escape")setBasketOpen(false)}
+        window.addEventListener("keydown",close)
+        return ()=>{document.body.style.overflow=previous;window.removeEventListener("keydown",close)}
+    },[basketOpen])
     const selectedService = servicios.find(s=>s.id===servicioId)
     const personalPromo:BookingPromo|null = React.useMemo(()=>{
         if(!personal || !selectedService)return null
@@ -1515,7 +1539,7 @@ export default function BookingFlow(props: any) {
             detalle: string
         }[] = []
         if (disp.includes("mercadopago")) {
-            if(tarjetaDisponible)out.push({key:"tarjeta",emoji:"💳",label:"Tarjeta de crédito o débito",detalle:"Pagá con tu tarjeta bancaria o de una billetera digital"})
+            if(tarjetaDisponible && !groupMode)out.push({key:"tarjeta",emoji:"💳",label:"Tarjeta de crédito o débito",detalle:"Pagá con tu tarjeta bancaria o de una billetera digital"})
             out.push({
                 key: "mercadopago",
                 emoji: "💳",
@@ -1523,7 +1547,7 @@ export default function BookingFlow(props: any) {
                 detalle: "Dinero en cuenta y tarjetas aceptadas por Mercado Pago",
             })
         }
-        if (negocio.plan !== "gratis" && disp.includes("transferencia")) {
+        if (!groupMode && negocio.plan !== "gratis" && disp.includes("transferencia")) {
             out.push({
                 key: "transferencia",
                 emoji: "🏦",
@@ -1531,7 +1555,7 @@ export default function BookingFlow(props: any) {
                 detalle: "Adjuntás el comprobante para reservar",
             })
         }
-        if (negocio.plan !== "gratis" && disp.includes("efectivo")) {
+        if (!groupMode && negocio.plan !== "gratis" && disp.includes("efectivo")) {
             out.push({
                 key: "efectivo",
                 emoji: "💵",
@@ -1540,7 +1564,8 @@ export default function BookingFlow(props: any) {
             })
         }
         return out
-    }, [negocio, tarjetaDisponible, browseOfferId])
+    }, [negocio, tarjetaDisponible, browseOfferId, groupMode])
+    const pagoGrupoDisponible = !!negocio?.agenda_sin_pagos || negocio?.metodo_pago === "none" || !!negocio?.metodos_pago_disponibles?.includes("mercadopago")
 
     React.useEffect(() => {
         if (!negocio) return
@@ -1598,7 +1623,7 @@ export default function BookingFlow(props: any) {
     }, [metodoPagoRequerido, metodo, comprobante])
 
     const puedeConfirmar =
-        offerReady && !!fecha && !!hora && !loadingCuenta && datosPersonalesOkParaBoton && metodoPagoValido
+        offerReady && (groupMode ? basket.length>0 && basket.every(item=>!!item.fecha && !!item.hora) : !!fecha && !!hora) && !loadingCuenta && datosPersonalesOkParaBoton && metodoPagoValido
 
     const STEP_LABELS: Record<string, string> = {
         sucursal: "Sucursal",
@@ -1618,6 +1643,47 @@ export default function BookingFlow(props: any) {
     },[steps,stepId,loadingProf,browseOfferId,offerLoading])
     const stepIndex = Math.max(0, steps.indexOf(stepId))
     const enCheckoutStep = stepId === "checkout"
+
+    React.useEffect(() => {
+        if (stepId !== "checkout" || !servicioElegido || !fecha || !hora || browseOfferId || personalKey) return
+        const id = activeBasketId.current || crypto.randomUUID()
+        activeBasketId.current = id
+        const item: BasketItem = {
+            id, servicio_id: servicioElegido.id, servicio_nombre: servicioElegido.nombre,
+            equipo_id: equipoIdParaEnviar || null,
+            equipo_nombre: profesionalElegido ? `${profesionalElegido.nombre}${profesionalElegido.apellido ? ` ${profesionalElegido.apellido}` : ""}` : null,
+            fecha, hora, precio: servicioElegido.precio, duracion: servicioElegido.duracion,
+            promocion_id: promoAplicada?.id || null,
+        }
+        setBasket(previous => {
+            const index = previous.findIndex(entry => entry.id === id)
+            if (index < 0) return [...previous, item]
+            if (JSON.stringify(previous[index]) === JSON.stringify(item)) return previous
+            return previous.map(entry => entry.id === id ? item : entry)
+        })
+    }, [stepId, servicioElegido?.id, servicioElegido?.nombre, servicioElegido?.precio, fecha, hora, equipoIdParaEnviar, profesionalElegido?.id, promoAplicada?.id])
+
+    function addSameService(id: string) {
+        const original = basket.find(item => item.id === id)
+        if (!original || basket.length >= 8 || !pagoGrupoDisponible) return
+        setGroupMode(true)
+        setBasket(items => [...items, {...original, id: crypto.randomUUID(), fecha: "", hora: ""}])
+        setBasketOpen(true)
+    }
+
+    function addOtherService() {
+        if (basket.length >= 8 || !pagoGrupoDisponible) return
+        setGroupMode(true)
+        activeBasketId.current = null
+        setServicioId(null)
+        setPromocionId(null)
+        setFecha("")
+        setHora("")
+        setExtrasSeleccionados([])
+        setBasketOpen(false)
+        setStepId("servicio")
+    }
+
 
     // Al pasar a un paso nuevo (adelante o atrás) la vista vuelve arriba de
     // todo, así en los pasos largos el usuario no queda abajo ni se pierde.
@@ -1869,8 +1935,8 @@ export default function BookingFlow(props: any) {
         const sinPago = sinPagoRevalidado || negocio?.agenda_sin_pagos === true
         setSubmitError("")
 
-        if (!fecha) return setSubmitError("Seleccioná una fecha.")
-        if (!hora) return setSubmitError("Seleccioná un horario.")
+        if (!groupMode && !fecha) return setSubmitError("Seleccioná una fecha.")
+        if (!groupMode && !hora) return setSubmitError("Seleccioná un horario.")
         if (!nombre.trim() || nombre.trim().length < 2)
             return setSubmitError("El nombre es requerido (mín. 2 caracteres).")
         if (!validNationalPhone(telefonoDigits, pais.code))
@@ -1889,6 +1955,46 @@ export default function BookingFlow(props: any) {
             )
 
         setSubmitEstado("loading")
+
+        if (groupMode && basket.length) {
+            if (!sinPago && !negocio?.agenda_sin_pagos && negocio?.metodo_pago !== "none" && metodo !== "mercadopago") {
+                setSubmitEstado("error")
+                setSubmitError("El pago único de varios turnos se realiza con Mercado Pago.")
+                return
+            }
+            if (basket.some(item => !item.fecha || !item.hora)) {
+                setSubmitEstado("error")
+                setSubmitError("Elegí día y hora para cada turno del carrito.")
+                setBasketOpen(true)
+                return
+            }
+            if (extrasSeleccionados.length || browseOfferId || personalKey) {
+                setSubmitEstado("error")
+                setSubmitError("Para reservar varios turnos, quitá los adicionales de esta selección.")
+                return
+            }
+            try {
+                const paid = !sinPago && !negocio?.agenda_sin_pagos && negocio?.metodo_pago !== "none"
+                const endpoint = paid ? "/api/create-group-preference" : "/turnos/reservar-grupo"
+                const response = await fetch(api + endpoint, {
+                    method: "POST",
+                    headers: {"Content-Type":"application/json", ...consumerHeaders()},
+                    body: JSON.stringify({slug,nombre:nombre.trim(),apellido:apellido.trim(),
+                        telefono:`${pais.dial}${telefonoDigits}`,email:email.trim(),
+                        reservas:basket.map(item => ({servicio_id:item.servicio_id,equipo_id:item.equipo_id,
+                            fecha:item.fecha,hora:item.hora,promocion_id:item.promocion_id}))}),
+                })
+                const result = await response.json()
+                if (!response.ok) throw new Error(result.error || "No se pudieron confirmar los turnos.")
+                const destination = paid ? result.payment_url : result.comprobante_url
+                if (!destination) throw new Error("No recibimos la confirmación del grupo.")
+                window.location.assign(destination)
+            } catch (error: any) {
+                setSubmitEstado("error")
+                setSubmitError(error?.message || "No se pudo procesar el carrito.")
+            }
+            return
+        }
 
         if(extrasSeleccionados.some(e=>e.cantidad>1) && !extrasConCantidades){
             setSubmitEstado("error")
@@ -2062,22 +2168,23 @@ export default function BookingFlow(props: any) {
 
     const esSena =
         !browseOfferId && !negocio?.agenda_sin_pagos && negocio?.metodo_pago === "sena" &&
-        !!servicioElegido &&
+        (!!servicioElegido || (groupMode && basket.length>0)) &&
         metodo !== "efectivo"
-    const totalServicioYExtras =
-        (servicioElegido?.precio ?? 0) + totalExtras || null
+    const totalServicioYExtras = groupMode && basket.length
+        ? basket.reduce((sum,item)=>sum+item.precio,0)
+        : (servicioElegido?.precio ?? 0) + totalExtras || null
     const montoASenar =
-        esSena && servicioElegido
+        esSena && totalServicioYExtras != null
             ? Math.round(
-                  ((servicioElegido.precio + totalExtras) *
+                  ((totalServicioYExtras!)*
                       (negocio!.porcentaje_sena || 30)) /
                       100
               )
             : null
     const totalAPagarAhora = esSena
         ? (montoASenar ?? 0)
-        : (servicioElegido?.precio ?? 0) + totalExtras
-    const totalAMostrar = servicioElegido ? totalAPagarAhora : null
+        : (totalServicioYExtras ?? 0)
+    const totalAMostrar = servicioElegido || (groupMode && basket.length) ? totalAPagarAhora : null
     const totalPendiente =
         esSena && totalServicioYExtras != null
             ? Math.max(totalServicioYExtras - totalAPagarAhora, 0)
@@ -2230,7 +2337,7 @@ export default function BookingFlow(props: any) {
     )
 
     return (
-        <div style={{width:"100%",minHeight:"100dvh",margin:0,boxSizing:"border-box",display:"flex",flexDirection:"column",fontFamily:"'DM Sans', -apple-system, sans-serif",...temaVars}}>
+        <div style={{width:"100%",minHeight:"100dvh",margin:0,paddingBottom:basket.length || servicioElegido ? 72 : 0,boxSizing:"border-box",display:"flex",flexDirection:"column",fontFamily:"'DM Sans', -apple-system, sans-serif",...temaVars}}>
             {personal && stepId==="servicio" && !primaryPersonal && <p style={{margin:"12px auto",padding:"0 16px"}}>Elegí un servicio para reservar tu turno. La oferta de {personal.items.map(item=>item.nombre).join(" + ")} se suma por {formatearMoneda(personal.precio)}.</p>}
             {!esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && <BookingCombosSubheader promociones={promociones.filter(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id))} servicios={servicios} accent={accent} icono={iconoVerCombo} onSelect={elegirPromo} />}
         <div className={esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && promociones.some(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id)) ? "bf-combos-desktop-stage" : undefined} style={{display:"flex",flex:1,width:"100%",alignItems:enCheckoutStep ? "flex-start" : "center",justifyContent:"center",padding:enCheckoutStep ? 0 : "20px 0",boxSizing:"border-box"}}>
@@ -2260,6 +2367,7 @@ export default function BookingFlow(props: any) {
             }
         >
             <style>{shimmerCSS}</style>
+            <style>{`@media(max-width:560px){.bf-basket-item-editor{grid-template-columns:repeat(2,minmax(0,1fr))!important}.bf-basket-item-editor>button{grid-column:1/-1}}`}</style>
 
 
             {!enCheckoutStep && headerBlock}
@@ -2698,7 +2806,7 @@ export default function BookingFlow(props: any) {
                                 color: "var(--bf-text)",
                             }}
                         >
-                            Resumen de la reserva
+                            {groupMode ? `Resumen de ${basket.length} turno${basket.length===1 ? "" : "s"}` : "Resumen de la reserva"}
                         </div>
 
                         {/* Tarjeta de Resumen (Fondo blanco, texto negro, bordes redondeados) */}
@@ -2716,7 +2824,13 @@ export default function BookingFlow(props: any) {
                                 color: "#111827",
                             }}
                         >
-                            {servicioElegido && (
+                            {groupMode && basket.map((item,index)=><div key={item.id} style={{fontSize:13,borderBottom:"1px solid #e5e7eb",paddingBottom:8}}>
+                                <strong>{index+1}. {item.servicio_nombre}</strong><br/>
+                                    {item.fecha ? `${formatearFecha(item.fecha)} · ${item.hora || "Sin horario"}` : "Día y hora pendientes"}
+                                    {item.promocion_id ? " · Promo" : ""}
+                                {item.equipo_nombre ? ` · ${item.equipo_nombre}` : ""}
+                            </div>)}
+                            {!groupMode && servicioElegido && (
                                 <div
                                     style={{
                                         fontSize: 15,
@@ -2728,7 +2842,7 @@ export default function BookingFlow(props: any) {
                                     {servicioElegido.nombre}
                                 </div>
                             )}
-                            {(profesionalElegido || esCualquierProfesional) && (
+                            {!groupMode && (profesionalElegido || esCualquierProfesional) && (
                                 <div
                                     style={{
                                         fontSize: 13,
@@ -2740,7 +2854,7 @@ export default function BookingFlow(props: any) {
                                     Con {nombreProfesionalActual}
                                 </div>
                             )}
-                            {fecha && (
+                            {!groupMode && fecha && (
                                 <div
                                     style={{
                                         fontSize: 13,
@@ -2754,7 +2868,7 @@ export default function BookingFlow(props: any) {
                                 </div>
                             )}
                             {offerQuote && <div style={{fontSize:12,color:accent,fontWeight:600}}>Turnits Offer · <del style={{color:"#6b7280",fontWeight:400}}>{formatearMoneda(offerQuote.precio_original)}</del></div>}
-                            {promoAplicada && <div style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)"}}>Promo: {promoAplicada.nombre}{promoAplicada.tipo === "combo" && <div>Incluye {promoAplicada.items.map(i=>`${i.cantidad} × ${i.nombre}`).join(" + ")}</div>}</div>}
+                            {!groupMode && promoAplicada && <div style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)"}}>Promo: {promoAplicada.nombre}{promoAplicada.tipo === "combo" && <div>Incluye {promoAplicada.items.map(i=>`${i.cantidad} × ${i.nombre}`).join(" + ")}</div>}</div>}
                             {extrasSeleccionados.length > 0 && (
                                 <div
                                     style={{
@@ -2887,7 +3001,7 @@ export default function BookingFlow(props: any) {
                         <FillButton
                             onClick={() => confirmarReserva()}
                             disabled={
-                                !puedeConfirmar || submitEstado === "loading"
+                                !puedeConfirmar || submitEstado === "loading" || basket.some(item => !item.fecha || !item.hora)
                             }
                             fill={accent}
                             style={{
@@ -2901,12 +3015,62 @@ export default function BookingFlow(props: any) {
                         >
                             {submitEstado === "loading"
                                 ? "Procesando..."
-                                : "Confirmar reserva"}
+                                : basket.length > 1 ? `Confirmar ${basket.length} turnos` : "Confirmar reserva"}
                         </FillButton>
                     </div>
                 )}
             </div>
 
+            {!browseOfferId && !personalKey && (basket.length > 0 || !!servicioElegido) && <>
+                <button type="button" onClick={() => setBasketOpen(true)}
+                    aria-label="Abrir mis reservas" aria-expanded={basketOpen}
+                    style={{position:"fixed",bottom:0,left:0,right:0,zIndex:3000,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,
+                        padding:"14px max(20px, env(safe-area-inset-right)) 14px max(20px, env(safe-area-inset-left))",border:0,
+                        borderTop:"1px solid #e5e7eb",background:"#fff",color:"#111827",boxShadow:"0 -8px 28px #11182716",cursor:"pointer",fontFamily:"inherit"}}>
+                    <span style={{textAlign:"left",minWidth:0}}><strong style={{display:"block",fontSize:14}}>Mis reservas · {basket.length || 1}</strong>
+                        <span style={{display:"block",fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                            {basket.length ? `${basket.filter(item => item.fecha && item.hora).length} con horario · ${formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}`
+                                : `${servicioElegido?.nombre || "Elegí un servicio"}${fecha ? ` · ${formatearFecha(fecha)}` : ""}${hora ? ` · ${hora}` : ""}`}
+                        </span></span>
+                    <strong style={{color:accent,fontSize:13,whiteSpace:"nowrap"}}>Ver carrito ↑</strong>
+                </button>
+                {basketOpen && <div role="dialog" aria-modal="true" aria-label="Mis reservas" style={{position:"fixed",inset:0,zIndex:4000,background:"#fff",color:"#111827",overflowY:"auto",fontFamily:"'DM Sans', sans-serif"}}>
+                    <div style={{maxWidth:760,margin:"0 auto",padding:"24px 18px 120px"}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:20}}>
+                            <div><h2 style={{margin:0,fontSize:24}}>Mis reservas</h2><p style={{margin:"5px 0 0",color:"#6b7280",fontSize:13}}>Elegí un horario para cada turno.</p></div>
+                            <button type="button" onClick={() => setBasketOpen(false)} aria-label="Cerrar carrito" style={{border:0,background:"#f3f4f6",borderRadius:12,width:42,height:42,fontSize:24,cursor:"pointer"}}>×</button>
+                        </div>
+                        {basket.length === 0 && <div style={{padding:20,border:"1px solid #e5e7eb",borderRadius:14}}>Terminá de elegir día y hora para agregar {servicioElegido?.nombre} al carrito.</div>}
+                        {[...new Set(basket.map(item => `${item.servicio_id}|${item.equipo_id || ""}`))].map(key => {
+                            const group=basket.filter(item => `${item.servicio_id}|${item.equipo_id || ""}` === key)
+                            return <section key={key} style={{border:"1px solid #e5e7eb",borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 3px 16px #1118270a"}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                                    <div><strong style={{fontSize:16}}>{group[0].servicio_nombre}</strong>{group[0].equipo_nombre && <div style={{fontSize:12,color:"#6b7280"}}>Con {group[0].equipo_nombre}</div>}</div>
+                                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                        <button type="button" aria-label={`Quitar un turno de ${group[0].servicio_nombre}`} disabled={group.length===1} onClick={() => setBasket(items => items.filter(item => item.id !== group[group.length-1].id))} style={{width:34,height:34,border:"1px solid #d1d5db",borderRadius:9,background:"#fff",cursor:"pointer"}}>−</button>
+                                        <strong>{group.length}</strong>
+                                        <button type="button" aria-label={`Agregar un turno de ${group[0].servicio_nombre}`} disabled={basket.length>=8 || !pagoGrupoDisponible} onClick={() => addSameService(group[0].id)} style={{width:34,height:34,border:"1px solid #d1d5db",borderRadius:9,background:"#fff",cursor:"pointer"}}>+</button>
+                                    </div>
+                                </div>
+                                {group.map((item,index) => <BasketItemEditor key={item.id} item={item} index={index+1} api={api} slug={slug} minDate={getHoyBAISO()}
+                                    others={basket.filter(other => other.id !== item.id)}
+                                    onChange={patch => {
+                                        setBasket(items => items.map(entry => entry.id === item.id ? {...entry,...patch} : entry))
+                                        if (!groupMode && item.id === activeBasketId.current) {
+                                            if (patch.fecha !== undefined) {setFecha(patch.fecha);setHora("")}
+                                            if (patch.hora !== undefined) setHora(patch.hora)
+                                        }
+                                    }}
+                                    onRemove={basket.length>1 ? () => setBasket(items => items.filter(entry => entry.id !== item.id)) : undefined}/>) }
+                            </section>
+                        })}
+                        {!pagoGrupoDisponible && <p style={{fontSize:13,color:"#6b7280"}}>Para pagar varios turnos juntos, este negocio necesita tener Mercado Pago habilitado.</p>}
+                        <button type="button" disabled={basket.length>=8 || !pagoGrupoDisponible} onClick={addOtherService} style={{width:"100%",padding:14,border:`1px dashed ${accent}`,borderRadius:12,background:"#fff",color:accent,fontWeight:700,cursor:"pointer"}}>+ Agregar otro servicio</button>
+                        <div style={{display:"flex",justifyContent:"space-between",padding:"20px 2px",fontWeight:700}}><span>Total de los servicios</span><span>{formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}</span></div>
+                        <button type="button" onClick={() => {setBasketOpen(false); if(stepId !== "checkout" && basket.length) setStepId("checkout")}} style={{width:"100%",padding:15,border:0,borderRadius:12,background:accent,color:"#fff",fontWeight:700,cursor:"pointer"}}>{basket.length && basket.every(item=>item.fecha && item.hora) ? "Continuar al pago" : "Seguir eligiendo"}</button>
+                    </div>
+                </div>}
+            </>}
             {cardSession && <BookingCardPayment session={cardSession} api={api} accent={accent} onClose={()=>setCardSession(null)} />}
             {notaAbierta && (
                 <div
@@ -3385,6 +3549,47 @@ function ClockIcon() {
             <path d="M12 7v5l3 2" />
         </svg>
     )
+}
+
+function BasketItemEditor({item,index,api,slug,minDate,others,onChange,onRemove}:{
+    item:BasketItem;index:number;api:string;slug:string;minDate:string;others:BasketItem[];
+    onChange:(patch:Partial<BasketItem>)=>void;onRemove?:()=>void
+}) {
+    const [slots,setSlots]=React.useState<Slot[]>([])
+    const [loading,setLoading]=React.useState(false)
+    const [error,setError]=React.useState("")
+    React.useEffect(()=>{
+        if(!item.fecha){setSlots([]);return}
+        const controller=new AbortController()
+        setLoading(true);setError("")
+        const params=new URLSearchParams({fecha:item.fecha,servicio_id:item.servicio_id})
+        if(item.equipo_id)params.set("equipo_id",item.equipo_id)
+        if(item.promocion_id)params.set("promocion_id",item.promocion_id)
+        fetch(`${api}/slots-disponibles/${encodeURIComponent(slug)}?${params}`,{signal:controller.signal,cache:"no-store"})
+            .then(async response=>{const data=await response.json();if(!response.ok || !data.success)throw new Error(data.error || "No se pudieron cargar los horarios.");return data.slots as Slot[]})
+            .then(setSlots).catch(error=>{if(!controller.signal.aborted)setError(error.message || "No se pudieron cargar los horarios.")})
+            .finally(()=>{if(!controller.signal.aborted)setLoading(false)})
+        return ()=>controller.abort()
+    },[api,slug,item.fecha,item.servicio_id,item.equipo_id])
+    const toMinutes=(value:string)=>Number(value.slice(0,2))*60+Number(value.slice(3,5))
+    const available=slots.filter(slot=>!slot.lleno && slot.disponibles>0 && !others.some(other=>
+        other.fecha===item.fecha && other.equipo_id===(slot.equipo_id || item.equipo_id) && !!other.hora &&
+        toMinutes(slot.hora)<toMinutes(other.hora)+other.duracion && toMinutes(other.hora)<toMinutes(slot.hora)+item.duracion))
+    return <div className="bf-basket-item-editor" style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr) auto",alignItems:"end",gap:10,borderTop:"1px solid #f3f4f6",marginTop:14,paddingTop:14}}>
+        <label style={{fontSize:12,fontWeight:600}}>Turno {index} · día
+            <input type="date" min={minDate} value={item.fecha} onChange={event=>onChange({fecha:event.target.value,hora:""})}
+                style={{display:"block",width:"100%",boxSizing:"border-box",marginTop:6,padding:10,border:"1px solid #d1d5db",borderRadius:9,font:"inherit"}}/>
+        </label>
+        <label style={{fontSize:12,fontWeight:600}}>Horario
+            <select value={item.hora} disabled={!item.fecha || loading} onChange={event=>onChange({hora:event.target.value})}
+                style={{display:"block",width:"100%",boxSizing:"border-box",marginTop:6,padding:10,border:"1px solid #d1d5db",borderRadius:9,font:"inherit",background:"#fff"}}>
+                <option value="">{loading ? "Cargando..." : "Elegí hora"}</option>
+                {available.map(slot=><option key={`${slot.hora}-${slot.equipo_id || ""}`} value={slot.hora}>{slot.hora}</option>)}
+            </select>
+        </label>
+        {onRemove && <button type="button" onClick={onRemove} aria-label={`Quitar turno ${index}`} style={{border:0,background:"#fef2f2",color:"#b91c1c",borderRadius:9,padding:10,cursor:"pointer"}}>Quitar</button>}
+        {error && <span role="alert" style={{gridColumn:"1 / -1",fontSize:12,color:"#b91c1c"}}>{error}</span>}
+    </div>
 }
 
 function BookingCombosDesktop({promociones,servicios,accent,onSelect}:{promociones:BookingPromo[];servicios:Servicio[];accent:string;onSelect:(promo:BookingPromo)=>void}) {

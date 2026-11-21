@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 
 const audience = "turnits-receipt";
-const fields = "id,slug,nombre,apellido,fecha,hora,servicio_nombre,equipo_nombre,precio_cobrado,monto_pagado,porcentaje_sena,tipo_cobro,metodo_pago,pago_estado,estado,fecha_pago,extras,monto_extras,tc_gastados";
+const fields = "id,slug,nombre,apellido,fecha,hora,servicio_nombre,equipo_nombre,precio_cobrado,monto_pagado,porcentaje_sena,tipo_cobro,metodo_pago,pago_estado,estado,fecha_pago,extras,monto_extras,tc_gastados,grupo_reserva_id,grupo_reserva_orden";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Separate signing context: a receipt capability can never become a session.
@@ -76,7 +76,15 @@ export function createReceiptAccess({ secret, supabase, consumerAccounts }) {
         const { data: turno, error } = await query.maybeSingle();
         if (error) throw error;
         if (!turno) return res.status(404).json({ success: false, error: "Comprobante no disponible." });
-        return res.json({ success: true, turno: { ...turno, monto_pendiente_local: Math.max(Number(turno.precio_cobrado || 0) - Number(turno.monto_pagado || 0), 0) } });
+        let group = null;
+        if(turno.grupo_reserva_id) {
+          let groupQuery=supabase.from("turnos").select(fields).eq("slug",slug).eq("grupo_reserva_id",turno.grupo_reserva_id).order("grupo_reserva_orden");
+          if(access.kind === "consumer")groupQuery=groupQuery.eq("consumidor_id",access.consumerId);
+          const {data,error:groupError}=await groupQuery;
+          if(groupError)throw groupError;
+          group=(data || []).map(item=>({...item,monto_pendiente_local:Math.max(Number(item.precio_cobrado || 0)-Number(item.monto_pagado || 0),0)}));
+        }
+        return res.json({ success: true, turno: { ...turno, monto_pendiente_local: Math.max(Number(turno.precio_cobrado || 0) - Number(turno.monto_pagado || 0), 0) }, ...(group ? {turnos:group} : {}) });
       } catch {
         return res.status(500).json({ success: false, error: "No se pudo consultar el comprobante." });
       }
