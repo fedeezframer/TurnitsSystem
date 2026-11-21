@@ -240,13 +240,10 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0, range = 
             ((d.value - min) / Math.max(max - min, 1)) * usableH
         return { x, y, ...d }
     })
-    const linePath = Array.from({ length: 48 }, (_, index) => {
-        const point = index * Math.max(pts.length - 1, 0) / 47
-        const lower = Math.floor(point)
-        const fraction = point - lower
-        const y = (pts[lower]?.y ?? marginTop + usableH) * (1 - fraction) + (pts[Math.min(lower + 1, pts.length - 1)]?.y ?? marginTop + usableH) * fraction
-        return `${index ? "L" : "M"} ${marginLeft + index / 47 * usableW} ${y}`
-    }).join(" ")
+    // La línea debe atravesar las mismas coordenadas que usan los puntos.
+    const linePath = pts.map((point: any, index: number) =>
+        `${index ? "L" : "M"} ${point.x} ${point.y}`
+    ).join(" ")
     // Mantiene pocas marcas regulares, como un calendario mensual.
     const labelStep = range === "week" ? 1 : range === "month" ? 7 : isNarrow ? 3 : 2
     const xLabelIdx = new Set<number>()
