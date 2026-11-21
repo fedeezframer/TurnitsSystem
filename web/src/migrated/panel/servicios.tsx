@@ -2826,7 +2826,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const transition = useCatalogTransition()
     const branch = useBranchAdmin();
     const hoy = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
-    const initial = () => ({nombre:"",descripcion:"",imagen_url:"",owner_equipo_id:null as string|null,tipo:"combo",items:[] as {tipo:string;id:string;cantidad:number}[],descuento_tipo:"precio_final",valor:"",fecha_inicio:hoy(),fecha_fin:"2099-12-31",dias_semana:null as number[] | null,activo:true})
+    const initial = () => ({nombre:"",descripcion:"",imagen_url:"",owner_equipo_id:null as string|null,tipo:"combo",items:[] as {tipo:string;id:string;cantidad:number}[],descuento_tipo:"precio_final",valor:"",fecha_inicio:hoy(),fecha_fin:"2099-12-31",dias_semana:null as number[] | null,hora_desde:null as string|null,hora_hasta:null as string|null,activo:true})
     const [form,setForm]=React.useState(initial)
     const [lista,setLista]=React.useState<any[]>([])
     const [diasHabilitados,setDiasHabilitados]=React.useState(false)
@@ -2875,6 +2875,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const valor=Number(form.valor)
     const final=Math.round((form.descuento_tipo === "porcentaje" ? original*(1-valor/100) : valor)*100)/100
     const validPrice=Number.isFinite(final)&&valor>0&&final>0&&final<original
+    const horasValidas=(!form.hora_desde && !form.hora_hasta) || (!!form.hora_desde && !!form.hora_hasta && form.hora_desde < form.hora_hasta)
     const toggle=(item:any)=>setForm(prev=>({...prev,items:prev.items.some(i=>i.id===item.id&&i.tipo===item.tipo) ? prev.items.filter(i=>!(i.id===item.id&&i.tipo===item.tipo)) : [...prev.items,{tipo:item.tipo,id:item.id,cantidad:1}]}))
     const toggleDay = (id:number) => setForm(prev => {
         const days = prev.dias_semana ?? []
@@ -2887,7 +2888,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     const tipo = form.items.length === 1 && form.items[0].tipo === "servicio" && form.items[0].cantidad === 1 ? "descuento" : "combo"
     const validOffer = !!form.nombre.trim() && form.items.length > 0 && selected.every(i => i.source) && validPrice
         && (tipo === "descuento" || form.items.reduce((sum,i) => sum + i.cantidad, 0) >= 2)
-    const readyToSave = validOffer && !uploadingCover && (form.dias_semana === null || diasHabilitados)
+    const readyToSave = validOffer && horasValidas && !uploadingCover && (form.dias_semana === null || diasHabilitados)
         && originalDraft.current !== draftKey(form, assigned)
     // Editar una promoción existente: el borrador va al estado global (barra "Guardar cambios").
     const globalEdit = mostrar && !!editando && !employeeMode && !branch && originalDraft.current !== ""
@@ -2896,6 +2897,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
         if(globalEdit) return
         if(uploadingCover || busy) return
         if(form.dias_semana !== null && !diasHabilitados) {setError("La programación por días todavía no está disponible. Volvé a cargar las promociones.");return}
+        if(!horasValidas) {setError("Revisá la hora de inicio y fin de la promoción.");return}
         if (!validOffer) {setError("Revisá los elementos y el descuento de la promoción.");return}
         setBusy(true)
         try {
@@ -2923,7 +2925,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
     }
     const editar=(promo:any)=>{
         const people = (promo.profesionales || []).map((p:any)=>p.id)
-        const draft = {...promo,descripcion:promo.descripcion || "",imagen_url:promo.imagen_url || "",dias_semana:promo.dias_semana?.length ? promo.dias_semana : null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))}
+        const draft = {...promo,descripcion:promo.descripcion || "",imagen_url:promo.imagen_url || "",dias_semana:promo.dias_semana?.length ? promo.dias_semana : null,hora_desde:promo.hora_desde ? String(promo.hora_desde).slice(0,5) : null,hora_hasta:promo.hora_hasta ? String(promo.hora_hasta).slice(0,5) : null,valor:String(promo.valor),items:promo.items.map((i:any)=>({tipo:i.tipo,id:i.id,cantidad:i.cantidad}))}
         originalDraft.current = draftKey(draft,people)
         const saved = !employeeMode && !branch ? TurnitsGlobalSaveManager_get()?.getPending("promociones")?.[promo.id] : undefined
         setAssigned(saved?.assigned || people); setForm(saved?.form || draft); setEditando(promo.id); setMostrar(true); setError("")
@@ -2949,7 +2951,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
             payload: {...form, tipo, valor, dias_semana: form.dias_semana?.length === PROMO_DAYS.length ? null : form.dias_semana},
             profesionalesIds: assigned.filter(isEligible),
             equipoIds: equipo.map(p => p.id),
-            valid: validOffer && (form.dias_semana === null || diasHabilitados),
+            valid: validOffer && horasValidas && (form.dias_semana === null || diasHabilitados),
         }
         if (Object.keys(pending).length) manager.markDirty("promociones", pending)
         else manager.clear("promociones")
@@ -3019,6 +3021,12 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                         </button>)}
                     </div>
                 </section>}
+                <section className="promo-options" aria-labelledby="promo-valid-hours">
+                    <h3 id="promo-valid-hours" className="catalog-field-title"><ServiciosManager_FieldIcon name="calendar" size={16} color="#566257"/>Horario de vigencia</h3>
+                    <small className="catalog-hint">Opcional. Se aplica a los días elegidos; el servicio debe entrar completo en la franja.</small>
+                    <label className="promo-hours-toggle"><input type="checkbox" checked={form.hora_desde !== null} onChange={e=>setForm(prev=>({...prev,hora_desde:e.target.checked?"15:00":null,hora_hasta:e.target.checked?"16:30":null}))}/>Limitar a una franja horaria</label>
+                    {form.hora_desde !== null && <div className="promo-hours-fields"><label>Desde<input type="time" value={form.hora_desde} onChange={e=>setForm(prev=>({...prev,hora_desde:e.target.value}))}/></label><label>Hasta<input type="time" value={form.hora_hasta || ""} onChange={e=>setForm(prev=>({...prev,hora_hasta:e.target.value}))}/></label></div>}
+                </section>
                 <section className="promo-options" aria-labelledby="promo-discount-mode">
                     <h3 id="promo-discount-mode" className="catalog-field-title"><ServiciosManager_FieldIcon name="percent" size={16} color="#566257"/>Reducción del precio</h3>
                     <small className="catalog-hint">Elegí si vas a ingresar el precio final en pesos o el porcentaje de descuento sobre el precio original.</small>
@@ -3041,6 +3049,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 {cover ? <img src={cover} alt={p.nombre}/> : <ServiciosManager_SeccionIcon tipo="promociones" size={48}/>}
                 <div className="promo-badges"><b>{p.tipo==="combo" && !repeated?"Combo":"Descuento"}</b>
                     {p.dias_semana!=null && <span>Solo los {promoDaysLabel(p.dias_semana)}</span>}
+                    {p.hora_desde && p.hora_hasta && <span>De {String(p.hora_desde).slice(0,5)} a {String(p.hora_hasta).slice(0,5)}</span>}
                     <div>{p.items.filter((i:any)=>i.tipo==="producto" && photo(lookup(i))).map((i:any)=><img key={i.id} src={photo(lookup(i))} alt={i.nombre}/>)}</div>
                 </div>{repeated && <b className="promo-multiple">x{p.items[0].cantidad}</b>}
                 </div><div className="promo-foot"><div className="promo-heading"><strong>{p.nombre}</strong><div className="promo-cost">{money(Number(p.precio_final))} <del>{money(Number(p.precio_original))}</del></div></div>

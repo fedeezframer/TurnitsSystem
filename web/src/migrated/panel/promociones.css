@@ -32,6 +32,11 @@
 .promo-editor {position:relative;border:1px solid #aaa;border-radius:clamp(20px,3cqw,48px);padding:clamp(44px,4.5cqw,68px) clamp(16px,4.8cqw,72px) 30px}
 .promo-editor fieldset {border:0;padding:0;margin:0;min-width:0;display:grid;gap:24px}
 .promo-editor label,.promo-details {display:grid;gap:8px}
+.promo-hours-toggle{display:flex!important;align-items:center;gap:9px;color:#29452e;font-size:13px;font-weight:700}
+.promo-hours-toggle input{width:17px;height:17px;accent-color:#196b1f}
+.promo-hours-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:420px}
+.promo-hours-fields label{min-width:0;color:#36513a;font-size:12px;font-weight:700}
+.promo-hours-fields input{width:100%;min-height:43px;padding:8px 12px;border:1px solid #cbdccb;border-radius:10px;background:#fff;color:#172e1a;font:inherit}
 .promo-editor fieldset>label input {font-weight:700}
 .promo-intro {display:grid;grid-template-columns:38% minmax(0,1fr);gap:8%;align-items:stretch}
 .promo-intro>div:first-child>div {margin-top:8px}

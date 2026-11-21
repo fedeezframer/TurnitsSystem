@@ -18,6 +18,14 @@ export function promoAppliesOn(promo, date) {
   if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return false;
   return promo.dias_semana == null || (Array.isArray(promo.dias_semana) && promo.dias_semana.includes(parsed.getUTCDay()));
 }
+export function promoAppliesAt(promo, date, time, duration = 0) {
+  if (!promoAppliesOn(promo, date)) return false;
+  if (!promo.hora_desde || !promo.hora_hasta) return true;
+  if (!/^\d{2}:\d{2}$/.test(time || "")) return false;
+  const minutes = value => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+  const start = minutes(time);
+  return start >= minutes(promo.hora_desde) && start + duration <= minutes(promo.hora_hasta);
+}
 export function promoHasMatchingDate(promo) {
   const start = new Date(promo.fecha_inicio + "T12:00:00Z");
   for (let i = 0; i < 7; i++) {

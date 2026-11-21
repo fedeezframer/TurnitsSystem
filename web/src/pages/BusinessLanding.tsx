@@ -41,6 +41,8 @@ interface Promo {
   fecha_inicio: string
   fecha_fin: string
   dias_semana?: number[] | null
+  hora_desde?: string | null
+  hora_hasta?: string | null
   items?: { id: string; tipo: string; nombre: string; cantidad: number }[]
   imagenes?: { id: string; tipo: string; url: string }[]
 }
@@ -234,9 +236,11 @@ export default function BusinessLanding() {
   const serverNow = now + offset
   const liveOffers = offers.filter(o => Date.parse(o.cierre) > serverNow)
   const todayISO = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date())
+  const timeToday = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date())
+  const promoToday = (promo: Promo) => promoAppliesOn(promo, todayISO) && (!promo.hora_hasta || promo.hora_hasta > timeToday)
   const headlines = [
     ...(todaySlots != null && todaySlots > 0 ? [{ text: `${todaySlots} ${todaySlots === 1 ? "horario libre" : "horarios libres"} hoy`, action: "Reservar ahora", href: `/agenda/${encodeURIComponent(slug)}` }] : []),
-    ...(promos.some(promo => promoAppliesOn(promo, todayISO)) ? [{ text: "Hoy hay promociones para vos", action: "Ver promos", href: "#bl-promos" }] : []),
+    ...(promos.some(promoToday) ? [{ text: "Hoy hay promociones para vos", action: "Ver promos", href: "#bl-promos" }] : []),
     ...(liveOffers.some(offer => offer.fecha === todayISO) ? [{ text: "Ofertas de último momento para hoy", action: "Ver ofertas", href: "#bl-offers" }] : []),
   ]
   if (!headlines.length) headlines.push({ text: "Elegí tu próximo turno en minutos", action: "Reservar ahora", href: `/agenda/${encodeURIComponent(slug)}` })
@@ -285,7 +289,7 @@ export default function BusinessLanding() {
       if (promoAppliesOn(p, candidate)) return true
     }
     return false
-  }).sort((a, b) => Number(promoAppliesOn(b, todayISO)) - Number(promoAppliesOn(a, todayISO)) || ((b.precio_original - b.precio_final) / Math.max(b.precio_original, 1)) - ((a.precio_original - a.precio_final) / Math.max(a.precio_original, 1)))
+  }).sort((a, b) => Number(promoToday(b)) - Number(promoToday(a)) || ((b.precio_original - b.precio_final) / Math.max(b.precio_original, 1)) - ((a.precio_original - a.precio_final) / Math.max(a.precio_original, 1)))
   const discountForService = (service: Service) => rankedPromos
     .filter(p => p.tipo === "descuento" && p.servicio_id === service.id && p.items?.length === 1 && p.items[0].tipo === "servicio" && p.items[0].cantidad === 1 && p.precio_final < p.precio_original)
     .sort((a, b) => a.precio_final - b.precio_final)[0]
@@ -322,7 +326,7 @@ export default function BusinessLanding() {
   }
 
   const promoCard = (p: Promo) => {
-    const isToday = promoAppliesOn(p, todayISO)
+    const isToday = promoToday(p)
     const serviceQuantity = p.items?.filter(item => item.tipo === "servicio")
       .reduce((total, item) => total + Math.max(0, Number(item.cantidad) || 0), 0) || 0
     return (
@@ -330,6 +334,7 @@ export default function BusinessLanding() {
         <div className="bl-promo-img">{p.imagenes?.[0]?.url && <img src={p.imagenes[0].url} alt="" loading="lazy" />}{isToday && <span className="bl-promo-today-badge">Disponible hoy</span>}{p.imagenes?.some(image => image.tipo === "producto") && <span className="bl-promo-products">{p.imagenes.filter(image => image.tipo === "producto").slice(0, 2).map(image => <img key={image.id} src={image.url} alt="" loading="lazy" />)}</span>}{p.dias_semana?.length ? <small>SOLO {promoDaysLabel(p.dias_semana).toLocaleUpperCase("es-AR")}</small> : null}{serviceQuantity > 1 && <span className="bl-promo-quantity" aria-label={`${serviceQuantity} servicios incluidos`}>x{serviceQuantity}</span>}</div>
         <div className="bl-promo-body">
           <strong>{p.nombre}</strong>
+          {p.hora_desde && p.hora_hasta && <span className="bl-promo-hours">De {p.hora_desde} a {p.hora_hasta}</span>}
           <span className="bl-promo-price"><b>{money(p.precio_final)}</b>{p.precio_original > p.precio_final && <s>{money(p.precio_original)}</s>}</span>
           <span className="bl-promo-cta">Reservar <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></span>
         </div>
@@ -357,7 +362,7 @@ export default function BusinessLanding() {
                 <span>{address.map((line, i) => <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>)}</span>
               </a>
             )}
-            {reviews.cantidad > 0 && <a className="bl-info-item bl-reviews" href="#bl-reviews" aria-label={`${reviews.cantidad} reseñas, calificación ${reviews.promedio.toLocaleString("es-AR")} de 5`}>
+            {reviews.cantidad > 0 && <a className="bl-info-item bl-reviews" href={reviews.cantidad >= 5 && reviewItems.length > 0 ? "#bl-reviews" : `/perfil/${enc}`} aria-label={`${reviews.cantidad} reseñas, calificación ${reviews.promedio.toLocaleString("es-AR")} de 5`}>
               {reviews.cantidad > 0 && <strong className="bl-review-score">{reviews.promedio.toLocaleString("es-AR")}</strong>}
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.500 2.900 6 6.600.8-4.900 4.500 1.300 6.500L12 17l-5.900 3.300 1.300-6.500L2.500 9.300l6.600-.8z" /></svg>
               <span>{reviews.cantidad} {reviews.cantidad === 1 ? "reseña" : "reseñas"}</span>
@@ -372,7 +377,7 @@ export default function BusinessLanding() {
           {services.length > 0 && <a href="#bl-services">Servicios</a>}
           {works.length > 0 && <a href="#bl-works">Trabajos</a>}
           {rankedPromos.length > 0 && <a href="#bl-promos">Promociones</a>}
-          {reviews.cantidad > 0 && <a href="#bl-reviews">Reseñas</a>}
+          {reviews.cantidad >= 5 && reviewItems.length > 0 && <a href="#bl-reviews">Reseñas</a>}
         </nav>
 
         {liveOffers.length > 0 && <section id="bl-offers" className="bl-section bl-last-minute"><div className="bl-section-heading"><div><span className="bl-kicker">Solo por tiempo limitado</span><h2>Oferta de último momento</h2><p>Un horario libre, un mejor precio. Reservalo antes de que termine.</p></div></div>
@@ -426,7 +431,7 @@ export default function BusinessLanding() {
 
         {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><div className="bl-section-heading"><div><h2>Más para vos, por menos</h2><p>Combos y beneficios para tu próxima visita.</p></div></div><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
 
-        {reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} {reviews.cantidad === 1 ? "reseña" : "reseñas"}</p></div><Link to={`/perfil/${enc}`}>Ver reseñas</Link></div><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></article>)}</div></section>}
+        {reviews.cantidad >= 5 && reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} reseñas</p></div><Link to={`/perfil/${enc}`}>Ver reseñas</Link></div><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></article>)}</div></section>}
 
         <section className="bl-final-cta"><span>Tu lugar te espera</span><h2>¿Ya sabés cuándo venís?</h2><p>Elegí el servicio y reservá en pocos pasos.</p><Link to={`/agenda/${enc}`}>Encontrar mi turno</Link></section>
 

@@ -113,14 +113,14 @@ export default function BrowseBusiness({
     );
   return (
     <section className="browse-business">
-      <h3>{view === "offers" ? "Turnits Offers" : "Turnits T-Coins"}</h3>
+      {view === "coins" && <h3>Turnits T-Coins</h3>}
       {view === "offers" ? (
         <>
           <p>
             Ofrecé horarios sin ocupar durante los 30 minutos anteriores al
             cierre de reservas. Se respeta la antelación de cada profesional y
             sólo se publica si Mercado Pago está conectado. Podés limitar cada
-            Offer a días y franjas horarias concretas.
+            oferta a días y franjas horarias concretas.
           </p>
           <p>
             Durante los primeros 15 minutos de la oferta se aplica el 60% de la
@@ -129,7 +129,7 @@ export default function BrowseBusiness({
           </p>
           {draft.offers.map((o: any, i: number) => (
             <fieldset key={o.id} disabled={busy}>
-              <legend>Offer {i + 1}</legend>
+              <legend>Oferta {i + 1}</legend>
               <div className="browse-business-fields">
                 <label>
                   Servicio
@@ -187,7 +187,7 @@ export default function BrowseBusiness({
                     patch("offers", i, { activo: e.target.checked })
                   }
                 />
-                Habilitar esta Offer
+                Habilitar esta oferta
               </label>
               <button
                 className="browse-business-remove"
@@ -223,7 +223,7 @@ export default function BrowseBusiness({
               }))
             }
           >
-            Agregar Offer
+            Crear oferta
           </button>
         </>
       ) : (

@@ -2,7 +2,7 @@ import { seccionesPagos, type VistaPagos } from "./secciones-pagos"
 import { useCatalogTransition } from "./catalog-motion"
 import { BackButton } from "../../components/BackButton"
 import { fetchPanelRead } from "../../shared/panel-requests"
-import { SectionLoadingBoundary } from "../../components/LoadingRunner"
+import LoadingRunner, { SectionLoadingBoundary } from "../../components/LoadingRunner"
 import { BranchAccountFooter, BranchSchedule, OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
 import { appConfig } from "../../config"
 import { loadQuoteMode, useQuoteMode } from "../../shared/agenda-mode"
@@ -34,6 +34,7 @@ import "./panel-controls.css"
 const Consultations = React.lazy(() => import("../../pages/Consultations"))
 const SetupGuide = React.lazy(() => import("../../components/SetupGuide"))
 const OnboardingNube = React.lazy(() => import("./onboarding").then(module => ({ default: module.OnboardingNube })))
+const BrowseBusiness = React.lazy(() => import("./browse-config"))
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
@@ -101,7 +102,7 @@ function TurnitsPanel_Inner(props: any) {
     const [scheduleView,setScheduleView] = React.useState<"weekly"|"exceptions">("weekly")
     const vistaPagos = ["mp_success","mp_error"].includes(searchParams.get("status") || "") ? "metodos" : seccionesPagos.find(s => s.id === searchParams.get("vista"))?.id || "metodos"
     const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(["pagos", "equipo", "perfil", "horarios"].includes(seccionActiva) ? seccionActiva : null)
-    const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones">("servicios")
+    const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones" | "offers">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
     // Arranca oculta y solo se muestra si confirmamos que el plan es
     // premium, así el plan gratis nunca llega a verla en el menú.
@@ -218,7 +219,7 @@ function TurnitsPanel_Inner(props: any) {
         (item) => item.id !== "consultas" && (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible)
     ).sort((a, b) => ["inicio", "servicios", "agenda", "clientes", "horarios", "pagos", "finanzas", "temas", "equipo", "perfil"].indexOf(a.id) - ["inicio", "servicios", "agenda", "clientes", "horarios", "pagos", "finanzas", "temas", "equipo", "perfil"].indexOf(b.id))
 
-    const abrirCatalogo = (vista: "servicios" | "extras" | "promociones") => {
+    const abrirCatalogo = (vista: "servicios" | "extras" | "promociones" | "offers") => {
         setServiciosVistaInicial(vista)
         setMenuExpandido("servicios")
         irA("servicios")
@@ -272,7 +273,8 @@ function TurnitsPanel_Inner(props: any) {
                             {renderSubsection("exceptions","Excepciones laborales","/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "horarios" && scheduleView === "exceptions", () => {setScheduleView("exceptions");irA("horarios")})}
                         </> : <>{renderSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg", seccionActiva === "servicios" && serviciosVistaInicial === "servicios", () => abrirCatalogo("servicios"))}
                         {renderSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg", seccionActiva === "servicios" && serviciosVistaInicial === "extras", () => abrirCatalogo("extras"))}
-                        {renderSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg", seccionActiva === "servicios" && serviciosVistaInicial === "promociones", () => abrirCatalogo("promociones"))}</>}
+                        {renderSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg", seccionActiva === "servicios" && serviciosVistaInicial === "promociones", () => abrirCatalogo("promociones"))}
+                        {!branchAdmin && renderSubsection("offers","Ofertas de último momento","/assets/browse/ant-design_fire-outlined.svg", seccionActiva === "servicios" && serviciosVistaInicial === "offers", () => abrirCatalogo("offers"))}</>}
                     </div>
                     <motion.div
                         aria-hidden="true"
@@ -768,12 +770,12 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title={serviciosVistaInicial === "servicios" ? "Servicios" : serviciosVistaInicial === "extras" ? "Productos" : "Promociones"}
-                            subtitle={serviciosVistaInicial === "servicios" ? "Administrá los servicios que ofrecés a tus clientes" : serviciosVistaInicial === "extras" ? "Administrá los productos adicionales de tu catálogo" : "Creá y organizá tus promociones"}
+                            title={serviciosVistaInicial === "servicios" ? "Servicios" : serviciosVistaInicial === "extras" ? "Productos" : serviciosVistaInicial === "offers" ? "Ofertas de último momento" : "Promociones"}
+                            subtitle={serviciosVistaInicial === "servicios" ? "Administrá los servicios que ofrecés a tus clientes" : serviciosVistaInicial === "extras" ? "Administrá los productos adicionales de tu catálogo" : serviciosVistaInicial === "offers" ? "Elegí qué servicios ofrecer y en qué días y horarios" : "Creá y organizá tus promociones"}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
-                        {React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
+                        {serviciosVistaInicial === "offers" ? <React.Suspense fallback={<LoadingRunner card />}><BrowseBusiness api={baseUrl} view="offers" /></React.Suspense> : React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
                             baseUrl,
                             accentColor,
                             iconoPlaceholderUrl: iconos.servicioPlaceholder,

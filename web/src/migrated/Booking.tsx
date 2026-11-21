@@ -5,7 +5,7 @@ import { consumerHeaders } from "../shared/consumer-session"
 import { bookingSteps, resolveBookingStep } from "../shared/booking-flow"
 import * as React from "react"
 import { cardRadius, iconRadius, type BusinessAppearance } from "../shared/appearance.js"
-import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
+import { promoAppliesOn, promoAppliesAt, promoDaysLabel } from "../shared/promotions.js"
 import type {MapBranch} from "../components/BranchMap"
 const BranchSelection=React.lazy(()=>import("../components/BranchMap").then(m=>({default:m.BranchSelection})))
 
@@ -89,6 +89,7 @@ interface Negocio {
 }
 interface BookingPromo {
  dias_semana?: number[] | null;
+ hora_desde?: string | null;hora_hasta?: string | null;
  imagenes?:{id:string;tipo:string;url:string}[];
  id:string;nombre:string;tipo:"combo"|"descuento";servicio_id:string;precio_original:number;precio_final:number;duracion:number;fecha_inicio:string;fecha_fin:string;items:{id:string;tipo:string;nombre:string;cantidad:number}[]
 }
@@ -870,6 +871,7 @@ export default function BookingFlow(props: any) {
     const hoyBA = React.useMemo(() => getHoyBA(), [])
     const [verMasDias, setVerMasDias] = React.useState(false)
     const [fecha, setFecha] = React.useState<string>("")
+    const [hora, setHora] = React.useState<string>("")
     const selectedService = servicios.find(s=>s.id===servicioId)
     const personalPromo:BookingPromo|null = React.useMemo(()=>{
         if(!personal || !selectedService)return null
@@ -879,8 +881,8 @@ export default function BookingFlow(props: any) {
             fecha_inicio:personal.fecha || getHoyBAISO(),fecha_fin:personal.fecha || personal.vence}
     },[personal,personalKey,selectedService,primaryPersonal])
     const promoElegida = personalKey ? personalPromo : catalogPromo
-    const promoParaFecha = (dia:string) => promoElegida?.tipo === "combo" ? (promoAppliesOn(promoElegida,dia) ? promoElegida : null) : promociones.filter(p=>p.tipo === "descuento" && p.servicio_id===servicioId && promoAppliesOn(p,dia) && p.precio_final<Number(servicios.find(s=>s.id===servicioId)?.precio || 0)).sort((a,b)=>a.precio_final-b.precio_final)[0] || null
-    const promoAplicada = personalKey ? personalPromo : browseOfferId ? null : fecha ? promoParaFecha(fecha) : promoElegida
+    const promoParaFecha = (dia:string, slot?:string) => promoElegida?.tipo === "combo" ? (promoAppliesOn(promoElegida,dia) ? promoElegida : null) : promociones.filter(p=>p.tipo === "descuento" && p.servicio_id===servicioId && (slot ? promoAppliesAt(p,dia,slot,p.duracion) : promoAppliesOn(p,dia)) && p.precio_final<Number(servicios.find(s=>s.id===servicioId)?.precio || 0)).sort((a,b)=>a.precio_final-b.precio_final)[0] || null
+    const promoAplicada = personalKey ? personalPromo : browseOfferId ? null : fecha ? (promoElegida?.tipo === "combo" ? promoParaFecha(fecha) : hora ? promoParaFecha(fecha,hora) : null) : promoElegida
     const [diasLlenos, setDiasLlenos] = React.useState<string[]>([])
     const [diasSinDisponibilidad, setDiasSinDisponibilidad] = React.useState<
         string[]
@@ -891,7 +893,6 @@ export default function BookingFlow(props: any) {
     const [slotsRevision, setSlotsRevision] = React.useState(0)
     const [loadingSlots, setLoadingSlots] = React.useState(false)
     const [errorSlots, setErrorSlots] = React.useState("")
-    const [hora, setHora] = React.useState<string>("")
     const [puedeAnotarseEspera, setPuedeAnotarseEspera] = React.useState(false)
 
     const [esperaNombre, setEsperaNombre] = React.useState("")
@@ -1290,7 +1291,7 @@ export default function BookingFlow(props: any) {
                     const equipoFiltro = equipoId
                         ? `&equipo_id=${encodeURIComponent(equipoId)}`
                         : ""
-                    const promoDia=promoParaFecha(f)
+                    const promoDia=promoElegida?.tipo === "combo" ? promoParaFecha(f) : null
                     const url = `${api}/slots-disponibles/${slug}?fecha=${f}&servicio_id=${servicioId}${equipoFiltro}${promoDia ? "&promocion_id="+encodeURIComponent(promoDia.id) : ""}`
                     const res = await fetch(url)
                     const data = await res.json()
@@ -1374,7 +1375,7 @@ export default function BookingFlow(props: any) {
 
         let url = `${api}/slots-disponibles/${slug}?fecha=${fecha}`
         if (servicioId) url += `&servicio_id=${servicioId}`
-        if (promoAplicada) url += `&promocion_id=${encodeURIComponent(promoAplicada.id)}`
+        if (promoAplicada?.tipo === "combo") url += `&promocion_id=${encodeURIComponent(promoAplicada.id)}`
         if (equipoId) url += `&equipo_id=${encodeURIComponent(equipoId)}`
 
         fetch(url, { cache: "no-store" })
@@ -1408,7 +1409,7 @@ export default function BookingFlow(props: any) {
         return () => {
             alive = false
         }
-    }, [fecha, servicioId, slug, api, equipoId, habilitarListaEspera, promocionId, promoAplicada?.id, slotsRevision])
+    }, [fecha, servicioId, slug, api, equipoId, habilitarListaEspera, promocionId, promoAplicada?.tipo === "combo" ? promoAplicada.id : null, slotsRevision])
 
     const slotsDisponibles = React.useMemo(() => {
         const hoy = getHoyBAISO()
