@@ -547,6 +547,14 @@ function TurnitsGlobalSaveManager_get() {
                             if (!res.headers.get("content-type")?.includes("application/json")) throw new Error("No se pudo guardar el perfil (" + res.status + ").")
                             const d = await res.json()
                             if (!res.ok || !d.success) throw new Error(d.error || "Error al guardar el perfil.")
+                            const submittedPosts = body.publicaciones || {}
+                            if (Object.keys(submittedPosts).length && Object.entries(submittedPosts).some(([url, post]: [string, any]) => {
+                                const saved = d.perfil?.publicaciones?.[url]
+                                return !saved || saved.servicio_id !== post.servicio_id || saved.descripcion !== post.descripcion ||
+                                    (saved.encuadre_x ?? 50) !== (post.encuadre_x ?? 50) ||
+                                    (saved.encuadre_y ?? 50) !== (post.encuadre_y ?? 50) ||
+                                    (saved.zoom ?? 1) !== (post.zoom ?? 1)
+                            })) throw new Error("La API todavía no guarda los datos de las publicaciones. Tus cambios siguen pendientes.")
                             savedData.perfil = perfilDraft(d.perfil || body,
                                 Object.hasOwn(current.perfil, "redes_sociales"),
                                 Object.hasOwn(current.perfil, "foto_perfil_url"))
