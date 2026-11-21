@@ -46,7 +46,7 @@
 .bl-section-heading{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:17px}
 .bl-section-heading h2,.bl-contact h2{margin:0;font-size:clamp(23px,3vw,31px);line-height:1.12;letter-spacing:-.035em}
 .bl-section-heading p,.bl-contact p{margin:6px 0 0;color:#677369;font-size:14px;line-height:1.45}
-.bl-section-heading>a{flex:none;color:var(--bl-ink);font-size:13px;font-weight:800;white-space:nowrap}
+.bl-section-heading>a{display:inline-flex;align-items:center;gap:3px;flex:none;color:var(--bl-ink);font-size:13px;font-weight:800;white-space:nowrap}
 .bl-kicker{display:block;margin-bottom:8px;color:var(--bl-ink);font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
 
 .bl-offer-slider{display:grid;gap:12px}
@@ -135,7 +135,7 @@
 .bl-signup{display:flex;align-items:center;justify-content:center;gap:10px;width:min(calc(100% - 40px),1160px);margin:28px auto 0;padding:18px 0;border-top:1px solid #e9eee9;color:#687469;font-size:12px}
 .bl-signup>span{font-weight:800;text-transform:uppercase;letter-spacing:.08em}
 .bl-signup p{margin:0}
-.bl-signup>a{color:var(--bl-ink);font-weight:800}
+.bl-signup>a{display:inline-flex;align-items:center;gap:3px;color:var(--bl-ink);font-weight:800}
 .bl-footer{display:flex;align-items:center;justify-content:center;gap:8px;min-height:70px;margin-top:auto;background:var(--bl-ink);color:#fff;font-size:13px}
 .bl-footer img{display:block;width:190px;max-width:70%;height:auto;filter:brightness(0) invert(1)}
 
