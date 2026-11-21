@@ -657,3 +657,13 @@
 .publicacion-zoom { display:grid;gap:8px;margin-top:18px;color:#354237;font-size:13px;font-weight:650; }
 .publicacion-zoom input { width:100%;accent-color:#2b823b; }
 .publicacion-dialog footer { justify-content:flex-start; }
+.publicacion-dialog header .turnits-back-button { width:48px;height:48px;min-width:48px;padding:0;border:0; }
+.perfil-workspace .publicacion-image button { display:grid;place-items:center; }
+.perfil-workspace .publicacion-image button img { width:22px;height:22px;object-fit:contain;transform:none; }
+.publicacion-delete-dialog { position:relative;width:min(420px,100%);padding:28px;border-radius:20px;background:#fff;box-shadow:0 25px 80px #0004;color:#203025; }
+.publicacion-delete-dialog>.turnits-back-button { position:absolute;top:16px;right:16px; }
+.publicacion-delete-dialog h2 { margin:45px 0 8px;font-size:22px; }
+.publicacion-delete-dialog p { margin:0;color:#637164;line-height:1.5; }
+.publicacion-delete-dialog>div { display:flex;justify-content:flex-end;gap:10px;margin-top:26px; }
+.publicacion-delete-dialog>div button { padding:10px 15px;border:1px solid #d8e5d8;border-radius:10px;background:#f6faf6;color:#25402a;font:inherit;font-weight:650;cursor:pointer; }
+.publicacion-delete-dialog>div button:last-child { border-color:#bd514c;background:#bd514c;color:#fff; }

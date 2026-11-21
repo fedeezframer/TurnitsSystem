@@ -94,7 +94,7 @@ function PublicationEditor({ url, post, services, onApply, onClose }: {
   return createPortal(
     <div className="publicacion-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="publicacion-dialog" role="dialog" aria-modal="true" aria-label="Editar publicación">
-        <header><div><span className="publicacion-eyebrow">Tu publicación</span><h2>Editar publicación</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></header>
+        <header><div><span className="publicacion-eyebrow">Tu publicación</span><h2>Editar publicación</h2></div><BackButton aria-label="Volver" onClick={onClose} /></header>
         <div className="publicacion-dialog-body">
           <div className="publicacion-crop">
             <div className="publicacion-crop-image" aria-label="Arrastrá la foto para ajustar el encuadre"
@@ -162,6 +162,7 @@ export function PerfilNegocio({
     [uploadProgress, setUploadProgress] = React.useState(""),
     [servicios, setServicios] = React.useState<{ id: string; nombre: string }[]>([]),
     [editingUrl, setEditingUrl] = React.useState<string | null>(null),
+    [deleteUrl, setDeleteUrl] = React.useState<string | null>(null),
     [error, setError] = React.useState("");
   const draftRef = React.useRef(form);
   const capabilities = React.useRef({ redes: false, imagenes: false });
@@ -458,21 +459,16 @@ export function PerfilNegocio({
                     <span aria-hidden="true">＋</span>{uploading ? "Subiendo…" : "Crear publicación"}<small>JPG, PNG o WebP · hasta 3 MB</small>
                     <input aria-label="Subir foto de publicación" type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={e => subir(e)} />
                   </label>
-                  {form.fotos.map((url, i) => (
+                  {form.fotos.map((url) => (
                     <article className="publicacion-tile" key={url}>
-                      <div className="publicacion-image"><img src={url} alt={form.publicaciones[url]?.descripcion || `Publicación ${i + 1}`} loading="lazy" style={cropStyle(form.publicaciones[url])} /><button type="button" aria-label={`Quitar publicación ${i + 1}`} disabled={uploading} onClick={() => updateDraft(f => {
-                        const titles = {...f.titulos_fotos};
-                        delete titles[url];
-                        const posts = {...f.publicaciones};
-                        delete posts[url];
-                        return {...f, titulos_fotos: titles, publicaciones: posts, fotos: f.fotos.filter(photo => photo !== url)};
-                      })}>×</button></div>
+                      <div className="publicacion-image"><img src={url} alt={form.publicaciones[url]?.descripcion || "Foto de la publicación"} loading="lazy" style={cropStyle(form.publicaciones[url])} /><button type="button" aria-label="Eliminar publicación" disabled={uploading} onClick={() => setDeleteUrl(url)}><img src="/assets/basil_cross-outline.svg" alt="" aria-hidden="true" /></button></div>
                       <div className="publicacion-fields"><strong>{form.publicaciones[url]?.servicio_nombre || "Sin servicio"}</strong><p>{form.publicaciones[url]?.descripcion || form.titulos_fotos[url] || "Agregá una descripción"}</p><button type="button" onClick={() => setEditingUrl(url)}>Editar publicación</button></div>
                     </article>
                   ))}
                 </div>
               </>}
               {editingUrl && <PublicationEditor key={editingUrl} url={editingUrl} post={{ servicio_id: "", servicio_nombre: "", descripcion: form.titulos_fotos[editingUrl] || "", ...form.publicaciones[editingUrl] }} services={servicios} onClose={() => setEditingUrl(null)} onApply={(post) => { updatePost(editingUrl, post); setEditingUrl(null); }} />}
+              {deleteUrl && createPortal(<div className="publicacion-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setDeleteUrl(null); }}><section className="publicacion-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publicacion-delete-title" aria-describedby="publicacion-delete-description"><BackButton aria-label="Volver" onClick={() => setDeleteUrl(null)} /><h2 id="publicacion-delete-title">¿Eliminar publicación?</h2><p id="publicacion-delete-description">Se quitará la foto y su descripción cuando guardes los cambios.</p><div><button type="button" onClick={() => setDeleteUrl(null)}>Cancelar</button><button type="button" onClick={() => { updateDraft((f) => { const titles = { ...f.titulos_fotos }; delete titles[deleteUrl]; const posts = { ...f.publicaciones }; delete posts[deleteUrl]; return { ...f, titulos_fotos: titles, publicaciones: posts, fotos: f.fotos.filter((photo) => photo !== deleteUrl) }; }); setDeleteUrl(null); }}>Sí, eliminar</button></div></section></div>, document.body)}
               <label className="negocio-toggle">
                 <input
                   type="checkbox"
