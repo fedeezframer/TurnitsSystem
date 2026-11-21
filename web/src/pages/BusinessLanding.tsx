@@ -115,6 +115,16 @@ export default function BusinessLanding() {
   const [offers, setOffers] = React.useState<Offer[]>([])
   const [offerIndex, setOfferIndex] = React.useState(0)
   const reduceMotion = useReducedMotion()
+  const scrollToSection = (event: React.MouseEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#"]')
+    if (!link || !event.currentTarget.contains(link)) return
+    const target = document.getElementById(link.hash.slice(1))
+    if (!target) return
+    event.preventDefault()
+    window.history.pushState(null, "", link.hash)
+    target.scrollIntoView({ behavior: reduceMotion ? "instant" : "smooth", block: "start" })
+  }
   const [offerPaused, setOfferPaused] = React.useState(false)
   const [offset, setOffset] = React.useState(0)
   const [now, setNow] = React.useState(() => Date.now())
@@ -345,7 +355,7 @@ export default function BusinessLanding() {
   }
 
   return (
-    <main className="bl-page" style={style}>
+    <main className="bl-page" style={style} onClick={scrollToSection}>
       <div className="bl-wrap">
         <header className="bl-bar">
           <AnimatePresence mode="wait" initial={false}>
