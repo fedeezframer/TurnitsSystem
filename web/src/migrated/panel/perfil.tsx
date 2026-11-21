@@ -3,6 +3,7 @@ import { LocationEditor } from "../../components/LocationEditor";
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { useBranchAdmin } from "../../components/BranchAdmin";
 import * as React from "react";
+import { createPortal } from "react-dom";
 import {
   MenuFooter_getSlug,
   MenuFooter_getToken,
@@ -117,6 +118,7 @@ export function PerfilNegocio({
     [uploading, setUploading] = React.useState(false),
     [uploadProgress, setUploadProgress] = React.useState(""),
     [servicios, setServicios] = React.useState<{ id: string; nombre: string }[]>([]),
+    [editingUrl, setEditingUrl] = React.useState<string | null>(null),
     [error, setError] = React.useState("");
   const draftRef = React.useRef(form);
   const capabilities = React.useRef({ redes: false, imagenes: false });
@@ -206,6 +208,16 @@ export function PerfilNegocio({
   const change = (key: string, value: any) => {
     updateDraft((f) => ({ ...f, [key]: value }));
   };
+  const updatePost = (url: string, patch: Partial<(typeof form.publicaciones)[string]>) =>
+    updateDraft((f) => ({ ...f, publicaciones: { ...f.publicaciones, [url]: { servicio_id: "", servicio_nombre: "", descripcion: f.titulos_fotos[url] || "", ...f.publicaciones[url], ...patch } } }));
+  React.useEffect(() => {
+    if (!editingUrl) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setEditingUrl(null); };
+    document.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = previous; };
+  }, [editingUrl]);
   const subir = async (
     e: React.ChangeEvent<HTMLInputElement>,
     destino: "fotos" | "foto_perfil_url" | "banner_url" = "fotos",
@@ -251,6 +263,7 @@ export function PerfilNegocio({
             ? { ...f, fotos: [...new Set([...f.fotos, d.url])] }
             : { ...f, [destino]: d.url },
         );
+        if (destino === "fotos") setEditingUrl(d.url);
       }
     } catch (e: any) {
       setError(e.message);
@@ -401,22 +414,23 @@ export function PerfilNegocio({
                 <div className="publicacion-grid">
                   <label className="publicacion-upload">
                     <span aria-hidden="true">＋</span>{uploading ? "Subiendo…" : "Crear publicación"}<small>JPG, PNG o WebP · hasta 3 MB</small>
-                    <input aria-label="Subir fotos" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={uploading} onChange={e => subir(e)} />
+                    <input aria-label="Subir foto de publicación" type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={e => subir(e)} />
                   </label>
                   {form.fotos.map((url, i) => (
                     <article className="publicacion-tile" key={url}>
-                      <div className="publicacion-image"><img src={url} alt={form.publicaciones[url]?.descripcion || `Publicación ${i + 1}`} loading="lazy" /><button type="button" aria-label={`Quitar publicación ${i + 1}`} disabled={uploading} onClick={() => updateDraft(f => {
+                      <div className="publicacion-image"><img src={url} alt={form.publicaciones[url]?.descripcion || `Publicación ${i + 1}`} loading="lazy" style={{transform:`scale(${form.publicaciones[url]?.zoom || 1})`,transformOrigin:`${form.publicaciones[url]?.encuadre_x ?? 50}% ${form.publicaciones[url]?.encuadre_y ?? 50}%`}} /><button type="button" aria-label={`Quitar publicación ${i + 1}`} disabled={uploading} onClick={() => updateDraft(f => {
                         const titles = {...f.titulos_fotos};
                         delete titles[url];
                         const posts = {...f.publicaciones};
                         delete posts[url];
                         return {...f, titulos_fotos: titles, publicaciones: posts, fotos: f.fotos.filter(photo => photo !== url)};
                       })}>×</button></div>
-                      <div className="publicacion-fields"><span className="publicacion-index">Publicación {i + 1}</span><label>Servicio<select value={form.publicaciones[url]?.servicio_id || ""} onChange={e => { const selected = servicios.find(service => service.id === e.target.value); change("publicaciones", {...form.publicaciones, [url]: { ...form.publicaciones[url], servicio_id: selected?.id || "", servicio_nombre: selected?.nombre || "", descripcion: form.publicaciones[url]?.descripcion || "" }}); }}><option value="">Elegí un servicio</option>{servicios.map(service => <option key={service.id} value={service.id}>{service.nombre}</option>)}</select></label><label>Descripción<textarea maxLength={1500} rows={3} placeholder="Contá qué se ve en esta foto…" value={form.publicaciones[url]?.descripcion ?? form.titulos_fotos[url] ?? ""} onChange={e => change("publicaciones", {...form.publicaciones, [url]: { servicio_id: form.publicaciones[url]?.servicio_id || "", servicio_nombre: form.publicaciones[url]?.servicio_nombre || "", descripcion: e.target.value }})} /></label></div>
+                      <div className="publicacion-fields"><span className="publicacion-index">Publicación {i + 1}</span><strong>{form.publicaciones[url]?.servicio_nombre || "Sin servicio"}</strong><p>{form.publicaciones[url]?.descripcion || form.titulos_fotos[url] || "Agregá una descripción"}</p><button type="button" onClick={() => setEditingUrl(url)}>Editar publicación</button></div>
                     </article>
                   ))}
                 </div>
               </>}
+              {editingUrl && createPortal(<div className="publicacion-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setEditingUrl(null); }}><section className="publicacion-dialog" role="dialog" aria-modal="true" aria-label="Editar publicación"><header><div><span className="publicacion-eyebrow">Tu publicación</span><h2>Editar publicación</h2></div><button type="button" aria-label="Cerrar" onClick={() => setEditingUrl(null)}>×</button></header><div className="publicacion-dialog-body"><div className="publicacion-crop"><div className="publicacion-crop-image"><img src={editingUrl} alt="Vista previa de la publicación" style={{transform:`scale(${form.publicaciones[editingUrl]?.zoom || 1})`,transformOrigin:`${form.publicaciones[editingUrl]?.encuadre_x ?? 50}% ${form.publicaciones[editingUrl]?.encuadre_y ?? 50}%`}} /></div><div className="publicacion-sliders"><label>Zoom<input type="range" min="1" max="2" step="0.05" value={form.publicaciones[editingUrl]?.zoom ?? 1} onChange={e => updatePost(editingUrl, {zoom:Number(e.target.value)})} /></label><label>Horizontal<input type="range" min="0" max="100" value={form.publicaciones[editingUrl]?.encuadre_x ?? 50} onChange={e => updatePost(editingUrl, {encuadre_x:Number(e.target.value)})} /></label><label>Vertical<input type="range" min="0" max="100" value={form.publicaciones[editingUrl]?.encuadre_y ?? 50} onChange={e => updatePost(editingUrl, {encuadre_y:Number(e.target.value)})} /></label></div></div><div className="publicacion-dialog-fields"><label>Servicio<select value={form.publicaciones[editingUrl]?.servicio_id || ""} onChange={e => { const selected = servicios.find(service => service.id === e.target.value); updatePost(editingUrl, {servicio_id:selected?.id || "",servicio_nombre:selected?.nombre || ""}); }}><option value="">Elegí un servicio</option>{servicios.map(service => <option key={service.id} value={service.id}>{service.nombre}</option>)}</select></label><label>Descripción<textarea maxLength={1500} rows={6} placeholder="Contá qué se ve en esta foto…" value={form.publicaciones[editingUrl]?.descripcion ?? form.titulos_fotos[editingUrl] ?? ""} onChange={e => updatePost(editingUrl, {descripcion:e.target.value})} /></label><small>{(form.publicaciones[editingUrl]?.descripcion ?? form.titulos_fotos[editingUrl] ?? "").length}/1500</small></div></div><footer><button type="button" onClick={() => setEditingUrl(null)}>Listo</button></footer></section></div>, document.body)}
               <label className="negocio-toggle">
                 <input
                   type="checkbox"

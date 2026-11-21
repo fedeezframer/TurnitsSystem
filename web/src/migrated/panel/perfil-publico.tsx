@@ -383,7 +383,7 @@ export function PerfilContenido({
       {photos.length > 0 && <section className="perfil-inline-publications" aria-labelledby="perfil-inline-publications-title">
         <div className="perfil-inline-section-heading"><h2 id="perfil-inline-publications-title">Publicaciones</h2><span>{photos.length}</span></div>
         <div className="perfil-publications-grid" id="perfil-inline-gallery">
-          {photos.slice(0, expanded ? photos.length : 6).map((url: string, index: number) => <PublicationPhoto key={`${url}-${index}`} src={url} serviceName={perfil.publicaciones?.[url]?.servicio_nombre} caption={perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url]} name={name} index={index} onOpen={() => setPhoto({ src: url, alt: perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url] || `Publicación ${index + 1} de ${name}` })} />)}
+          {photos.slice(0, expanded ? photos.length : 6).map((url: string, index: number) => <PublicationPhoto key={`${url}-${index}`} src={url} crop={perfil.publicaciones?.[url]} serviceName={perfil.publicaciones?.[url]?.servicio_nombre} caption={perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url]} name={name} index={index} onOpen={() => setPhoto({ src: url, alt: perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url] || `Publicación ${index + 1} de ${name}` })} />)}
         </div>
         {photos.length > 6 && <button type="button" className="perfil-publications-more" aria-expanded={expanded} aria-controls="perfil-inline-gallery" onClick={() => setExpanded(value => !value)}>{expanded ? "Ver menos" : "Ver más publicaciones"}</button>}
       </section>}
@@ -425,6 +425,7 @@ function PublicationPhoto({
   src,
   caption,
   serviceName,
+  crop,
   name,
   index,
   onOpen,
@@ -432,6 +433,7 @@ function PublicationPhoto({
   src: string;
   caption?: string;
   serviceName?: string;
+  crop?: { encuadre_x?: number; encuadre_y?: number; zoom?: number };
   name: string;
   index: number;
   onOpen: () => void;
@@ -460,6 +462,7 @@ function PublicationPhoto({
         loading="lazy"
         decoding="async"
         alt={caption || `Publicación ${index + 1} de ${name}`}
+        style={{transform:`scale(${crop?.zoom || 1})`,transformOrigin:`${crop?.encuadre_x ?? 50}% ${crop?.encuadre_y ?? 50}%`}}
         onError={() => setFailed(true)}
       />
     </button>{(serviceName || caption) && <div className="perfil-publication-copy">{serviceName && <strong>{serviceName}</strong>}{caption && <p>{caption}</p>}</div>}</article>
@@ -517,6 +520,7 @@ export function PerfilPublicaciones({
                 src={url}
                 caption={perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url]}
                 serviceName={perfil.publicaciones?.[url]?.servicio_nombre}
+                crop={perfil.publicaciones?.[url]}
                 name={name}
                 index={index}
                 onOpen={() =>

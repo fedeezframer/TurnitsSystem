@@ -70,12 +70,17 @@ export function validarPerfil(body) {
       if (!data.fotos.includes(url) || !post || typeof post !== "object" || Array.isArray(post) ||
           typeof post.descripcion !== "string" || post.descripcion.length > 1500 ||
           typeof post.servicio_id !== "string" || (post.servicio_id && !UUID.test(post.servicio_id)) ||
-          typeof post.servicio_nombre !== "string" || post.servicio_nombre.length > 120)
+          typeof post.servicio_nombre !== "string" || post.servicio_nombre.length > 120 ||
+          ![post.encuadre_x ?? 50, post.encuadre_y ?? 50].every((value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100) ||
+          typeof (post.zoom ?? 1) !== "number" || !Number.isFinite(post.zoom ?? 1) || (post.zoom ?? 1) < 1 || (post.zoom ?? 1) > 2)
         throw new Error("Revisá las publicaciones.");
       data.publicaciones[url] = {
         descripcion: post.descripcion.trim(),
         servicio_id: post.servicio_id,
         servicio_nombre: post.servicio_nombre.trim(),
+        encuadre_x: post.encuadre_x ?? 50,
+        encuadre_y: post.encuadre_y ?? 50,
+        zoom: post.zoom ?? 1,
       };
     }
   }
