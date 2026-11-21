@@ -1,0 +1,9 @@
+.offer-schedule{margin:16px 0;padding:14px;border:1px solid #dce8dc;border-radius:12px;background:#f8fbf7}
+.offer-schedule>strong{display:block;color:#1d3d20;font-size:13px}
+.offer-schedule>p{margin:5px 0 12px;color:#526457;font-size:12px;line-height:1.45}
+.offer-schedule-row{display:grid;grid-template-columns:minmax(110px,1.3fr) repeat(2,minmax(90px,1fr)) auto;align-items:end;gap:8px;margin-top:9px}
+.offer-schedule-row label{display:grid;gap:5px;min-width:0;color:#36513a;font-size:11px;font-weight:700}
+.offer-schedule-row :is(select,input){width:100%;min-width:0;min-height:39px;padding:7px 9px;border:1px solid #cadcca;border-radius:9px;background:#fff;color:#172e1a;font:inherit;font-size:13px}
+.offer-schedule-row button,.offer-schedule-add{min-height:39px;padding:7px 11px;border:1px solid #c8dcc7;border-radius:9px;background:#fff;color:#196b1f;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.offer-schedule-add{margin-top:12px;background:#eaf4e8}
+@media(max-width:520px){.offer-schedule-row{grid-template-columns:repeat(2,minmax(0,1fr))}.offer-schedule-row label:first-child{grid-column:1/-1}.offer-schedule-row button{grid-column:1/-1}}

@@ -60,6 +60,13 @@ export const argentinaDate = (now = new Date()) =>
     month: "2-digit",
     day: "2-digit",
   }).format(now);
+const offerMinutes = (time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+export function offerWindowAllowed(windows, date, time, duration) {
+  if (!Array.isArray(windows) || !windows.length) return true;
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  const start = offerMinutes(time);
+  return windows.some(w => Number(w.dia) === day && start >= offerMinutes(w.desde) && start + duration <= offerMinutes(w.hasta));
+}
 export function createBrowse({
   app,
   supabase,
@@ -772,6 +779,7 @@ export function createBrowse({
                     Number(o.precio_minimo),
                     remaining,
                   );
+                if (!offerWindowAllowed(o.franjas, today, hora, duration)) continue;
                 if (price === null) continue;
                 try {
                   await available(
@@ -834,6 +842,7 @@ export function createBrowse({
     if (!Number.isFinite(start.getTime()) || argentinaDate(start) !== input.fecha || price === null) fail("Esta oferta finalizó. Elegí otro horario.", 409);
     const minute = Number(input.hora.slice(0, 2)) * 60 + Number(input.hora.slice(3));
     const duration = Number(ctx.service.duracion || 30);
+    if (!offerWindowAllowed(offer.franjas, input.fecha, input.hora, duration)) fail("La oferta no está disponible en este día y horario.", 409);
     if (!(intervals(ctx.config.horarios, ctx.config.excepciones, input.fecha) || []).some(([start, end]) => minute >= start && minute + duration <= end && (minute - start) % duration === 0)) fail("Este horario ya no está disponible.", 409);
     return { ctx, quote: { id: offer.id, slug: offer.slug, servicio_id: offer.servicio_id, equipo_id: offer.equipo_id, sucursal_id: ctx.member.sucursal_id || "principal", fecha: input.fecha, hora: input.hora, precio: price, precio_original: ctx.service.precio, cierre: close.toISOString() } };
   }
@@ -1064,6 +1073,13 @@ export function createBrowse({
       const cleanOffers = [],
         cleanRewards = [];
       for (const o of offers) {
+        const franjas = o.franjas ?? [];
+        if (!Array.isArray(franjas) || franjas.length > 21 || franjas.some(w =>
+          !Number.isInteger(w?.dia) || w.dia < 0 || w.dia > 6 ||
+          !/^([01]\d|2[0-3]):[0-5]\d$/.test(w.desde || "") ||
+          !/^([01]\d|2[0-3]):[0-5]\d$/.test(w.hasta || "") ||
+          offerMinutes(w.desde) >= offerMinutes(w.hasta)
+        )) fail("Revisá los días y franjas horarias de la Offer.");
         if (
           !UUID.test(o.id || "") ||
           !UUID.test(o.servicio_id || "") ||
@@ -1116,6 +1132,7 @@ export function createBrowse({
           equipo_id: o.equipo_id,
           precio_minimo: o.precio_minimo,
           activo: o.activo === true,
+          franjas,
           updated_at: new Date().toISOString(),
         });
       }

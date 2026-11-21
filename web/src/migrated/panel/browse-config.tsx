@@ -1,5 +1,6 @@
 import { InlineLoading } from "../../components/LoadingRunner"
 import * as React from "react";
+import { OfferSchedule } from "./OfferSchedule";
 import {
   TurnitsGlobalSaveManager_get,
   ServiciosManager_getSlug,
@@ -176,6 +177,7 @@ export default function BrowseBusiness({
                   />
                 </label>
               </div>
+              <OfferSchedule windows={o.franjas} onChange={franjas => patch("offers", i, { franjas })} />
               <label className="browse-business-toggle">
                 <input
                   type="checkbox"

@@ -1,6 +1,7 @@
 import { InlineLoading } from "../../components/LoadingRunner"
 import * as React from "react";
 import { useBrowseBusiness } from "./browse-config";
+import { OfferSchedule } from "./OfferSchedule";
 import "./service-browse-config.css";
 
 function Icon({ coin = false }: { coin?: boolean }) {
@@ -116,6 +117,10 @@ export default function ServiceBrowseConfig({
               <span className="service-offer-member-copy"><strong>{member.nombre} {member.apellido}</strong>{!offers.some((o: any) => o.equipo_id === member.id) && !assignments.some((a: any) => a.equipo_id === member.id) && <small>Si lo seleccionás, este perfil ofrecerá el servicio.</small>}</span>
             </label>)}
           </fieldset>}
+          {offers.map((offer: any) => {
+            const member = members.find((item: any) => item.id === offer.equipo_id);
+            return <OfferSchedule key={offer.id} label={`Franjas de ${member?.nombre || "este profesional"}`} windows={offer.franjas} onChange={franjas => update(d => ({ ...d, offers: d.offers.map((row: any) => row.id === offer.id ? { ...row, franjas } : row) }))} />;
+          })}
           {enableOffer && (!offers.length || Number(minimum) <= 0 || Number(minimum) >= maximumMinimum) &&
             <p className="service-browse-error" role="alert">
               Elegí al menos un profesional y una tarifa mayor a $0, menor al precio de todos los seleccionados.
