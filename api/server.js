@@ -10,7 +10,7 @@ import multer         from "multer";
 import { clientOffers } from "./client-offers.js";
 import crypto         from "crypto";
 import webpush        from "web-push";
-import { normalizePromoDays, promoAppliesOn, promoHasMatchingDate } from "../web/src/shared/promotions.js";
+import { normalizePromoDays, promoAppliesOn, promoAppliesAt, promoHasMatchingDate } from "../web/src/shared/promotions.js";
 import { crearSucursales } from "./perfil-sucursales.js";
 import { createBranchPanel } from "./branch-panel.js";
 import { businessIcon } from "./business-appearance.js";
@@ -2601,7 +2601,7 @@ async function resolverPromoBooking(slug,id,servicioId,fecha,equipoId,redeem) {
   if(!Number.isFinite(total) || total<=0 || !Number.isFinite(ratio) || ratio<=0 || ratio>=1)throw promoError('El precio de esta promo no es válido.');
   const extras=p.items.filter(i=>i.tipo==='producto').map(i=>({id:i.id,nombre:i.nombre,cantidad:i.cantidad,precio:Math.round(Number(i.precio)*i.cantidad*ratio*100)/100,promo_incluido:true}));
   const montoExtras=Math.round(extras.reduce((sum,i)=>sum+i.precio,0)*100)/100;
-  return {id:p.id,nombre:p.nombre,tipo:p.tipo,items:p.items,imagenes,fecha_inicio:p.fecha_inicio,fecha_fin:p.fecha_fin,dias_semana:p.dias_semana ?? null,precio_original:Number(p.precio_original),precio_final:total,servicio_id:servicios[0].id,duracion,capacidad,extras,montoExtras,precioServicio:Math.round((total-montoExtras)*100)/100};
+  return {id:p.id,nombre:p.nombre,tipo:p.tipo,items:p.items,imagenes,fecha_inicio:p.fecha_inicio,fecha_fin:p.fecha_fin,dias_semana:p.dias_semana ?? null,hora_desde:p.hora_desde ? String(p.hora_desde).slice(0,5) : null,hora_hasta:p.hora_hasta ? String(p.hora_hasta).slice(0,5) : null,precio_original:Number(p.precio_original),precio_final:total,servicio_id:servicios[0].id,duracion,capacidad,extras,montoExtras,precioServicio:Math.round((total-montoExtras)*100)/100};
 }
 async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servicioId,read=(_key,load)=>load()) {
   if(!promo){
@@ -2609,6 +2609,7 @@ async function promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servici
     promo={duracion:Number(srv?.duracion || config.duracion_turno || 30),capacidad:Number(srv?.capacidad || config.capacidad_por_turno || 1)};
   }
   const minutes=t=>Number(String(t).slice(0,2))*60+Number(String(t).slice(3,5));const inicio=minutes(hora),fin=inicio+promo.duracion;
+  if(promo.id && !promoAppliesAt(promo,fecha,hora,promo.duracion))throw promoError('La promoción no está disponible en ese horario.');
   const intervalos=obtenerIntervalosDia(config.horarios,config.excepciones,fecha) || [];
   if(!intervalos.some(([a,b])=>inicio>=a && fin<=b))throw promoError('No hay tiempo suficiente para el combo en ese horario.');
   let query=supabase.from('turnos').select('hora,servicio_id,duracion_reservada').eq('slug',slug).eq('fecha',fecha).in('estado',['confirmado','pendiente']);
@@ -2733,6 +2734,7 @@ app.get("/slots-disponibles/:slug", async (req, res) => {
       for (const slotInicio of slotsGenerados) {
         if (!cumpleAnticipacionReserva(fecha, fromMin(slotInicio), anticipacion)) continue;
         const slotFin = slotInicio + duracionSolicitada;
+        if(promocionSlots && !promoAppliesAt(promocionSlots,fecha,fromMin(slotInicio),duracionSolicitada))continue;
         const ocupados = rangosOcupados.filter(({ inicio, fin }) => slotInicio < fin && slotFin > inicio).length;
         const disponibles = Math.max(0, capacidad - ocupados);
         const hora = fromMin(slotInicio);
@@ -6171,6 +6173,8 @@ function promocionesValidar(body) {
   if(!['porcentaje','precio_final'].includes(descuento_tipo) || typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0 || valor > 100000000000 || (descuento_tipo === 'porcentaje' && valor >= 100)) throw new Error('Ingresá un porcentaje entre 0 y 100 o un precio final válido.');
   const dias_semana=normalizePromoDays(body.dias_semana);
   if(!promoHasMatchingDate({fecha_inicio,fecha_fin,dias_semana}))throw new Error('No hay ningún día seleccionado dentro de la vigencia. Revisá los días o las fechas.');
+  const hora_desde=body.hora_desde || null,hora_hasta=body.hora_hasta || null;
+  if((hora_desde !== null || hora_hasta !== null) && (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hora_desde || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora_hasta || '') || hora_desde >= hora_hasta))throw new Error('Elegí una hora de inicio y fin válidas para la promoción.');
   const presentacion = {};
   if (Object.hasOwn(body, "descripcion")) {
     if (typeof body.descripcion !== "string" || body.descripcion.length > 2000) throw new Error("La descripción admite hasta 2000 caracteres.");
@@ -6181,7 +6185,7 @@ function promocionesValidar(body) {
     if (typeof url !== "string" || url.length > 2048 || (url && !/^https:\/\//i.test(url))) throw new Error("La imagen debe tener una URL HTTPS válida.");
     presentacion.imagen_url = url || null;
   }
-  return {...presentacion,nombre:nombre.trim(),tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin,dias_semana,activo:body.activo !== false};
+  return {...presentacion,nombre:nombre.trim(),tipo,items,descuento_tipo,valor,fecha_inicio,fecha_fin,dias_semana,hora_desde,hora_hasta,activo:body.activo !== false};
 }
 async function promocionesPreparar(slug,body,equipoId=null) {
   let datos;try{datos=promocionesValidar(body);}catch(e){e.promoValidacion=true;throw e;}const items=[];
@@ -6222,6 +6226,7 @@ async function promocionesGuardar(req,res) {
       ownerId=existing.owner_equipo_id || null;
       // Older clients do not send this field; preserve an existing schedule.
       if(!Object.hasOwn(body,'dias_semana'))body={...body,dias_semana:existing.dias_semana ?? null};
+      if(!Object.hasOwn(body,'hora_desde') && !Object.hasOwn(body,'hora_hasta'))body={...body,hora_desde:existing.hora_desde ? String(existing.hora_desde).slice(0,5) : null,hora_hasta:existing.hora_hasta ? String(existing.hora_hasta).slice(0,5) : null};
     }
     datos=await promocionesPreparar(slug,body,ownerId);
     datos.owner_equipo_id=ownerId;
