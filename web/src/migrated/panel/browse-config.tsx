@@ -4,6 +4,7 @@ import { OfferSchedule } from "./OfferSchedule";
 import { BackButton } from "../../components/BackButton";
 import { OfferCards } from "./OfferCards";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   TurnitsGlobalSaveManager_get,
   ServiciosManager_getSlug,
@@ -137,7 +138,7 @@ export default function BrowseBusiness({
             onEdit={setEditingOfferId}
             onToggle={offerId => update(d => ({ ...d, offers: d.offers.map((offer: any) => offer.id === offerId ? { ...offer, activo: !offer.activo } : offer) }))}
             onDelete={offerId => { if (!window.confirm("¿Eliminar esta oferta?")) return; update(d => ({ ...d, offers: d.offers.filter((offer: any) => offer.id !== offerId) })); if (editingOfferId === offerId) setEditingOfferId(null); }} />
-          {editingOfferId && createPortal(<div className="browse-offer-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditingOfferId(null); }}><section className="browse-offer-dialog" role="dialog" aria-modal="true" aria-label="Editar oferta"><BackButton floating onClick={() => setEditingOfferId(null)} /><h3>Configurar oferta</h3><p>El servicio y la franja deben quedar libres para que la oferta aparezca en el link público.</p>
+          {createPortal(<AnimatePresence>{editingOfferId && <motion.div className="browse-offer-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onMouseDown={event => { if (event.target === event.currentTarget) setEditingOfferId(null); }}><motion.section className="browse-offer-dialog" role="dialog" aria-modal="true" aria-label="Editar oferta" initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} transition={{ duration: 0.2, ease: "easeOut" }}><BackButton floating onClick={() => setEditingOfferId(null)} /><h3>Configurar oferta</h3><p>El servicio y la franja deben quedar libres para que la oferta aparezca en el link público.</p>
           {draft.offers.map((o: any, i: number) => o.id === editingOfferId && (
             <fieldset key={o.id} disabled={busy}>
               <div className="browse-business-fields">
@@ -191,7 +192,7 @@ export default function BrowseBusiness({
               <OfferSchedule windows={o.franjas} onChange={franjas => patch("offers", i, { franjas })} />
             </fieldset>
           ))}
-          <button type="button" className="browse-offer-done" onClick={() => setEditingOfferId(null)}>Listo</button></section></div>, document.body)}
+          <button type="button" className="browse-offer-done" onClick={() => setEditingOfferId(null)}>Listo</button></motion.section></motion.div>}</AnimatePresence>, document.body)}
         </>
       ) : (
         <>

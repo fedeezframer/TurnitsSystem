@@ -10,6 +10,9 @@ function OfferCardActions({ offer, service, editIcon, onEdit, onToggle, onDelete
 }) {
   const [open, setOpen] = React.useState(false);
   const anchor = React.useRef<HTMLButtonElement>(null);
+  const regularPrice = Number(service?.precio);
+  const minimumPrice = Number(offer.precio_minimo);
+  const discount = regularPrice > minimumPrice && minimumPrice > 0 ? Math.round((1 - minimumPrice / regularPrice) * 100) : 0;
   React.useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
@@ -20,6 +23,7 @@ function OfferCardActions({ offer, service, editIcon, onEdit, onToggle, onDelete
     return () => document.removeEventListener("pointerdown", outside);
   }, [open]);
   return <div className="offer-catalog-actions">
+    <span className="offer-catalog-discount">{discount > 0 ? `${discount}% OFF` : minimumPrice > 0 ? `Desde $${minimumPrice.toLocaleString("es-AR")}` : "Sin tarifa"}</span>
     <button className="svc-edit-button" type="button" onClick={() => onEdit(offer.id)}>{editIcon ? <img src={editIcon} alt="" /> : <span aria-hidden="true">✎</span>}Editar</button>
     <button className="svc-more-button" type="button" ref={anchor} aria-label={`Opciones de ${service?.nombre || "la oferta"}`} aria-expanded={open} onClick={() => setOpen(value => !value)}>•••</button>
     {open && <ServiciosManager_RowMenu anchor={anchor}><button type="button" onClick={() => { setOpen(false); onToggle(offer.id); }}>{offer.activo ? "Pausar" : "Activar"}</button><button type="button" className="is-danger" onClick={() => { setOpen(false); onDelete(offer.id); }}>Eliminar</button></ServiciosManager_RowMenu>}
