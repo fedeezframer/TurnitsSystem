@@ -1,6 +1,9 @@
 import { InlineLoading } from "../../components/LoadingRunner"
 import * as React from "react";
 import { OfferSchedule } from "./OfferSchedule";
+import { BackButton } from "../../components/BackButton";
+import { OfferCards } from "./OfferCards";
+import { createPortal } from "react-dom";
 import {
   TurnitsGlobalSaveManager_get,
   ServiciosManager_getSlug,
@@ -96,6 +99,17 @@ export default function BrowseBusiness({
 }) {
   const { data, draft, error, busy, update, patch, retry } =
     useBrowseBusiness(api);
+  const [editingOfferId, setEditingOfferId] = React.useState<string | null>(null);
+  const [offerFilter, setOfferFilter] = React.useState<"all" | "active" | "paused">("all");
+  const [offerSearch, setOfferSearch] = React.useState("");
+  React.useEffect(() => {
+    if (!editingOfferId) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setEditingOfferId(null); };
+    document.addEventListener("keydown", escape);
+    return () => { document.body.style.overflow = previous; document.removeEventListener("keydown", escape); };
+  }, [editingOfferId]);
   if (error)
     return (
       <div className="browse-business">
@@ -116,20 +130,14 @@ export default function BrowseBusiness({
       {view === "coins" && <h3>Turnits T-Coins</h3>}
       {view === "offers" ? (
         <>
-          <p>
-            Ofrecé horarios sin ocupar durante los 30 minutos anteriores al
-            cierre de reservas. Se respeta la antelación de cada profesional y
-            sólo se publica si Mercado Pago está conectado. Podés limitar cada
-            oferta a días y franjas horarias concretas.
-          </p>
-          <p>
-            Durante los primeros 15 minutos de la oferta se aplica el 60% de la
-            diferencia con tu tarifa mínima; en los últimos 15 llega al mínimo.
-            Nunca se combinan otras promociones.
-          </p>
-          {draft.offers.map((o: any, i: number) => (
+          <OfferCards offers={draft.offers} services={services} members={members} busy={busy}
+            onCreate={() => { const offerId = id(); update(d => ({ ...d, offers: [...d.offers, { id: offerId, servicio_id: "", equipo_id: "", precio_minimo: 0, activo: false, franjas: [] }] })); setEditingOfferId(offerId); }}
+            onEdit={setEditingOfferId}
+            onToggle={offerId => update(d => ({ ...d, offers: d.offers.map((offer: any) => offer.id === offerId ? { ...offer, activo: !offer.activo } : offer) }))}
+            onDelete={offerId => { if (!window.confirm("¿Eliminar esta oferta?")) return; update(d => ({ ...d, offers: d.offers.filter((offer: any) => offer.id !== offerId) })); if (editingOfferId === offerId) setEditingOfferId(null); }} />
+          {editingOfferId && createPortal(<div className="browse-offer-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditingOfferId(null); }}><section className="browse-offer-dialog" role="dialog" aria-modal="true" aria-label="Editar oferta"><BackButton floating onClick={() => setEditingOfferId(null)} /><h3>Configurar oferta</h3><p>El servicio y la franja deben quedar libres para que la oferta aparezca en el link público.</p>
+          {draft.offers.map((o: any, i: number) => o.id === editingOfferId && (
             <fieldset key={o.id} disabled={busy}>
-              <legend>Oferta {i + 1}</legend>
               <div className="browse-business-fields">
                 <label>
                   Servicio
@@ -189,42 +197,9 @@ export default function BrowseBusiness({
                 />
                 Habilitar esta oferta
               </label>
-              <button
-                className="browse-business-remove"
-                onClick={() =>
-                  update((d) => ({
-                    ...d,
-                    offers: d.offers.filter(
-                      (_: any, index: number) => index !== i,
-                    ),
-                  }))
-                }
-              >
-                Quitar configuración
-              </button>
             </fieldset>
           ))}
-          <button
-            disabled={busy || !services.length || !members.length}
-            onClick={() =>
-              update((d) => ({
-                ...d,
-                offers: [
-                  ...d.offers,
-                  {
-                    id: id(),
-                    servicio_id: "",
-                    equipo_id: "",
-                    precio_minimo: 0,
-                    activo: false,
-                    franjas: [],
-                  },
-                ],
-              }))
-            }
-          >
-            Crear oferta
-          </button>
+          <button type="button" className="browse-offer-done" onClick={() => setEditingOfferId(null)}>Listo</button></section></div>, document.body)}
         </>
       ) : (
         <>

@@ -107,3 +107,14 @@
   border-color: #adc7a4;
   color: #1b6b1a;
 }
+.browse-business .offer-catalog-filters button[aria-pressed=true],.browse-business .offer-catalog-create,.browse-business .offer-catalog-actions>button{background:#196b1f;border-color:#196b1f;color:#fff}
+.browse-business .offer-catalog-actions details button{display:block;width:100%;border:0;background:transparent;color:#29452e;text-align:left}
+.browse-offer-backdrop{position:fixed;z-index:1000;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:#0b1b1080;backdrop-filter:blur(5px)}
+.browse-offer-dialog{position:relative;width:min(100%,680px);max-height:min(90dvh,850px);overflow-y:auto;padding:27px;border:1px solid #d7e5d7;border-radius:22px;background:#fff;box-shadow:0 20px 80px #07160a55}
+.browse-offer-dialog h3{margin:0 62px 7px 0;font-size:22px;color:#173b1b}
+.browse-offer-dialog>p{max-width:520px;margin:0 50px 14px 0;color:#647468;font-size:13px;line-height:1.5}
+.browse-offer-dialog fieldset{margin:0;padding:0;border:0;min-width:0}
+.browse-offer-dialog .browse-business-fields :is(input,select){width:100%;min-width:0;height:42px;padding:0 10px;border:1px solid #dbe3ec;border-radius:9px;background:#fff;color:#172033;font:inherit;font-size:14px}
+.browse-offer-dialog .browse-business-toggle{display:flex;align-items:center;gap:8px;margin:16px 0;font-size:13px}
+.browse-offer-dialog .browse-offer-done{margin-top:17px;padding:10px 15px;border:0;border-radius:9px;background:#196b1f;color:#fff;font:inherit;font-size:13px;font-weight:800;cursor:pointer}
+@media(max-width:600px){.browse-offer-backdrop{align-items:flex-end;padding:0}.browse-offer-dialog{width:100%;max-height:94dvh;border-radius:20px 20px 0 0;padding:22px 16px 24px}}
