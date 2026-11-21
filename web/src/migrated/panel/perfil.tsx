@@ -303,7 +303,7 @@ export function PerfilNegocio({
           throw new Error(d.error || "No se pudo subir la foto.");
         updateDraft((f) =>
           destino === "fotos"
-            ? { ...f, fotos: [...new Set([...f.fotos, d.url])] }
+            ? { ...f, fotos: [d.url, ...f.fotos.filter((photo) => photo !== d.url)] }
             : { ...f, [destino]: d.url },
         );
         if (destino === "fotos") setEditingUrl(d.url);
@@ -452,7 +452,6 @@ export function PerfilNegocio({
               </div>
               </>}
               {publicaciones && <>
-                <div className="publicacion-intro"><div><span className="publicacion-eyebrow">Tu galería</span><h2>Publicaciones</h2><p>Mostrá tus trabajos y conectá cada foto con el servicio que ofrecés.</p></div><span className="publicacion-count">{form.fotos.length} publicaciones</span></div>
                 {uploadProgress && <p role="status">{uploadProgress}</p>}
                 <div className="publicacion-grid">
                   <label className="publicacion-upload">
@@ -468,7 +467,7 @@ export function PerfilNegocio({
                         delete posts[url];
                         return {...f, titulos_fotos: titles, publicaciones: posts, fotos: f.fotos.filter(photo => photo !== url)};
                       })}>×</button></div>
-                      <div className="publicacion-fields"><span className="publicacion-index">Publicación {i + 1}</span><strong>{form.publicaciones[url]?.servicio_nombre || "Sin servicio"}</strong><p>{form.publicaciones[url]?.descripcion || form.titulos_fotos[url] || "Agregá una descripción"}</p><button type="button" onClick={() => setEditingUrl(url)}>Editar publicación</button></div>
+                      <div className="publicacion-fields"><strong>{form.publicaciones[url]?.servicio_nombre || "Sin servicio"}</strong><p>{form.publicaciones[url]?.descripcion || form.titulos_fotos[url] || "Agregá una descripción"}</p><button type="button" onClick={() => setEditingUrl(url)}>Editar publicación</button></div>
                     </article>
                   ))}
                 </div>
