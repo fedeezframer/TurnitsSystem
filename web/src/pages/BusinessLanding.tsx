@@ -129,31 +129,28 @@ export default function BusinessLanding() {
       setNegocio(data.negocio)
       setState("ready")
     }).catch(() => { if (!controller.signal.aborted) setState("missing") })
-    Promise.allSettled([
-      getJson(`/perfil/${s}`, controller.signal),
-      getJson(`/perfil/${s}/resenas`, controller.signal),
-      getJson(`/promociones/${s}`, controller.signal),
-      getJson(`/servicios/${s}`, controller.signal),
-      getJson(`/equipo/${s}`, controller.signal),
-      getJson(`/sucursales/${s}`, controller.signal),
-    ]).then(async ([profile, rev, promo, srv, team, locations]) => {
+    const update = (path: string, apply: (data: any) => void) => {
+      getJson(path, controller.signal).then(data => { if (!controller.signal.aborted) apply(data) }).catch(() => {})
+    }
+    update(`/perfil/${s}`, data => setPerfil(data.perfil))
+    update(`/perfil/${s}/resenas`, data => { setReviews({ promedio: data.promedio || 0, cantidad: data.cantidad || 0 }); setReviewItems(data.resenas || []) })
+    update(`/promociones/${s}`, data => setPromos(data.promociones || []))
+    update(`/sucursales/${s}`, data => setBranches(data.sucursales || []))
+    const teamRequest = getJson(`/equipo/${s}`, controller.signal).catch(() => ({ equipo: [] }))
+    teamRequest.then(data => { if (!controller.signal.aborted) setMembers(data.equipo || []) })
+    const showServices = (list: Service[]) => setServices([...new Map(list.map(service => [service.id, service])).values()].sort((a, b) =>
+        Number(b.reservas_90d || 0) - Number(a.reservas_90d || 0) ||
+        Number(a.orden || 0) - Number(b.orden || 0) ||
+        a.nombre.localeCompare(b.nombre, "es"),
+      ))
+    const servicesRequest = getJson(`/servicios/${s}`, controller.signal).catch(() => ({ servicios: [] }))
+    servicesRequest.then(data => { if (!controller.signal.aborted) showServices(data.servicios || []) })
+    Promise.all([servicesRequest, teamRequest]).then(async ([srv, team]) => {
       if (controller.signal.aborted) return
-      if (profile.status === "fulfilled") setPerfil(profile.value.perfil)
-      if (rev.status === "fulfilled") { setReviews({ promedio: rev.value.promedio || 0, cantidad: rev.value.cantidad || 0 }); setReviewItems(rev.value.resenas || []) }
-      if (promo.status === "fulfilled") setPromos(promo.value.promociones || [])
-      if (team.status === "fulfilled") setMembers(team.value.equipo || [])
-      if (locations.status === "fulfilled") setBranches(locations.value.sucursales || [])
-      if (srv.status === "fulfilled") {
-        const memberList = team.status === "fulfilled" ? team.value.equipo || [] : []
-        const byMember = await Promise.all(memberList.map((member: Member) => getJson(`/servicios/${s}?equipo_id=${encodeURIComponent(member.id)}`, controller.signal).catch(() => ({ servicios: [] }))))
-        if (controller.signal.aborted) return
-        const all = [...(srv.value.servicios || []), ...byMember.flatMap(data => data.servicios || [])]
-        setServices([...new Map(all.map((service: Service) => [service.id, service])).values()].sort((a, b) =>
-          Number(b.reservas_90d || 0) - Number(a.reservas_90d || 0) ||
-          Number(a.orden || 0) - Number(b.orden || 0) ||
-          a.nombre.localeCompare(b.nombre, "es"),
-        ))
-      }
+      const memberList: Member[] = team.equipo || []
+      const base: Service[] = srv.servicios || []
+      const byMember = await Promise.all(memberList.map(member => getJson(`/servicios/${s}?equipo_id=${encodeURIComponent(member.id)}`, controller.signal).catch(() => ({ servicios: [] }))))
+      if (!controller.signal.aborted) showServices([...base, ...byMember.flatMap(data => data.servicios || [])])
     })
     return () => controller.abort()
   }, [slug])
