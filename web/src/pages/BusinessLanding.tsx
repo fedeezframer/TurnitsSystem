@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Link, useParams } from "react-router"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { appConfig } from "../config"
 import BrandPreloader from "../components/BrandPreloader"
 import { SocialIcon } from "../components/SocialIcon"
@@ -113,6 +114,7 @@ export default function BusinessLanding() {
   const [todaySlots, setTodaySlots] = React.useState<number | null>(null)
   const [offers, setOffers] = React.useState<Offer[]>([])
   const [offerIndex, setOfferIndex] = React.useState(0)
+  const reduceMotion = useReducedMotion()
   const [offerPaused, setOfferPaused] = React.useState(false)
   const [offset, setOffset] = React.useState(0)
   const [now, setNow] = React.useState(() => Date.now())
@@ -346,8 +348,12 @@ export default function BusinessLanding() {
     <main className="bl-page" style={style}>
       <div className="bl-wrap">
         <header className="bl-bar">
-          <span>{headline.text}</span>
-          {headline.href.startsWith("#") ? <a className="bl-reserve" href={headline.href}>{headline.action}</a> : <Link className="bl-reserve" to={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={`${headline.text}-${headline.href}`} className="bl-bar-slide" initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }} transition={{ duration: reduceMotion ? 0 : .25 }}>
+              <span>{headline.text}</span>
+              {headline.href.startsWith("#") ? <a className="bl-reserve" href={headline.href}>{headline.action}</a> : <Link className="bl-reserve" to={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>}
+            </motion.div>
+          </AnimatePresence>
         </header>
 
         <section className={`bl-hero${banner ? " bl-hero-with-banner" : ""}`}>
@@ -382,20 +388,24 @@ export default function BusinessLanding() {
 
         {liveOffers.length > 0 && <section id="bl-offers" className="bl-section bl-last-minute"><div className="bl-section-heading"><div><span className="bl-kicker">Solo por tiempo limitado</span><h2>Oferta de último momento</h2><p>Un horario libre, un mejor precio. Reservalo antes de que termine.</p></div></div>
           <div className="bl-offer-slider" onMouseEnter={() => setOfferPaused(true)} onMouseLeave={() => setOfferPaused(false)} onFocusCapture={() => setOfferPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOfferPaused(false) }}>
+            <AnimatePresence mode="wait" initial={false}>
             {(() => {
               const offer = liveOffers[offerIndex] || liveOffers[0]
               const offerMember = members.find(member => member.id === offer.equipo_id)
-              return <Link key={`${offer.id}-${offer.fecha}-${offer.hora}`} className="bl-offer" to={offerLink(slug, offer)} aria-label={`Reservar ${offer.nombre} a ${money(offer.precio)}, ${offerDateLabel(offer.fecha)} ${offer.hora.slice(0, 5)}`}>
+              const initials = `${offerMember?.nombre?.[0] || ""}${offerMember?.apellido?.[0] || ""}`.toUpperCase()
+              const memberColor = /^#[0-9a-f]{6}$/i.test(offerMember?.color || "") ? offerMember?.color : color
+              return <motion.div key={`${offer.id}-${offer.fecha}-${offer.hora}`} className="bl-offer-frame" initial={{ opacity: 0, x: reduceMotion ? 0 : 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reduceMotion ? 0 : -20 }} transition={{ duration: reduceMotion ? 0 : .3, ease: "easeOut" }}><Link className="bl-offer" to={offerLink(slug, offer)} aria-label={`Reservar ${offer.nombre} a ${money(offer.precio)}, ${offerDateLabel(offer.fecha)} ${offer.hora.slice(0, 5)}`}>
                 <span className="bl-offer-timer">Termina en {countdown(Date.parse(offer.cierre) - serverNow)}</span>
                 <div className="bl-offer-img">{offer.imagen && <img src={offer.imagen} alt="" />}</div>
                 <div className="bl-offer-body">
-                  <small className="bl-offer-time">{offerDateLabel(offer.fecha)} {offer.hora.slice(0, 5)} hs · Con {offerMember?.foto_url && <img className="bl-offer-member-photo" src={offerMember.foto_url} alt="" />} {offerMember?.nombre || "nuestro equipo"}</small>
+                  <small className="bl-offer-time">{offerDateLabel(offer.fecha)} {offer.hora.slice(0, 5)} hs · Con {offerMember && (offerMember.foto_url ? <img className="bl-offer-member-photo" src={offerMember.foto_url} alt="" /> : <span className="bl-offer-member-photo bl-offer-member-initials" style={{ "--member-color": memberColor } as React.CSSProperties} aria-hidden="true">{initials}</span>)} {offerMember?.nombre || "nuestro equipo"}</small>
                   <strong>{offer.nombre}</strong>
                   <span><b>{money(offer.precio)}</b><s>{money(offer.precio_original)}</s></span>
                   <span className="bl-offer-cta">Reservar oferta <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></span>
                 </div>
-              </Link>
+              </Link></motion.div>
             })()}
+            </AnimatePresence>
             {liveOffers.length > 1 && <div className="bl-offer-controls" aria-label="Más ofertas disponibles">
               <button type="button" aria-label="Oferta anterior" onClick={() => setOfferIndex(index => (index - 1 + liveOffers.length) % liveOffers.length)}>‹</button>
               <div className="bl-offer-dots" role="group" aria-label="Elegir oferta">
@@ -427,12 +437,12 @@ export default function BusinessLanding() {
 
         {works.length > 0 && <section id="bl-works" className="bl-section bl-works"><div className="bl-section-heading"><div><h2>Trabajos que hablan por sí solos</h2><p>Explorá resultados reales y reservá el servicio que te gusta.</p></div>{works.length > 4 && <Link to={`/perfil/${enc}/publicaciones`}>Ver todos</Link>}</div><div className="bl-work-list">{works.slice(0, 4).map(({ url, post, description }) => {
           const linked = services.find(service => service.id === post?.servicio_id)
-          return <article className="bl-work" key={url}><div className="bl-work-photo"><img src={url} alt={description || "Trabajo realizado por el negocio"} loading="lazy" style={{ objectPosition: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%`, transform: `scale(${post?.zoom ?? 1})`, transformOrigin: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%` }} /></div><div className="bl-work-copy">{linked && <span>{linked.nombre}</span>}{description && <p>{description}</p>}<Link to={`/agenda/${enc}${linked ? `?servicio_id=${encodeURIComponent(linked.id)}` : ""}`}>Reservar {linked ? "este servicio" : "turno"} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></div></article>
+          return <motion.article className="bl-work" key={url} initial={reduceMotion ? false : { opacity: .65, x: 14 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: false, amount: .3 }} transition={{ duration: reduceMotion ? 0 : .28 }}><div className="bl-work-photo"><img src={url} alt={description || "Trabajo realizado por el negocio"} loading="lazy" style={{ objectPosition: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%`, transform: `scale(${post?.zoom ?? 1})`, transformOrigin: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%` }} /></div><div className="bl-work-copy">{linked && <span>{linked.nombre}</span>}{description && <p>{description}</p>}<Link to={`/agenda/${enc}${linked ? `?servicio_id=${encodeURIComponent(linked.id)}` : ""}`}>Reservar {linked ? "este servicio" : "turno"} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></div></motion.article>
         })}</div></section>}
 
         {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><div className="bl-section-heading"><div><h2>Más para vos, por menos</h2><p>Combos y beneficios para tu próxima visita.</p></div></div><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
 
-        {reviews.cantidad >= 5 && reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} reseñas</p></div><Link to={`/perfil/${enc}`}>Ver reseñas</Link></div><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></article>)}</div></section>}
+        {reviews.cantidad >= 5 && reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} reseñas</p></div><Link to={`/perfil/${enc}`}>Ver reseñas</Link></div><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <motion.article className="bl-review" key={review.id} initial={reduceMotion ? false : { opacity: .65, x: 14 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: false, amount: .3 }} transition={{ duration: reduceMotion ? 0 : .28 }}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></motion.article>)}</div></section>}
 
         <section className="bl-final-cta"><span>Tu lugar te espera</span><h2>¿Ya sabés cuándo venís?</h2><p>Elegí el servicio y reservá en pocos pasos.</p><Link to={`/agenda/${enc}`}>Encontrar mi turno</Link></section>
 
