@@ -75,13 +75,13 @@ function FinanzasMonthPicker({ value, onChange, disabled = false }: { value: str
             const buttons = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled):not([tabindex="-1"])') || [])
             if (!buttons.length) return
             const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
-            if (index < 0 || (event.shiftKey && index === 0) || (!event.shiftKey && index === buttons.length-1)) {event.preventDefault();buttons[event.shiftKey ? buttons.length-1 : 0].focus()}
+            if (index < 0 || (event.shiftKey && index === 0) || (!event.shiftKey && index === buttons.length-1)) {event.preventDefault();buttons[event.shiftKey ? buttons.length-1 : 0].focus({preventScroll:true})}
         }
         document.addEventListener("keydown",keyboard,true)
-        return () => {document.body.style.overflow=previous;document.removeEventListener("keydown",keyboard,true);trigger.current?.focus()}
+        return () => {document.body.style.overflow=previous;document.removeEventListener("keydown",keyboard,true);trigger.current?.focus({preventScroll:true})}
     }, [open])
     React.useEffect(() => {
-        if (open) dialog.current?.querySelector<HTMLButtonElement>(`[data-date="${focused}"]`)?.focus()
+        if (open) dialog.current?.querySelector<HTMLButtonElement>(`[data-date="${focused}"]`)?.focus({preventScroll:true})
     }, [open,focused,month])
     const overlay = presence.visible ? <div className="fin-exp-overlay" data-closing={presence.closing} onClick={event => {if(event.target === event.currentTarget)close()}}>
         <div className="fin-exp-dialog fin-date-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-heading`}>

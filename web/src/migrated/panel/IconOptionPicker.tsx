@@ -25,7 +25,7 @@ export function IconOptionPicker({ title, heading, help, icon, value, options, o
         const previousOverflow = document.body.style.overflow
         document.body.style.overflow = "hidden"
         const preferred = dialog.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]') || dialog.current?.querySelector<HTMLButtonElement>('.fin-exp-option')
-        preferred?.focus()
+        preferred?.focus({preventScroll:true})
         const keyboard = (event: KeyboardEvent) => {
             if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setOpen(false); return }
             const buttons = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])
@@ -34,7 +34,7 @@ export function IconOptionPicker({ title, heading, help, icon, value, options, o
                 const position = buttons.indexOf(document.activeElement as HTMLButtonElement)
                 if (position < 0 || (!event.shiftKey && position === buttons.length - 1) || (event.shiftKey && position === 0)) {
                     event.preventDefault()
-                    buttons[event.shiftKey ? buttons.length - 1 : 0].focus()
+                    buttons[event.shiftKey ? buttons.length - 1 : 0].focus({preventScroll:true})
                 }
             }
             const choices = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>('.fin-exp-option') || [])
@@ -44,17 +44,17 @@ export function IconOptionPicker({ title, heading, help, icon, value, options, o
             const steps: Record<string, number> = {ArrowRight:1,ArrowLeft:-1,ArrowDown:columns,ArrowUp:-columns}
             if (event.key in steps) {
                 event.preventDefault()
-                choices[(current + steps[event.key] + choices.length) % choices.length]?.focus()
+                choices[(current + steps[event.key] + choices.length) % choices.length]?.focus({preventScroll:true})
             } else if (event.key === "Home" || event.key === "End") {
                 event.preventDefault()
-                choices[event.key === "Home" ? 0 : choices.length - 1]?.focus()
+                choices[event.key === "Home" ? 0 : choices.length - 1]?.focus({preventScroll:true})
             }
         }
         document.addEventListener("keydown", keyboard, true)
         return () => {
             document.body.style.overflow = previousOverflow
             document.removeEventListener("keydown", keyboard, true)
-            trigger.current?.focus()
+            trigger.current?.focus({preventScroll:true})
         }
     }, [open])
     const overlay = presence.visible ? <div className="fin-exp-overlay" data-closing={presence.closing} onClick={event => { if (event.target === event.currentTarget) setOpen(false) }}>

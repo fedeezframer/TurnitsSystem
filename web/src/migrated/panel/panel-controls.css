@@ -26,6 +26,10 @@
 :is(.fin-exp-dialog,.panel-modal-dialog,.exception-sheet) { animation:panel-sheet-in .23s cubic-bezier(.2,.8,.2,1) both; }
 :is(.fin-exp-overlay,.panel-modal-overlay)[data-closing="true"] { pointer-events:none; animation:panel-overlay-in .18s ease-in reverse both; }
 .fin-exp-overlay[data-closing="true"] .fin-exp-dialog,.panel-modal-overlay[data-closing="true"] .panel-modal-dialog { animation:panel-sheet-in .18s ease-in reverse both; }
+.fin-exp-overlay .fin-exp-dialog { border:1px solid #cbdccd; border-radius:16px; box-shadow:0 20px 50px #162c1e28; color:#243b2a; }
+.fin-exp-dialog .fin-exp-header { border-bottom:1px solid #e5ede5; background:#fff; }
+.fin-exp-dialog .fin-exp-option { border-color:#dbe5dc; border-radius:11px; background:#fff; box-shadow:0 2px 8px #1c3d2510; }
+.fin-exp-dialog .fin-exp-option:hover,.fin-exp-dialog .fin-exp-option[aria-pressed="true"] { border-color:#a6caa9; background:#eaf5ec; }
 :is(.exception-editor,.agenda-day-dialog,.client-offer)[open] { transition:opacity .2s ease,transform .2s ease,display .2s allow-discrete,overlay .2s allow-discrete; opacity:1; transform:translateY(0) scale(1); }
 :is(.exception-editor,.agenda-day-dialog,.client-offer):not([open]) { opacity:0; transform:translateY(12px) scale(.985); }
 @starting-style { :is(.exception-editor,.agenda-day-dialog,.client-offer)[open] { opacity:0; transform:translateY(12px) scale(.985); } }

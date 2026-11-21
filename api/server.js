@@ -1370,10 +1370,14 @@ function rangosComparativos(hoyISO) {
   const inicioSemAnt   = sumarDiasISO(inicioSem, -7);
   const finSemActual   = sumarDiasISO(inicioSem, 6);
   const finSemAnt      = sumarDiasISO(inicioSemAnt, 6);
+  const anio = Number(hoyISO.slice(0, 4));
+  const mismoDiaAnioAnterior = `${anio - 1}-${hoyISO.slice(5)}`;
+  const finAnioAnterior = mismoDiaAnioAnterior.slice(5) === "02-29" ? `${anio - 1}-02-28` : mismoDiaAnioAnterior;
 
   return {
     mes:    { actual: { desde: inicioMes, hasta: hoyISO }, anterior: { desde: inicioMesAnt, hasta: finMesAntComparable } },
     semana: { actual: { desde: inicioSem, hasta: finSemActual }, anterior: { desde: inicioSemAnt, hasta: finSemAnt } },
+    anio: { actual: { desde: `${anio}-01-01`, hasta: hoyISO }, anterior: { desde: `${anio - 1}-01-01`, hasta: finAnioAnterior } },
   };
 }
 
@@ -6466,7 +6470,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       const turnosRango = [];
       for (let pagina = 0; pagina < 50; pagina++) {
         const { data, error } = await branchPanel.from(req, "turnos")
-          .select("id, precio_cobrado, fecha, estado")
+          .select("id, precio_cobrado, fecha, estado, servicio_nombre")
           .eq("slug", slug).gte("fecha", desde).lte("fecha", hasta)
           .not("estado", "in", "(cancelado,pendiente)")
           .order("id", { ascending: true })
@@ -6478,6 +6482,12 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       return {
         turnos: turnosRango.length,
         ingresos: turnosRango.reduce((total, t) => total + Number(t.precio_cobrado || 0), 0),
+        serviciosMasPedidos: calcularServiciosMasPedidos(turnosRango),
+        ventasPorMes: Object.entries(turnosRango.reduce((meses, t) => {
+          const mes = String(t.fecha || "").slice(0, 7);
+          meses[mes] = (meses[mes] || 0) + Number(t.precio_cobrado || 0);
+          return meses;
+        }, {})).map(([label, volumen]) => ({ label, volumen })),
         diasConMasTurnos: calcularDiasConMasTurnos(turnosRango),
       };
     };
@@ -6488,7 +6498,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
       { data: turnosMes }, { data: serviciosNegocio }, { count: turnosMesAnteriorTotal },
       { data: turnosPago }, { data: turnosSinPago, error: turnosSinPagoError },
       { data: todosLosTurnos }, { data: referidosPropios },
-      mesActualResumen, mesAnteriorResumen, semActualResumen, semAnteriorResumen, mesCompletoResumen,
+      mesActualResumen, mesAnteriorResumen, semActualResumen, semAnteriorResumen, anioActualResumen, anioAnteriorResumen, mesCompletoResumen,
     ] = await Promise.all([
       branchPanel.from(req, "turnos").select("*")
         // Contar también las reservas futuras ya agendadas en el mes actual.
@@ -6516,7 +6526,7 @@ app.get("/admin-stats/:slug", requireAuth, async (req, res) => {
         .eq("slug", slug).neq("estado", "cancelado"),
       req.sucursalAdmin ? Promise.resolve({ data: [] }) : supabase.from("referidos")
         .select("grupo_nro, premio_entregado_at").eq("referidor_slug", slug),
-      ...[rangosCmp.mes.actual, rangosCmp.mes.anterior, rangosCmp.semana.actual, rangosCmp.semana.anterior,
+      ...[rangosCmp.mes.actual, rangosCmp.mes.anterior, rangosCmp.semana.actual, rangosCmp.semana.anterior, rangosCmp.anio.actual, rangosCmp.anio.anterior,
         { desde: inicioMes, hasta: finMesActual }]
         .map(({ desde, hasta }) => resumenTurnosRango(desde, hasta)),
     ]);
@@ -6730,12 +6740,14 @@ const turnosHoyDetalle = turnosData
         turnos: resumen.turnos,
         clientes_nuevos: nuevosRango(desde, hasta),
         ingresos: resumen.ingresos,
+        serviciosMasPedidos: resumen.serviciosMasPedidos,
       };
     };
 
     const comparativas = {
       mes:    { actual: armarTramo(rangosCmp.mes.actual, mesActualResumen), anterior: armarTramo(rangosCmp.mes.anterior, mesAnteriorResumen) },
       semana: { actual: armarTramo(rangosCmp.semana.actual, semActualResumen), anterior: armarTramo(rangosCmp.semana.anterior, semAnteriorResumen) },
+      anio: { actual: armarTramo(rangosCmp.anio.actual, anioActualResumen), anterior: armarTramo(rangosCmp.anio.anterior, anioAnteriorResumen) },
     };
 
     const serviciosMasPedidos = calcularServiciosMasPedidos(turnosParaMetricas);
@@ -6779,6 +6791,7 @@ const turnosHoyDetalle = turnosData
       ventasPorDia: pagosPorDia,
       ventasPorSem: metricas.porSemana,
       ventasPorMes: metricas.porMes,
+      ventasPorMesAnio: anioActualResumen.ventasPorMes,
       proximosDias,
       horarios: user.horarios,
       config: {

@@ -109,6 +109,8 @@ async function harness({ branch = false, bulk = false, failure, missing = false,
   assert.equal(data.comparativas.mes.actual.ingresos, 940000);
   assert.equal(data.comparativas.mes.anterior.turnos, 1);
   assert.equal(data.comparativas.semana.actual.turnos, 4);
+  assert(data.comparativas.anio.actual.turnos >= data.comparativas.mes.actual.turnos);
+  assert.equal(data.ventasPorMesAnio.reduce((sum, item) => sum + Number(item.volumen), 0), data.comparativas.anio.actual.ingresos);
   assert.equal(data.diasConMasTurnos.reduce((sum, d) => sum + d.cantidad, 0), 6);
   assert.equal(data.logros.programaAfiliadosCompleto, true);
   assert.equal(data.logros.turnosHistoricos, 9);
@@ -120,6 +122,7 @@ async function harness({ branch = false, bulk = false, failure, missing = false,
   assert.equal(branch.res.body.nombre_persona, "Admin");
   assert.equal(branch.res.body.turnosMes, 3);
   assert.equal(branch.res.body.comparativas.mes.actual.ingresos, 25000);
+  assert(branch.res.body.comparativas.anio.actual.turnos >= branch.res.body.comparativas.mes.actual.turnos);
   assert.equal(branch.res.body.logros.programaAfiliadosCompleto, false);
   assert.equal(branch.logs.some(l => l.table === "referidos"), false);
   assert(branch.logs.filter(l => l.table === "turnos" || l.table === "servicios").every(l => l.scoped));

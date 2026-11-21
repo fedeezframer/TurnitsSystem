@@ -131,8 +131,7 @@ function TurnitsDashboard_Sparkline({ values, accentColor }: any) {
     )
 }
 
-function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
-    const [range, setRange] = React.useState("month")
+function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0, range = "month", onRangeChange }: any) {
     const [hoveredPoint, setHoveredPoint] = React.useState<number | null>(null)
     // Ancho real de la tarjeta: el SVG se dibuja a ese ancho (1 unidad = 1px)
     // para que llene todo el espacio y los textos se vean a tamaño real.
@@ -142,7 +141,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
         const now = new Date()
         if (range === "year") {
             const byMonth = new Map<string, number>(
-                (Array.isArray(stats?.ventasPorMes) ? stats.ventasPorMes : []).map((item: any) => [
+                (Array.isArray(stats?.ventasPorMesAnio) ? stats.ventasPorMesAnio : Array.isArray(stats?.ventasPorMes) ? stats.ventasPorMes : []).map((item: any) => [
                     String(item.label), Number(item.volumen || 0),
                 ])
             )
@@ -189,12 +188,12 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
         ? stats?.comparativas?.semana
         : range === "month"
           ? stats?.comparativas?.mes
-          : null
+          : stats?.comparativas?.anio
     const periodRevenue = range === "month"
         ? Number(monthRevenue || 0)
         : range === "week"
           ? Number(periodComparison?.actual?.ingresos ?? totalSeries)
-          : totalSeries
+        : Number(periodComparison?.actual?.ingresos ?? totalSeries)
     const [animatedRevenue, setAnimatedRevenue] = React.useState(0)
     const animatedRevenueRef = React.useRef(0)
     const prefersReducedMotion = useReducedMotion()
@@ -210,7 +209,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
         return () => controls.stop()
     }, [periodRevenue, prefersReducedMotion])
     const previousRevenue = range === "year"
-        ? previousYearTotal
+        ? Number(periodComparison?.anterior?.ingresos ?? previousYearTotal)
         : periodComparison?.anterior?.ingresos == null
           ? null
           : Number(periodComparison.anterior.ingresos)
@@ -223,7 +222,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
 
     const w = Math.max(Math.round(wrapW), 240)
     const isNarrow = w < 520
-    const h = isNarrow ? 180 : 200
+    const h = isNarrow ? 200 : 220
     const fontSize = isNarrow ? 11 : 11.5
     // márgenes: a la izquierda para los valores del eje Y, abajo para las
     // etiquetas de fecha del eje X.
@@ -241,7 +240,13 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
             ((d.value - min) / Math.max(max - min, 1)) * usableH
         return { x, y, ...d }
     })
-    const line = pts.map((p: any) => `${p.x},${p.y}`).join(" ")
+    const linePath = Array.from({ length: 48 }, (_, index) => {
+        const point = index * Math.max(pts.length - 1, 0) / 47
+        const lower = Math.floor(point)
+        const fraction = point - lower
+        const y = (pts[lower]?.y ?? marginTop + usableH) * (1 - fraction) + (pts[Math.min(lower + 1, pts.length - 1)]?.y ?? marginTop + usableH) * fraction
+        return `${index ? "L" : "M"} ${marginLeft + index / 47 * usableW} ${y}`
+    }).join(" ")
     // Mantiene pocas marcas regulares, como un calendario mensual.
     const labelStep = range === "week" ? 1 : range === "month" ? 7 : isNarrow ? 3 : 2
     const xLabelIdx = new Set<number>()
@@ -289,7 +294,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                             type="button"
                             role="tab"
                             aria-selected={range === id}
-                            onClick={() => { setRange(id); setHoveredPoint(null) }}
+                            onClick={() => { onRangeChange?.(id); setHoveredPoint(null) }}
                             className={range === id ? "is-active" : ""}
                         >
                             {label}
@@ -410,8 +415,10 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0 }: any) {
                             />
                         )}
                         {hasActivity && (
-                            <polyline
-                                points={line}
+                            <motion.path
+                                initial={false}
+                                animate={{ d: linePath }}
+                                transition={{ duration: prefersReducedMotion ? 0 : .42, ease: [.22, 1, .36, 1] }}
                                 fill="none"
                                 stroke={accentColor || "#1b6b1a"}
                                 strokeWidth="2.6"
@@ -2710,21 +2717,22 @@ function TurnitsDashboard_Content({
     ilustracionRendimientoVacio,
 }: any) {
     const branch = useBranchAdmin()
+    const [range, setRange] = React.useState<"week" | "month" | "year">("month")
     const turnos = Number(stats?.turnosMes || 0)
     const prevTurnos = Number(stats?.turnosMesAnterior || 0)
     const ingresos = Number(stats?.ventas?.volumenMes || 0)
     const nuevos = Number(stats?.clientesNuevos || 0)
-    const comparativaMes = stats?.comparativas?.mes
-    const tramoActual = comparativaMes?.actual
-    const tramoAnterior = comparativaMes?.anterior
-    const turnosActuales = Number(tramoActual?.turnos ?? turnos)
-    const turnosAnteriores = Number(tramoAnterior?.turnos ?? prevTurnos)
-    const ingresosActuales = Number(tramoActual?.ingresos ?? ingresos)
+    const comparativa = stats?.comparativas?.[range === "week" ? "semana" : range === "year" ? "anio" : "mes"]
+    const tramoActual = comparativa?.actual
+    const tramoAnterior = comparativa?.anterior
+    const turnosActuales = Number(tramoActual?.turnos ?? (range === "month" ? turnos : 0))
+    const turnosAnteriores = Number(tramoAnterior?.turnos ?? (range === "month" ? prevTurnos : 0))
+    const ingresosActuales = Number(tramoActual?.ingresos ?? (range === "month" ? ingresos : 0))
     const ingresosAnteriores =
         tramoAnterior?.ingresos == null ? null : Number(tramoAnterior.ingresos)
-    const clientesActuales = Number(tramoActual?.clientes_nuevos ?? nuevos)
+    const clientesActuales = Number(tramoActual?.clientes_nuevos ?? (range === "month" ? nuevos : 0))
     const clientesAnteriores = Number(
-        tramoAnterior?.clientes_nuevos ?? stats?.clientesNuevosMesAnterior ?? 0
+        tramoAnterior?.clientes_nuevos ?? (range === "month" ? stats?.clientesNuevosMesAnterior : 0) ?? 0
     )
     const ticketActual =
         turnosActuales > 0 ? ingresosActuales / turnosActuales : 0
@@ -2732,7 +2740,7 @@ function TurnitsDashboard_Content({
         ingresosAnteriores != null && turnosAnteriores > 0
             ? ingresosAnteriores / turnosAnteriores
             : null
-    const servicioTop = stats?.serviciosMasPedidos?.[0] || null
+    const servicioTop = tramoActual?.serviciosMasPedidos?.[0] || (range === "month" ? stats?.serviciosMasPedidos?.[0] : null) || null
     const metricCardMobile: React.CSSProperties | undefined = isMobile
         ? {
               flex: "0 0 auto",
@@ -2759,6 +2767,8 @@ function TurnitsDashboard_Content({
                     stats={stats}
                     accentColor={accentColor}
                     monthRevenue={ingresosActuales}
+                    range={range}
+                    onRangeChange={setRange}
                 />
             </div>
             <div
@@ -2790,28 +2800,28 @@ function TurnitsDashboard_Content({
             >
                 <TurnitsDashboard_MetricCard
                     cardStyle={metricCardMobile}
-                    label="Turnos"
-                    value={turnosActuales}
-                    trend={TurnitsDashboard_percent(
+                    label={range === "week" ? "Turnos de la semana" : range === "year" ? "Turnos del año" : "Turnos del mes"}
+                    value={comparativa || range === "month" ? turnosActuales : "—"}
+                    trend={comparativa || range === "month" ? TurnitsDashboard_percent(
                         turnosActuales,
                         turnosAnteriores
-                    )}
+                    ) : null}
                 />
                 <TurnitsDashboard_MetricCard
                     cardStyle={metricCardMobile}
                     label="Clientes nuevos"
-                    value={clientesActuales}
-                    trend={TurnitsDashboard_percent(
+                    value={comparativa || range === "month" ? clientesActuales : "—"}
+                    trend={comparativa || range === "month" ? TurnitsDashboard_percent(
                         clientesActuales,
                         clientesAnteriores
-                    )}
+                    ) : null}
                 />
                 <TurnitsDashboard_MetricCard
                     cardStyle={metricCardMobile}
                     label="Ticket promedio"
-                    value={TurnitsDashboard_shortMoney(ticketActual)}
+                    value={comparativa || range === "month" ? TurnitsDashboard_shortMoney(ticketActual) : "—"}
                     trend={
-                        ticketAnterior == null
+                        ticketAnterior == null || (!comparativa && range !== "month")
                             ? null
                             : TurnitsDashboard_percent(
                                   ticketActual,

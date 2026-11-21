@@ -32,7 +32,7 @@ function SearchSelect({ label, value, options, disabled, onChange }: {
   const listId = React.useId();
   React.useEffect(() => {
     if (!open) return;
-    search.current?.focus();
+    search.current?.focus({ preventScroll: true });
     const place = () => {
       const box = root.current?.getBoundingClientRect();
       if (!box) return;
