@@ -94,7 +94,7 @@ function PublicationEditor({ url, post, services, onApply, onClose }: {
   return createPortal(
     <div className="publicacion-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="publicacion-dialog" role="dialog" aria-modal="true" aria-label="Editar publicación">
-        <header><div><span className="publicacion-eyebrow">Tu publicación</span><h2>Editar publicación</h2></div><BackButton aria-label="Volver" onClick={onClose} /></header>
+        <header><h2>Editar publicación</h2><BackButton aria-label="Volver" onClick={onClose} /></header>
         <div className="publicacion-dialog-body">
           <div className="publicacion-crop">
             <div className="publicacion-crop-image" aria-label="Arrastrá la foto para ajustar el encuadre"
@@ -102,7 +102,6 @@ function PublicationEditor({ url, post, services, onApply, onClose }: {
               onPointerMove={(event) => { const origin = drag.current; if (!origin) return; const rect = event.currentTarget.getBoundingClientRect(); setDraft((current) => ({ ...current, encuadre_x: clamp(origin.horizontal - (event.clientX - origin.x) * 100 / rect.width), encuadre_y: clamp(origin.vertical - (event.clientY - origin.y) * 100 / rect.height) })); }}
               onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
               <img src={url} alt="Vista previa de la publicación" draggable={false} style={cropStyle(draft)} />
-              <span>Arrastrá para encuadrar</span>
             </div>
             <label className="publicacion-zoom">Acercar foto<input type="range" min="1" max="2" step="0.05" value={draft.zoom ?? 1} onChange={(event) => setDraft((current) => ({ ...current, zoom: Number(event.target.value) }))} /></label>
           </div>
