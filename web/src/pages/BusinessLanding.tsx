@@ -115,12 +115,13 @@ export default function BusinessLanding() {
   const [offset, setOffset] = React.useState(0)
   const [now, setNow] = React.useState(() => Date.now())
   const [logoFailed, setLogoFailed] = React.useState(false)
+  const [bannerFailed, setBannerFailed] = React.useState(false)
   const [shareStatus, setShareStatus] = React.useState("")
 
   React.useEffect(() => {
     if (!slug) return
     const controller = new AbortController()
-    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setOffers([]); setLogoFailed(false); setServices([]); setMembers([]); setBranches([]); setReviewItems([]); setAvailability({}); setTodaySlots(null)
+    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setOffers([]); setLogoFailed(false); setBannerFailed(false); setServices([]); setMembers([]); setBranches([]); setReviewItems([]); setAvailability({}); setTodaySlots(null)
     const s = encodeURIComponent(slug)
     getJson(`/negocio/${s}`, controller.signal).then(data => {
       if (controller.signal.aborted) return
@@ -251,6 +252,7 @@ export default function BusinessLanding() {
   const style = { "--bl-color": color, "--bl-ink": readableAccent(color) } as React.CSSProperties
   const name = title || "Negocio"
   const logo = !logoFailed && (perfil?.foto_perfil_url || negocio?.logo_url)
+  const banner = !bannerFailed && perfil?.banner_url
   const tagline = (perfil?.descripcion || perfil?.categoria || "").trim()
   const branchAddress = String(branches[0]?.direccion || "").trim()
   const locality = [perfil?.ciudad, perfil?.provincia].filter(Boolean).join(", ")
@@ -325,8 +327,8 @@ export default function BusinessLanding() {
           <Link className="bl-reserve" to={`/agenda/${enc}`}>Reservar ahora <span aria-hidden="true">↗</span></Link>
         </header>
 
-        <section className="bl-hero">
-          <div className="bl-hero-pattern" aria-hidden="true" />
+        <section className={`bl-hero${banner ? " bl-hero-with-banner" : ""}`}>
+          {banner ? <img className="bl-hero-banner" src={banner} alt="" onError={() => setBannerFailed(true)} /> : <div className="bl-hero-pattern" aria-hidden="true" />}
           <div className="bl-logo">{logo ? <img src={logo} alt={`Logo de ${name}`} onError={() => setLogoFailed(true)} /> : <span aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>}</div>
           <h1 className={name.length > 22 ? "bl-name-long bl-name-extra-long" : name.length > 15 ? "bl-name-long" : undefined}>{name}</h1>
           {tagline && <p className="bl-tagline">{tagline}</p>}
