@@ -20,7 +20,6 @@ const Store = lazy(() => import("./pages/Store"))
 const Internal = lazy(() => import("./migrated/public/AdminStats"))
 const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))
-const BusinessProfile = lazy(() => import("./pages/BusinessProfile"))
 const BusinessLanding = lazy(() => import("./pages/BusinessLanding"))
 const QuoteAvailability = lazy(() => import("./pages/QuoteAvailability"))
 
@@ -53,6 +52,12 @@ function RenewRoute() {
   if (!slug) return <Navigate to="/login" replace />
   query.set("planes", "actual")
   return <Navigate to={`/panel/${encodeURIComponent(slug)}?${query}`} replace />
+}
+function LegacyProfileRedirect({ publications = false }: { publications?: boolean }) {
+  const { slug } = useParams()
+  const location = useLocation()
+  const anchor = publications || /publica|gallery/.test(location.hash) ? "#bl-works" : location.hash === "#perfil-reviews" ? "#bl-reviews" : ""
+  return <Navigate to={`/${encodeURIComponent(slug || "")}${anchor}`} replace />
 }
 function BookingRoute() {
   const { slug: pathSlug } = useParams()
@@ -120,8 +125,8 @@ export default function App() {
     <Route path="/agenda" element={<BookingRoute />} />
     <Route path="/agenda/:slug" element={<BookingRoute />} />
     <Route path="/planes" element={<PublicPlans />} />
-    <Route path="/perfil/:slug" element={<BusinessProfile />} />
-    <Route path="/perfil/:slug/publicaciones" element={<BusinessProfile publications />} />
+    <Route path="/perfil/:slug" element={<LegacyProfileRedirect />} />
+    <Route path="/perfil/:slug/publicaciones" element={<LegacyProfileRedirect publications />} />
     <Route path="/store-login" element={<Store />} />
     <Route path="/app" element={<AppGateway />} />
     <Route path="/internal" element={<Internal loginPath="/login" refreshSeconds={60} />} />

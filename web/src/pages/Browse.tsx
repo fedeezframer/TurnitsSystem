@@ -205,9 +205,9 @@ function Card({ item, location, onReserve, kind = "servicio" }: any) {
         <Avatar name={n?.nombre} src={n?.foto_perfil_url} />
         <Link
           className="browse-card-profile"
-          to={`/perfil/${encodeURIComponent(s.slug)}`}
+          to={`/${encodeURIComponent(s.slug)}`}
         >
-          Ver Perfil
+          Ver negocio
         </Link>
         {kind === "offer" && (
           <span className="browse-card-fire">
@@ -811,8 +811,8 @@ function BrowseContent() {
                         {recentService.nombre}
                       </span>
                       <div>
-                        ¿Cómo te fue en {recentService.negocio.nombre}?
-                        <p><Link to={`/perfil/${encodeURIComponent(recentService.slug)}#perfil-reviews`}>Dejá tu reseña</Link></p>
+                        Volvé a visitar {recentService.negocio.nombre}
+                        <p><Link to={`/${encodeURIComponent(recentService.slug)}`}>Ver negocio</Link></p>
                       </div>
                     </article>
                   ) : (
@@ -933,7 +933,7 @@ function BrowseContent() {
                     <div className="browse-favorite-businesses">{favorites.favorites.map((slug: string) => {
                       const business = catalog.negocios.find((item: any) => item.slug === slug);
                       const name = business?.nombre || slug;
-                      return <article key={slug}><Avatar name={name} src={business?.foto_perfil_url} /><Link to={`/perfil/${encodeURIComponent(slug)}`}>{name}</Link><FavoriteButton slug={slug} name={name} /></article>;
+                      return <article key={slug}><Avatar name={name} src={business?.foto_perfil_url} /><Link to={`/${encodeURIComponent(slug)}`}>{name}</Link><FavoriteButton slug={slug} name={name} /></article>;
                     })}</div>
                   )}
                   {!favorites.loading && !favorites.error && !favorites.favorites.length && <p>Guardá los negocios que te gustan tocando el corazón.</p>}

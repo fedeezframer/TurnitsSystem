@@ -474,21 +474,21 @@ export function PerfilNegocio({
                   checked={form.publicado}
                   onChange={(e) => change("publicado", e.target.checked)}
                 />
-                Publicar mi perfil
+                Publicar mi página
               </label>
               <p className="negocio-muted">
-                Al publicarlo, estos datos y fotos estarán disponibles en tu
-                ficha pública. Podés ocultarla cuando quieras.
+                Al publicarla, estos datos y fotos estarán disponibles en tu
+                link público. Podés ocultarla cuando quieras.
               </p>
               <div className="negocio-row">
                 {form.publicado && (
                   <a
-                    href={`/perfil/${slug}`}
+                    href={`/${slug}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="negocio-button secondary"
                   >
-                    Ver perfil público
+                    Ver link público
                   </a>
                 )}
               </div>
