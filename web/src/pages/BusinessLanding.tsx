@@ -4,7 +4,6 @@ import { appConfig } from "../config"
 import BrandPreloader from "../components/BrandPreloader"
 import { SocialIcon } from "../components/SocialIcon"
 import whatsappLogo from "../components/whatsapp-icon.svg"
-import promoIcon from "../components/griddy-icons-sale-alt.svg"
 import arrowUpRightIcon from "../components/akar-icons-arrow-up-right.svg"
 import { enlacesPublicos } from "../shared/socials.js"
 import { promoAppliesOn, promoDaysLabel } from "../shared/promotions.js"
@@ -48,6 +47,7 @@ interface Promo {
 interface Service { id: string; nombre: string; precio: number; duracion: number; descripcion?: string; imagen_url?: string | null; reservas_90d?: number; orden?: number }
 interface Member { id: string; nombre: string; apellido?: string; color?: string; foto_url?: string | null }
 interface Review { id: string; nombre: string; comentario?: string; puntuacion: number; created_at?: string }
+interface Branch { id: string; nombre: string; direccion: string; latitud?: number | null; longitud?: number | null }
 
 async function getJson(path: string, signal?: AbortSignal) {
   const response = await fetch(`${appConfig.apiUrl}${path}`, { signal, cache: "no-store" })
@@ -56,9 +56,15 @@ async function getJson(path: string, signal?: AbortSignal) {
   return data
 }
 
-function readableOn(color: string) {
-  const [r, g, b] = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16) / 255)
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? "#14201a" : "#ffffff"
+function readableAccent(color: string) {
+  const rgb = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16))
+  const luminance = (values: number[]) => values.map(value => {
+    const channel = value / 255
+    return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4
+  }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0)
+  let result = rgb
+  while (luminance(result) > .12) result = result.map(value => Math.max(0, Math.floor(value * .88)))
+  return `#${result.map(value => value.toString(16).padStart(2, "0")).join("")}`
 }
 function countdown(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -100,18 +106,21 @@ export default function BusinessLanding() {
   const [promos, setPromos] = React.useState<Promo[]>([])
   const [services, setServices] = React.useState<Service[]>([])
   const [members, setMembers] = React.useState<Member[]>([])
+  const [branches, setBranches] = React.useState<Branch[]>([])
   const [availability, setAvailability] = React.useState<Record<string, { date: string; time: string } | null>>({})
+  const [todaySlots, setTodaySlots] = React.useState<number | null>(null)
   const [offers, setOffers] = React.useState<Offer[]>([])
   const [offerIndex, setOfferIndex] = React.useState(0)
   const [offerPaused, setOfferPaused] = React.useState(false)
   const [offset, setOffset] = React.useState(0)
   const [now, setNow] = React.useState(() => Date.now())
   const [logoFailed, setLogoFailed] = React.useState(false)
+  const [shareStatus, setShareStatus] = React.useState("")
 
   React.useEffect(() => {
     if (!slug) return
     const controller = new AbortController()
-    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setOffers([]); setLogoFailed(false); setServices([]); setMembers([]); setReviewItems([]); setAvailability({})
+    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setOffers([]); setLogoFailed(false); setServices([]); setMembers([]); setBranches([]); setReviewItems([]); setAvailability({}); setTodaySlots(null)
     const s = encodeURIComponent(slug)
     getJson(`/negocio/${s}`, controller.signal).then(data => {
       if (controller.signal.aborted) return
@@ -126,12 +135,14 @@ export default function BusinessLanding() {
       getJson(`/promociones/${s}`, controller.signal),
       getJson(`/servicios/${s}`, controller.signal),
       getJson(`/equipo/${s}`, controller.signal),
-    ]).then(async ([profile, rev, promo, srv, team]) => {
+      getJson(`/sucursales/${s}`, controller.signal),
+    ]).then(async ([profile, rev, promo, srv, team, locations]) => {
       if (controller.signal.aborted) return
       if (profile.status === "fulfilled") setPerfil(profile.value.perfil)
       if (rev.status === "fulfilled") { setReviews({ promedio: rev.value.promedio || 0, cantidad: rev.value.cantidad || 0 }); setReviewItems(rev.value.resenas || []) }
       if (promo.status === "fulfilled") setPromos(promo.value.promociones || [])
       if (team.status === "fulfilled") setMembers(team.value.equipo || [])
+      if (locations.status === "fulfilled") setBranches(locations.value.sucursales || [])
       if (srv.status === "fulfilled") {
         const memberList = team.status === "fulfilled" ? team.value.equipo || [] : []
         const byMember = await Promise.all(memberList.map((member: Member) => getJson(`/servicios/${s}?equipo_id=${encodeURIComponent(member.id)}`, controller.signal).catch(() => ({ servicios: [] }))))
@@ -150,21 +161,35 @@ export default function BusinessLanding() {
   React.useEffect(() => {
     if (state !== "ready" || !members.length || !services.length) return
     const controller = new AbortController()
-    const firstDate = new Date()
-    const dates = Array.from({ length: 14 }, (_, i) => {
-      const d = new Date(firstDate); d.setDate(d.getDate() + i)
-      return new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(d)
+    const formatter = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" })
+    const firstDate = new Date(`${formatter.format(new Date())}T12:00:00Z`)
+    const dates = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(firstDate); d.setUTCDate(d.getUTCDate() + i)
+      return formatter.format(d)
     })
-    Promise.all(members.slice(0, 8).map(async member => {
-      for (const date of dates) {
+    const checkedMembers = members.slice(0, 6)
+    Promise.all(checkedMembers.map(async member => {
+      try {
+        const data = await getJson(`/slots-disponibles/${encodeURIComponent(slug)}?fecha=${dates[0]}&equipo_id=${encodeURIComponent(member.id)}`, controller.signal)
+        const open = (data.slots || []).filter((item: any) => !item.lleno)
+        return { id: member.id, next: open[0] ? { date: dates[0], time: String(open[0].hora).slice(0, 5) } : null, todayCount: open.length }
+      } catch { return { id: member.id, next: null, todayCount: null } }
+    })).then(async todayRows => {
+      if (controller.signal.aborted) return
+      setTodaySlots(todayRows.some(row => row.todayCount !== null) ? todayRows.reduce((total, row) => total + (row.todayCount || 0), 0) : null)
+      setAvailability(Object.fromEntries(todayRows.map(row => [row.id, row.next])))
+      const futureRows = await Promise.all(todayRows.filter(row => !row.next).map(async row => {
+        for (const date of dates.slice(1)) {
         try {
-          const data = await getJson(`/slots-disponibles/${encodeURIComponent(slug)}?fecha=${date}&equipo_id=${encodeURIComponent(member.id)}`, controller.signal)
-          const slot = (data.slots || []).find((item: any) => !item.lleno)
-          if (slot) return [member.id, { date, time: String(slot.hora).slice(0, 5) }] as const
-        } catch { if (controller.signal.aborted) return [member.id, null] as const }
-      }
-      return [member.id, null] as const
-    })).then(rows => { if (!controller.signal.aborted) setAvailability(Object.fromEntries(rows)) })
+          const data = await getJson(`/slots-disponibles/${encodeURIComponent(slug)}?fecha=${date}&equipo_id=${encodeURIComponent(row.id)}`, controller.signal)
+          const open = (data.slots || []).filter((item: any) => !item.lleno)
+          if (open[0]) return { id: row.id, next: { date, time: String(open[0].hora).slice(0, 5) } }
+        } catch { if (controller.signal.aborted) break }
+        }
+        return { id: row.id, next: null }
+      }))
+      if (!controller.signal.aborted) setAvailability(Object.fromEntries([...todayRows.filter(row => row.next), ...futureRows].map(row => [row.id, row.next])))
+    })
     return () => controller.abort()
   }, [state, slug, members, services])
 
@@ -191,18 +216,21 @@ export default function BusinessLanding() {
     return () => window.clearInterval(refresh)
   }, [state, loadOffers])
   React.useEffect(() => {
-    if (!offers.length) return
-    const tick = window.setInterval(() => setNow(Date.now()), 1000)
+    if (!offers.length && !members.length) return
+    const tick = window.setInterval(() => setNow(Date.now()), offers.length ? 1000 : 60000)
     return () => window.clearInterval(tick)
-  }, [offers.length])
+  }, [offers.length, members.length])
 
   const title = perfil?.nombre || negocio?.business_name
   React.useEffect(() => {
     if (!title) return
     const previous = document.title
     document.title = `${title} | Turnits`
-    return () => { document.title = previous }
-  }, [title])
+    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
+    const previousDescription = description?.content
+    if (description) description.content = (perfil?.descripcion || `Reservá tu turno en ${title} desde Turnits.`).slice(0, 160)
+    return () => { document.title = previous; if (description && previousDescription) description.content = previousDescription }
+  }, [title, perfil?.descripcion])
 
   const serverNow = now + offset
   const liveOffers = offers.filter(o => Date.parse(o.cierre) > serverNow)
@@ -223,13 +251,19 @@ export default function BusinessLanding() {
   if (state === "loading") return <BrandPreloader />
 
   const color = /^#[0-9a-f]{6}$/i.test(negocio?.tema?.acento || "") ? negocio.tema.acento : /^#[0-9a-f]{6}$/i.test(negocio?.tema?.primario || "") ? negocio.tema.primario : DEFAULT_COLOR
-  const style = { "--bl-color": color, "--bl-on": readableOn(color) } as React.CSSProperties
+  const style = { "--bl-color": color, "--bl-ink": readableAccent(color) } as React.CSSProperties
   const name = title || "Negocio"
-  const logo = !logoFailed && (negocio?.logo_url || perfil?.foto_perfil_url)
+  const logo = !logoFailed && (perfil?.foto_perfil_url || negocio?.logo_url)
   const tagline = (perfil?.descripcion || perfil?.categoria || "").trim()
-  const address = [perfil?.direccion, [perfil?.ciudad, perfil?.provincia].filter(Boolean).join(", ")].filter(Boolean)
+  const branchAddress = String(branches[0]?.direccion || "").trim()
+  const locality = [perfil?.ciudad, perfil?.provincia].filter(Boolean).join(", ")
+  const address = [branchAddress || perfil?.direccion, locality && (!branchAddress || !perfil?.ciudad || !branchAddress.toLocaleLowerCase("es-AR").includes(String(perfil.ciudad).toLocaleLowerCase("es-AR"))) ? locality : ""].filter(Boolean)
   const socials = perfil ? enlacesPublicos(perfil) : []
-  const hasPublicProfile = Boolean(perfil && (tagline || address.length || socials.length || perfil.foto_perfil_url || perfil.banner_url || perfil.sitio_web || perfil.fotos?.length || reviews.cantidad > 0))
+  const works = (Array.isArray(perfil?.fotos) ? perfil.fotos : []).filter((url: unknown): url is string => typeof url === "string" && !!url).map((url: string) => ({ url, post: perfil?.publicaciones?.[url], description: perfil?.publicaciones?.[url]?.descripcion || perfil?.titulos_fotos?.[url] || "" }))
+  const rankedMembers = [...members].sort((a, b) => {
+    const left = availability[a.id], right = availability[b.id]
+    return (left ? `${left.date}T${left.time}` : "9999").localeCompare(right ? `${right.date}T${right.time}` : "9999")
+  })
   const todayISO = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date())
   const rankedPromos = promos.filter(p => {
     for (let offset = 0; offset <= 30; offset++) {
@@ -244,13 +278,20 @@ export default function BusinessLanding() {
     .filter(p => p.tipo === "descuento" && p.servicio_id === service.id && p.items?.length === 1 && p.items[0].tipo === "servicio" && p.items[0].cantidad === 1 && p.precio_final < p.precio_original)
     .sort((a, b) => a.precio_final - b.precio_final)[0]
   const enc = encodeURIComponent(slug)
-  const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
-  const today = new Date().toLocaleDateString("es-AR", { day: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
-  const whatsapp = String(perfil?.telefono_publico || "").replace(/\D/g, "")
+  const sharePage = async () => {
+    const url = `${appConfig.siteUrl}/${enc}`
+    try {
+      if (navigator.share) await navigator.share({ title: name, url })
+      else { await navigator.clipboard.writeText(url); setShareStatus("Enlace copiado") }
+    } catch (error) {
+      if ((error as DOMException)?.name !== "AbortError") setShareStatus("No pudimos copiar el enlace")
+    }
+  }
+  const whatsappLink = socials.find((red: any) => red.key === "whatsapp")?.url || (perfil?.telefono_publico ? `https://wa.me/${String(perfil.telefono_publico).replace(/\D/g, "")}` : "")
   const timeUntil = (date: string, time: string) => {
-    const [y, m, d] = date.split("-").map(Number), [h, min] = time.split(":").map(Number)
-    const target = new Date(y, m - 1, d, h, min).getTime()
-    const minutes = Math.max(0, Math.round((target - Date.now()) / 60000))
+    const target = Date.parse(`${date}T${time}:00-03:00`)
+    const minutes = Math.max(0, Math.round((target - now) / 60000))
+    if (date !== todayISO) return new Date(`${date}T12:00:00-03:00`).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", timeZone: "America/Argentina/Buenos_Aires" })
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60} min` : ""}`.trim()
   }
   const offerDateLabel = (date: string) => {
@@ -282,50 +323,53 @@ export default function BusinessLanding() {
   return (
     <main className="bl-page" style={style}>
       <div className="bl-wrap">
-        {(hasPublicProfile || rankedPromos.length > 0) && <nav className="bl-nav" aria-label="Secciones">
-          {hasPublicProfile && <Link to={`/perfil/${enc}`}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.5c1.5-2.5 3.2-3.5 5.5-3.5" /></svg>Perfil</Link>}
-          {rankedPromos.length > 0 && <button type="button" onClick={() => goTo("bl-promos")}><i className="bl-mask-icon bl-promo-nav-icon" style={maskedIcon(promoIcon)} aria-hidden="true" />Promociones</button>}
-        </nav>}
-
         <header className="bl-bar">
-          <Link className="bl-reserve" to={`/agenda/${enc}`}>Reservar Ahora</Link>
+          <span>{todaySlots != null && todaySlots > 0 ? <><b>{todaySlots}</b> {todaySlots === 1 ? "horario disponible hoy" : "horarios disponibles hoy"}</> : "Tu próximo turno empieza acá"}</span>
+          <Link className="bl-reserve" to={`/agenda/${enc}`}>Reservar ahora <span aria-hidden="true">↗</span></Link>
         </header>
 
         <section className="bl-hero">
+          <div className="bl-hero-pattern" aria-hidden="true" />
           <div className="bl-logo">{logo ? <img src={logo} alt={`Logo de ${name}`} onError={() => setLogoFailed(true)} /> : <span aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>}</div>
           <h1 className={name.length > 22 ? "bl-name-long bl-name-extra-long" : name.length > 15 ? "bl-name-long" : undefined}>{name}</h1>
           {tagline && <p className="bl-tagline">{tagline}</p>}
           <div className="bl-info">
             {address.length > 0 && (
-              <div className="bl-info-item">
+              <a className="bl-info-item" href={branches[0]?.latitud != null && branches[0]?.longitud != null ? `https://www.google.com/maps/search/?api=1&query=${branches[0].latitud},${branches[0].longitud}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.join(", "))}`} target="_blank" rel="noopener noreferrer">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11A6.5 6.5 0 0 1 12 3.5 6.5 6.5 0 0 1 18.5 10c0 5.400-6.500 11-6.500 11Z" /><circle cx="12" cy="10" r="2.400" /></svg>
                 <span>{address.map((line, i) => <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>)}</span>
-              </div>
+              </a>
             )}
-            {socials.length > 0 && (
-              <div className="bl-socials">
-                {socials.slice(0, 3).map((red: any) => <a key={red.key} href={red.url} target="_blank" rel="noopener noreferrer" aria-label={red.label}><SocialIcon name={red.key} /></a>)}
-              </div>
-            )}
-            <Link className="bl-info-item bl-reviews" to={`/perfil/${enc}`} aria-label={`${reviews.cantidad} reseñas${reviews.cantidad > 0 ? `, calificación ${reviews.promedio.toLocaleString("es-AR")} de 5` : ""}`}>
+            {reviews.cantidad > 0 && <a className="bl-info-item bl-reviews" href="#bl-reviews" aria-label={`${reviews.cantidad} reseñas, calificación ${reviews.promedio.toLocaleString("es-AR")} de 5`}>
               {reviews.cantidad > 0 && <strong className="bl-review-score">{reviews.promedio.toLocaleString("es-AR")}</strong>}
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.500 2.900 6 6.600.8-4.900 4.500 1.300 6.500L12 17l-5.900 3.300 1.300-6.500L2.500 9.300l6.600-.8z" /></svg>
-              <span>· {reviews.cantidad} {reviews.cantidad === 1 ? "reseña" : "reseñas"}</span>
-            </Link>
+              <span>{reviews.cantidad} {reviews.cantidad === 1 ? "reseña" : "reseñas"}</span>
+            </a>}
           </div>
+          {socials.length > 0 && <div className="bl-socials">{socials.slice(0, 4).map((red: any) => <a key={red.key} href={red.url} target="_blank" rel="noopener noreferrer" aria-label={red.label}><SocialIcon name={red.key} /></a>)}{socials.length > 4 && <Link className="bl-social-more" to={`/perfil/${enc}`} aria-label="Ver todas las redes sociales">+{socials.length - 4}</Link>}</div>}
+          <button className="bl-share" type="button" onClick={sharePage}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7.5 7.5M12 3l4.5 4.5M5 13.5v5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-5" /></svg>Compartir página</button>
+          {shareStatus && <span className="bl-share-status" role="status">{shareStatus}</span>}
         </section>
 
-        {liveOffers.length > 0 && <section className="bl-section bl-last-minute"><h2>Oferta de último momento</h2><p>Aprovechá los horarios vacíos y reservá con descuento.</p>
+        <nav className="bl-nav" aria-label="Explorar este negocio">
+          {services.length > 0 && <a href="#bl-services">Servicios</a>}
+          {works.length > 0 && <a href="#bl-works">Trabajos</a>}
+          {rankedPromos.length > 0 && <a href="#bl-promos">Promociones</a>}
+          {reviews.cantidad > 0 && <a href="#bl-reviews">Reseñas</a>}
+        </nav>
+
+        {liveOffers.length > 0 && <section className="bl-section bl-last-minute"><div className="bl-section-heading"><div><span className="bl-kicker">Solo por tiempo limitado</span><h2>Oferta de último momento</h2><p>Un horario libre, un mejor precio. Reservalo antes de que termine.</p></div></div>
           <div className="bl-offer-slider" onMouseEnter={() => setOfferPaused(true)} onMouseLeave={() => setOfferPaused(false)} onFocusCapture={() => setOfferPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOfferPaused(false) }}>
             {(() => {
               const offer = liveOffers[offerIndex] || liveOffers[0]
               return <Link key={`${offer.id}-${offer.fecha}-${offer.hora}`} className="bl-offer" to={offerLink(slug, offer)} aria-label={`Reservar ${offer.nombre} a ${money(offer.precio)}, ${offerDateLabel(offer.fecha)} ${offer.hora.slice(0, 5)}`}>
-                <span className="bl-offer-timer">Disponible por: {countdown(Date.parse(offer.cierre) - serverNow)}</span>
+                <span className="bl-offer-timer">Termina en {countdown(Date.parse(offer.cierre) - serverNow)}</span>
                 <div className="bl-offer-img">{offer.imagen && <img src={offer.imagen} alt="" />}</div>
                 <div className="bl-offer-body">
                   <small className="bl-offer-time">{offerDateLabel(offer.fecha)} {offer.hora.slice(0, 5)} hs · Con {members.find(m => m.id === offer.equipo_id)?.nombre || "nuestro equipo"}</small>
                   <strong>{offer.nombre}</strong>
                   <span><b>{money(offer.precio)}</b><s>{money(offer.precio_original)}</s></span>
+                  <span className="bl-offer-cta">Reservar oferta <span aria-hidden="true">↗</span></span>
                 </div>
               </Link>
             })()}
@@ -339,32 +383,40 @@ export default function BusinessLanding() {
           </div>
         </section>}
 
-        {members.length > 0 && services.length > 0 && <section className="bl-section bl-availability"><h2>Próximos turnos disponibles</h2><p>Encontrá el horario más cercano de nuestro equipo.</p><div className="bl-list">{members.slice(0, 8).map((member, index) => {
+        {members.length > 0 && services.length > 0 && <section className="bl-section bl-availability"><div className="bl-section-heading"><div><h2>Tu próximo turno, más cerca</h2><p>Una vista rápida de los horarios de nuestro equipo.</p></div><Link to={`/agenda/${enc}`}>Ver agenda <span aria-hidden="true">↗</span></Link></div><div className="bl-list">{rankedMembers.slice(0, 6).map((member) => {
           const next = availability[member.id], initials = `${member.nombre?.[0] || ""}${member.apellido?.[0] || ""}`.toUpperCase()
           const memberColor = /^#[0-9a-f]{6}$/i.test(member.color || "") ? member.color : color
           return <Link className="bl-member" key={member.id} to={`/agenda/${enc}?equipo_id=${encodeURIComponent(member.id)}`}>
             <span className="bl-avatar" style={{ "--member-color": memberColor } as React.CSSProperties}>{member.foto_url ? <img src={member.foto_url} alt="" /> : initials || member.nombre?.[0]}</span>
-            <span className="bl-member-copy"><strong>{member.nombre} {member.apellido}</strong><small>{next ? <>Disponible en <b>{timeUntil(next.date, next.time) || "ahora"}</b></> : "Ver disponibilidad"}</small><span>Reservar con este profesional <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></span></span>
-            <span className="bl-member-rank">{index + 1}</span>
+            <span className="bl-member-copy"><strong>{member.nombre} {member.apellido}</strong><small>{next ? <>Disponible desde <b>{timeUntil(next.date, next.time)}</b></> : "Ver disponibilidad"}</small></span>
+            <span className="bl-member-arrow" aria-hidden="true">↗</span>
           </Link>
         })}</div></section>}
 
-        {reviewItems.length > 0 && <section className="bl-section bl-reviews-section"><h2>Reseñas</h2><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div><strong>{review.nombre}</strong>{review.comentario && <p>“{review.comentario}”</p>}</article>)}</div></section>}
-
-        {services.length > 0 && <section id="bl-services" className="bl-section"><h2>Servicios</h2><p>Lo que ofrecemos en {name}</p><div className="bl-service-list">{services.map(service => {
+        {services.length > 0 && <section id="bl-services" className="bl-section"><div className="bl-section-heading"><div><h2>Elegí lo que necesitás</h2><p>Servicios claros, precios a la vista y tu turno a un toque.</p></div></div><div className="bl-service-list">{services.map(service => {
           const discount = discountForService(service)
+          const image = service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1] || works.find(work => work.post?.servicio_id === service.id)?.url
           return <article className="bl-service" key={service.id}>
-            {(service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]) && <img src={service.imagen_url || service.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]} alt="" loading="lazy" />}
-            <div><strong>{service.nombre}</strong><span className="bl-service-price"><b>{discount?.dias_semana != null ? "Desde " : ""}{money(discount?.precio_final ?? service.precio)}</b>{discount && <s>{money(service.precio)}</s>}</span></div><span>{service.duracion} min</span><Link to={`/agenda/${enc}?servicio_id=${encodeURIComponent(service.id)}`}>Reservar</Link>
+            {image ? <img src={image} alt="" loading="lazy" /> : <span className="bl-service-placeholder" aria-hidden="true">✦</span>}
+            <div><strong>{service.nombre}</strong><span className="bl-service-price"><b>{discount?.dias_semana != null ? "Desde " : ""}{money(discount?.precio_final ?? service.precio)}</b>{discount && <s>{money(service.precio)}</s>}</span></div><span className="bl-service-duration">{service.duracion} min</span><Link to={`/agenda/${enc}?servicio_id=${encodeURIComponent(service.id)}`} aria-label={`Reservar ${service.nombre}`}>↗</Link>
           </article>
         })}</div></section>}
 
-        {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><h2>Promociones</h2><p>Llevá una experiencia</p><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
+        {works.length > 0 && <section id="bl-works" className="bl-section bl-works"><div className="bl-section-heading"><div><h2>Trabajos que hablan por sí solos</h2><p>Explorá resultados reales y reservá el servicio que te gusta.</p></div>{works.length > 4 && <Link to={`/perfil/${enc}/publicaciones`}>Ver todos <span aria-hidden="true">↗</span></Link>}</div><div className="bl-work-list">{works.slice(0, 4).map(({ url, post, description }) => {
+          const linked = services.find(service => service.id === post?.servicio_id)
+          return <article className="bl-work" key={url}><div className="bl-work-photo"><img src={url} alt={description || "Trabajo realizado por el negocio"} loading="lazy" style={{ objectPosition: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%`, transform: `scale(${post?.zoom ?? 1})`, transformOrigin: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%` }} /></div><div className="bl-work-copy">{linked && <span>{linked.nombre}</span>}{description && <p>{description}</p>}<Link to={`/agenda/${enc}${linked ? `?servicio_id=${encodeURIComponent(linked.id)}` : ""}`}>Reservar {linked ? "este servicio" : "turno"} <span aria-hidden="true">↗</span></Link></div></article>
+        })}</div></section>}
 
-        {whatsapp && <section className="bl-section bl-contact"><h2>¿Tenés alguna duda?</h2><p>Contactanos</p><a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">Consultas aquí <img src={whatsappLogo} alt="WhatsApp" /></a></section>}
-        <section className="bl-signup"><h2>Creá tu agenda ahora con Turnits</h2><Link to="/registro/negocio">Empezar ya</Link></section>
+        {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><div className="bl-section-heading"><div><h2>Más para vos, por menos</h2><p>Combos y beneficios para tu próxima visita.</p></div></div><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
 
-        <footer className="bl-footer"><span>Powered by <b>Turnits</b></span></footer>
+        {reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} {reviews.cantidad === 1 ? "reseña" : "reseñas"}</p></div><Link to={`/perfil/${enc}`}>Ver reseñas <span aria-hidden="true">↗</span></Link></div><div className="bl-review-list">{reviewItems.slice(0, 3).map(review => <article className="bl-review" key={review.id}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></article>)}</div></section>}
+
+        <section className="bl-final-cta"><span>Tu lugar te espera</span><h2>¿Ya sabés cuándo venís?</h2><p>Elegí el servicio y reservá en pocos pasos.</p><Link to={`/agenda/${enc}`}>Encontrar mi turno <span aria-hidden="true">↗</span></Link></section>
+
+        {whatsappLink && <section className="bl-section bl-contact"><div><h2>¿Te quedó alguna duda?</h2><p>Escribinos y te ayudamos a elegir.</p></div><a href={whatsappLink} target="_blank" rel="noopener noreferrer">Consultar por WhatsApp <img src={whatsappLogo} alt="" /></a></section>}
+        <section className="bl-signup"><span>Para negocios</span><p>Hacé crecer tu agenda con Turnits.</p><Link to="/registro/negocio">Crear mi agenda <span aria-hidden="true">↗</span></Link></section>
+
+        <footer className="bl-footer"><img src="/assets/turnits-icon.svg" alt="" /><span>Hecho con <b>Turnits</b></span></footer>
       </div>
     </main>
   )
