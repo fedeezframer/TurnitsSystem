@@ -209,3 +209,8 @@
 @container(max-width:720px){.week-editor-heading{align-items:flex-start;padding:18px}.schedule-exceptions header{gap:14px}}
 [data-schedule-view] .week-editor-heading {display:none}
 [data-schedule-view] .schedule-exceptions header {padding:0;border:0;border-radius:0;background:transparent}
+.week-notice-input { display:flex; align-items:center; justify-content:stretch; width:150px; min-width:0; height:44px; overflow:hidden; padding:0 4px 0 10px; border:1px solid #b9d49f; border-radius:12px; background:#fff; box-shadow:0 3px 12px #31552b0d; }
+.week-notice-input input { flex:1 1 auto; min-width:0; width:0; height:100%; padding:0 6px 0 0; border:0!important; outline:0; background:transparent!important; color:#1f2b21; font:inherit; font-weight:700; text-align:right; box-shadow:none!important; }
+.turnits-root .week-notice-input select { flex:0 0 78px; width:78px; min-width:78px; max-width:78px; min-height:36px; height:36px; padding:0 25px 0 9px!important; border:0!important; border-left:1px solid #e2eadf!important; border-radius:0!important; background-color:transparent!important; background-size:16px!important; background-position:right 6px center!important; color:#1f2b21; box-shadow:none!important; font-size:13px; font-weight:650; }
+.week-notice-input:focus-within { border-color:#39834c; box-shadow:0 0 0 3px #39834c22; }
+@container(max-width:570px){.week-notice-input {grid-column:1;grid-row:3;width:100%;margin-top:6px}.week-notice-input input{text-align:left}}
