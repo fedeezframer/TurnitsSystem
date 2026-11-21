@@ -137,7 +137,6 @@ function Calculadora({
           onChange={(e) => setPlan(e.target.value)}
         >
           {Object.keys(config.planes)
-            .filter((p) => p !== "basico" || config.plan === p)
             .map((p) => (
               <option key={p} value={p}>
                 Plan {planes[p]}
