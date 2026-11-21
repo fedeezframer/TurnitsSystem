@@ -117,6 +117,7 @@ export default function BusinessLanding() {
   const [logoFailed, setLogoFailed] = React.useState(false)
   const [bannerFailed, setBannerFailed] = React.useState(false)
   const [shareStatus, setShareStatus] = React.useState("")
+  const [headlineIndex, setHeadlineIndex] = React.useState(0)
 
   React.useEffect(() => {
     if (!slug) return
@@ -232,6 +233,19 @@ export default function BusinessLanding() {
 
   const serverNow = now + offset
   const liveOffers = offers.filter(o => Date.parse(o.cierre) > serverNow)
+  const todayISO = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date())
+  const headlines = [
+    ...(todaySlots != null && todaySlots > 0 ? [{ text: `${todaySlots} ${todaySlots === 1 ? "horario libre" : "horarios libres"} hoy`, action: "Reservar ahora", href: `/agenda/${encodeURIComponent(slug)}` }] : []),
+    ...(promos.some(promo => promoAppliesOn(promo, todayISO)) ? [{ text: "Hoy hay promociones para vos", action: "Ver promos", href: "#bl-promos" }] : []),
+    ...(liveOffers.some(offer => offer.fecha === todayISO) ? [{ text: "Ofertas de último momento para hoy", action: "Ver ofertas", href: "#bl-offers" }] : []),
+  ]
+  if (!headlines.length) headlines.push({ text: "Elegí tu próximo turno en minutos", action: "Reservar ahora", href: `/agenda/${encodeURIComponent(slug)}` })
+  React.useEffect(() => {
+    if (headlines.length < 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    const timer = window.setInterval(() => setHeadlineIndex(index => (index + 1) % headlines.length), 6000)
+    return () => window.clearInterval(timer)
+  }, [headlines.length])
+  const headline = headlines[headlineIndex % headlines.length]
   React.useEffect(() => {
     if (offerIndex >= liveOffers.length) setOfferIndex(0)
   }, [liveOffers.length, offerIndex])
@@ -263,7 +277,6 @@ export default function BusinessLanding() {
     const left = availability[a.id], right = availability[b.id]
     return (left ? `${left.date}T${left.time}` : "9999").localeCompare(right ? `${right.date}T${right.time}` : "9999")
   })
-  const todayISO = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date())
   const rankedPromos = promos.filter(p => {
     for (let offset = 0; offset <= 30; offset++) {
       const date = new Date(`${todayISO}T12:00:00Z`)
@@ -327,8 +340,8 @@ export default function BusinessLanding() {
     <main className="bl-page" style={style}>
       <div className="bl-wrap">
         <header className="bl-bar">
-          <span>{todaySlots != null && todaySlots > 0 ? <><b>{todaySlots}</b> {todaySlots === 1 ? "horario disponible hoy" : "horarios disponibles hoy"}</> : "Tu próximo turno empieza acá"}</span>
-          <Link className="bl-reserve" to={`/agenda/${enc}`}>Reservar ahora <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>
+          <span>{headline.text}</span>
+          {headline.href.startsWith("#") ? <a className="bl-reserve" href={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></a> : <Link className="bl-reserve" to={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>}
         </header>
 
         <section className={`bl-hero${banner ? " bl-hero-with-banner" : ""}`}>
@@ -361,7 +374,7 @@ export default function BusinessLanding() {
           {reviews.cantidad > 0 && <a href="#bl-reviews">Reseñas</a>}
         </nav>
 
-        {liveOffers.length > 0 && <section className="bl-section bl-last-minute"><div className="bl-section-heading"><div><span className="bl-kicker">Solo por tiempo limitado</span><h2>Oferta de último momento</h2><p>Un horario libre, un mejor precio. Reservalo antes de que termine.</p></div></div>
+        {liveOffers.length > 0 && <section id="bl-offers" className="bl-section bl-last-minute"><div className="bl-section-heading"><div><span className="bl-kicker">Solo por tiempo limitado</span><h2>Oferta de último momento</h2><p>Un horario libre, un mejor precio. Reservalo antes de que termine.</p></div></div>
           <div className="bl-offer-slider" onMouseEnter={() => setOfferPaused(true)} onMouseLeave={() => setOfferPaused(false)} onFocusCapture={() => setOfferPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOfferPaused(false) }}>
             {(() => {
               const offer = liveOffers[offerIndex] || liveOffers[0]
