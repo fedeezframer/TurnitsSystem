@@ -217,10 +217,10 @@ export default function BusinessLanding() {
     return () => window.clearInterval(refresh)
   }, [state, loadOffers])
   React.useEffect(() => {
-    if (!offers.length && !members.length) return
+    if (!offers.length && !members.length && !promos.length) return
     const tick = window.setInterval(() => setNow(Date.now()), offers.length ? 1000 : 60000)
     return () => window.clearInterval(tick)
-  }, [offers.length, members.length])
+  }, [offers.length, members.length, promos.length])
 
   const title = perfil?.nombre || negocio?.business_name
   React.useEffect(() => {
