@@ -57,6 +57,7 @@
 .bl-offer-img img{width:100%;height:100%;object-fit:cover}
 .bl-offer-body{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:9px;min-width:0;padding:4px 4px 4px 0}
 .bl-offer-time{font-size:12px;font-weight:650;line-height:1.3;opacity:.9}
+.bl-offer-member-photo{display:inline-block;width:22px;height:22px;margin:0 2px 0 3px;border-radius:50%;object-fit:cover;vertical-align:middle}
 .bl-offer-body strong{font-size:clamp(18px,3.5vw,28px);line-height:1.1;letter-spacing:-.02em;overflow-wrap:anywhere}
 .bl-offer-body>span:not(.bl-offer-cta){display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:19px}
 .bl-offer-body b{font-weight:800}

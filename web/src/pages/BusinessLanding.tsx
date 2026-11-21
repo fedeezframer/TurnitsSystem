@@ -384,11 +384,12 @@ export default function BusinessLanding() {
           <div className="bl-offer-slider" onMouseEnter={() => setOfferPaused(true)} onMouseLeave={() => setOfferPaused(false)} onFocusCapture={() => setOfferPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOfferPaused(false) }}>
             {(() => {
               const offer = liveOffers[offerIndex] || liveOffers[0]
+              const offerMember = members.find(member => member.id === offer.equipo_id)
               return <Link key={`${offer.id}-${offer.fecha}-${offer.hora}`} className="bl-offer" to={offerLink(slug, offer)} aria-label={`Reservar ${offer.nombre} a ${money(offer.precio)}, ${offerDateLabel(offer.fecha)} ${offer.hora.slice(0, 5)}`}>
                 <span className="bl-offer-timer">Termina en {countdown(Date.parse(offer.cierre) - serverNow)}</span>
                 <div className="bl-offer-img">{offer.imagen && <img src={offer.imagen} alt="" />}</div>
                 <div className="bl-offer-body">
-                  <small className="bl-offer-time">{offerDateLabel(offer.fecha)} {offer.hora.slice(0, 5)} hs · Con {members.find(m => m.id === offer.equipo_id)?.nombre || "nuestro equipo"}</small>
+                  <small className="bl-offer-time">{offerDateLabel(offer.fecha)} {offer.hora.slice(0, 5)} hs · Con {offerMember?.foto_url && <img className="bl-offer-member-photo" src={offerMember.foto_url} alt="" />} {offerMember?.nombre || "nuestro equipo"}</small>
                   <strong>{offer.nombre}</strong>
                   <span><b>{money(offer.precio)}</b><s>{money(offer.precio_original)}</s></span>
                   <span className="bl-offer-cta">Reservar oferta <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></span>
