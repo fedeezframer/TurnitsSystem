@@ -137,7 +137,7 @@
 .bl-signup p{margin:0}
 .bl-signup>a{color:var(--bl-ink);font-weight:800}
 .bl-footer{display:flex;align-items:center;justify-content:center;gap:8px;min-height:70px;margin-top:auto;background:var(--bl-ink);color:#fff;font-size:13px}
-.bl-footer img{width:27px;height:27px;filter:brightness(0) invert(1)}
+.bl-footer img{display:block;width:190px;max-width:70%;height:auto;filter:brightness(0) invert(1)}
 
 @media(max-width:900px){
   .bl-availability .bl-list{grid-template-columns:repeat(2,minmax(0,1fr))}

@@ -415,7 +415,7 @@ export default function BusinessLanding() {
         {whatsappLink && <section className="bl-section bl-contact"><div><h2>¿Te quedó alguna duda?</h2><p>Escribinos y te ayudamos a elegir.</p></div><a href={whatsappLink} target="_blank" rel="noopener noreferrer">Consultar por WhatsApp <img src={whatsappLogo} alt="" /></a></section>}
         <section className="bl-signup"><span>Para negocios</span><p>Hacé crecer tu agenda con Turnits.</p><Link to="/registro/negocio">Crear mi agenda <span aria-hidden="true">↗</span></Link></section>
 
-        <footer className="bl-footer"><img src="/assets/turnits-icon.svg" alt="" /><span>Hecho con <b>Turnits</b></span></footer>
+        <footer className="bl-footer"><img src="/assets/turnits-logo-completo.png" alt="Turnits" /></footer>
       </div>
     </main>
   )
