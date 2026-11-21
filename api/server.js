@@ -7742,6 +7742,169 @@ app.post("/api/card-payment/status",limiterBooking,async(req,res)=>{
   }catch{return res.status(400).json({error:"No pudimos consultar el pago. Contactá al negocio antes de volver a pagar."});}
 });
 
+// A basket has one payment record and several appointments. Prices, staff and
+// availability are resolved again on the server; the client never sets totals.
+async function prepararReservaGrupo(req) {
+  const slug = cleanSlug(req.body?.slug || "");
+  const requested = req.body?.reservas;
+  if (!slug || !Array.isArray(requested) || requested.length < 1 || requested.length > 8)
+    throw promoError("Elegí entre 1 y 8 turnos para reservar.");
+  const nombre = String(req.body?.nombre || "").trim();
+  const telefono = cleanPhone(String(req.body?.telefono || ""));
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (nombre.length < 2 || nombre.length > 80 || !validatePhone(telefono) || (email && !validateEmail(email)))
+    throw promoError("Revisá los datos de contacto antes de continuar.");
+  const {data:user,error:ue}=await supabase.from("usuarios").select("*").eq("slug",slug).maybeSingle();
+  if(ue)throw ue;
+  if(!user || !isActivo(user.activo))throw promoError("El negocio ya no está disponible.");
+  const diasRestantes=user.fecha_vencimiento ? diasHastaVencer(user.fecha_vencimiento) : null;
+  if(user.estado_suscripcion === "suspendido" || (diasRestantes !== null && diasRestantes <= 0))throw promoError("La agenda está pausada.");
+  if(await agendaPausadaPorComisiones(slug,user.plan))throw promoError("La agenda está pausada por un saldo pendiente.");
+  const items=[];
+  let baseConfig=null, sellerId=null;
+  for(const input of requested) {
+    const servicioId=String(input?.servicio_id || "");
+    const equipoId=String(input?.equipo_id || "");
+    const fecha=String(input?.fecha || "");
+    const hora=String(input?.hora || "").slice(0,5);
+    if(!UUID_REGEX.test(servicioId) || (equipoId && !UUID_REGEX.test(equipoId)) ||
+       !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora))
+      throw promoError("Revisá el servicio, profesional, día y hora de cada turno.");
+    let empleado=null;
+    if(equipoId){
+      const {data,error}=await supabase.from("equipo").select("*").eq("slug",slug).eq("id",equipoId).eq("activo",true).maybeSingle();
+      if(error)throw error;
+      if(!data)throw promoError("Un profesional ya no está disponible.");
+      empleado=data;
+      const {data:assignment,error:ae}=await supabase.from("servicio_equipo").select("id").eq("servicio_id",servicioId).eq("equipo_id",equipoId).maybeSingle();
+      if(ae)throw ae;
+      if(!assignment)throw promoError("Un profesional ya no ofrece el servicio elegido.");
+    }
+    const config=configNegocioParaEquipo(user,empleado);
+    const itemSeller=usaCuentaMpPersonal(empleado) ? empleado.id : "negocio";
+    if(sellerId !== null && itemSeller !== sellerId)throw promoError("Estos profesionales cobran en cuentas distintas. Reservalos por separado.");
+    sellerId=itemSeller;
+    if(baseConfig && (config.metodo_pago !== baseConfig.metodo_pago ||
+       config.agenda_sin_pagos !== baseConfig.agenda_sin_pagos ||
+       config.porcentaje_sena !== baseConfig.porcentaje_sena))
+      throw promoError("Estos turnos tienen condiciones de pago distintas. Reservalos por separado.");
+    baseConfig=config;
+    if(!horaDentroDeIntervalos(config.horarios,config.excepciones,fecha,hora) ||
+       !cumpleAnticipacionReserva(fecha,hora,config.anticipacion_minutos))
+      throw promoError("Un horario ya no está disponible. Elegí otro.");
+    const {data:raw,error:se}=await supabase.from("servicios").select("*").eq("slug",slug).eq("id",servicioId).maybeSingle();
+    if(se)throw se;
+    if(!raw || !isActivo(raw.activo))throw promoError("Un servicio ya no está disponible.");
+    const service=await aplicarVarianteServicio(slug,servicioId,empleado?.id,raw);
+    const promo=await resolverPromoBooking(slug,input?.promocion_id,servicioId,fecha,empleado?.id);
+    await promoDisponibilidad(slug,fecha,hora,promo,config,empleado,servicioId);
+    const price=Math.round(Number(promo?.precio_final ?? service.precio ?? 0)*100)/100;
+    if(!Number.isFinite(price) || price<0)throw promoError("El precio de un servicio no es válido.");
+    items.push({servicio_id:servicioId,servicio_nombre:promo?.nombre || service.nombre,equipo_id:empleado?.id || null,
+      es_dueno:empleado?.es_dueño === true,
+      equipo_nombre:empleado ? `${empleado.nombre}${empleado.apellido ? " " + empleado.apellido : ""}` : null,
+      fecha,hora,duracion:Number(promo?.duracion || service.duracion || config.duracion_turno || 30),
+      capacidad:Number(promo?.capacidad || service.capacidad || config.capacidad_por_turno || 1),
+      precio:price,promocion:promo || null,
+      extras:promo?.extras || [],monto_extras:promo?.montoExtras || 0});
+  }
+  // Check the basket itself for collisions before any payment is opened.
+  const minute=h=>Number(h.slice(0,2))*60+Number(h.slice(3,5));
+  for(let a=0;a<items.length;a++)for(let b=0;b<a;b++){
+    const x=items[a],y=items[b];
+    if(x.fecha===y.fecha && (x.equipo_id===y.equipo_id || (x.es_dueno && !y.equipo_id) || (y.es_dueno && !x.equipo_id)) && minute(x.hora)<minute(y.hora)+y.duracion && minute(y.hora)<minute(x.hora)+x.duracion)
+      throw promoError("Dos turnos del carrito se superponen. Elegí otro horario.");
+  }
+  const today=promoHoyArgentina();
+  const [byPhone,byEmail]=await Promise.all([
+    supabase.from("turnos").select("id").eq("slug",slug).gte("fecha",today).neq("estado","cancelado").eq("telefono",telefono).limit(1),
+    email ? supabase.from("turnos").select("id").eq("slug",slug).gte("fecha",today).neq("estado","cancelado").eq("email",email).limit(1) : Promise.resolve({data:[]})
+  ]);
+  if(byPhone.error || byEmail.error)throw byPhone.error || byEmail.error;
+  if(byPhone.data?.length || byEmail.data?.length)throw promoError("Ya tenés un turno activo con este negocio.");
+  if(!mediosOfflinePermitidos(user) && !baseConfig?.mp_access_token)
+    throw promoError("El negocio debe conectar Mercado Pago para recibir reservas.");
+  return {slug,user,items,config:baseConfig,sellerId,nombre,telefono,email,
+    apellido:String(req.body?.apellido || "").trim().slice(0,80),total:Math.round(items.reduce((n,i)=>n+i.precio,0)*100)/100};
+}
+
+async function guardarGrupoPendiente(group,monto) {
+  const first=group.items[0];
+  const {data,error}=await supabase.from("pagos_pendientes").insert({
+    slug:group.slug,nombre:group.nombre,apellido:group.apellido,telefono:group.telefono,email:group.email,
+    fecha:first.fecha,hora:first.hora,servicio_id:first.servicio_id,servicio_nombre:first.servicio_nombre,
+    equipo_id:first.equipo_id,equipo_nombre:first.equipo_nombre,precio_servicio:group.total,
+    metodo_pago:group.config.metodo_pago,monto,estado:"pendiente",reserva_items:group.items,
+    consumidor_id:group.consumidorId || null
+  }).select("id").single();
+  if(error)throw error;
+  return data.id;
+}
+
+async function notificarReservaGrupo(slug,ids,paid,amount) {
+  const {data:turnos,error}=await supabase.from("turnos").select("*").in("id",ids).order("grupo_reserva_orden");
+  if(error)throw error;
+  const {data:user}=await supabase.from("usuarios").select("email,business_name").eq("slug",slug).maybeSingle();
+  for(const turno of turnos || []) {
+    enviarMailTurno({adminEmail:user?.email,emailCliente:turno.email || "",nombreCliente:turno.nombre,
+      fechaHora:`${turno.fecha} ${turno.hora}`,slug,servicio:turno.servicio_nombre || "",
+      profesional:turno.equipo_nombre || "",precioTotal:Number(turno.precio_cobrado || 0),
+      montoOnline:Number(turno.monto_pagado || 0),metodoPago:paid ? "mercadopago" : "none",
+      tipoCobro:paid ? turno.tipo_cobro : null,extras:[],
+      reprogramarUrl:armarReprogramarUrl(turno.id,turno.gestion_token,slug)});
+  }
+  crearNotificacion({slug,tipo:paid ? "pago_aprobado" : "turno_nuevo",titulo:`${(turnos || []).length} turnos reservados`,
+    mensaje:`${turnos?.[0]?.nombre || "Un cliente"} reservó ${(turnos || []).length} turnos${paid ? ` y pagó $${amount}` : ""}.`,
+    data:{turno_id:ids[0],seccion:"agenda"}});
+}
+
+app.post("/turnos/reservar-grupo",limiterBooking,async(req,res)=>{
+  try{
+    const group=await prepararReservaGrupo(req);
+    if(!group.config.agenda_sin_pagos && (group.config.metodo_pago === "sena" || group.config.metodo_pago === "total") && group.total>0)
+      return res.status(409).json({success:false,error:"Estos turnos requieren un pago para confirmarse."});
+    group.consumidorId=await consumidorReserva(req);
+    const pendingId=await guardarGrupoPendiente(group,0);
+    const {data,error}=await supabase.rpc("confirmar_reserva_grupo",{p_pending_id:pendingId,p_payment_id:null,p_paid:false});
+    if(error)throw error;
+    await supabase.from("pagos_pendientes").update({estado:"aprobado"}).eq("id",pendingId);
+    notificarReservaGrupo(group.slug,data,false,0).catch(e=>console.error("Aviso de grupo:",e.message));
+    invalidateCache(group.slug);
+    return res.json({success:true,turno_ids:data,comprobante_url:receiptAccess.url(SUCCESS_URL,{slug:group.slug,turnoId:data[0]})});
+  }catch(e){return res.status(e.promoValidacion ? 400 : 500).json({success:false,error:e.promoValidacion ? e.message : "No se pudo confirmar el grupo de reservas."});}
+});
+
+app.post("/api/create-group-preference",limiterBooking,async(req,res)=>{
+  try{
+    const group=await prepararReservaGrupo(req);
+    if(group.config.agenda_sin_pagos || !["sena","total"].includes(group.config.metodo_pago) || group.total<=0)
+      return res.status(409).json({success:false,error:"Estos turnos no necesitan un pago online."});
+    let token;
+    if(group.sellerId === "negocio")token=await obtenerTokenMpVigente(group.slug,group.user);
+    else {
+      const {data:seller,error:se}=await supabase.from("equipo").select("id,mp_access_token,mp_refresh_token,mp_token_expires_at").eq("slug",group.slug).eq("id",group.sellerId).maybeSingle();
+      if(se)throw se;
+      token=seller ? await obtenerTokenMpVigenteEquipo(group.slug,group.sellerId,seller) : null;
+    }
+    if(!token)throw promoError("El negocio debe reconectar Mercado Pago.");
+    const amount=group.config.metodo_pago === "sena" ? Math.round(group.total*(group.config.porcentaje_sena || 30)/100) : group.total;
+    group.consumidorId=await consumidorReserva(req);
+    const pendingId=await guardarGrupoPendiente(group,amount);
+    const fee=planCobraComision(group.user.plan,group.user.estado_suscripcion)
+      ? calcularComisionTurnits(amount,group.user.plan,group.user.estado_suscripcion) : 0;
+    const client=new MercadoPagoConfig({accessToken:token});
+    const pref=new Preference(client);
+    const body={items:[{title:`${group.items.length} turnos en ${group.user.business_name}`,unit_price:amount,quantity:1,currency_id:"ARS"}],
+      payer:{name:group.nombre,...(group.apellido ? {surname:group.apellido} : {}),...(group.email ? {email:group.email} : {}),phone:{number:group.telefono}},
+      external_reference:pendingId,metadata:{slug:group.slug},notification_url:`${API_URL}/webhook/mp`,
+      back_urls:{success:receiptAccess.url(SUCCESS_URL,{slug:group.slug,pendingId}),failure:receiptAccess.url(ERROR_URL,{slug:group.slug,pendingId}),pending:receiptAccess.url(PENDIENTE_URL,{slug:group.slug,pendingId})},auto_return:"approved"};
+    if(fee>0)body.marketplace_fee=fee;
+    const response=await pref.create({body});
+    await supabase.from("pagos_pendientes").update({preference_id:response.id}).eq("id",pendingId);
+    return res.json({success:true,payment_url:response.init_point,monto:amount});
+  }catch(e){console.error("Error en pago grupal:",e.message);return res.status(e.promoValidacion ? 400 : 500).json({success:false,error:e.promoValidacion ? e.message : "No se pudo iniciar el pago de los turnos."});}
+});
+
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   if(req.body?.browse_offer_id)return res.status(409).json({success:false,error:"Continuá desde el pago de la oferta en la agenda."});
   console.log("📥 create-preference:", JSON.stringify({
@@ -8881,7 +9044,7 @@ app.post("/webhook/mp", async (req, res) => {
       }
 
       const { data: userNegocio } = await supabase.from("usuarios")
-        .select("mp_access_token, mp_refresh_token, mp_token_expires_at").eq("slug", slug).maybeSingle();
+        .select("email, mp_access_token, mp_refresh_token, mp_token_expires_at").eq("slug", slug).maybeSingle();
 
       // 3) Releer el pago con el token del vendedor para confirmar estado/monto reales
       let finalPayData = payData;
@@ -8924,6 +9087,33 @@ app.post("/webhook/mp", async (req, res) => {
         }
         comisionMp = Math.round(comisionMp * 100) / 100;
         comisionPlataforma = Math.round(comisionPlataforma * 100) / 100;
+      }
+
+      if(Array.isArray(meta.reserva_items)) {
+        if(["refunded","charged_back"].includes(finalPayData.status)) {
+          await supabase.from("turnos").update({pago_estado:finalPayData.status === "refunded" ? "reembolsado" : "contracargo"}).eq("grupo_reserva_id",pendiente.id);
+          return res.sendStatus(200);
+        }
+        if(estado === "aprobado") {
+          if(Math.abs(Number(finalPayData.transaction_amount)-Number(meta.monto))>0.005)
+            throw new Error("El monto del pago grupal no coincide con el carrito.");
+          const {data:alreadyCreated}=await supabase.from("turnos").select("id").eq("grupo_reserva_id",pendiente.id).limit(1);
+          const {data:created,error:groupError}=await supabase.rpc("confirmar_reserva_grupo",{
+            p_pending_id:pendiente.id,p_payment_id:String(paymentId),p_paid:true
+          });
+          if(groupError){
+            console.error("Pago grupal aprobado sin turnos:",pendiente.id,groupError.message);
+            enviarMailConflictoTurno({adminEmail:userNegocio?.email,nombreCliente:meta.nombre,fechaHora:"varios turnos",slug,payment_id:paymentId,monto:meta.monto});
+            crearNotificacion({slug,tipo:"sistema",titulo:"Pago grupal requiere atención",mensaje:`El pago ${paymentId} se aprobó pero un horario del carrito ya no estaba disponible. Revisá el cobro y contactá al cliente.`,data:{payment_id:paymentId,seccion:"agenda"}});
+            return res.sendStatus(200);
+          }
+          if(created?.length && !alreadyCreated?.length){
+            invalidateCache(slug);
+            notificarReservaGrupo(slug,created,true,meta.monto).catch(e=>console.error("Aviso de grupo:",e.message));
+          }
+        }
+        await supabase.from("pagos_pendientes").update({estado,payment_id:String(paymentId)}).eq("id",pendiente.id);
+        return res.sendStatus(200);
       }
 
       await procesarPagoConfirmado({
