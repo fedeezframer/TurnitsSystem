@@ -576,7 +576,7 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
               setError("");
             }}
           >
-            + Nueva sucursal
+            Crear +
           </button>
         ))}
       </div>
@@ -588,7 +588,6 @@ export function SucursalesNegocio({ baseUrl, iconoCheck, iconoEditar }: { baseUr
       {form && locked ? <section className="negocio-card negocio-stack sucursal-editor">
         <div className="sucursal-editor-head"><h2>Local</h2><BackButton disabled={busy} onClick={closeEditor} aria-label="Volver" /></div>
         <LocationEditor key="local" value={form} onChange={(location) => setForm((previous) => previous ? { ...previous, ...location } : previous)} disabled={busy || !data.mapa_habilitado} />
-        <p className="negocio-muted">Los cambios de ubicación se guardan desde «Guardar cambios».</p>
       </section> : form && (
         <form className="negocio-card negocio-stack sucursal-editor" onSubmit={(event) => event.preventDefault()}>
           <div className="sucursal-editor-head"><h2>
@@ -954,7 +953,7 @@ export function SucursalEmpleado({
                   })
                 }
               >
-                + Nuevo miembro
+                Crear +
               </button>
             </div>
             {form && (

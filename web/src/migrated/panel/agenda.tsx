@@ -754,7 +754,7 @@ function AgendaPanel(props: any) {
                         </select>
                     </label>
                 )}
-                <button className="agenda-add" type="button" onClick={abrirNuevo}>+ Agregar turno</button>
+                <button className="agenda-add" type="button" onClick={abrirNuevo}>Crear +</button>
             </div>
             <div
                 ref={containerRef}

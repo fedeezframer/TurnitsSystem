@@ -3141,8 +3141,7 @@ function ServiciosManager_CanvasPreview({
                         gap: 6,
                     }}
                 >
-                    <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-                    {!isMobile && " Nuevo"}
+                    Crear <span style={{ fontSize: 16, lineHeight: 1 }} aria-hidden="true">+</span>
                 </div>
             </div>
             <div

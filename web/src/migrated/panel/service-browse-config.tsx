@@ -123,7 +123,6 @@ export default function ServiceBrowseConfig({
           <p className="service-browse-explanation">
             La Offer aparece dentro de la última hora antes del límite de reserva. El descuento aumenta al acercarse ese límite y llega a la tarifa mínima en los últimos 15 minutos. Solo participan los profesionales marcados.
           </p>
-          <p className="service-browse-hint">Se aplica con Guardar cambios del panel.</p>
         </fieldset>
         {!members.length && <p className="service-browse-hint">Asigná este servicio a un profesional activo para configurar Offers.</p>}
       </fieldset> : <p className="service-browse-hint">Turnits Offers requiere un precio y horarios fijos; en las consultas, el precio y la fecha se acuerdan por chat.</p>}

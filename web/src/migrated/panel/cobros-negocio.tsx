@@ -297,7 +297,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
       setCbu("");
       editar(false);
       bankDraftStart.current = null;
-      setNotice("Guardado");
+      setNotice("");
     };
     window.addEventListener("turnits_global_saved", onSaved);
     return () => window.removeEventListener("turnits_global_saved", onSaved);
@@ -408,7 +408,6 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
             ) : (
               <small>Necesitas mejorar tu plan</small>
             )}
-            <small className="cb-help">Los cambios se guardan con «Guardar cambios» en el panel.</small>
           </>
         )}
         {vista === "metodos" &&
@@ -466,7 +465,6 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                             }
                           }}
                         />
-                        <small className="cb-help">Se guarda con «Guardar cambios» en el panel.</small>
                         <button
                           onClick={() => {
                             if (bankDraftStart.current) publicarPagos(bankDraftStart.current);

@@ -817,9 +817,6 @@ function MercadoPagoConexion(props: any) {
                                     ".", "_", "-").
                                 </span>
                             )}
-                            <span style={{ fontSize: 10.5, color: "#94a3b8" }}>
-                                Se guarda junto con el resto al tocar Guardar.
-                            </span>
                         </div>
                     </MercadoPagoConexion_MetodoCard>
                 }
@@ -1792,18 +1789,6 @@ function ConfigPagos(props: any) {
                     <span style={{ fontSize: 11, color: "#ef4444" }}>
                         {error}
                     </span>
-                ) : savedOk ? (
-                    <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        style={{
-                            fontSize: 11,
-                            color: "#22c55e",
-                            fontWeight: 600,
-                        }}
-                    >
-                        Guardado
-                    </motion.span>
                 ) : null}
             </div>
         </div>

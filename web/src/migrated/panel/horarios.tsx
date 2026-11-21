@@ -494,7 +494,7 @@ function HorariosConfig_Shell({
             })}
         </div>
         {error && <p role="alert">{error}</p>}
-        {mostrarBotonGuardar && <button className="week-save" disabled={guardando} onClick={onGuardar}>{guardando?"Guardando…":guardadoOk?"Horarios guardados":"Guardar horarios"}</button>}
+        {mostrarBotonGuardar && <button className="week-save" disabled={guardando} onClick={onGuardar}>{guardando?"Guardando…":"Guardar horarios"}</button>}
     </div>
 }
 

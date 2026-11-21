@@ -355,7 +355,7 @@ function FinanzasPanel({
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <FinanzasMonthPicker value={mes} onChange={setMes} />
                     <button onClick={abrirNuevo} style={button}>
-                        + Cargar gasto
+                        Crear +
                     </button>
                 </div>
             </div>

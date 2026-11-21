@@ -1672,8 +1672,7 @@ function TeamManager_CanvasPreview({
                         gap: 6,
                     }}
                 >
-                    <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-                    {!isMobile && " Nuevo"}
+                    Crear <span style={{ fontSize: 16, lineHeight: 1 }} aria-hidden="true">+</span>
                 </div>
             </div>
             <div
@@ -2241,8 +2240,7 @@ function TeamManager(props: any) {
                             flexShrink: 0,
                         }}
                     >
-                        {limiteEquipoBasico && miembros.length >= 2 ? <TurnitsPlanRequirement premiumOnly color="#ffffff" /> : <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>}
-                        {isMobile ? "" : " Nuevo"}
+                        {limiteEquipoBasico && miembros.length >= 2 ? <TurnitsPlanRequirement premiumOnly color="#ffffff" /> : <>Crear <span style={{ fontSize: 16, lineHeight: 1 }} aria-hidden="true">+</span></>}
                     </motion.button>
                 )}
             </div>

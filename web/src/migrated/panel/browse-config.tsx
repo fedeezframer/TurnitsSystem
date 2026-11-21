@@ -415,9 +415,6 @@ export default function BrowseBusiness({
       {!services.length && (
         <p>Primero creá un servicio y asignalo a un profesional.</p>
       )}
-      <p className="browse-business-save-note">
-        Los cambios se aplican con el botón global Guardar cambios.
-      </p>
     </section>
   );
 }

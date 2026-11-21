@@ -321,9 +321,7 @@ export function LocationPicker({
       </div>
       <div className="tn-map-actions">
         <span className="tn-map-note">
-          {pins.length
-            ? "Ubicación marcada. Usá «Guardar cambios» para aplicarla."
-            : "Escribí la dirección y salí del campo para ubicar el punto."}
+          {!pins.length && "Escribí la dirección y salí del campo para ubicar el punto."}
         </span>
         {pins.length > 0 && (
           <button

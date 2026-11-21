@@ -34,7 +34,7 @@ export function CatalogToolbar<F extends string,S extends string>({filters,label
                         </label>
                         {onCreate && (
                             <motion.button className="svc-create-button" whileHover={{y:-1}} whileTap={{scale:.98}} onClick={onCreate}>
-                                <span aria-hidden="true">+</span> Nuevo
+                                Crear <span aria-hidden="true">+</span>
                             </motion.button>
                         )}
                     </div>)
