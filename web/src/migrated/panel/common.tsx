@@ -544,7 +544,7 @@ function TurnitsGlobalSaveManager_get() {
                                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                                 body: JSON.stringify(body),
                             })
-                            if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) throw new Error("No se pudo guardar el perfil (" + res.status + ").")
+                            if (!res.headers.get("content-type")?.includes("application/json")) throw new Error("No se pudo guardar el perfil (" + res.status + ").")
                             const d = await res.json()
                             if (!res.ok || !d.success) throw new Error(d.error || "Error al guardar el perfil.")
                             savedData.perfil = perfilDraft(d.perfil || body,

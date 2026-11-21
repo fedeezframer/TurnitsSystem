@@ -462,7 +462,7 @@ function PublicationPhoto({
         loading="lazy"
         decoding="async"
         alt={caption || `Publicación ${index + 1} de ${name}`}
-        style={{transform:`scale(${crop?.zoom || 1})`,transformOrigin:`${crop?.encuadre_x ?? 50}% ${crop?.encuadre_y ?? 50}%`}}
+        style={{objectPosition:`${crop?.encuadre_x ?? 50}% ${crop?.encuadre_y ?? 50}%`,transform:`scale(${crop?.zoom || 1})`,transformOrigin:`${crop?.encuadre_x ?? 50}% ${crop?.encuadre_y ?? 50}%`}}
         onError={() => setFailed(true)}
       />
     </button>{(serviceName || caption) && <div className="perfil-publication-copy">{serviceName && <strong>{serviceName}</strong>}{caption && <p>{caption}</p>}</div>}</article>

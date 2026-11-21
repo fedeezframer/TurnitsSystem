@@ -650,3 +650,10 @@
 .sucursal-card-actions > .sucursal-menu-trigger:focus-visible { outline:2px solid #218232;outline-offset:2px; }
 .sucursal-card-actions > .sucursal-menu-trigger:disabled { opacity:.5;cursor:not-allowed; }
 .sucursal-delete-confirm { display:block;padding:6px 8px;color:#46564a;font-size:11px;font-weight:650; }
+.publicacion-crop-image { position:relative; cursor:grab; touch-action:none; user-select:none; }
+.publicacion-crop-image:active { cursor:grabbing; }
+.publicacion-crop-image img { pointer-events:none; user-select:none; }
+.publicacion-crop-image span { position:absolute;left:50%;bottom:14px;transform:translateX(-50%);padding:7px 11px;border-radius:999px;background:#17251bc9;color:#fff;font-size:12px;white-space:nowrap;pointer-events:none; }
+.publicacion-zoom { display:grid;gap:8px;margin-top:18px;color:#354237;font-size:13px;font-weight:650; }
+.publicacion-zoom input { width:100%;accent-color:#2b823b; }
+.publicacion-dialog footer { justify-content:flex-start; }

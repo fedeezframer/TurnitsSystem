@@ -124,7 +124,9 @@ export function crearSucursales({
         success: false,
         codigo: schema ? "instalar_perfil_sucursales" : undefined,
         error: schema
-          ? "Falta instalar la actualización de Perfil y Sucursales en la base de datos."
+          ? /publicaciones/i.test(`${e.message || ""} ${e.details || ""}`)
+            ? "Falta aplicar la actualización de Publicaciones en la base de datos."
+            : "Falta instalar la actualización de Perfil y Sucursales en la base de datos."
           : e.publicMessage ||
             "No se pudo completar el cambio. Volvé a intentarlo.",
       });

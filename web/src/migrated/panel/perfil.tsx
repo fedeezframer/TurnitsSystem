@@ -74,6 +74,49 @@ async function request(url: string, options: RequestInit = {}) {
   return d;
 }
 export { perfilVacio } from "../../shared/profile-draft";
+type PublicationPost = (typeof perfilVacio.publicaciones)[string];
+const cropStyle = (post?: PublicationPost): React.CSSProperties => ({
+  objectPosition: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%`,
+  transform: `scale(${post?.zoom ?? 1})`,
+  transformOrigin: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%`,
+});
+
+function PublicationEditor({ url, post, services, onApply, onClose }: {
+  url: string;
+  post: PublicationPost;
+  services: { id: string; nombre: string }[];
+  onApply: (post: PublicationPost) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = React.useState(post);
+  const drag = React.useRef<{ x: number; y: number; horizontal: number; vertical: number } | null>(null);
+  const clamp = (value: number) => Math.max(0, Math.min(100, value));
+  return createPortal(
+    <div className="publicacion-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="publicacion-dialog" role="dialog" aria-modal="true" aria-label="Editar publicación">
+        <header><div><span className="publicacion-eyebrow">Tu publicación</span><h2>Editar publicación</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></header>
+        <div className="publicacion-dialog-body">
+          <div className="publicacion-crop">
+            <div className="publicacion-crop-image" aria-label="Arrastrá la foto para ajustar el encuadre"
+              onPointerDown={(event) => { drag.current = { x: event.clientX, y: event.clientY, horizontal: draft.encuadre_x ?? 50, vertical: draft.encuadre_y ?? 50 }; event.currentTarget.setPointerCapture(event.pointerId); }}
+              onPointerMove={(event) => { const origin = drag.current; if (!origin) return; const rect = event.currentTarget.getBoundingClientRect(); setDraft((current) => ({ ...current, encuadre_x: clamp(origin.horizontal - (event.clientX - origin.x) * 100 / rect.width), encuadre_y: clamp(origin.vertical - (event.clientY - origin.y) * 100 / rect.height) })); }}
+              onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+              <img src={url} alt="Vista previa de la publicación" draggable={false} style={cropStyle(draft)} />
+              <span>Arrastrá para encuadrar</span>
+            </div>
+            <label className="publicacion-zoom">Acercar foto<input type="range" min="1" max="2" step="0.05" value={draft.zoom ?? 1} onChange={(event) => setDraft((current) => ({ ...current, zoom: Number(event.target.value) }))} /></label>
+          </div>
+          <div className="publicacion-dialog-fields">
+            <label>Servicio<select value={draft.servicio_id} onChange={(event) => { const selected = services.find((service) => service.id === event.target.value); setDraft((current) => ({ ...current, servicio_id: selected?.id || "", servicio_nombre: selected?.nombre || "" })); }}><option value="">Elegí un servicio</option>{services.map((service) => <option key={service.id} value={service.id}>{service.nombre}</option>)}</select></label>
+            <label>Descripción<textarea maxLength={1500} rows={6} placeholder="Contá qué se ve en esta foto…" value={draft.descripcion} onChange={(event) => setDraft((current) => ({ ...current, descripcion: event.target.value }))} /></label>
+            <small>{draft.descripcion.length}/1500</small>
+          </div>
+        </div>
+        <footer><button type="button" onClick={() => onApply(draft)}>Listo</button></footer>
+      </section>
+    </div>, document.body,
+  );
+}
 function UbicacionPerfil({api, slug}: {api:string; slug:string}) {
   const [branches, setBranches] = React.useState<any[]>([]);
   const [selected, setSelected] = React.useState("principal");
@@ -418,7 +461,7 @@ export function PerfilNegocio({
                   </label>
                   {form.fotos.map((url, i) => (
                     <article className="publicacion-tile" key={url}>
-                      <div className="publicacion-image"><img src={url} alt={form.publicaciones[url]?.descripcion || `Publicación ${i + 1}`} loading="lazy" style={{transform:`scale(${form.publicaciones[url]?.zoom || 1})`,transformOrigin:`${form.publicaciones[url]?.encuadre_x ?? 50}% ${form.publicaciones[url]?.encuadre_y ?? 50}%`}} /><button type="button" aria-label={`Quitar publicación ${i + 1}`} disabled={uploading} onClick={() => updateDraft(f => {
+                      <div className="publicacion-image"><img src={url} alt={form.publicaciones[url]?.descripcion || `Publicación ${i + 1}`} loading="lazy" style={cropStyle(form.publicaciones[url])} /><button type="button" aria-label={`Quitar publicación ${i + 1}`} disabled={uploading} onClick={() => updateDraft(f => {
                         const titles = {...f.titulos_fotos};
                         delete titles[url];
                         const posts = {...f.publicaciones};
@@ -430,7 +473,7 @@ export function PerfilNegocio({
                   ))}
                 </div>
               </>}
-              {editingUrl && createPortal(<div className="publicacion-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setEditingUrl(null); }}><section className="publicacion-dialog" role="dialog" aria-modal="true" aria-label="Editar publicación"><header><div><span className="publicacion-eyebrow">Tu publicación</span><h2>Editar publicación</h2></div><button type="button" aria-label="Cerrar" onClick={() => setEditingUrl(null)}>×</button></header><div className="publicacion-dialog-body"><div className="publicacion-crop"><div className="publicacion-crop-image"><img src={editingUrl} alt="Vista previa de la publicación" style={{transform:`scale(${form.publicaciones[editingUrl]?.zoom || 1})`,transformOrigin:`${form.publicaciones[editingUrl]?.encuadre_x ?? 50}% ${form.publicaciones[editingUrl]?.encuadre_y ?? 50}%`}} /></div><div className="publicacion-sliders"><label>Zoom<input type="range" min="1" max="2" step="0.05" value={form.publicaciones[editingUrl]?.zoom ?? 1} onChange={e => updatePost(editingUrl, {zoom:Number(e.target.value)})} /></label><label>Horizontal<input type="range" min="0" max="100" value={form.publicaciones[editingUrl]?.encuadre_x ?? 50} onChange={e => updatePost(editingUrl, {encuadre_x:Number(e.target.value)})} /></label><label>Vertical<input type="range" min="0" max="100" value={form.publicaciones[editingUrl]?.encuadre_y ?? 50} onChange={e => updatePost(editingUrl, {encuadre_y:Number(e.target.value)})} /></label></div></div><div className="publicacion-dialog-fields"><label>Servicio<select value={form.publicaciones[editingUrl]?.servicio_id || ""} onChange={e => { const selected = servicios.find(service => service.id === e.target.value); updatePost(editingUrl, {servicio_id:selected?.id || "",servicio_nombre:selected?.nombre || ""}); }}><option value="">Elegí un servicio</option>{servicios.map(service => <option key={service.id} value={service.id}>{service.nombre}</option>)}</select></label><label>Descripción<textarea maxLength={1500} rows={6} placeholder="Contá qué se ve en esta foto…" value={form.publicaciones[editingUrl]?.descripcion ?? form.titulos_fotos[editingUrl] ?? ""} onChange={e => updatePost(editingUrl, {descripcion:e.target.value})} /></label><small>{(form.publicaciones[editingUrl]?.descripcion ?? form.titulos_fotos[editingUrl] ?? "").length}/1500</small></div></div><footer><button type="button" onClick={() => setEditingUrl(null)}>Listo</button></footer></section></div>, document.body)}
+              {editingUrl && <PublicationEditor key={editingUrl} url={editingUrl} post={{ servicio_id: "", servicio_nombre: "", descripcion: form.titulos_fotos[editingUrl] || "", ...form.publicaciones[editingUrl] }} services={servicios} onClose={() => setEditingUrl(null)} onApply={(post) => { updatePost(editingUrl, post); setEditingUrl(null); }} />}
               <label className="negocio-toggle">
                 <input
                   type="checkbox"
