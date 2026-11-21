@@ -12,6 +12,7 @@ export const perfilVacio = {
   sitio_web: "",
   redes_sociales: {} as Record<string, string>,
   titulos_fotos: {} as Record<string, string>,
+  publicaciones: {} as Record<string, { servicio_id: string; servicio_nombre: string; descripcion: string }>,
   fotos: [] as string[],
   foto_perfil_url: "",
   banner_url: "",

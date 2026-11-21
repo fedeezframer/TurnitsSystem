@@ -383,7 +383,7 @@ export function PerfilContenido({
       {photos.length > 0 && <section className="perfil-inline-publications" aria-labelledby="perfil-inline-publications-title">
         <div className="perfil-inline-section-heading"><h2 id="perfil-inline-publications-title">Publicaciones</h2><span>{photos.length}</span></div>
         <div className="perfil-publications-grid" id="perfil-inline-gallery">
-          {photos.slice(0, expanded ? photos.length : 6).map((url: string, index: number) => <PublicationPhoto key={`${url}-${index}`} src={url} caption={perfil.titulos_fotos?.[url]} name={name} index={index} onOpen={() => setPhoto({ src: url, alt: perfil.titulos_fotos?.[url] || `Publicación ${index + 1} de ${name}` })} />)}
+          {photos.slice(0, expanded ? photos.length : 6).map((url: string, index: number) => <PublicationPhoto key={`${url}-${index}`} src={url} serviceName={perfil.publicaciones?.[url]?.servicio_nombre} caption={perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url]} name={name} index={index} onOpen={() => setPhoto({ src: url, alt: perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url] || `Publicación ${index + 1} de ${name}` })} />)}
         </div>
         {photos.length > 6 && <button type="button" className="perfil-publications-more" aria-expanded={expanded} aria-controls="perfil-inline-gallery" onClick={() => setExpanded(value => !value)}>{expanded ? "Ver menos" : "Ver más publicaciones"}</button>}
       </section>}
@@ -424,12 +424,14 @@ export function PerfilContenido({
 function PublicationPhoto({
   src,
   caption,
+  serviceName,
   name,
   index,
   onOpen,
 }: {
   src: string;
   caption?: string;
+  serviceName?: string;
   name: string;
   index: number;
   onOpen: () => void;
@@ -446,7 +448,7 @@ function PublicationPhoto({
       <span>Imagen no disponible</span>
     </div>
   ) : (
-    <button
+    <article className="perfil-publication-card"><button
       type="button"
       className="perfil-publication-open"
       aria-label={`Ampliar publicación ${index + 1} de ${name}`}
@@ -460,8 +462,7 @@ function PublicationPhoto({
         alt={caption || `Publicación ${index + 1} de ${name}`}
         onError={() => setFailed(true)}
       />
-      {caption && <span className="publicacion-caption">{caption}</span>}
-    </button>
+    </button>{(serviceName || caption) && <div className="perfil-publication-copy">{serviceName && <strong>{serviceName}</strong>}{caption && <p>{caption}</p>}</div>}</article>
   );
 }
 
@@ -514,13 +515,14 @@ export function PerfilPublicaciones({
               <PublicationPhoto
                 key={`${url}-${index}`}
                 src={url}
-                caption={perfil.titulos_fotos?.[url]}
+                caption={perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url]}
+                serviceName={perfil.publicaciones?.[url]?.servicio_nombre}
                 name={name}
                 index={index}
                 onOpen={() =>
                   setPhoto({
                     src: url,
-                    alt: perfil.titulos_fotos?.[url] || `Publicación ${index + 1} de ${name}`,
+                    alt: perfil.publicaciones?.[url]?.descripcion || perfil.titulos_fotos?.[url] || `Publicación ${index + 1} de ${name}`,
                   })
                 }
               />

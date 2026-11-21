@@ -116,6 +116,7 @@ export function PerfilNegocio({
     [busy, setBusy] = React.useState(false),
     [uploading, setUploading] = React.useState(false),
     [uploadProgress, setUploadProgress] = React.useState(""),
+    [servicios, setServicios] = React.useState<{ id: string; nombre: string }[]>([]),
     [error, setError] = React.useState("");
   const draftRef = React.useRef(form);
   const capabilities = React.useRef({ redes: false, imagenes: false });
@@ -174,6 +175,12 @@ export function PerfilNegocio({
       alive = false;
     };
   }, [api, slug]);
+  React.useEffect(() => {
+    if (!publicaciones) return;
+    request(`${api}/admin/servicios/${slug}`)
+      .then((data) => setServicios((data.servicios || []).map((service: any) => ({ id: service.id, nombre: service.nombre }))))
+      .catch(() => setError("No pudimos cargar los servicios para las publicaciones."));
+  }, [api, slug, publicaciones]);
   React.useEffect(() => {
     const manager = TurnitsGlobalSaveManager_get();
     setBusy(!!manager?.isSaving());
@@ -389,24 +396,23 @@ export function PerfilNegocio({
               </div>
               </>}
               {publicaciones && <>
-                <p className="negocio-muted">JPG, PNG o WebP de hasta 3 MB por foto.</p>
+                <div className="publicacion-intro"><div><span className="publicacion-eyebrow">Tu galería</span><h2>Publicaciones</h2><p>Mostrá tus trabajos y conectá cada foto con el servicio que ofrecés.</p></div><span className="publicacion-count">{form.fotos.length} publicaciones</span></div>
                 {uploadProgress && <p role="status">{uploadProgress}</p>}
                 <div className="publicacion-grid">
                   <label className="publicacion-upload">
-                    <span aria-hidden="true">＋</span>{uploading ? "Subiendo…" : "Subir foto"}
+                    <span aria-hidden="true">＋</span>{uploading ? "Subiendo…" : "Crear publicación"}<small>JPG, PNG o WebP · hasta 3 MB</small>
                     <input aria-label="Subir fotos" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={uploading} onChange={e => subir(e)} />
                   </label>
                   {form.fotos.map((url, i) => (
                     <article className="publicacion-tile" key={url}>
-                      <img src={url} alt={form.titulos_fotos[url] || `Publicación ${i + 1}`} loading="lazy" />
-                      <input aria-label={`Título de la publicación ${i + 1}`} maxLength={120}
-                        placeholder="Agregar título" value={form.titulos_fotos[url] || ""}
-                        onChange={e => change("titulos_fotos", {...form.titulos_fotos, [url]: e.target.value})}/>
-                      <button type="button" aria-label={`Quitar foto ${i + 1}`} disabled={uploading} onClick={() => updateDraft(f => {
+                      <div className="publicacion-image"><img src={url} alt={form.publicaciones[url]?.descripcion || `Publicación ${i + 1}`} loading="lazy" /><button type="button" aria-label={`Quitar publicación ${i + 1}`} disabled={uploading} onClick={() => updateDraft(f => {
                         const titles = {...f.titulos_fotos};
                         delete titles[url];
-                        return {...f, titulos_fotos: titles, fotos: f.fotos.filter(photo => photo !== url)};
-                      })}>×</button>
+                        const posts = {...f.publicaciones};
+                        delete posts[url];
+                        return {...f, titulos_fotos: titles, publicaciones: posts, fotos: f.fotos.filter(photo => photo !== url)};
+                      })}>×</button></div>
+                      <div className="publicacion-fields"><span className="publicacion-index">Publicación {i + 1}</span><label>Servicio<select value={form.publicaciones[url]?.servicio_id || ""} onChange={e => { const selected = servicios.find(service => service.id === e.target.value); change("publicaciones", {...form.publicaciones, [url]: { ...form.publicaciones[url], servicio_id: selected?.id || "", servicio_nombre: selected?.nombre || "", descripcion: form.publicaciones[url]?.descripcion || "" }}); }}><option value="">Elegí un servicio</option>{servicios.map(service => <option key={service.id} value={service.id}>{service.nombre}</option>)}</select></label><label>Descripción<textarea maxLength={1500} rows={3} placeholder="Contá qué se ve en esta foto…" value={form.publicaciones[url]?.descripcion ?? form.titulos_fotos[url] ?? ""} onChange={e => change("publicaciones", {...form.publicaciones, [url]: { servicio_id: form.publicaciones[url]?.servicio_id || "", servicio_nombre: form.publicaciones[url]?.servicio_nombre || "", descripcion: e.target.value }})} /></label></div>
                     </article>
                   ))}
                 </div>

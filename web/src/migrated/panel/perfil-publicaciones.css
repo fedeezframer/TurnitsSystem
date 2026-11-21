@@ -121,6 +121,7 @@
   height: 100%;
   object-fit: cover;
 }
+.perfil-publication-card{min-width:0;border:1px solid #e2e9e2;border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 4px 16px #1424180a}.perfil-publication-card .perfil-publication-open{border-radius:0}.perfil-publication-copy{padding:13px 15px 16px;display:grid;gap:5px}.perfil-publication-copy strong{font-size:13px;color:#286c32}.perfil-publication-copy p{margin:0;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;color:#344037}
 .perfil-publication-open:focus-visible {
   outline: 3px solid #1b6b1a;
   outline-offset: 3px;

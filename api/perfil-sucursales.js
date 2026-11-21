@@ -62,6 +62,23 @@ export function validarPerfil(body) {
     throw new Error("Revisá la publicación y las fotos.");
   data.publicado = body.publicado;
   data.fotos = [...new Set(body.fotos)];
+  if (body.publicaciones !== undefined) {
+    if (!body.publicaciones || typeof body.publicaciones !== "object" || Array.isArray(body.publicaciones))
+      throw new Error("Revisá las publicaciones.");
+    data.publicaciones = {};
+    for (const [url, post] of Object.entries(body.publicaciones)) {
+      if (!data.fotos.includes(url) || !post || typeof post !== "object" || Array.isArray(post) ||
+          typeof post.descripcion !== "string" || post.descripcion.length > 1500 ||
+          typeof post.servicio_id !== "string" || (post.servicio_id && !UUID.test(post.servicio_id)) ||
+          typeof post.servicio_nombre !== "string" || post.servicio_nombre.length > 120)
+        throw new Error("Revisá las publicaciones.");
+      data.publicaciones[url] = {
+        descripcion: post.descripcion.trim(),
+        servicio_id: post.servicio_id,
+        servicio_nombre: post.servicio_nombre.trim(),
+      };
+    }
+  }
   for (const key of ["foto_perfil_url", "banner_url"]) {
     if (!Object.hasOwn(body, key)) continue;
     if (typeof body[key] !== "string") throw new Error("Imagen inválida.");
@@ -130,7 +147,7 @@ export function crearSucursales({
   };
   const leerPerfil = async (slug, publico = false) => {
     const campos = publico
-      ? "nombre,descripcion,categoria,direccion,ciudad,provincia,telefono_publico,instagram,sitio_web,fotos"
+      ? "nombre,descripcion,categoria,direccion,ciudad,provincia,telefono_publico,instagram,sitio_web,fotos,publicaciones"
       : "*";
     const consultar = (columnas) => {
       let q = supabase
@@ -362,6 +379,18 @@ export function crearSucursales({
           "Falta instalar la actualización de imágenes para ampliar la galería.",
           409,
         );
+      if (perfil.publicaciones) {
+        const ids = [...new Set(Object.values(perfil.publicaciones).map((post) => post.servicio_id).filter(Boolean))];
+        if (ids.length) {
+          const { data: services, error: servicesError } = await supabase.from("servicios")
+            .select("id,nombre").eq("slug", slug).in("id", ids);
+          if (servicesError) throw servicesError;
+          if (services.length !== ids.length) fail("Elegí servicios de este negocio.");
+          const names = new Map(services.map((service) => [service.id, service.nombre]));
+          for (const post of Object.values(perfil.publicaciones))
+            post.servicio_nombre = post.servicio_id ? names.get(post.servicio_id) : "";
+        }
+      }
       // Sólo fotos subidas por este negocio al bucket público; nunca datos de la cuenta.
       const prefix = supabase.storage
         .from("logos")
