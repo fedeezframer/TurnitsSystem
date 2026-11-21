@@ -177,39 +177,39 @@
 @container(max-width:480px) { .week-editor {gap:16px;padding:16px}.week-notice {grid-template-columns:1fr;padding:15px}.week-notice-input {grid-column:1;grid-row:3;width:100%;margin-top:4px}.week-days {grid-template-columns:repeat(2,minmax(0,1fr))}.week-days button {min-height:62px}.week-period-heading {align-items:start;flex-direction:column}.week-period-actions {width:100%;justify-content:space-between}.week-range {grid-template-columns:1fr}.schedule-exceptions {gap:14px;padding:15px}.schedule-exceptions header {flex-direction:column;align-items:stretch}.schedule-exceptions nav {justify-content:space-between}.exception-month {grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.exception-month button {min-height:74px}.exception-weekday {font-size:10px}.exception-columns {display:none} }
 
 .week-editor,.schedule-exceptions {background:#f7f9f6;border-color:#e1e9df;box-shadow:0 16px 38px #1421180b}
-.week-editor-heading {align-items:center;padding:22px 24px;border:1px solid #dce9d3;border-radius:20px;background:linear-gradient(120deg,#edf7e5,#f9fcf6 72%)}
-.week-editor-heading > div > span {color:#4d7c35;font-size:10px;letter-spacing:.13em}
+.week-editor-heading {align-items:center;padding:22px 24px;border:1px solid #dce8dc;border-radius:20px;background:linear-gradient(120deg,#f1f8f1,#fff 72%)}
+.week-editor-heading > div > span {color:#1b6b1a;font-size:10px;letter-spacing:.13em}
 .week-editor-heading h2 {color:#1d2c20;font-size:clamp(25px,3vw,36px);letter-spacing:-.045em}
 .week-editor-heading p {color:#607260}
-.week-notice {border-color:#dceacb;background:linear-gradient(120deg,#e6f4d9,#f5faef 70%,#fff)}
-.week-notice-input {border-color:#b9d49f;box-shadow:0 3px 12px #31552b0d}
+.week-notice {border-color:#d5e7d5;background:linear-gradient(120deg,#eaf5ea,#f6faf6 70%,#fff)}
+.week-notice-input {border-color:#b9d8b9;box-shadow:0 3px 12px #31552b0d}
 .week-days {gap:8px}
 .week-days button {min-height:76px;border:1px solid #e0e7df;border-radius:18px;background:#fff;box-shadow:0 3px 12px #17231908}
 .week-days button strong {font-size:14px}
-.week-days button[aria-pressed=true] {border-color:#9dc887;background:#e7f4db;box-shadow:0 6px 18px #397b2c16}
-.week-days button[aria-pressed=true] strong {color:#315f25}
-.week-days button[aria-pressed=true] small {color:#527c41}
+.week-days button[aria-pressed=true] {border-color:#9bc79b;background:#e9f5e9;box-shadow:0 6px 18px #1b6b1a16}
+.week-days button[aria-pressed=true] strong {color:#1b6b1a}
+.week-days button[aria-pressed=true] small {color:#4a7650}
 .week-days button:not([aria-pressed=true]):hover {border-color:#83ae72;background:#f3f9ef}
 .week-selected-day {padding:14px 18px;border:1px solid #e2e9df;border-radius:16px;background:#fff}
-.week-selected-day > span.is-open {background:#e7f4d7;color:#38621f}
+.week-selected-day > span.is-open {background:#e8f4e8;color:#1b6b1a}
 .week-periods .week-period,.week-period {border-color:#e0e8dd;border-radius:20px;background:#fff;box-shadow:0 5px 18px #17231909}
-.week-period[data-enabled=true] {border-color:#c9dfbc;background:linear-gradient(145deg,#fff,#f6fbf2)}
-.week-period[data-enabled=true] .week-period-status {border-color:#d3e7c5;background:#eaf6df;color:#386e28}
-.week-switch[aria-checked=true] {background:#a7d849;border-color:#a7d849}
+.week-period[data-enabled=true] {border-color:#c9dfc9;background:linear-gradient(145deg,#fff,#f5faf5)}
+.week-period[data-enabled=true] .week-period-status {border-color:#d3e7d3;background:#eaf6ea;color:#1b6b1a}
+.week-switch[aria-checked=true] {background:#1b6b1a;border-color:#1b6b1a}
 .week-range input {border-color:#d8e3d4!important;border-radius:13px!important}
-.schedule-exceptions header {padding:19px 22px;border:1px solid #dce9d3;border-radius:18px;background:linear-gradient(120deg,#edf7e5,#f9fcf6 72%)}
+.schedule-exceptions header {padding:19px 22px;border:1px solid #dce8dc;border-radius:18px;background:linear-gradient(120deg,#f1f8f1,#fff 72%)}
 .schedule-exceptions h2 {color:#1d2c20}
 .schedule-exceptions header p,.schedule-exceptions nav {color:#607260}
 .schedule-exceptions nav button {border-color:#c9dbc0;background:#fff;color:#315f25}
 .exception-editor .exception-heading h2 {color:#1d2c20}
 .exception-sheet footer {padding-top:16px}
 .exception-month button {border-color:#e0e7de;background:#fff;box-shadow:0 3px 11px #17231907}
-.exception-month button[data-exception=true] {border-color:#b8d69f;background:#edf7e3;color:#315f22}
-.exception-month button[aria-pressed=true] {border-color:#8eb858;box-shadow:0 0 0 2px #a7d84940}
+.exception-month button[data-exception=true] {border-color:#b8d8b8;background:#edf7ed;color:#1b6b1a}
+.exception-month button[aria-pressed=true] {border-color:#1b6b1a;box-shadow:0 0 0 2px #1b6b1a30}
 @container(max-width:720px){.week-editor-heading{align-items:flex-start;padding:18px}.schedule-exceptions header{gap:14px}}
 [data-schedule-view] .week-editor-heading {display:none}
 [data-schedule-view] .schedule-exceptions header {padding:0;border:0;border-radius:0;background:transparent}
-.week-notice-input { display:flex; align-items:center; justify-content:stretch; width:150px; min-width:0; height:44px; overflow:hidden; padding:0 4px 0 10px; border:1px solid #b9d49f; border-radius:12px; background:#fff; box-shadow:0 3px 12px #31552b0d; }
+.week-notice-input { display:flex; align-items:center; justify-content:stretch; width:150px; min-width:0; height:44px; overflow:hidden; padding:0 4px 0 10px; border:1px solid #b9d8b9; border-radius:12px; background:#fff; box-shadow:0 3px 12px #31552b0d; }
 .week-notice-input input { flex:1 1 auto; min-width:0; width:0; height:100%; padding:0 6px 0 0; border:0!important; outline:0; background:transparent!important; color:#1f2b21; font:inherit; font-weight:700; text-align:right; box-shadow:none!important; }
 .turnits-root .week-notice-input select { flex:0 0 78px; width:78px; min-width:78px; max-width:78px; min-height:36px; height:36px; padding:0 25px 0 9px!important; border:0!important; border-left:1px solid #e2eadf!important; border-radius:0!important; background-color:transparent!important; background-size:16px!important; background-position:right 6px center!important; color:#1f2b21; box-shadow:none!important; font-size:13px; font-weight:650; }
 .week-notice-input:focus-within { border-color:#39834c; box-shadow:0 0 0 3px #39834c22; }
