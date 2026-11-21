@@ -3032,14 +3032,12 @@ export default function BookingFlow(props: any) {
                             {basket.length ? `${basket.filter(item => item.fecha && item.hora).length} con horario · ${formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}`
                                 : `${servicioElegido?.nombre || "Elegí un servicio"}${fecha ? ` · ${formatearFecha(fecha)}` : ""}${hora ? ` · ${hora}` : ""}`}
                         </span></span>
-                    <strong style={{color:accent,fontSize:13,whiteSpace:"nowrap"}}>Ver carrito ↑</strong>
+                    <strong style={{color:accent,fontSize:13,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:7}}><span aria-hidden="true" style={{width:19,height:19,display:"inline-block",backgroundColor:accent,mask:"url('/icons/shopping-cart.svg') center / contain no-repeat"}}/>Ver carrito ↑</strong>
                 </button>
                 {basketOpen && <div role="dialog" aria-modal="true" aria-label="Mis reservas" style={{position:"fixed",inset:0,zIndex:4000,background:"#fff",color:"#111827",overflowY:"auto",fontFamily:"'DM Sans', sans-serif"}}>
                     <div style={{maxWidth:760,margin:"0 auto",padding:"24px 18px 120px"}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:20}}>
-                            <div><h2 style={{margin:0,fontSize:24}}>Mis reservas</h2><p style={{margin:"5px 0 0",color:"#6b7280",fontSize:13}}>Elegí un horario para cada turno.</p></div>
-                            <button type="button" onClick={() => setBasketOpen(false)} aria-label="Cerrar carrito" style={{border:0,background:"#f3f4f6",borderRadius:12,width:42,height:42,fontSize:24,cursor:"pointer"}}>×</button>
-                        </div>
+                        <div style={{marginBottom:18}}><BackLink onClick={() => setBasketOpen(false)}/></div>
+                        <div style={{marginBottom:20}}><h2 style={{margin:0,fontSize:24}}>Mis reservas</h2><p style={{margin:"5px 0 0",color:"#6b7280",fontSize:13}}>Elegí un horario para cada turno.</p></div>
                         {basket.length === 0 && <div style={{padding:20,border:"1px solid #e5e7eb",borderRadius:14}}>Terminá de elegir día y hora para agregar {servicioElegido?.nombre} al carrito.</div>}
                         {[...new Set(basket.map(item => `${item.servicio_id}|${item.equipo_id || ""}`))].map(key => {
                             const group=basket.filter(item => `${item.servicio_id}|${item.equipo_id || ""}` === key)
@@ -3065,7 +3063,7 @@ export default function BookingFlow(props: any) {
                             </section>
                         })}
                         {!pagoGrupoDisponible && <p style={{fontSize:13,color:"#6b7280"}}>Para pagar varios turnos juntos, este negocio necesita tener Mercado Pago habilitado.</p>}
-                        <button type="button" disabled={basket.length>=8 || !pagoGrupoDisponible} onClick={addOtherService} style={{width:"100%",padding:14,border:`1px dashed ${accent}`,borderRadius:12,background:"#fff",color:accent,fontWeight:700,cursor:"pointer"}}>+ Agregar otro servicio</button>
+                        <button type="button" disabled={basket.length>=8 || !pagoGrupoDisponible} onClick={addOtherService} style={{width:"100%",padding:15,border:0,borderRadius:12,background:`linear-gradient(115deg, ${accent}, color-mix(in srgb, ${accent} 50%, ${tema.secundario} 50%), ${tema.secundario})`,color:"#fff",textShadow:"0 1px 2px #0008",boxShadow:`0 6px 18px ${withAlpha(accent,"55")}`,fontWeight:800,fontSize:14,cursor:"pointer",opacity:basket.length>=8 || !pagoGrupoDisponible ? .5 : 1}}>+ Agregar otro servicio</button>
                         <div style={{display:"flex",justifyContent:"space-between",padding:"20px 2px",fontWeight:700}}><span>Total de los servicios</span><span>{formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}</span></div>
                         <button type="button" onClick={() => {setBasketOpen(false); if(stepId !== "checkout" && basket.length) setStepId("checkout")}} style={{width:"100%",padding:15,border:0,borderRadius:12,background:accent,color:"#fff",fontWeight:700,cursor:"pointer"}}>{basket.length && basket.every(item=>item.fecha && item.hora) ? "Continuar al pago" : "Seguir eligiendo"}</button>
                     </div>
@@ -3587,7 +3585,7 @@ function BasketItemEditor({item,index,api,slug,minDate,others,onChange,onRemove}
                 {available.map(slot=><option key={`${slot.hora}-${slot.equipo_id || ""}`} value={slot.hora}>{slot.hora}</option>)}
             </select>
         </label>
-        {onRemove && <button type="button" onClick={onRemove} aria-label={`Quitar turno ${index}`} style={{border:0,background:"#fef2f2",color:"#b91c1c",borderRadius:9,padding:10,cursor:"pointer"}}>Quitar</button>}
+        {onRemove && <button type="button" onClick={onRemove} aria-label={`Quitar turno ${index} de ${item.servicio_nombre}`} style={{gridColumn:3,gridRow:1,alignSelf:"start",border:0,background:"transparent",color:"#e83939",borderRadius:9,padding:6,cursor:"pointer"}}><span aria-hidden="true" style={{display:"block",width:22,height:22,backgroundColor:"currentColor",mask:"url('/icons/trash.svg') center / contain no-repeat"}}/></button>}
         {error && <span role="alert" style={{gridColumn:"1 / -1",fontSize:12,color:"#b91c1c"}}>{error}</span>}
     </div>
 }
