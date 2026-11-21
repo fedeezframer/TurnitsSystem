@@ -93,9 +93,11 @@ export function useBrowseBusiness(api: string) {
 export default function BrowseBusiness({
   api,
   view,
+  editIcon,
 }: {
   api: string;
   view: "offers" | "coins";
+  editIcon?: string;
 }) {
   const { data, draft, error, busy, update, patch, retry } =
     useBrowseBusiness(api);
@@ -130,7 +132,7 @@ export default function BrowseBusiness({
       {view === "coins" && <h3>Turnits T-Coins</h3>}
       {view === "offers" ? (
         <>
-          <OfferCards offers={draft.offers} services={services} members={members} busy={busy}
+          <OfferCards offers={draft.offers} services={services} members={members} busy={busy} editIcon={editIcon}
             onCreate={() => { const offerId = id(); update(d => ({ ...d, offers: [...d.offers, { id: offerId, servicio_id: "", equipo_id: "", precio_minimo: 0, activo: false, franjas: [] }] })); setEditingOfferId(offerId); }}
             onEdit={setEditingOfferId}
             onToggle={offerId => update(d => ({ ...d, offers: d.offers.map((offer: any) => offer.id === offerId ? { ...offer, activo: !offer.activo } : offer) }))}
@@ -187,16 +189,6 @@ export default function BrowseBusiness({
                 </label>
               </div>
               <OfferSchedule windows={o.franjas} onChange={franjas => patch("offers", i, { franjas })} />
-              <label className="browse-business-toggle">
-                <input
-                  type="checkbox"
-                  checked={o.activo}
-                  onChange={(e) =>
-                    patch("offers", i, { activo: e.target.checked })
-                  }
-                />
-                Habilitar esta oferta
-              </label>
             </fieldset>
           ))}
           <button type="button" className="browse-offer-done" onClick={() => setEditingOfferId(null)}>Listo</button></section></div>, document.body)}

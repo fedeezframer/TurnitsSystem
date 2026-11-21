@@ -775,7 +775,7 @@ function TurnitsPanel_Inner(props: any) {
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
-                        {serviciosVistaInicial === "offers" ? <React.Suspense fallback={<LoadingRunner card />}><BrowseBusiness api={baseUrl} view="offers" /></React.Suspense> : React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
+                        {serviciosVistaInicial === "offers" ? <React.Suspense fallback={<LoadingRunner card />}><BrowseBusiness api={baseUrl} view="offers" editIcon={iconos.editar} /></React.Suspense> : React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
                             baseUrl,
                             accentColor,
                             iconoPlaceholderUrl: iconos.servicioPlaceholder,

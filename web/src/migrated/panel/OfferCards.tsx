@@ -1,26 +1,47 @@
 import * as React from "react";
+import { CatalogToolbar } from "./CatalogToolbar";
+import { ServiciosManager_RowMenu } from "./servicios";
 import "./offer-cards.css";
 
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-export function OfferCards({ offers, services, members, busy, onCreate, onEdit, onToggle, onDelete }: {
+function OfferCardActions({ offer, service, editIcon, onEdit, onToggle, onDelete }: {
+  offer: any; service: any; editIcon?: string;
+  onEdit: (id: string) => void; onToggle: (id: string) => void; onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const anchor = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Element;
+      if (!anchor.current?.contains(target) && !target.closest(".svc-row-menu")) setOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [open]);
+  return <div className="offer-catalog-actions">
+    <button className="svc-edit-button" type="button" onClick={() => onEdit(offer.id)}>{editIcon ? <img src={editIcon} alt="" /> : <span aria-hidden="true">✎</span>}Editar</button>
+    <button className="svc-more-button" type="button" ref={anchor} aria-label={`Opciones de ${service?.nombre || "la oferta"}`} aria-expanded={open} onClick={() => setOpen(value => !value)}>•••</button>
+    {open && <ServiciosManager_RowMenu anchor={anchor}><button type="button" onClick={() => { setOpen(false); onToggle(offer.id); }}>{offer.activo ? "Pausar" : "Activar"}</button><button type="button" className="is-danger" onClick={() => { setOpen(false); onDelete(offer.id); }}>Eliminar</button></ServiciosManager_RowMenu>}
+  </div>;
+}
+export function OfferCards({ offers, services, members, busy, editIcon, onCreate, onEdit, onToggle, onDelete }: {
   offers: any[]; services: any[]; members: any[]; busy: boolean;
+  editIcon?: string;
   onCreate: () => void; onEdit: (id: string) => void; onToggle: (id: string) => void; onDelete: (id: string) => void;
 }) {
   const [filter, setFilter] = React.useState<"all" | "active" | "paused">("all");
   const [search, setSearch] = React.useState("");
+  const [sort, setSort] = React.useState<"status" | "service" | "price">("status");
   const rows = offers.filter(offer => {
     if (filter === "active" && !offer.activo) return false;
     if (filter === "paused" && offer.activo) return false;
     const service = services.find(item => item.id === offer.servicio_id);
     const member = members.find(item => item.id === offer.equipo_id);
     return [service?.nombre, member?.nombre, member?.apellido].filter(Boolean).join(" ").toLocaleLowerCase("es-AR").includes(search.toLocaleLowerCase("es-AR"));
-  }).sort((a, b) => Number(b.activo) - Number(a.activo));
+  }).sort((a, b) => sort === "service" ? String(services.find(item => item.id === a.servicio_id)?.nombre || "").localeCompare(String(services.find(item => item.id === b.servicio_id)?.nombre || ""), "es") : sort === "price" ? Number(a.precio_minimo) - Number(b.precio_minimo) : Number(b.activo) - Number(a.activo));
   return <div className="offer-catalog">
-    <div className="offer-catalog-toolbar">
-      <input type="search" aria-label="Buscar ofertas" placeholder="Buscar servicio o profesional" value={search} onChange={event => setSearch(event.target.value)} />
-      <div role="group" aria-label="Filtrar ofertas" className="offer-catalog-filters">{([["all", "Todas"], ["active", "Activas"], ["paused", "Pausadas"]] as const).map(([id, label]) => <button type="button" key={id} aria-pressed={filter === id} onClick={() => setFilter(id)}>{label}</button>)}</div>
-      <button type="button" className="offer-catalog-create" disabled={busy || !services.length || !members.length} onClick={onCreate}>Crear +</button>
-    </div>
+    <CatalogToolbar<"all" | "active" | "paused", "status" | "service" | "price"> filters={[{id:"all",label:"Todas"},{id:"active",label:"Activas"},{id:"paused",label:"Pausadas"}]} label="ofertas" filterValue={filter} onFilter={setFilter} sort={sort} onSort={setSort} opcionesOrden={[{id:"status",label:"Activas primero"},{id:"service",label:"Servicio A-Z"},{id:"price",label:"Tarifa más baja"}]} search={search} onSearch={setSearch} onCreate={!busy && services.length && members.length ? onCreate : undefined} />
     {!offers.length && <p className="offer-catalog-empty">Todavía no hay ofertas. Creá una para ocupar horarios libres con un precio especial.</p>}
     {!!offers.length && !rows.length && <p className="offer-catalog-empty">No hay ofertas que coincidan con esos filtros.</p>}
     <div className="offer-catalog-grid">{rows.map(offer => {
@@ -31,7 +52,7 @@ export function OfferCards({ offers, services, members, busy, onCreate, onEdit, 
       return <article className="offer-catalog-card" key={offer.id}>
         <div className="offer-catalog-cover">{image ? <img src={image} alt="" /> : <span>{(service?.nombre || "Oferta").slice(0, 1)}</span>}<b>{offer.activo ? "Activa" : "Pausada"}</b></div>
         <div className="offer-catalog-body"><strong>{service?.nombre || "Elegí un servicio"}</strong><span>Con {member ? `${member.nombre} ${member.apellido || ""}`.trim() : "un profesional"}</span><div className="offer-catalog-prices"><b>{Number(offer.precio_minimo) > 0 ? `Desde $${Number(offer.precio_minimo).toLocaleString("es-AR")}` : "Definí la tarifa mínima"}</b>{Number(service?.precio) > 0 && <s>${Number(service.precio).toLocaleString("es-AR")}</s>}</div><small>{windows}</small></div>
-        <div className="offer-catalog-actions"><button type="button" onClick={() => onEdit(offer.id)}>Editar</button><details><summary aria-label={`Más opciones para ${service?.nombre || "la oferta"}`}>···</summary><div><button type="button" onClick={() => onToggle(offer.id)}>{offer.activo ? "Pausar" : "Activar"}</button><button type="button" onClick={() => onDelete(offer.id)}>Eliminar</button></div></details></div>
+        <OfferCardActions offer={offer} service={service} editIcon={editIcon} onEdit={onEdit} onToggle={onToggle} onDelete={onDelete} />
       </article>;
     })}</div>
   </div>;
