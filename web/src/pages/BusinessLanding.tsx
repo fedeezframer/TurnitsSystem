@@ -289,9 +289,13 @@ export default function BusinessLanding() {
   const whatsappLink = socials.find((red: any) => red.key === "whatsapp")?.url || (perfil?.telefono_publico ? `https://wa.me/${String(perfil.telefono_publico).replace(/\D/g, "")}` : "")
   const timeUntil = (date: string, time: string) => {
     const target = Date.parse(`${date}T${time}:00-03:00`)
-    const minutes = Math.max(0, Math.round((target - now) / 60000))
-    if (date !== todayISO) return new Date(`${date}T12:00:00-03:00`).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", timeZone: "America/Argentina/Buenos_Aires" })
-    return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60} min` : ""}`.trim()
+    const minutes = Math.max(0, Math.ceil((target - now) / 60000))
+    if (minutes === 0) return "ahora"
+    if (minutes < 60) return `en ${minutes} min`
+    if (minutes < 1440) return `en ${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`
+    const days = Math.floor(minutes / 1440)
+    const hours = Math.floor((minutes % 1440) / 60)
+    return `en ${days} ${days === 1 ? "día" : "días"}${hours ? ` y ${hours} h` : ""}`
   }
   const offerDateLabel = (date: string) => {
     const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date())
@@ -387,7 +391,7 @@ export default function BusinessLanding() {
           const memberColor = /^#[0-9a-f]{6}$/i.test(member.color || "") ? member.color : color
           return <Link className="bl-member" key={member.id} to={`/agenda/${enc}?equipo_id=${encodeURIComponent(member.id)}`}>
             <span className="bl-avatar" style={{ "--member-color": memberColor } as React.CSSProperties}>{member.foto_url ? <img src={member.foto_url} alt="" /> : initials || member.nombre?.[0]}</span>
-            <span className="bl-member-copy"><strong>{member.nombre} {member.apellido}</strong><small>{next ? <>Disponible desde <b>{timeUntil(next.date, next.time)}</b></> : "Ver disponibilidad"}</small></span>
+            <span className="bl-member-copy"><strong>{member.nombre} {member.apellido}</strong><small>{next ? <>Disponible <b>{timeUntil(next.date, next.time)}</b></> : "Ver disponibilidad"}</small></span>
             <span className="bl-member-arrow" aria-hidden="true"><i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} /></span>
           </Link>
         })}</div></section>}
