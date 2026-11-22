@@ -2367,7 +2367,7 @@ export default function BookingFlow(props: any) {
             }
         >
             <style>{shimmerCSS}</style>
-            <style>{`@media(max-width:560px){.bf-basket-item-editor{grid-template-columns:repeat(2,minmax(0,1fr))!important}.bf-basket-item-editor>button{grid-column:1/-1}}`}</style>
+            <style>{`@media(max-width:560px){.bf-basket-item-editor{grid-template-columns:minmax(0,1fr)!important;gap:14px!important}.bf-basket-item-editor>label{min-width:0}}`}</style>
 
 
             {!enCheckoutStep && headerBlock}
@@ -3573,7 +3573,7 @@ function BasketItemEditor({item,index,api,slug,minDate,others,onChange,onRemove}
     const available=slots.filter(slot=>!slot.lleno && slot.disponibles>0 && !others.some(other=>
         other.fecha===item.fecha && other.equipo_id===(slot.equipo_id || item.equipo_id) && !!other.hora &&
         toMinutes(slot.hora)<toMinutes(other.hora)+other.duracion && toMinutes(other.hora)<toMinutes(slot.hora)+item.duracion))
-    return <div className="bf-basket-item-editor" style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr) auto",alignItems:"end",gap:10,borderTop:"1px solid #f3f4f6",marginTop:14,paddingTop:14}}>
+    return <div className="bf-basket-item-editor" style={{position:"relative",display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",alignItems:"end",gap:10,borderTop:"1px solid #f3f4f6",marginTop:14,paddingTop:onRemove ? 42 : 14}}>
         <label style={{fontSize:12,fontWeight:600}}>Turno {index} · día
             <input type="date" min={minDate} value={item.fecha} onChange={event=>onChange({fecha:event.target.value,hora:""})}
                 style={{display:"block",width:"100%",boxSizing:"border-box",marginTop:6,padding:10,border:"1px solid #d1d5db",borderRadius:9,font:"inherit"}}/>
@@ -3585,7 +3585,7 @@ function BasketItemEditor({item,index,api,slug,minDate,others,onChange,onRemove}
                 {available.map(slot=><option key={`${slot.hora}-${slot.equipo_id || ""}`} value={slot.hora}>{slot.hora}</option>)}
             </select>
         </label>
-        {onRemove && <button type="button" onClick={onRemove} aria-label={`Quitar turno ${index} de ${item.servicio_nombre}`} style={{gridColumn:3,gridRow:1,alignSelf:"start",border:0,background:"transparent",color:"#e83939",borderRadius:9,padding:6,cursor:"pointer"}}><span aria-hidden="true" style={{display:"block",width:22,height:22,backgroundColor:"currentColor",mask:"url('/icons/trash.svg') center / contain no-repeat"}}/></button>}
+        {onRemove && <button type="button" onClick={onRemove} aria-label={`Quitar turno ${index} de ${item.servicio_nombre}`} style={{position:"absolute",top:10,right:0,border:0,background:"transparent",color:"#e83939",borderRadius:9,padding:6,cursor:"pointer"}}><span aria-hidden="true" style={{display:"block",width:22,height:22,backgroundColor:"currentColor",mask:"url('/icons/trash.svg') center / contain no-repeat"}}/></button>}
         {error && <span role="alert" style={{gridColumn:"1 / -1",fontSize:12,color:"#b91c1c"}}>{error}</span>}
     </div>
 }
