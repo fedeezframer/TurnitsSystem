@@ -5,7 +5,7 @@ import cors from "cors";
 import jwt from "jsonwebtoken";
 import { createReceiptAccess } from "./receipt-access.js";
 import { allowedOrigins, originGuard, securityHeaders } from "./http-security.js";
-import { validNewPassword } from "../web/src/shared/password-policy.js";
+import { validNewPassword, validRegistrationPassword } from "../web/src/shared/password-policy.js";
 
 const secret = "test-only-secret-that-is-not-used-outside-this-process";
 const first = "11111111-1111-4111-8111-111111111111";
@@ -163,4 +163,8 @@ test("security headers also protect rejected requests and HTTPS enables bounded 
 test("new passwords require 8 characters and respect bcrypt's UTF-8 byte limit", () => {
   for (const value of [undefined, {}, "123456", "1234567", "a".repeat(73), "é".repeat(37)]) assert.equal(validNewPassword(value), false);
   for (const value of ["12345678", "12345678901", "a new passphrase", "a".repeat(72), "é".repeat(36)]) assert.equal(validNewPassword(value), true);
+});
+test("registration passwords require uppercase, lowercase, number and symbol", () => {
+  for (const value of ["Abcdefg1", "abcdefgh1!", "ABCDEFGH1!", "Abcdefgh!", "Ab1!", "A".repeat(70) + "a1!"]) assert.equal(validRegistrationPassword(value), false);
+  assert.equal(validRegistrationPassword("MiClave9!"), true);
 });
