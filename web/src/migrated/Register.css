@@ -869,6 +869,6 @@
 }
 .registration-header > a:first-child { display: inline-flex; align-items: center; }
 .registration-header > a:first-child img { display: block; width: 156px; height: auto; }
-.registration-header .registration-login { display: inline-flex; align-items: center; gap: 5px; }
+.registration-header .registration-login { display: inline-flex; align-items: center; gap: 5px; color: #111; }
 .registration-login-arrow { display: block; flex: none; width: 16px; height: 16px; margin-left: 0 !important; object-fit: contain; }
 @media (max-width: 760px) { .registration-header > a:first-child img { width: 125px; } }
