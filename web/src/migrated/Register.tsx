@@ -1,8 +1,7 @@
-import { validNewPassword, PASSWORD_ERROR, PASSWORD_MIN_LENGTH } from "../shared/password-policy.js";
+import { validRegistrationPassword, REGISTRATION_PASSWORD_ERROR, PASSWORD_MIN_LENGTH } from "../shared/password-policy.js";
 import { PHONE_COUNTRIES, phoneLimit, validNationalPhone, parsePhoneInput, phoneHint } from "../shared/phone-policy.js";
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { ACCOUNT_CATEGORIES } from "../shared/categories.js";
 import "./Register.css";
 import { appConfig } from "../config";
 import { readQuoteBookingDraft } from "../shared/quote-booking-draft";
@@ -41,53 +40,19 @@ function detailsError(fields: Fields, type: AccountType, phone: string) {
     return "Revisá tu correo electrónico.";
   if (!/^[0-9]{7,15}$/.test(phone))
     return "Elegí el país e ingresá tu teléfono con código de área.";
-  if (!validNewPassword(fields.password)) return PASSWORD_ERROR;
+  if (!validRegistrationPassword(fields.password)) return REGISTRATION_PASSWORD_ERROR;
   if (type === "negocio" && ['admin', 'agenda', 'agenda-test', 'alert', 'api', 'app', 'assets', 'browse', 'cambiar-contrasena', 'cambiar-contraseña', 'consultas', 'error', 'internal', 'login', 'login-test', 'panel', 'panel-test', 'pendiente', 'perfil', 'planes', 'politica-de-privacidad', 'privacidad', 'public', 'register', 'register-test', 'registro', 'renovar', 'reprogramar', 'store-login', 'success', 'sucess', 'terminos', 'terminos-y-condiciones', 'test'].includes(fields.usuario)) return "Ese usuario está reservado. Elegí otro para tu enlace.";
   if (
     type === "negocio" &&
-    (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(fields.usuario) ||
+    (!/^[a-z0-9][a-z0-9-]{1,29}$/.test(fields.usuario) ||
       fields.usuario.endsWith("-"))
   )
-    return "El usuario del enlace debe tener entre 2 y 60 letras minúsculas, números o guiones.";
+    return "El enlace debe tener entre 2 y 30 letras minúsculas, números o guiones.";
   return "";
 }
 function maskEmail(email: string) {
   const [name, domain] = email.split("@");
   return `${name.slice(0, 3)}${"*".repeat(Math.max(3, Math.min(12, name.length - 3)))}@${domain}`;
-}
-function CategoryIcon({ icon }: { icon: string }) {
-  const assets: Record<string, string> = {
-    moustache: "mingcute_beard-fill.svg",
-    nails: "fluent-emoji-high-contrast_nail-polish.svg",
-    wheel: "boxicons_steering-wheel.svg",
-    scissors: "akar-icons_cut.svg",
-    tie: "iconoven_tie.svg",
-  };
-  if (assets[icon]) {
-    const mask = `url("/assets/categories/${assets[icon]}")`;
-    return (
-      <span
-        className="registration-category-icon"
-        aria-hidden="true"
-        style={{ maskImage: mask, WebkitMaskImage: mask }}
-      />
-    );
-  }
-  return (
-    <svg
-      width="34"
-      height="34"
-      viewBox="0 0 32 32"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path strokeWidth="3.5" d="M8 16h16M16 8v16" />
-    </svg>
-  );
 }
 export default function Register({
   baseUrl = "https://negosocio.onrender.com",
@@ -106,8 +71,6 @@ export default function Register({
     telefono: quoteDraft.telefono,
   } : empty);
   const [phoneCountry, setPhoneCountry] = useState(() => PHONE_COUNTRIES.some((country) => country.code === quoteDraft?.countryCode) ? quoteDraft!.countryCode : "AR");
-  const [categories, setCategories] = useState<string[]>([]);
-  const [agendaMode, setAgendaMode] = useState("normal");
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [registrationId, setRegistrationId] = useState("");
   const [error, setError] = useState("");
@@ -198,10 +161,10 @@ export default function Register({
       setError(invalid);
       return;
     }
-    setStep(3);
+    void start();
   }
-  async function start(selected: string[]) {
-    if (lock.current || !selected.length) return;
+  async function start() {
+    if (lock.current) return;
     lock.current = true;
     setBusy(true);
     setError("");
@@ -219,13 +182,12 @@ export default function Register({
           ? "/consumidores/registro/iniciar"
           : "/registro/iniciar",
         type === "usuario"
-          ? { ...payload, intereses: selected }
+          ? { ...payload, intereses: ["otro"] }
           : {
               ...payload,
               usuario: fields.usuario,
               business_name: fields.usuario,
-              rubros: selected,
-              ...(appConfig.quoteBookingEnabled ? { modo_agenda: agendaMode } : {}),
+              ...(appConfig.quoteBookingEnabled ? { modo_agenda: "normal" } : {}),
               plan,
               ref: referral,
             },
@@ -245,18 +207,6 @@ export default function Register({
       lock.current = false;
       if (mounted.current) setBusy(false);
     }
-  }
-  function chooseCategory(id: string) {
-    if (busy) return;
-    setError("");
-    if (type === "negocio") {
-      setCategories([id]);
-    } else
-      setCategories((values) =>
-        values.includes(id)
-          ? values.filter((value) => value !== id)
-          : [...values, id],
-      );
   }
   function saveSession(result: any) {
     const consumer =
@@ -395,7 +345,7 @@ export default function Register({
           autoComplete={autoComplete}
           required
           minLength={key === "password" ? PASSWORD_MIN_LENGTH : undefined}
-          maxLength={key === "email" ? 254 : key === "usuario" ? 60 : 80}
+          maxLength={key === "email" ? 254 : key === "usuario" ? 30 : 80}
           value={fields[key]}
           onChange={(event) => {
             setFields((values) => ({
@@ -418,7 +368,13 @@ export default function Register({
         {key === "usuario" && (
           <small id="registration-link-help">Tu enlace: turnits.com/{fields.usuario || "tu-negocio"}</small>
         )}
-        {key === "password" && <small id="registration-password-help">Usá al menos {PASSWORD_MIN_LENGTH} caracteres.</small>}
+        {key === "password" && <div className="registration-password-rules" id="registration-password-help" aria-label="Requisitos de contraseña">
+          <span data-met={fields.password.length >= PASSWORD_MIN_LENGTH}>8 caracteres</span>
+          <span data-met={/[A-Z]/.test(fields.password)}>Mayúscula</span>
+          <span data-met={/[a-z]/.test(fields.password)}>Minúscula</span>
+          <span data-met={/[0-9]/.test(fields.password)}>Número</span>
+          <span data-met={/[^A-Za-z0-9\s]/.test(fields.password)}>Símbolo</span>
+        </div>}
       </div>
     );
   }
@@ -428,24 +384,9 @@ export default function Register({
         <Link to="/" aria-label="Turnits, inicio">
           turnits
         </Link>
-        <span>Tu espacio empieza acá</span>
         <Link className="registration-login" to="/login">Ya tengo cuenta <span aria-hidden="true">↗</span></Link>
       </header>
       <div className="registration-shell">
-      <aside className="registration-aside" aria-label="Tu camino en Turnits">
-        <div className="registration-aside-orbit" aria-hidden="true"><span /><span /><span /></div>
-        <div className="registration-aside-content">
-          <span className="registration-eyebrow">TURNITS PARA {type === "negocio" ? "NEGOCIOS" : "VOS"}</span>
-          <h2>{type === "negocio" ? <>Tu negocio,<br /><em>en movimiento.</em></> : <>Descubrí más.<br /><em>Reservá fácil.</em></>}</h2>
-          <p>{type === "negocio" ? "Armá tu agenda, compartí tu enlace y empezá a recibir reservas en un solo lugar." : "Encontrá lo que necesitás y organizá tus próximas reservas desde un solo lugar."}</p>
-          <ol className="registration-aside-steps">
-            <li data-active={step === 2} data-complete={step > 2}><span>01</span><div><strong>Contanos sobre vos</strong><small>Tus datos y tu enlace</small></div></li>
-            <li data-active={step === 3} data-complete={step > 3}><span>02</span><div><strong>{type === "negocio" ? "Elegí tu rubro" : "Elegí tus intereses"}</strong><small>Para personalizar tu experiencia</small></div></li>
-            <li data-active={step === 4}><span>03</span><div><strong>Confirmá tu correo</strong><small>Y ya estás listo para empezar</small></div></li>
-          </ol>
-        </div>
-        <div className="registration-aside-footer">Todo listo en unos minutos <span aria-hidden="true">✦</span></div>
-      </aside>
       <div className="registration-content">
       {step > 2 && (
         <button
@@ -453,7 +394,7 @@ export default function Register({
           type="button"
           disabled={busy}
           onClick={() => {
-            setStep(step - 1);
+            setStep(2);
             setError("");
             setNotice("");
           }}
@@ -466,15 +407,11 @@ export default function Register({
         className="registration-main"
         aria-busy={busy}
       >
-        <div className="registration-progress" aria-label={`Paso ${step - 1} de 3`}><span>PASO 0{step - 1} / 03</span><div>{[2, 3, 4].map(value => <i key={value} data-active={value <= step} />)}</div></div>
         <h1 ref={title} tabIndex={-1}>
           {step === 2
             ? type === "usuario" ? "Crea tu cuenta" : "Registra tu negocio"
-            : step === 3
-              ? type === "usuario" ? "¿Qué servicios te interesan?" : "¿Qué rubro de negocio es?"
-              : "Verificá tu email"}
+            : "Verificá tu email"}
         </h1>
-        {step !== 3 && (
           <p className="registration-subtitle">
             {step === 2 ? (
               type === "usuario" ? "Encontrá servicios, descubrí negocios y reservá en Turnits." : "Creá tu cuenta y empezá a preparar tu agenda."
@@ -484,7 +421,6 @@ export default function Register({
               </>
             )}
           </p>
-        )}
         {step === 2 && (
           <form className={`registration-form ${type}`} noValidate onSubmit={nextDetails}>
             {field("nombre_persona", "Nombre", "text", "given-name")}
@@ -551,10 +487,10 @@ export default function Register({
                 disabled={busy}
                 aria-describedby="registration-consent"
               >
-                Continuar
+                {busy ? "Enviando código…" : "Crear cuenta"}
               </button>
               <p className="registration-consent" id="registration-consent">
-                Al presionar «Continuar», aceptás los{" "}
+                Al presionar «Crear cuenta», aceptás los{" "}
                 <a
                   href={termsUrl}
                   target="_blank"
@@ -577,50 +513,6 @@ export default function Register({
         )}
         {step === 2 && type === "usuario" && <p className="registration-business-link">¿Tenés un negocio? <Link to="/registro/negocio">Registralo desde acá</Link></p>}
         {step === 2 && type === "negocio" && <p className="registration-business-link">Tus clientes pueden reservar directamente desde el enlace de tu agenda.</p>}
-        {step === 3 && (
-          <>
-            {type === "negocio" && <p className="registration-subtitle">Elegí tu actividad.</p>}
-            {type === "usuario" && <p className="registration-subtitle">Elegí algunos rubros para que Turnits empiece a mostrarte opciones relevantes.</p>}
-            {type === "negocio" && appConfig.quoteBookingEnabled && <fieldset className="registration-agenda-mode"><legend>¿Cómo coordinás tus turnos?</legend><label><input type="radio" name="agenda-mode" checked={agendaMode === "normal"} onChange={() => setAgendaMode("normal")} /> Agenda normal: servicios con precio y horario</label><label><input type="radio" name="agenda-mode" checked={agendaMode === "presupuesto"} onChange={() => setAgendaMode("presupuesto")} /> Mediante presupuesto: consulta y referencias antes de reservar</label><p>El rubro describe tu actividad; el tipo de agenda define cómo reservan tus clientes.</p></fieldset>}
-            <div
-              className="registration-categories"
-              role="group"
-              aria-label={
-                type === "negocio" ? "Elegí un rubro" : "Elegí tus intereses"
-              }
-            >
-              {ACCOUNT_CATEGORIES.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  aria-pressed={categories.includes(category.id)}
-                  className="registration-category"
-                  disabled={busy}
-                  onClick={() => chooseCategory(category.id)}
-                >
-                  <CategoryIcon icon={category.icon} />
-                  {category.label}
-                </button>
-              ))}
-            </div>
-            {(
-              <button
-                className="registration-next registration-interests-next"
-                type="button"
-                data-ready={categories.length > 0}
-                disabled={busy || !categories.length}
-                onClick={() => void start(categories)}
-              >
-                {busy ? "Enviando código…" : type === "negocio" ? "Enviar código a mi email" : "Crear cuenta"}
-              </button>
-            )}
-            {type === "negocio" && busy && (
-              <p role="status" className="registration-status">
-                Enviando código…
-              </p>
-            )}
-          </>
-        )}
         {step === 4 && (
           <form
             className="registration-verification"

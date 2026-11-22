@@ -65,6 +65,8 @@
   .tn-onb-title { font-size: 29px; }
   .tn-onb-description { font-size: 12px; }
 }
+.tn-onb-mp-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-weight: 750; }
+.tn-onb-mp-button img { display: block; width: 35px; height: 25px; object-fit: contain; }
 
 /* El tutorial continúa el lenguaje visual del registro. */
 .tn-onb-root { background: #eff4ebed; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }

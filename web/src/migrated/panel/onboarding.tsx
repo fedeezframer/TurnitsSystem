@@ -65,11 +65,13 @@ function OnboardingNube_BotonPrincipal({
     onClick,
     disabled,
     loading,
+    mercadoPago = false,
 }: {
     children: React.ReactNode
     onClick: () => void
     disabled?: boolean
     loading?: boolean
+    mercadoPago?: boolean
 }) {
     return (
         <motion.button
@@ -81,12 +83,12 @@ function OnboardingNube_BotonPrincipal({
                 width: "100%",
                 padding: "13px 16px",
                 borderRadius: 999,
-                border: "none",
+                border: mercadoPago ? "1px solid #b9dce9" : "none",
                 background:
                     disabled || loading
                         ? "rgba(18,19,26,0.25)"
-                        : OnboardingNube_ACCENT,
-                color: "#fff",
+                        : mercadoPago ? "#fff" : OnboardingNube_ACCENT,
+                color: mercadoPago ? "#063b74" : "#fff",
                 fontSize: 14.5,
                 fontWeight: 500,
                 cursor: disabled || loading ? "default" : "pointer",
@@ -959,8 +961,9 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                     <OnboardingNube_BotonPrincipal
                                         onClick={conectarMercadoPago}
                                         loading={guardando}
+                                        mercadoPago
                                     >
-                                        Conectar Mercado Pago
+                                        <span className="tn-onb-mp-button"><img src="/assets/mercado-pago.svg" alt="" />Conectar Mercado Pago</span>
                                     </OnboardingNube_BotonPrincipal>
 
                                     {esPremium && (

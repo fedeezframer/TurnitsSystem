@@ -854,3 +854,16 @@
 }
 @media (max-width: 380px) { .registration-category { font-size: 12px !important; }.registration-code input { height: 52px; font-size: 23px; } }
 @media (prefers-reduced-motion: reduce) { .registration-aside-steps li, .registration-next, .registration-category { transition: none; }.registration-next:hover:not(:disabled), .registration-category:hover:not(:disabled) { transform: none; } }
+.registration-shell { display: block; max-width: 100%; min-height: calc(100dvh - 76px); }
+.registration-content { min-height: calc(100dvh - 76px); padding: 38px 20px; }
+.registration-main, .registration-step-2 .registration-main, .registration-step-4 .registration-main { width: min(100%, 780px); max-width: 780px; }
+.registration-password-rules { display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 1px; }
+.registration-password-rules span { display: inline-flex; align-items: center; gap: 4px; color: #7d8b7e; font-size: 11px; font-weight: 600; }
+.registration-password-rules span::before { content: "○"; font-size: 13px; }
+.registration-password-rules span[data-met="true"] { color: #25713b; }
+.registration-password-rules span[data-met="true"]::before { content: "✓"; }
+@media (max-width: 760px) {
+  .registration-shell { min-height: calc(100dvh - 64px); }
+  .registration-content { min-height: calc(100dvh - 64px); padding: 20px 14px 40px; }
+  .registration-main, .registration-step-2 .registration-main, .registration-step-4 .registration-main { width: 100%; max-width: 100%; }
+}
