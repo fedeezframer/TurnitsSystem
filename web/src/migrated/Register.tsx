@@ -385,7 +385,7 @@ export default function Register({
         <Link to="/" aria-label="Turnits, inicio">
           <img src="/assets/turnits-logo-completo.png" alt="Turnits" />
         </Link>
-        <Link className="registration-login" to="/login">Ya tengo cuenta <span className="registration-login-arrow" style={{ maskImage: `url(${arrowUpRightIcon})`, WebkitMaskImage: `url(${arrowUpRightIcon})` }} aria-hidden="true" /></Link>
+        <Link className="registration-login" to="/login">Ya tengo cuenta <img className="registration-login-arrow" src={arrowUpRightIcon} alt="" aria-hidden="true" /></Link>
       </header>
       <div className="registration-shell">
       <div className="registration-content">
