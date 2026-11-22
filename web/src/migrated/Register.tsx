@@ -428,7 +428,25 @@ export default function Register({
         <Link to="/" aria-label="Turnits, inicio">
           turnits
         </Link>
+        <span>Tu espacio empieza acá</span>
+        <Link className="registration-login" to="/login">Ya tengo cuenta <span aria-hidden="true">↗</span></Link>
       </header>
+      <div className="registration-shell">
+      <aside className="registration-aside" aria-label="Tu camino en Turnits">
+        <div className="registration-aside-orbit" aria-hidden="true"><span /><span /><span /></div>
+        <div className="registration-aside-content">
+          <span className="registration-eyebrow">TURNITS PARA {type === "negocio" ? "NEGOCIOS" : "VOS"}</span>
+          <h2>{type === "negocio" ? <>Tu negocio,<br /><em>en movimiento.</em></> : <>Descubrí más.<br /><em>Reservá fácil.</em></>}</h2>
+          <p>{type === "negocio" ? "Armá tu agenda, compartí tu enlace y empezá a recibir reservas en un solo lugar." : "Encontrá lo que necesitás y organizá tus próximas reservas desde un solo lugar."}</p>
+          <ol className="registration-aside-steps">
+            <li data-active={step === 2} data-complete={step > 2}><span>01</span><div><strong>Contanos sobre vos</strong><small>Tus datos y tu enlace</small></div></li>
+            <li data-active={step === 3} data-complete={step > 3}><span>02</span><div><strong>{type === "negocio" ? "Elegí tu rubro" : "Elegí tus intereses"}</strong><small>Para personalizar tu experiencia</small></div></li>
+            <li data-active={step === 4}><span>03</span><div><strong>Confirmá tu correo</strong><small>Y ya estás listo para empezar</small></div></li>
+          </ol>
+        </div>
+        <div className="registration-aside-footer">Todo listo en unos minutos <span aria-hidden="true">✦</span></div>
+      </aside>
+      <div className="registration-content">
       {step > 2 && (
         <button
           className="registration-back"
@@ -448,6 +466,7 @@ export default function Register({
         className="registration-main"
         aria-busy={busy}
       >
+        <div className="registration-progress" aria-label={`Paso ${step - 1} de 3`}><span>PASO 0{step - 1} / 03</span><div>{[2, 3, 4].map(value => <i key={value} data-active={value <= step} />)}</div></div>
         <h1 ref={title} tabIndex={-1}>
           {step === 2
             ? type === "usuario" ? "Crea tu cuenta" : "Registra tu negocio"
@@ -685,6 +704,8 @@ export default function Register({
           </p>
         )}
       </main>
+      </div>
+      </div>
     </div>
   );
 }

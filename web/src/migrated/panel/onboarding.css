@@ -65,3 +65,26 @@
   .tn-onb-title { font-size: 29px; }
   .tn-onb-description { font-size: 12px; }
 }
+
+/* El tutorial continúa el lenguaje visual del registro. */
+.tn-onb-root { background: #eff4ebed; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.tn-onb-card { grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); border-radius: 26px; border-color: #dce8d7; box-shadow: 0 28px 80px #193b2522; }
+.tn-onb-art { min-height: 520px; background: radial-gradient(circle at 80% 20%, #b9dca6 0, transparent 35%), linear-gradient(155deg, #ebf5e6, #cfe5c4); }
+.tn-onb-content { padding: 32px clamp(24px, 4vw, 46px) 38px; }
+.tn-onb-skip { margin-bottom: 23px; font-size: 12px; font-weight: 650; text-underline-offset: 3px; }
+.tn-onb-eyebrow { display: block; margin-bottom: 16px; color: #3a8750; font-size: 10px; font-weight: 850; letter-spacing: .16em; }
+.tn-onb-progress { gap: 7px; margin-bottom: 9px; }
+.tn-onb-progress span { flex: 1; width: auto; height: 5px; background: #e6ede2; }
+.tn-onb-progress span[data-active="true"] { background: linear-gradient(90deg, #287943, #a5cf86); }
+.tn-onb-step-label { display: block; margin-bottom: 18px; color: #6a806c; font-size: 11px; font-weight: 700; }
+.tn-onb-heading { margin-bottom: 24px; }
+.tn-onb-title { font-size: clamp(31px, 3vw, 40px); font-weight: 700; letter-spacing: -.05em; color: #193324; }
+.tn-onb-description { max-width: 440px; font-size: 13px; line-height: 1.6; }
+.tn-onb-time-row input[type=time] { width: 100% !important; max-width: 100% !important; padding: 9px 8px !important; border-radius: 10px; }
+@media (max-width: 640px) {
+  .tn-onb-card { grid-template-columns: minmax(0, 1fr); border-radius: 20px; }
+  .tn-onb-art { height: 110px; min-height: 0; }
+  .tn-onb-content { padding: 14px 22px 27px; }
+  .tn-onb-skip { margin-bottom: 16px; }
+  .tn-onb-title { font-size: 29px; }
+}

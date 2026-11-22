@@ -664,9 +664,12 @@ function OnboardingNube({ baseUrl, accentColor, mpClientId, onFinish }: any) {
                                 Seguir después desde Inicio
                             </button>
                             <div className="tn-onb-heading">
+                                <span className="tn-onb-eyebrow">TU AGENDA EMPIEZA ACÁ</span>
                                 <div className="tn-onb-progress" role="img" aria-label={`Paso ${paso + 1} de ${totalPasos}`}>
                                     {Array.from({ length: totalPasos }, (_, index) => <span key={index} data-active={index <= paso} />)}
                                 </div>
+
+                                <span className="tn-onb-step-label">Paso {paso + 1} de {totalPasos}</span>
 
                                 <h2 className="tn-onb-title">
                                     {paso === 0 && (quoteMode ? "Mostrá qué trabajos realizás" : "Creá tu primer servicio")}
