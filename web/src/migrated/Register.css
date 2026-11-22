@@ -867,3 +867,8 @@
   .registration-content { min-height: calc(100dvh - 64px); padding: 20px 14px 40px; }
   .registration-main, .registration-step-2 .registration-main, .registration-step-4 .registration-main { width: 100%; max-width: 100%; }
 }
+.registration-header > a:first-child { display: inline-flex; align-items: center; }
+.registration-header > a:first-child img { display: block; width: 156px; height: auto; }
+.registration-header .registration-login { display: inline-flex; align-items: center; gap: 5px; }
+.registration-login-arrow { display: inline-block; flex: none; width: 16px; height: 16px; margin-left: 0 !important; background: currentColor; mask-position: center; mask-size: contain; mask-repeat: no-repeat; -webkit-mask-position: center; -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; }
+@media (max-width: 760px) { .registration-header > a:first-child img { width: 125px; } }

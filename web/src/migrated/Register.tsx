@@ -6,6 +6,7 @@ import "./Register.css";
 import { appConfig } from "../config";
 import { readQuoteBookingDraft } from "../shared/quote-booking-draft";
 import { safeMessagesReturn } from "../shared/consultation-session.js";
+import arrowUpRightIcon from "../components/akar-icons-arrow-up-right.svg";
 
 type AccountType = "usuario" | "negocio";
 type Fields = {
@@ -382,9 +383,9 @@ export default function Register({
     <div className={`registration registration-step-${step}`}>
       <header className="registration-header">
         <Link to="/" aria-label="Turnits, inicio">
-          turnits
+          <img src="/assets/turnits-logo-completo.png" alt="Turnits" />
         </Link>
-        <Link className="registration-login" to="/login">Ya tengo cuenta <span aria-hidden="true">↗</span></Link>
+        <Link className="registration-login" to="/login">Ya tengo cuenta <span className="registration-login-arrow" style={{ maskImage: `url(${arrowUpRightIcon})`, WebkitMaskImage: `url(${arrowUpRightIcon})` }} aria-hidden="true" /></Link>
       </header>
       <div className="registration-shell">
       <div className="registration-content">
