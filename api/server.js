@@ -24,7 +24,7 @@ import { validateEnvironment, stagingMiddleware } from "./environment.js";
 import path from "node:path";
 import { createReceiptAccess } from "./receipt-access.js";
 import { securityHeaders, allowedOrigins, originGuard } from "./http-security.js";
-import { validNewPassword, PASSWORD_ERROR } from "../web/src/shared/password-policy.js";
+import { validNewPassword, PASSWORD_ERROR, validRegistrationPassword, REGISTRATION_PASSWORD_ERROR } from "../web/src/shared/password-policy.js";
 import { validInternationalPhone } from "../web/src/shared/phone-policy.js";
 
 // ══════════════════════════════════════════════════════════════
@@ -1507,15 +1507,15 @@ app.post("/registro/iniciar", limiterAuth, async (req, res) => {
       return res.status(400).json({success:false,error:"Revisá los datos del negocio y completá todos los campos."});
     const requestedSlug = req.body.usuario === undefined ? null : String(req.body.usuario).trim().toLowerCase();
     if (rutasReservadas.has(requestedSlug)) return res.status(409).json({success:false,error:"Ese usuario está reservado. Elegí otro."});
-    if (requestedSlug !== null && (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(requestedSlug) || requestedSlug.endsWith("-")))
-      return res.status(400).json({success:false,error:"El usuario debe tener entre 2 y 60 letras minúsculas, números o guiones."});
+    if (requestedSlug !== null && (!/^[a-z0-9][a-z0-9-]{1,29}$/.test(requestedSlug) || requestedSlug.endsWith("-")))
+      return res.status(400).json({success:false,error:"El enlace debe tener entre 2 y 30 letras minúsculas, números o guiones."});
 
     if (!nombre_persona || !email || !password || !business_name)
       return res.status(400).json({ success: false, error: "Faltan campos obligatorios." });
     if (!validateEmail(email))
       return res.status(400).json({ success: false, error: "Email inválido." });
-    if (!validatePassword(password))
-      return res.status(400).json({ success: false, error: PASSWORD_ERROR });
+    if (!validRegistrationPassword(password))
+      return res.status(400).json({ success: false, error: REGISTRATION_PASSWORD_ERROR });
     if (telefono && !(rubros ? validInternationalPhone(cleanPhone(telefono)) : validatePhone(cleanPhone(telefono))))
       return res.status(400).json({ success: false, error: "Ingresá un teléfono válido con código de país y de área." });
     if (business_name.trim().length < 2)
