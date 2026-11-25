@@ -20,9 +20,10 @@ export function saveBookingToken(token: string) {
     } catch {}
 }
 
-export default function BookingLogin({ api, onSession }: {
+export default function BookingLogin({ api, onSession, accent }: {
     api: string
     onSession?: (token: string) => void
+    accent?: string
 }) {
     const [open, setOpen] = React.useState(false)
     const [signedIn, setSignedIn] = React.useState(false)
@@ -95,6 +96,21 @@ export default function BookingLogin({ api, onSession }: {
     const control: React.CSSProperties = { font: "inherit", border: "1px solid currentColor", borderRadius: 10, padding: "10px 12px", minHeight: 44, color: "inherit", background: "transparent", boxSizing: "border-box", minWidth: 0 }
     const button: React.CSSProperties = { ...control, cursor: "pointer" }
 
+    const primaryButton: React.CSSProperties = accent ? {
+        ...button,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        border: 0,
+        borderRadius: 999,
+        background: accent,
+        color: "#fff",
+        fontSize: 13,
+        fontWeight: 750,
+        padding: "10px clamp(12px, 3vw, 17px)",
+    } : button
+
     if (signedIn) return (
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
             <span role="status">Sesión iniciada</span>
@@ -106,7 +122,11 @@ export default function BookingLogin({ api, onSession }: {
         </div>
     )
 
-    if (!open) return <button type="button" style={button} onClick={() => setOpen(true)}>Ingresar con mi correo</button>
+    if (!open) return (
+        <button type="button" style={primaryButton} onClick={() => setOpen(true)}>
+            Ingresar con mi correo {accent && <span aria-hidden="true">↗</span>}
+        </button>
+    )
 
     return (
         <form onSubmit={submit} style={{ display: "grid", gap: 10, width: "100%", maxWidth: 420, textAlign: "left" }}>
@@ -127,7 +147,7 @@ export default function BookingLogin({ api, onSession }: {
             {challenge && <span role="status">Si tenés una cuenta de cliente con ese correo, te enviamos un código.</span>}
             {error && <span role="alert">{error}</span>}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <button type="submit" style={button} disabled={busy}>{busy ? "Un momento…" : challenge ? "Confirmar código" : "Enviar código"}</button>
+                <button type="submit" style={primaryButton} disabled={busy}>{busy ? "Un momento…" : challenge ? "Confirmar código" : "Enviar código"}</button>
                 <button type="button" style={button} disabled={busy} onClick={() => {
                     setError("")
                     setCode("")
