@@ -184,21 +184,35 @@ export default function BookingLogin({ api, onSession, accent }: {
         pending.current = true
         setBusy(true)
         setError("")
+        let register = signup
         try {
             const action = challenge ? "verificar-codigo" : "enviar-codigo"
-            const response = await fetch(`${api}/consumidores/agenda/${action}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: email.trim().toLowerCase(), challenge, codigo: code, registro: signup }),
-            })
-            const data = await response.json().catch(() => null)
+            const address = email.trim().toLowerCase()
+            const requestCode = async (registro: boolean) => {
+                const response = await fetch(`${api}/consumidores/agenda/${action}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: address, challenge, codigo: code, registro }),
+                })
+                return { response, data: await response.json().catch(() => null) }
+            }
+            let { response, data } = await requestCode(register)
+            if (!challenge && !register && response.status === 404 && data?.code === "consumer_registration_required") {
+                register = true
+                const registration = await requestCode(register)
+                response = registration.response
+                data = registration.data
+            }
             if (!response.ok || !data?.success) {
-                throw new Error(response.status === 429 ? "Esperá unos minutos antes de volver a intentar." : data?.error || "No pudimos continuar. Probá de nuevo.")
+                throw new Error(data?.error || (response.status === 429 ? "Esperá unos minutos antes de volver a intentar." : "No pudimos continuar. Probá de nuevo."))
             }
             if (challenge && typeof data.token === "string" && data.token) finish(data.token, data)
-            else if (!challenge && typeof data.challenge === "string" && data.challenge) setChallenge(data.challenge)
-            else throw new Error("No pudimos continuar. Probá de nuevo.")
+            else if (!challenge && typeof data.challenge === "string" && data.challenge) {
+                setSignup(register)
+                setChallenge(data.challenge)
+            } else throw new Error("No pudimos continuar. Probá de nuevo.")
         } catch (failure) {
+            setSignup(register)
             setError(failure instanceof Error ? failure.message : "No pudimos continuar. Probá de nuevo.")
         } finally {
             pending.current = false
@@ -282,7 +296,7 @@ export default function BookingLogin({ api, onSession, accent }: {
                         {challenge ? "Ingresá el código de verificación" : "Ingresá tu correo electrónico"}
                     </h2>
                     {challenge ? <>
-                        <p style={{ margin: 0, color: "#555", overflowWrap: "anywhere" }}>Si podemos verificar ese correo, vas a recibir un código en <strong>{maskedEmail}</strong>.</p>
+                        <p style={{ margin: 0, color: "#555", overflowWrap: "anywhere" }}>Te enviamos un código a <strong>{maskedEmail}</strong>{signup ? " para crear tu cuenta." : "."}</p>
                         <div className="booking-code" style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: "clamp(4px, 2vw, 9px)", position: "relative", marginTop: 8 }}>
                             {Array.from({ length: 6 }, (_, i) => <span key={i} aria-hidden="true" style={{ display: "grid", placeItems: "center", height: 44, border: "1px solid #818781", borderRadius: 6, fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{code[i]}</span>)}
                             <input key="code" autoFocus aria-label="Código de verificación" inputMode="numeric" autoComplete="one-time-code"
@@ -290,7 +304,10 @@ export default function BookingLogin({ api, onSession, accent }: {
                                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", boxSizing: "border-box", opacity: 0, fontSize: 16 }}
                                 onChange={event => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} />
                         </div>
-                        <button type="submit" disabled={busy} style={{ ...primaryButton, background: actionColor, color: "white", border: 0, borderRadius: 999 }}>{busy ? "Verificando…" : "Verificar código"}</button>
+                        {signup && <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
+                            Al crear tu cuenta, aceptás los <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: actionColor }}>Términos y Condiciones</a> y la <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: actionColor }}>Política de Privacidad</a>.
+                        </p>}
+                        <button type="submit" disabled={busy} style={{ ...primaryButton, background: actionColor, color: "white", border: 0, borderRadius: 999 }}>{busy ? "Verificando…" : signup ? "Verificar y crear cuenta" : "Verificar código"}</button>
                     </> : <>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <input key="email" autoFocus aria-label="Correo electrónico" required type="email" autoComplete="email"
