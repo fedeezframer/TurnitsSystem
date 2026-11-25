@@ -531,6 +531,18 @@ export function createBrowse({
     auth,
     route(async (req, res) => {
       const { nombre_persona, apellido, telefono } = req.body || {};
+      if (req.body?.completar_telefono === true) {
+        if (typeof telefono !== "string" || !validInternationalPhone(telefono))
+          fail("Revisá el número de teléfono e incluí el código de país.");
+        result(
+          await supabase
+            .from("consumidores")
+            .update({ telefono: telefono.replace("+", "") })
+            .eq("id", req.consumer.id)
+            .is("telefono", null),
+        );
+        return res.json({ success: true });
+      }
       if (
         [nombre_persona, apellido].some(
           (v) =>
