@@ -99,6 +99,61 @@ export function createConsumerAccounts({
     });
     if (!response.ok) throw new Error("Mail unavailable");
   }
+  const bookingCodeHash = (id, challenge, code) =>
+    crypto.createHmac("sha256", secret).update(`booking:${id}:${challenge}:${code}`).digest("hex");
+
+  app.post("/consumidores/agenda/enviar-codigo", limiterCodigo, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const email = emailOf(req.body?.email);
+    if (!emailValid(email)) return res.status(400).json({ success: false, error: "Ingresá un correo válido." });
+
+    try {
+      if (!secret || !mailUrl) throw new Error("Missing booking login configuration");
+      const challenge = crypto.randomUUID();
+      const consumer = await findByEmail(email);
+      if (consumer?.activo === true && consumer.email_verificado === true) {
+        const codigo = crypto.randomInt(100000, 1000000).toString();
+        const issued = check(await supabase.rpc("issue_consumer_booking_code", {
+          p_consumer: consumer.id,
+          p_challenge: challenge,
+          p_hash: bookingCodeHash(consumer.id, challenge, codigo),
+        }));
+        if (issued) {
+          await mail({ action: "verificarCodigo", email, nombre: consumer.nombre_persona, codigo })
+            .catch(() => console.error("Booking login email unavailable"));
+        }
+      }
+      return res.json({ success: true, challenge });
+    } catch (error) {
+      return fail(res, error);
+    }
+  });
+
+  app.post("/consumidores/agenda/verificar-codigo", limiterCodigo, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const email = emailOf(req.body?.email);
+    const { challenge, codigo } = req.body || {};
+    const invalid = () => res.status(400).json({ success: false, error: "Código inválido o vencido. Podés pedir otro." });
+    if (!emailValid(email) || typeof challenge !== "string" || !ID.test(challenge)
+        || typeof codigo !== "string" || !/^\d{6}$/.test(codigo)) return invalid();
+
+    try {
+      const consumer = await findByEmail(email);
+      if (consumer?.activo !== true || consumer.email_verificado !== true) return invalid();
+      const verified = check(await supabase.rpc("consume_consumer_booking_code", {
+        p_consumer: consumer.id,
+        p_challenge: challenge,
+        p_hash: bookingCodeHash(consumer.id, challenge, codigo),
+      }));
+      if (!verified) return invalid();
+      const current = await findById(consumer.id);
+      if (current?.activo !== true || current.email_verificado !== true || current.email !== email) return invalid();
+      return res.json(session(current));
+    } catch (error) {
+      return fail(res, error);
+    }
+  });
+
   app.post("/consumidores/registro/iniciar", limiterAuth, async (req, res) => {
     try {
       if (!secret || !mailUrl)
