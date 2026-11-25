@@ -123,8 +123,22 @@ export default function BookingLogin({ api, onSession, accent }: {
     )
 
     if (!open) return (
-        <button type="button" style={primaryButton} onClick={() => setOpen(true)}>
-            Ingresar con mi correo {accent && <span aria-hidden="true">↗</span>}
+        <button
+            type="button"
+            style={accent ? {
+                display: "inline-flex", alignItems: "center", gap: 8, minHeight: 44,
+                border: 0, background: "transparent", color: accent,
+                padding: "0 4px", font: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer",
+            } : button}
+            onClick={() => setOpen(true)}
+        >
+            {accent && (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="8" r="3.5" />
+                    <path d="M5 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1" />
+                </svg>
+            )}
+            {accent ? "Iniciar sesión" : "Ingresar con mi correo"}
         </button>
     )
 
