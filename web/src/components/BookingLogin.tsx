@@ -216,7 +216,7 @@ export default function BookingLogin({ api, onSession, accent }: {
     const actionColor = accent || "#1b6b1a"
 
     if (signedIn) return (
-        <details className="booking-account" style={{ position: "relative", maxWidth: "min(68vw, 280px)", color: "#171a17" }}>
+        <details className="booking-account" style={{ position: "relative", zIndex: 31, maxWidth: "min(68vw, 280px)", color: "#171a17" }}>
             <style>{`.booking-account summary::-webkit-details-marker{display:none}`}</style>
             <summary aria-label={accountName} style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 44, cursor: "pointer", listStyle: "none" }}>
                 <span aria-hidden="true" style={{ display: "grid", placeItems: "center", flex: "0 0 25px", height: 25, borderRadius: "50%", background: actionColor, color: "white", fontSize: 13, fontWeight: 700 }}>{Array.from(accountName)[0]?.toLocaleUpperCase("es")}</span>
