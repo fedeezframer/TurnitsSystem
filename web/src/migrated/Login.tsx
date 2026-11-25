@@ -70,6 +70,7 @@ function loadGoogleScript(): Promise<void> {
     })
     return googleScriptPromise
 }
+export { GOOGLE_CLIENT_ID, googleIdentity, loadGoogleScript }
 const keys = [
     "access_token",
     "auth_token",
