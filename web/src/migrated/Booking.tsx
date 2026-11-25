@@ -1,3 +1,4 @@
+import BookingLogin, { readBookingToken, saveBookingToken } from "../components/BookingLogin"
 import { appConfig } from "../config"
 import { validNationalPhone, phoneLimit, parsePhoneInput, phoneHint, validInternationalPhone } from "../shared/phone-policy.js"
 import { useStartupLoading } from "../components/BrandPreloader"
@@ -933,20 +934,50 @@ export default function BookingFlow(props: any) {
     const [paisDropdownOpen, setPaisDropdownOpen] = React.useState(false)
     const [emailError, setEmailError] = React.useState("")
     const [telError, setTelError] = React.useState("")
-    const [loadingCuenta, setLoadingCuenta] = React.useState(()=>!!consumerHeaders().Authorization)
+    const [bookingToken, setBookingToken] = React.useState(readBookingToken)
+    const bookingAuthorization = bookingToken ? `Bearer ${bookingToken}` : consumerHeaders().Authorization
+    const bookingHeaders = () => bookingAuthorization ? { Authorization: bookingAuthorization } : {}
+    const [loadingCuenta, setLoadingCuenta] = React.useState(()=>!!bookingAuthorization)
     const [cuentaConDatosCompletos, setCuentaConDatosCompletos] = React.useState(false)
     React.useEffect(()=>{
-        const headers=consumerHeaders();if(!headers.Authorization){setLoadingCuenta(false);return;}
-        const controller=new AbortController();
-        fetch(`${api}/browse/identidad`,{headers,signal:controller.signal}).then(r=>r.ok?r.json():null).then(d=>{
-            if(!d?.success||!d.perfil||controller.signal.aborted)return;const c=d.perfil;
-            setNombre(v=>v||c.nombre_persona||"");setApellido(v=>v||c.apellido||"");setEmail(v=>v||c.email||"");
-            const digits=String(c.telefono||"").replace(/\D/g,"");const country=[...PAISES].sort((a,b)=>b.dial.length-a.dial.length).find(p=>digits.startsWith(p.dial.slice(1)));
-            if(country){setPais(country);setTelefono(v=>v||digits.slice(country.dial.length-1))}
-            else if(digits){setPais({code:"OTHER",flag:"🌐",dial:"+",name:"Internacional"});setTelefono(v=>v||digits)}
-            setCuentaConDatosCompletos(String(c.nombre_persona||"").trim().length>=2 && EMAIL_REGEX.test(String(c.email||"").trim()) && validInternationalPhone(digits));
-        }).catch(()=>{}).finally(()=>{if(!controller.signal.aborted)setLoadingCuenta(false)});return ()=>controller.abort();
-    },[api]);
+        if (!bookingAuthorization) {
+            setLoadingCuenta(false)
+            setCuentaConDatosCompletos(false)
+            return
+        }
+        const controller = new AbortController()
+        setLoadingCuenta(true)
+        setCuentaConDatosCompletos(false)
+        fetch(`${api}/browse/identidad`, {
+            headers: { Authorization: bookingAuthorization },
+            signal: controller.signal,
+            cache: "no-store",
+        }).then(response => {
+            if (!controller.signal.aborted && bookingToken && [401, 403].includes(response.status)) {
+                if (readBookingToken() === bookingToken) saveBookingToken("")
+                setBookingToken("")
+            }
+            return response.ok ? response.json() : null
+        }).then(data => {
+            if (!data?.success || !data.perfil || controller.signal.aborted) return
+            const profile = data.perfil
+            setNombre(value => bookingToken ? profile.nombre_persona || "" : value || profile.nombre_persona || "")
+            setApellido(value => bookingToken ? profile.apellido || "" : value || profile.apellido || "")
+            setEmail(value => bookingToken ? profile.email || "" : value || profile.email || "")
+            const digits = String(profile.telefono || "").replace(/\D/g, "")
+            const country = [...PAISES].sort((a, b) => b.dial.length - a.dial.length)
+                .find(option => digits.startsWith(option.dial.slice(1)))
+            if (country) setPais(country)
+            else if (digits) setPais({ code: "OTHER", flag: "🌐", dial: "+", name: "Internacional" })
+            const localDigits = country ? digits.slice(country.dial.length - 1) : digits
+            setTelefono(value => bookingToken ? localDigits : value || localDigits)
+            setCuentaConDatosCompletos(String(profile.nombre_persona || "").trim().length >= 2
+                && EMAIL_REGEX.test(String(profile.email || "").trim()) && validInternationalPhone(digits))
+        }).catch(() => {}).finally(() => {
+            if (!controller.signal.aborted) setLoadingCuenta(false)
+        })
+        return () => controller.abort()
+    }, [api, bookingAuthorization, bookingToken]);
     const browsePreselect=React.useRef(false)
     React.useEffect(()=>{
         if (browsePreselect.current || !servicios.length || !bookingServiceId) return
@@ -961,13 +992,13 @@ export default function BookingFlow(props: any) {
         const controller=new AbortController()
         setOfferLoading(true);setOfferError("")
         const params=new URLSearchParams({slug,servicio_id:bookingServiceId,equipo_id:bookingQuery.get("equipo_id")||"",fecha:bookingQuery.get("fecha")||"",hora:bookingQuery.get("hora")||""})
-        fetch(api+"/browse/ofertas/"+encodeURIComponent(browseOfferId)+"/cotizacion?"+params,{signal:controller.signal,cache:"no-store",headers:consumerHeaders()})
+        fetch(api+"/browse/ofertas/"+encodeURIComponent(browseOfferId)+"/cotizacion?"+params,{signal:controller.signal,cache:"no-store",headers:bookingHeaders()})
           .then(async r=>{const data=await r.json();if(!r.ok||!data.success)throw new Error(data.error||"Esta oferta ya no está disponible.");return data.oferta})
           .then(quote=>{if(controller.signal.aborted)return;setOfferQuote(quote);setEquipoId(quote.equipo_id);setFecha(quote.fecha);setHora(quote.hora)})
           .catch(error=>{if(!controller.signal.aborted)setOfferError(error.message)})
           .finally(()=>{if(!controller.signal.aborted)setOfferLoading(false)})
         return()=>controller.abort()
-    },[api,slug,browseOfferId,bookingServiceId,bookingQuery])
+    },[api,slug,browseOfferId,bookingServiceId,bookingQuery,bookingAuthorization])
     const paisBtnRef = React.useRef<HTMLButtonElement>(null)
 
     const [nota, setNota] = React.useState("")
@@ -1978,7 +2009,7 @@ export default function BookingFlow(props: any) {
                 const endpoint = paid ? "/api/create-group-preference" : "/turnos/reservar-grupo"
                 const response = await fetch(api + endpoint, {
                     method: "POST",
-                    headers: {"Content-Type":"application/json", ...consumerHeaders()},
+                    headers: {"Content-Type":"application/json", ...bookingHeaders()},
                     body: JSON.stringify({slug,nombre:nombre.trim(),apellido:apellido.trim(),
                         telefono:`${pais.dial}${telefonoDigits}`,email:email.trim(),
                         reservas:basket.map(item => ({servicio_id:item.servicio_id,equipo_id:item.equipo_id,
@@ -2011,7 +2042,7 @@ export default function BookingFlow(props: any) {
         try {
             if (browseOfferId) {
                 if (!offerQuote) throw new Error("La oferta ya no está disponible.")
-                const res=await fetch(api+"/browse/ofertas/"+encodeURIComponent(browseOfferId)+"/checkout",{method:"POST",headers:{"Content-Type":"application/json",...consumerHeaders()},body:JSON.stringify({slug,servicio_id:servicioId,equipo_id:equipoIdParaEnviar,fecha,hora,precio:offerQuote.precio,nombre:nombreTrim,apellido:apellidoTrim,telefono:telefonoCompleto,email:emailTrim})})
+                const res=await fetch(api+"/browse/ofertas/"+encodeURIComponent(browseOfferId)+"/checkout",{method:"POST",headers:{"Content-Type":"application/json",...bookingHeaders()},body:JSON.stringify({slug,servicio_id:servicioId,equipo_id:equipoIdParaEnviar,fecha,hora,precio:offerQuote.precio,nombre:nombreTrim,apellido:apellidoTrim,telefono:telefonoCompleto,email:emailTrim})})
                 const data=await res.json()
                 if(!res.ok){if(data.redirect_url==="/error"){window.location.assign(ERROR_URL);return}if(data.oferta)setOfferQuote(data.oferta);if(typeof data.agenda_url==="string" && data.agenda_url.startsWith("/agenda/"))setRecoveryUrl(data.agenda_url);throw new Error(data.error||"No pudimos iniciar el pago.")}
                 if(data.payment_url){window.location.assign(data.payment_url);return}
@@ -2030,7 +2061,7 @@ export default function BookingFlow(props: any) {
                 }
                 const res = await fetch(`${api}/turnos/reservar`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", ...consumerHeaders() },
+                    headers: { "Content-Type": "application/json", ...bookingHeaders() },
                     body: JSON.stringify({
                         name: nombreTrim,
                         apellido: apellidoTrim,
@@ -2069,7 +2100,7 @@ export default function BookingFlow(props: any) {
             if (metodo === "mercadopago" || metodo === "tarjeta") {
                 const res = await fetch(`${api}/api/create-preference`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", ...consumerHeaders() },
+                    headers: { "Content-Type": "application/json", ...bookingHeaders() },
                     body: JSON.stringify({
                         card_checkout: metodo === "tarjeta",
                         nombre: nombreTrim,
@@ -2139,7 +2170,7 @@ export default function BookingFlow(props: any) {
             }
             const res = await fetch(`${api}/turnos/reservar-manual`, {
                 method: "POST",
-                headers: consumerHeaders(),
+                headers: bookingHeaders(),
                 body: form,
             })
             const data = await res.json().catch(() => ({}))
@@ -2653,6 +2684,21 @@ export default function BookingFlow(props: any) {
                                         }}
                                     >
                                         {stepIndex > 0 && <BackLink onClick={volverPaso} />}
+
+                                        {(!bookingAuthorization || bookingToken) && (
+                                            <BookingLogin api={api} onSession={token => {
+                                                setLoadingCuenta(Boolean(token))
+                                                setCuentaConDatosCompletos(false)
+                                                setBookingToken(token)
+                                                if (!token) {
+                                                    setNombre("")
+                                                    setApellido("")
+                                                    setEmail("")
+                                                    setTelefono("")
+                                                    setPais(PAISES[0])
+                                                }
+                                            }} />
+                                        )}
 
                                         {loadingCuenta ? <Skeleton/> : cuentaConDatosCompletos && !personalKey ? <div aria-label="Datos de tu cuenta" style={{fontSize:14,color:"var(--bf-text-muted)"}}>Reservás como <strong style={{color:"var(--bf-text)"}}>{nombre} {apellido}</strong></div> : <div style={{ minWidth: 0 }}>
                                             <SectionLabel

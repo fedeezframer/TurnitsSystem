@@ -1,3 +1,4 @@
+import BookingLogin from "../components/BookingLogin"
 import * as React from "react"
 import { Link, useParams } from "react-router"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
@@ -388,6 +389,10 @@ export default function BusinessLanding() {
           <button className="bl-share" type="button" onClick={sharePage}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7.5 7.5M12 3l4.5 4.5M5 13.5v5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-5" /></svg>Compartir página</button>
           {shareStatus && <span className="bl-share-status" role="status">{shareStatus}</span>}
         </section>
+
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+          <BookingLogin api={appConfig.apiUrl} />
+        </div>
 
         <nav className="bl-nav" aria-label="Explorar este negocio">
           {services.length > 0 && <a href="#bl-services">Servicios</a>}
