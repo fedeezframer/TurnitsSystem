@@ -116,7 +116,9 @@ export function createConsumerAccounts({
       return mail({ action: "verificarCodigo", email, nombre: name, codigo, expiraEnMinutos: 10 }, true);
     }
 
-    const instructions = "El código vence en 10 minutos. No lo compartas. Si no lo solicitaste, ignorá este correo.";
+    const expiration = "El código vence en 10 minutos.";
+    const warning = "No compartas este código. Si no lo solicitaste, ignorá este correo.";
+    const font = "'Inter Display', Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif";
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -125,16 +127,75 @@ export function createConsumerAccounts({
         "Idempotency-Key": `booking-code/${challenge}`,
       },
       body: JSON.stringify({
-        from: "Turnits <codigos@notificaciones.turnits.com>",
+        from: "Turnits <team@notificaciones.turnits.com>",
         to: [email],
         subject: "Tu código de acceso a Turnits",
-        text: `Tu código de acceso a Turnits es ${codigo}.\n\n${instructions}`,
-        html: `<div lang="es" style="font:16px Arial,sans-serif;color:#202620">
-          <img src="https://turnits.com/assets/browse/LogoTurnitsCompletoB.png" width="120" alt="Turnits">
-          <h1 style="font-size:22px">Tu código de acceso</h1>
-          <p style="color:#1b6b1a;font-size:32px;font-weight:bold;letter-spacing:6px">${codigo}</p>
-          <p>${instructions}</p>
-        </div>`,
+        text: `Tu código de acceso a Turnits es ${codigo}.\n\n${expiration} ${warning}`,
+        html: `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tu código de acceso a Turnits</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F0F0F0;font-family:${font};color:#0D0D0D">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F0F0F0">
+    <tr>
+      <td align="center" style="padding:36px 16px">
+        <table role="presentation" width="520" cellpadding="0" cellspacing="0" bgcolor="#FFFFFF"
+               style="width:100%;max-width:520px;border:1px solid #E4E4E4;border-radius:12px;overflow:hidden">
+          <tr>
+            <td align="center" style="padding:28px 24px 22px;border-bottom:1px solid #E4E4E4">
+              <img src="https://turnits.com/assets/browse/LogoTurnitsCompletoB.png" width="120" alt="Turnits"
+                   style="display:block;width:120px;max-width:100%;height:auto;border:0">
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 24px;font-family:${font}">
+              <p style="margin:0 0 8px;color:#1B6B1A;font-size:10px;font-weight:700;letter-spacing:2px">
+                VERIFICACIÓN
+              </p>
+              <h1 style="margin:0 0 22px;color:#0D0D0D;font-size:22px;line-height:1.25">
+                Tu código de acceso
+              </h1>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" bgcolor="#1B6B1A" style="padding:28px 12px;border-radius:12px">
+                    <p style="margin:0 0 12px;color:#D9E9D9;font-size:10px;font-weight:600;letter-spacing:2px">
+                      CÓDIGO DE VERIFICACIÓN
+                    </p>
+                    <p style="margin:0;color:#FFFFFF;font-size:42px;font-weight:800;letter-spacing:8px;line-height:1.15">
+                      ${codigo}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:20px 0 16px;color:#6B7280;font-size:12px;text-align:center">
+                Vence en <strong style="color:#0D0D0D">10 minutos</strong>.
+              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td bgcolor="#FFFBEB" style="border:1px solid #FDE68A;border-radius:8px;padding:14px 18px;color:#92400E;font-size:12px;line-height:1.6">
+                    ${warning}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" bgcolor="#F7F7F7" style="padding:22px 24px;border-top:1px solid #E4E4E4;font-family:${font}">
+              <p style="margin:0 0 6px;color:#6B7280;font-size:12px;line-height:1.7">
+                ¿Tenés dudas? Llamanos al <a href="tel:+5493513087324" style="color:#1B6B1A;font-weight:600;text-decoration:none">+54 9 3513 08-7324</a>
+              </p>
+              <p style="margin:0;color:#6B7280;font-size:11px">© ${new Date().getFullYear()} Turnits</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
       }),
       signal: AbortSignal.timeout(20000),
     });
