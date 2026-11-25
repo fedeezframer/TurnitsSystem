@@ -110,16 +110,19 @@ export function createConsumerAccounts({
     try {
       if (!secret || !mailUrl) throw new Error("Missing booking login configuration");
       const challenge = crypto.randomUUID();
-      const consumer = await findByEmail(email);
-      if (consumer?.activo === true && consumer.email_verificado === true) {
+      const signup = req.body?.registro === true;
+      const consumer = signup ? null : await findByEmail(email);
+      if (signup || (consumer?.activo === true && consumer.email_verificado === true)) {
         const codigo = crypto.randomInt(100000, 1000000).toString();
-        const issued = check(await supabase.rpc("issue_consumer_booking_code", {
-          p_consumer: consumer.id,
-          p_challenge: challenge,
-          p_hash: bookingCodeHash(consumer.id, challenge, codigo),
-        }));
+        const issued = signup
+          ? check(await supabase.rpc("issue_booking_consumer_signup", {
+            p_email: email, p_challenge: challenge, p_hash: bookingCodeHash(`signup:${email}`, challenge, codigo),
+          }))
+          : check(await supabase.rpc("issue_consumer_booking_code", {
+            p_consumer: consumer.id, p_challenge: challenge, p_hash: bookingCodeHash(consumer.id, challenge, codigo),
+          }));
         if (issued) {
-          await mail({ action: "verificarCodigo", email, nombre: consumer.nombre_persona, codigo })
+          await mail({ action: "verificarCodigo", email, nombre: consumer?.nombre_persona || "cliente", codigo })
             .catch(() => console.error("Booking login email unavailable"));
         }
       }
@@ -138,15 +141,27 @@ export function createConsumerAccounts({
         || typeof codigo !== "string" || !/^\d{6}$/.test(codigo)) return invalid();
 
     try {
-      const consumer = await findByEmail(email);
-      if (consumer?.activo !== true || consumer.email_verificado !== true) return invalid();
-      const verified = check(await supabase.rpc("consume_consumer_booking_code", {
-        p_consumer: consumer.id,
-        p_challenge: challenge,
-        p_hash: bookingCodeHash(consumer.id, challenge, codigo),
-      }));
-      if (!verified) return invalid();
-      const current = await findById(consumer.id);
+      let consumerId;
+      if (req.body?.registro === true) {
+        consumerId = check(await supabase.rpc("complete_booking_consumer_signup", {
+          p_email: email,
+          p_challenge: challenge,
+          p_hash: bookingCodeHash(`signup:${email}`, challenge, codigo),
+          // Conserva el contrato de cuentas existentes sin una contraseña conocida.
+          p_password_hash: await bcrypt.hash(crypto.randomBytes(32).toString("hex"), rounds),
+        }));
+      } else {
+        const consumer = await findByEmail(email);
+        if (consumer?.activo !== true || consumer.email_verificado !== true) return invalid();
+        const verified = check(await supabase.rpc("consume_consumer_booking_code", {
+          p_consumer: consumer.id,
+          p_challenge: challenge,
+          p_hash: bookingCodeHash(consumer.id, challenge, codigo),
+        }));
+        if (verified) consumerId = consumer.id;
+      }
+      if (!consumerId) return invalid();
+      const current = await findById(consumerId);
       if (current?.activo !== true || current.email_verificado !== true || current.email !== email) return invalid();
       return res.json(session(current));
     } catch (error) {
