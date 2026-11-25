@@ -51,7 +51,7 @@ function formFromPlan(plan: Plan): Form {
 }
 const sections = [["Servicios", "servicios", "servicio_ids"], ["Productos", "productos", "producto_ids"]] as const
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" })
-const filters = [{ id: "todos", label: "Todos" }, { id: "publicadas", label: "Publicadas" }, { id: "borradores", label: "Sin publicar" }] as const
+const filters = [{ id: "todos", label: "Todos" }, { id: "publicadas", label: "Activas" }, { id: "borradores", label: "Pausadas" }] as const
 const orders = [{ id: "recientes", label: "Recientes" }, { id: "az", label: "A–Z" }, { id: "precio", label: "Precio" }] as const
 const fieldTitle = (icon: string, text: string) =>
     <span className="catalog-field-title"><ServiciosManager_FieldIcon name={icon} size={16} color="#566257" />{text}</span>
@@ -192,6 +192,28 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
             setCatalog(current => current && { ...current, membresias: current.membresias.map(item => item.id === plan.id ? membresia : item) })
         } catch (err) {
             setError(err instanceof Error ? err.message : "No pudimos cambiar el estado de la suscripción.")
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    const remove = async (plan: Plan) => {
+        const manager = TurnitsGlobalSaveManager_get()
+        if (manager?.isSaving() || !window.confirm(`¿Eliminar la suscripción «${plan.nombre}»?`)) return
+        setMenuId(null)
+        setBusy(true)
+        setError("")
+        try {
+            await request(`/${plan.id}`, { method: "DELETE" })
+            setCatalog(current => current && { ...current, membresias: current.membresias.filter(item => item.id !== plan.id) })
+            const pending: Record<string, SubscriptionDraft> = { ...manager?.getPending("suscripciones") }
+            if (pending[plan.id]) {
+                delete pending[plan.id]
+                if (Object.keys(pending).length) manager?.markDirty("suscripciones", pending)
+                else manager?.clear("suscripciones")
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "No pudimos eliminar la suscripción.")
         } finally {
             setBusy(false)
         }
@@ -354,14 +376,15 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
                                     </ul>
                                 </div>)}
                         </div>
-                        <span className="promo-status" data-active={plan.publicado}>● {plan.publicado ? "Publicada" : "Sin publicar"}</span>
+                        <span className="promo-status" data-active={plan.publicado}>● {plan.publicado ? "Activa" : "Pausada"}</span>
                         <div className="promo-actions" style={{ flexWrap: "wrap" }}>
                             <button type="button" className="svc-edit-button" disabled={locked} onClick={() => open(plan)}>Editar</button>
                             <button type="button" className="promo-menu-trigger" ref={menuId === plan.id ? anchor : undefined}
                                 aria-label={`Opciones de ${plan.nombre}`} aria-expanded={menuId === plan.id} disabled={locked}
                                 onClick={() => setMenuId(menuId === plan.id ? null : plan.id)}>•••</button>
                             {menuId === plan.id && <ServiciosManager_RowMenu anchor={anchor}>
-                                <button type="button" disabled={locked} onClick={() => void changeStatus(plan)}>{plan.publicado ? "Despublicar" : "Publicar"}</button>
+                                <button type="button" disabled={locked} onClick={() => void changeStatus(plan)}>{plan.publicado ? "Pausar" : "Activar"}</button>
+                                <button type="button" className="is-danger" disabled={locked} onClick={() => void remove(plan)}>Eliminar</button>
                             </ServiciosManager_RowMenu>}
                         </div>
                     </div>
