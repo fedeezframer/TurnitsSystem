@@ -90,7 +90,7 @@ export function createConsumerAccounts({
       }),
     };
   }
-  async function mail(body) {
+  async function mail(body, confirmDeliveryRequest = false) {
     if (!mailUrl || !secret) throw new Error("Missing mail configuration");
     const response = await fetch(mailUrl, {
       method: "POST",
@@ -98,7 +98,17 @@ export function createConsumerAccounts({
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(20000),
     });
-    if (!response.ok) throw new Error("Mail unavailable");
+    if (!response.ok) {
+      throw Object.assign(new Error("Mail unavailable"), { code: `mail_http_${response.status}` });
+    }
+    if (confirmDeliveryRequest) {
+      const outcome = await response.json().catch(() => null);
+      if (outcome?.status !== "success") {
+        const knownErrors = ["mail_quota_or_limit", "mail_send_failed", "invalid_recipient", "invalid_code"];
+        const code = knownErrors.includes(outcome?.message) ? outcome.message : "mail_response_unconfirmed";
+        throw Object.assign(new Error("Mail unavailable"), { code });
+      }
+    }
   }
   const bookingCodeHash = (id, challenge, code) =>
     crypto.createHmac("sha256", secret).update(`booking:${id}:${challenge}:${code}`).digest("hex");
@@ -138,7 +148,15 @@ export function createConsumerAccounts({
       if (!issued) {
         return res.status(429).json({ success: false, error: "Esperá un minuto antes de pedir otro código." });
       }
-      await mail({ action: "verificarCodigo", email, nombre: consumer?.nombre_persona || "cliente", codigo });
+      try {
+        await mail({ action: "verificarCodigo", email, nombre: consumer?.nombre_persona || "cliente", codigo, expiraEnMinutos: 10 }, true);
+      } catch (error) {
+        console.error("Booking verification mail failed:", error.code || error.name || "unknown");
+        return res.status(503).json({
+          success: false,
+          error: "No pudimos enviar el código. Esperá un minuto y volvé a intentar.",
+        });
+      }
       return res.json({ success: true, challenge });
     } catch (error) {
       return fail(res, error);
