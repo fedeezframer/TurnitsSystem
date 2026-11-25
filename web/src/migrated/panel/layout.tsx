@@ -1,4 +1,3 @@
-import { SuscripcionesPanel } from "./suscripciones"
 import { seccionesPagos, type VistaPagos } from "./secciones-pagos"
 import { useCatalogTransition } from "./catalog-motion"
 import { BackButton } from "../../components/BackButton"
@@ -36,6 +35,7 @@ const Consultations = React.lazy(() => import("../../pages/Consultations"))
 const SetupGuide = React.lazy(() => import("../../components/SetupGuide"))
 const OnboardingNube = React.lazy(() => import("./onboarding").then(module => ({ default: module.OnboardingNube })))
 const BrowseBusiness = React.lazy(() => import("./browse-config"))
+const SuscripcionesPanel = React.lazy(() => import("./suscripciones").then(module => ({ default: module.SuscripcionesPanel })))
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
 
@@ -777,7 +777,7 @@ function TurnitsPanel_Inner(props: any) {
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
-                        {serviciosVistaInicial === "suscripciones" && !branchAdmin ? <SuscripcionesPanel api={baseUrl} accentColor={accentColor} /> : serviciosVistaInicial === "offers" ? <React.Suspense fallback={<LoadingRunner card />}><BrowseBusiness api={baseUrl} view="offers" editIcon={iconos.editar} /></React.Suspense> : React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
+                        {serviciosVistaInicial === "suscripciones" && !branchAdmin ? <React.Suspense fallback={<LoadingRunner card />}><SuscripcionesPanel api={baseUrl} accentColor={accentColor} /></React.Suspense> : serviciosVistaInicial === "offers" ? <React.Suspense fallback={<LoadingRunner card />}><BrowseBusiness api={baseUrl} view="offers" editIcon={iconos.editar} /></React.Suspense> : React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
                             baseUrl,
                             accentColor,
                             iconoPlaceholderUrl: iconos.servicioPlaceholder,

@@ -39,6 +39,8 @@ interface Membership {
   descripcion: string
   precio_mensual: number
   servicios: string[]
+  servicios_incluidos?: { nombre: string; cantidad: number }[]
+  imagen_url?: string | null
   productos: string[]
 }
 interface Promo {
@@ -477,17 +479,26 @@ export default function BusinessLanding() {
         {memberships.length > 0 && <section id="bl-memberships" className="bl-section">
           <div className="bl-section-heading"><h2>Suscripciones</h2></div>
           <div className="bl-promo-grid">
-            {memberships.map(plan => <article key={plan.id} style={{ border: "1px solid #dfe4df", background: "#fff", borderRadius: 16, padding: 16, minWidth: 0, overflowWrap: "anywhere" }}>
-              <h3 style={{ margin: "0 0 8px" }}>{plan.nombre}</h3>
-              <strong>{money(plan.precio_mensual)} / mes</strong>
-              {plan.descripcion && <p>{plan.descripcion}</p>}
-              {([["Servicios", plan.servicios], ["Productos", plan.productos]] as const).map(([label, items]) =>
-                items.length > 0 && <div key={label} style={{ marginTop: 12 }}>
-                  <strong>{label}</strong>
-                  <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{items.map((item, index) => <li key={index}>{item}</li>)}</ul>
+            {memberships.map(plan => {
+              const included = plan.servicios_incluidos || plan.servicios.map(nombre => ({ nombre, cantidad: 1 }))
+              const total = included.reduce((sum, service) => sum + service.cantidad, 0)
+              return <article key={plan.id} className="bl-promo">
+                {plan.imagen_url && <div className="bl-promo-img"><img src={plan.imagen_url} alt="" loading="lazy" /></div>}
+                <div className="bl-promo-body" style={{ overflowWrap: "anywhere" }}>
+                  <strong>{plan.nombre}</strong>
+                  <div className="bl-promo-price"><b>{money(plan.precio_mensual)}</b><span>/ mes</span></div>
+                  {plan.descripcion && <p style={{ margin: 0 }}>{plan.descripcion}</p>}
+                  {total > 0 && <div>
+                    <b>{total} {total === 1 ? "servicio" : "servicios"} al mes</b>
+                    <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{included.map(({ nombre, cantidad }, index) => <li key={index}>{cantidad} × {nombre}</li>)}</ul>
+                  </div>}
+                  {plan.productos.length > 0 && <div>
+                    <b>Productos</b>
+                    <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{plan.productos.map((name, index) => <li key={index}>{name}</li>)}</ul>
+                  </div>}
                 </div>
-              )}
-            </article>)}
+              </article>
+            })}
           </div>
         </section>}
         {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><div className="bl-section-heading"><div><h2>Más para vos, por menos</h2><p>Combos y beneficios para tu próxima visita.</p></div></div><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
