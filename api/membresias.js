@@ -1,5 +1,5 @@
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-const FIELDS = "id,nombre,descripcion,precio_mensual,servicio_ids,producto_ids,publicado,imagen_url,cantidades_servicios,profesional_ids";
+const FIELDS = "id,nombre,descripcion,precio_mensual,servicio_ids,producto_ids,publicado,imagen_url,cantidades_servicios,cantidades_productos,profesional_ids";
 const CATALOGS = [["servicios", "servicio_ids"], ["extras", "producto_ids"]];
 
 function parseUrl(value) {
@@ -57,12 +57,14 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
 
   const save = handle(async (req, res, slug) => {
     const { id } = req.params;
-    const { nombre, descripcion, precio_mensual, servicio_ids, producto_ids, publicado, imagen_url, cantidades_servicios, profesional_ids } = req.body || {};
+    const { nombre, descripcion, precio_mensual, servicio_ids, producto_ids, publicado, imagen_url, cantidades_servicios, cantidades_productos, profesional_ids, id_creacion } = req.body || {};
     const validIds = ids => Array.isArray(ids) && ids.length <= 100 &&
       ids.every(value => typeof value === "string" && UUID.test(value)) &&
       new Set(ids.map(value => value.toLowerCase())).size === ids.length;
     if ((id && !UUID.test(id)) || typeof nombre !== "string" || !nombre.trim() || nombre.trim().length > 100 ||
-        typeof descripcion !== "string" || descripcion.length > 600 || typeof publicado !== "boolean" ||
+        typeof descripcion !== "string" || descripcion.length > 600 ||
+        ((!id || publicado !== undefined) && typeof publicado !== "boolean") ||
+        (id_creacion !== undefined && (id || typeof id_creacion !== "string" || !UUID.test(id_creacion))) ||
         typeof precio_mensual !== "number" || !/^\d{1,10}(?:\.\d{1,2})?$/.test(String(precio_mensual)) || precio_mensual <= 0 ||
         !validIds(servicio_ids) || !validIds(producto_ids) || servicio_ids.length + producto_ids.length > 100 ||
         servicio_ids.length + producto_ids.length === 0) {
@@ -70,7 +72,8 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
     }
 
     const payload = {
-      nombre: nombre.trim(), descripcion: descripcion.trim(), precio_mensual, publicado,
+      nombre: nombre.trim(), descripcion: descripcion.trim(), precio_mensual,
+      ...(publicado === undefined ? {} : { publicado }),
       servicio_ids: servicio_ids.map(value => value.toLowerCase()),
       producto_ids: producto_ids.map(value => value.toLowerCase()),
     };
@@ -88,14 +91,18 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
       }
     }
 
-    if (cantidades_servicios !== undefined) {
-      const selection = new Set(payload.servicio_ids);
-      if (!cantidades_servicios || typeof cantidades_servicios !== "object" || Array.isArray(cantidades_servicios) ||
-          Object.entries(cantidades_servicios).some(([key, amount]) =>
+    for (const [field, amounts, ids] of [
+      ["cantidades_servicios", cantidades_servicios, payload.servicio_ids],
+      ["cantidades_productos", cantidades_productos, payload.producto_ids],
+    ]) {
+      if (amounts === undefined) continue;
+      const selection = new Set(ids);
+      if (!amounts || typeof amounts !== "object" || Array.isArray(amounts) ||
+          Object.entries(amounts).some(([key, amount]) =>
             !selection.has(key) || !Number.isInteger(amount) || amount < 1 || amount > 99)) {
-        return res.status(400).json({ success: false, error: "Cada servicio debe incluir entre 1 y 99 usos al mes." });
+        return res.status(400).json({ success: false, error: "Cada servicio o producto debe incluir entre 1 y 99 unidades." });
       }
-      payload.cantidades_servicios = cantidades_servicios;
+      payload[field] = amounts;
     }
 
     if (profesional_ids !== undefined && !validIds(profesional_ids)) {
@@ -116,8 +123,14 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
     }
 
     const table = supabase.from("membresias");
-    const query = id ? table.update(payload).eq("slug", slug).eq("id", id) : table.insert({ ...payload, slug });
-    const { data, error } = await query.select(FIELDS).maybeSingle();
+    const query = id ? table.update(payload).eq("slug", slug).eq("id", id)
+      : table.insert({ ...payload, slug, ...(id_creacion ? { id: id_creacion } : {}) });
+    let { data, error } = await query.select(FIELDS).maybeSingle();
+    if (error?.code === "23505" && id_creacion) {
+      // Reintentar un alta del guardado global conserva el mismo ID.
+      ({ data, error } = await supabase.from("membresias").update(payload)
+        .eq("slug", slug).eq("id", id_creacion).select(FIELDS).maybeSingle());
+    }
     if (error) throw error;
     if (!data) return res.status(404).json({ success: false, error: "Suscripción no encontrada." });
     res.status(id ? 200 : 201).json({ success: true, membresia: data });
@@ -151,18 +164,23 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
       return res.json({ success: true, membresias: [] });
     }
 
-    const membresias = plans.flatMap(({ id, nombre, descripcion, precio_mensual, imagen_url, cantidades_servicios, ...plan }) => {
+    const membresias = plans.flatMap(({ id, nombre, descripcion, precio_mensual, imagen_url, cantidades_servicios, cantidades_productos, ...plan }) => {
       const [servicios, productos] = CATALOGS.map(([, field], index) => plan[field].map(key => maps[index].get(key)));
       if ([...servicios, ...productos].some(item => !item?.activo)) return [];
       const servicios_incluidos = servicios.map(item => ({
         nombre: item.nombre, cantidad: cantidades_servicios[item.id] ?? 1,
       }));
       const precio_original = servicios.reduce((sum, item) => sum + (Number(item.precio) || 0) * (cantidades_servicios[item.id] ?? 1), 0) +
-        productos.reduce((sum, item) => sum + (Number(item.precio) || 0), 0);
+        productos.reduce((sum, item) => sum + (Number(item.precio) || 0) * (cantidades_productos[item.id] ?? 1), 0);
+      const productos_incluidos = productos.map(item => ({
+        nombre: item.nombre, cantidad: cantidades_productos[item.id] ?? 1,
+      }));
+      const portada = [...servicios].sort((a, b) => (cantidades_servicios[b.id] ?? 1) - (cantidades_servicios[a.id] ?? 1))
+        .map(item => item.imagen_url || item.descripcion?.match(/^\[img:(.*?)\]/s)?.[1]?.trim()).find(Boolean);
       const profesionales = team.filter(person => plan.profesional_ids.includes(person.id) && offersAll(maps[0], plan.servicio_ids, person.id))
         .map(({ nombre, apellido }) => [nombre, apellido].filter(Boolean).join(" "));
       return [{
-        id, nombre, descripcion, precio_mensual, precio_original, imagen_url, servicios_incluidos, profesionales,
+        id, nombre, descripcion, precio_mensual, precio_original, imagen_url: imagen_url || portada || null, servicios_incluidos, productos_incluidos, profesionales,
         servicios: servicios.map(item => item.nombre), productos: productos.map(item => item.nombre),
       }];
     });
