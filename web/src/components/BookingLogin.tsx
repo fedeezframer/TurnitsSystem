@@ -82,6 +82,10 @@ export default function BookingLogin({ api, onSession, accent }: {
         if (!open || signup || challenge) return
         const request = new AbortController()
         let observer: ResizeObserver | undefined
+        const referrer = document.querySelector<HTMLMetaElement>('meta[name="referrer"]')
+        const previousReferrer = referrer?.content
+        // Google validates the embedding site from the iframe's Referer header.
+        if (referrer) referrer.content = "strict-origin"
         setGoogleError("")
         setGoogleReady(false)
         const started = Date.now()
@@ -136,9 +140,11 @@ export default function BookingLogin({ api, onSession, accent }: {
                     }
                 },
             })
+            let renderedWidth = 0
             observer = new ResizeObserver(() => {
                 const width = Math.min(360, Math.floor(host.clientWidth))
-                if (request.signal.aborted || width < 200) return
+                if (request.signal.aborted || width < 200 || width === renderedWidth) return
+                renderedWidth = width
                 host.replaceChildren()
                 identity.renderButton(host, { type: "standard", theme: "outline", size: "large", text: "signin_with", width, locale: "es" })
             })
@@ -147,7 +153,12 @@ export default function BookingLogin({ api, onSession, accent }: {
         setup().catch(() => {
             if (!request.signal.aborted) setGoogleError("Google no está disponible en este momento.")
         })
-        return () => { request.abort(); observer?.disconnect(); window.clearInterval(readiness) }
+        return () => {
+            request.abort()
+            observer?.disconnect()
+            window.clearInterval(readiness)
+            if (referrer && previousReferrer !== undefined) referrer.content = previousReferrer
+        }
     }, [api, open, signup, challenge])
 
     function close() {
@@ -298,7 +309,7 @@ export default function BookingLogin({ api, onSession, accent }: {
                             <p style={{ margin: "8px 0 0", color: "#555" }}>Con tu cuenta de Turnits podés acceder a una experiencia personalizada según tus gustos.</p>
                             <p style={{ margin: 0, color: "#555" }}>Al continuar, aceptás los <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: actionColor }}>Términos y Condiciones</a> y la <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: actionColor }}>Política de Privacidad</a>.</p>
                         </> : <>
-                            {open && <div style={{ display: "grid", marginTop: 8 }}>
+                            {open && <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", marginTop: 8 }}>
                                 <div ref={googleHost} style={{ gridArea: "1 / 1", minHeight: 40, opacity: googleReady ? 1 : 0 }} aria-hidden={!googleReady} />
                                 {!googleReady && <button type="button" disabled style={{ ...button, gridArea: "1 / 1", minHeight: 40, padding: "6px 12px", cursor: "default", background: "#fff", zIndex: 1 }}>
                                     {googleError ? "Google no disponible" : "Cargando Google…"}
