@@ -148,6 +148,14 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
     res.json({ success: true, membresia: data });
   }));
 
+  app.delete(path + "/:id", requireAuth, ownerOnly, handle(async (req, res, slug) => {
+    const { id } = req.params;
+    if (!UUID.test(id)) return res.status(400).json({ success: false, error: "Suscripción inválida." });
+    const { error } = await supabase.from("membresias").delete().eq("slug", slug).eq("id", id);
+    if (error) throw error;
+    res.json({ success: true });
+  }));
+
   app.get("/membresias/:slug", handle(async (req, res, slug) => {
     const { data: plans, error } = await supabase.from("membresias").select(FIELDS)
       .eq("slug", slug).eq("publicado", true).order("created_at", { ascending: false });
