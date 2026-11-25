@@ -48,6 +48,7 @@ export default function BookingLogin({ api, onSession, accent }: {
     const [accountName, setAccountName] = React.useState("")
     const [signedIn, setSignedIn] = React.useState(false)
     const [signup, setSignup] = React.useState(false)
+    const [registrationRetry, setRegistrationRetry] = React.useState(false)
     const dialog = React.useRef<HTMLDialogElement>(null)
     const titleId = React.useId()
     const googleHost = React.useRef<HTMLDivElement>(null)
@@ -155,6 +156,7 @@ export default function BookingLogin({ api, onSession, accent }: {
                             } catch (error) {
                                 if (request.signal.aborted) return
                                 setSignup(true)
+                                setRegistrationRetry(true)
                                 setError(error instanceof Error ? error.message : "No pudimos enviar el código. Volvé a intentar.")
                             }
                             return
@@ -193,6 +195,7 @@ export default function BookingLogin({ api, onSession, accent }: {
     function close() {
         setOpen(false)
         setSignup(false)
+        setRegistrationRetry(false)
         setEmail("")
         setChallenge("")
         setCode("")
@@ -229,10 +232,12 @@ export default function BookingLogin({ api, onSession, accent }: {
             if (challenge && typeof data.token === "string" && data.token) finish(data.token, data)
             else if (!challenge && typeof data.challenge === "string" && data.challenge) {
                 setSignup(register)
+                setRegistrationRetry(false)
                 setChallenge(data.challenge)
             } else throw new Error("No pudimos continuar. Probá de nuevo.")
         } catch (failure) {
             setSignup(register)
+            if (register && !signup) setRegistrationRetry(true)
             setError(failure instanceof Error ? failure.message : "No pudimos continuar. Probá de nuevo.")
         } finally {
             pending.current = false
@@ -307,13 +312,13 @@ export default function BookingLogin({ api, onSession, accent }: {
                     onClick={() => {
                         setError("")
                         if (challenge) { setChallenge(""); setCode("") }
-                        else if (signup) setSignup(false)
+                        else if (signup) { setSignup(false); setRegistrationRetry(false) }
                         else close()
                     }} />
                 <img src="/favicon-light.png" alt="" width={96} height={96} style={{ display: "block", margin: "0 auto 10px" }} />
-                <form key={challenge ? "code" : signup ? "signup" : "login"} className="booking-login-step" onSubmit={submit} style={{ display: "grid", gap: 15 }}>
+                <form key={challenge ? "code" : registrationRetry ? "retry" : signup ? "signup" : "login"} className="booking-login-step" onSubmit={submit} style={{ display: "grid", gap: 15 }}>
                     <h2 id={titleId} style={{ margin: 0, fontSize: 19, lineHeight: 1.25 }}>
-                        {challenge ? "Ingresá el código de verificación" : "Ingresá tu correo electrónico"}
+                        {challenge ? "Ingresá el código de verificación" : registrationRetry ? "Reintentá el envío del código" : "Ingresá tu correo electrónico"}
                     </h2>
                     {challenge ? <>
                         <p style={{ margin: 0, color: "#555", overflowWrap: "anywhere" }}>Te enviamos un código a <strong>{maskedEmail}</strong>{signup ? " para crear tu cuenta." : "."}</p>
@@ -328,6 +333,11 @@ export default function BookingLogin({ api, onSession, accent }: {
                             Al crear tu cuenta, aceptás los <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: actionColor }}>Términos y Condiciones</a> y la <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: actionColor }}>Política de Privacidad</a>.
                         </p>}
                         <button type="submit" disabled={busy} style={{ ...primaryButton, background: actionColor, color: "white", border: 0, borderRadius: 999 }}>{busy ? "Verificando…" : signup ? "Verificar y crear cuenta" : "Verificar código"}</button>
+                    </> : registrationRetry ? <>
+                        <p style={{ margin: 0, color: "#555", overflowWrap: "anywhere" }}>Correo para crear tu cuenta <strong>{maskedEmail}</strong></p>
+                        <button type="submit" disabled={busy} style={{ ...primaryButton, background: actionColor, color: "white", border: 0, borderRadius: 999 }}>
+                            {busy ? "Enviando…" : "Reintentar envío"}
+                        </button>
                     </> : <>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <input key="email" autoFocus aria-label="Correo electrónico" required type="email" autoComplete="email"
