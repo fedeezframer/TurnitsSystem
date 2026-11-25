@@ -38,6 +38,8 @@ interface Membership {
   nombre: string
   descripcion: string
   precio_mensual: number
+  precio_original?: number
+  profesionales?: string[]
   servicios: string[]
   servicios_incluidos?: { nombre: string; cantidad: number }[]
   imagen_url?: string | null
@@ -486,7 +488,8 @@ export default function BusinessLanding() {
                 {plan.imagen_url && <div className="bl-promo-img"><img src={plan.imagen_url} alt="" loading="lazy" /></div>}
                 <div className="bl-promo-body" style={{ overflowWrap: "anywhere" }}>
                   <strong>{plan.nombre}</strong>
-                  <div className="bl-promo-price"><b>{money(plan.precio_mensual)}</b><span>/ mes</span></div>
+                  <div className="bl-promo-price"><b>{money(plan.precio_mensual)}</b><span>/ mes</span>{Number(plan.precio_original) > plan.precio_mensual && <s>{money(plan.precio_original!)}</s>}</div>
+                  {!!plan.profesionales?.length && <p style={{ margin: 0 }}><b>Profesionales</b> · {plan.profesionales.join(", ")}</p>}
                   {plan.descripcion && <p style={{ margin: 0 }}>{plan.descripcion}</p>}
                   {total > 0 && <div>
                     <b>{total} {total === 1 ? "servicio" : "servicios"} al mes</b>

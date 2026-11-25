@@ -1,11 +1,14 @@
 import * as React from "react"
-import { MenuFooter_getSlug, MenuFooter_getToken } from "./common"
+import { MenuFooter_getSlug, MenuFooter_getToken, ServiciosManager_parseDesc } from "./common"
 import { BackButton } from "../../components/BackButton"
+import { PromotionDiscountArrow } from "./PromotionDiscountArrow"
 import { CatalogToolbar } from "./CatalogToolbar"
 import { ServiciosManager_FieldIcon, ServiciosManager_ImageUploader, ServiciosManager_SeccionIcon } from "./servicios"
 import "./promociones.css"
 
-type CatalogItem = { id: string; nombre: string; activo: boolean }
+type Professional = { id: string; nombre: string; apellido?: string; foto_url?: string; color?: string }
+type CatalogItem = { id: string; nombre: string; activo: boolean; precio?: number; descripcion?: string; imagen_url?: string; profesionales?: Professional[] }
+const professionalName = (person: Professional) => [person.nombre, person.apellido].filter(Boolean).join(" ")
 type Plan = {
     id: string
     nombre: string
@@ -15,14 +18,15 @@ type Plan = {
     producto_ids: string[]
     imagen_url: string | null
     cantidades_servicios: Record<string, number>
+    profesional_ids: string[]
     publicado: boolean
 }
-type Catalog = { servicios: CatalogItem[]; productos: CatalogItem[]; membresias: Plan[] }
+type Catalog = { servicios: CatalogItem[]; productos: CatalogItem[]; membresias: Plan[]; equipo?: Professional[] }
 type Form = Omit<Plan, "id" | "precio_mensual"> & { precio_mensual: string }
 type Selection = "servicio_ids" | "producto_ids"
 
 const emptyForm = (): Form => ({
-    nombre: "", descripcion: "", precio_mensual: "", servicio_ids: [], producto_ids: [], imagen_url: null, cantidades_servicios: {}, publicado: false,
+    nombre: "", descripcion: "", precio_mensual: "", servicio_ids: [], producto_ids: [], imagen_url: null, cantidades_servicios: {}, profesional_ids: [], publicado: false,
 })
 const sections = [["Servicios", "servicios", "servicio_ids"], ["Productos", "productos", "producto_ids"]] as const
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" })
@@ -81,7 +85,7 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
         setEditing(plan)
         setError("")
         setStatus("")
-        setForm(plan ? { ...plan, imagen_url: plan.imagen_url ?? null, cantidades_servicios: plan.cantidades_servicios ?? {}, precio_mensual: String(plan.precio_mensual) } : emptyForm())
+        setForm(plan ? { ...plan, imagen_url: plan.imagen_url ?? null, cantidades_servicios: plan.cantidades_servicios ?? {}, profesional_ids: plan.profesional_ids ?? [], precio_mensual: String(plan.precio_mensual) } : emptyForm())
     }
 
     const persist = async (message: string, suffix: string, method: string, body?: Omit<Plan, "id">) => {
@@ -108,6 +112,16 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
 
     if (!catalog) return error ? <div><p role="alert">{error}</p><button type="button" onClick={() => setRetry(value => value + 1)}>Reintentar</button></div> : <p role="status">Cargando suscripciones…</p>
 
+    const servicesById = new Map(catalog.servicios.map(item => [item.id, item]))
+    const productsById = new Map(catalog.productos.map(item => [item.id, item]))
+    const team = catalog.equipo ?? []
+    const canOffer = (personId: string, serviceIds: string[]) => serviceIds.every(id =>
+        servicesById.get(id)?.profesionales?.some(person => person.id === personId)
+    )
+    const originalPrice = (plan: Pick<Plan, "servicio_ids" | "producto_ids" | "cantidades_servicios">) =>
+        plan.servicio_ids.reduce((sum, id) => sum + (Number(servicesById.get(id)?.precio) || 0) * (plan.cantidades_servicios?.[id] ?? 1), 0) +
+        plan.producto_ids.reduce((sum, id) => sum + (Number(productsById.get(id)?.precio) || 0), 0)
+    const original = form ? originalPrice(form) : 0
     const names = (ids: string[], items: CatalogItem[]) => ids.map(id => items.find(item => item.id === id)?.nombre || "Elemento eliminado")
     const toggle = (key: Selection, id: string) =>
         setForm(current => current && {
@@ -147,6 +161,7 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
                     nombre: form.nombre, descripcion: form.descripcion, precio_mensual: Number(price),
                     servicio_ids: form.servicio_ids, producto_ids: form.producto_ids, publicado,
                     imagen_url: form.imagen_url,
+                    profesional_ids: form.profesional_ids.filter(id => team.some(person => person.id === id) && canOffer(id, form.servicio_ids)),
                     cantidades_servicios: Object.fromEntries(form.servicio_ids.map(id => [id, form.cantidades_servicios[id] ?? 1])),
                 })
             }}>
@@ -165,18 +180,47 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
                                 onChange={value => change("imagen_url", value || null)} onUploadingChange={setUploading}
                                 accentColor={accentColor} apiUrl={api} />
                         </div>
-                        <div className="promo-details">
+                        <div className="promo-details" style={{ alignContent: "start" }}>
                             <label>
                                 {fieldTitle("align-left", "Descripción")}
                                 <small className="catalog-hint">Contá cuáles son los beneficios y cómo se usan.</small>
                                 <textarea maxLength={600} placeholder="Ej. Incluye cuatro cortes al mes." value={form.descripcion} onChange={event => change("descripcion", event.target.value)} />
                             </label>
-                            <label>
-                                {fieldTitle("dollar", "Precio mensual (ARS)")}
-                                <span className="promo-money-input"><span aria-hidden="true">$</span>
-                                    <input required style={{ flex: 1, minWidth: 0, width: 0, border: 0, paddingInline: 0, outline: "none" }} inputMode="decimal" maxLength={13} placeholder="Ej. 25000" value={form.precio_mensual} onChange={event => change("precio_mensual", event.target.value)} />
-                                </span>
-                            </label>
+                            <div className="promo-prices">
+                                <div>
+                                    {fieldTitle("dollar", "Precio original")}
+                                    <small className="catalog-hint">Total por separado.</small>
+                                    <output aria-live="polite" style={{ overflowWrap: "anywhere" }}>{money.format(original)}</output>
+                                </div>
+                                <PromotionDiscountArrow original={original} final={Number(form.precio_mensual.trim().replace(",", "."))} />
+                                <label>
+                                    {fieldTitle("dollar", "Precio mensual")}
+                                    <span className="promo-money-input"><span aria-hidden="true">$</span>
+                                        <input required style={{ flex: 1, minWidth: 0, width: 0, border: 0, paddingInline: 0, outline: "none" }} inputMode="decimal" maxLength={13} placeholder="Ej. 25000" value={form.precio_mensual} onChange={event => change("precio_mensual", event.target.value)} />
+                                    </span>
+                                </label>
+                            </div>
+                            <div>
+                                {fieldTitle("user-check", "Profesionales que ofrecen la suscripción")}
+                                <small className="catalog-hint">Elegí quiénes pueden realizar todos los servicios incluidos.</small>
+                                {team.length ? <div className="promo-people" role="group" aria-label="Profesionales que ofrecen la suscripción">
+                                    {team.map(person => {
+                                        const name = professionalName(person)
+                                        const eligible = canOffer(person.id, form.servicio_ids)
+                                        const selected = eligible && form.profesional_ids.includes(person.id)
+                                        return <button key={person.id} type="button" aria-label={name} aria-pressed={selected} disabled={!eligible}
+                                            title={eligible ? name : `${name} no ofrece todos los servicios incluidos`}
+                                            style={{ background: person.color || "#704dad" }}
+                                            onClick={() => change("profesional_ids", selected ? form.profesional_ids.filter(id => id !== person.id) : [...form.profesional_ids, person.id])}>
+                                            {person.foto_url ? <img src={person.foto_url} alt="" /> : name.slice(0, 1)}
+                                            {selected && <small><img src="/assets/panel-nav/akar-icons_check.svg" alt="" width="12" height="12" /></small>}
+                                        </button>
+                                    })}
+                                </div> : <small className="catalog-hint">No hay profesionales activos.</small>}
+                                <div aria-live="polite" style={{ marginTop: 8, overflowWrap: "anywhere" }}>
+                                    {team.filter(person => form.profesional_ids.includes(person.id) && canOffer(person.id, form.servicio_ids)).map(professionalName).join(", ")}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     {sections.map(([label, items, key]) => {
@@ -188,14 +232,16 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
                             <h3 className="catalog-field-title"><ServiciosManager_SeccionIcon tipo={icon} size={16} />{label} incluidos</h3>
                             {isService && <output aria-live="polite" style={{ fontWeight: 700 }}>{countLabel(countServices(form))}</output>}
                             {!options.length && !missing.length && <p>No hay {label.toLowerCase()} activos en tu catálogo.</p>}
-                            {[...options, ...missing.map(id => ({ id, nombre: "Elemento eliminado", activo: false }))].map(item => {
+                            {[...options, ...missing.map(id => ({ id, nombre: "Elemento eliminado", activo: false } as CatalogItem))].map(item => {
+                                const { imagen, descripcion } = ServiciosManager_parseDesc(item.descripcion || "")
+                                const photo = item.imagen_url || imagen
                                 const selected = form[key].includes(item.id)
                                 const quantity = form.cantidades_servicios[item.id] ?? 1
                                 return <div className="promo-line" key={item.id} data-selected={selected}>
                                     <button className="promo-choice" type="button" aria-pressed={selected} onClick={() => toggle(key, item.id)}>
                                         <span className="promo-check">{selected && <img src="/assets/panel-nav/akar-icons_check.svg" alt="" width="12" height="12" />}</span>
-                                        <span className="promo-thumb"><ServiciosManager_SeccionIcon tipo={icon} /></span>
-                                        <span><strong>{item.nombre}</strong>{!item.activo && <small>No disponible</small>}</span>
+                                        {photo ? <img src={photo} alt="" loading="lazy" /> : <span className="promo-thumb"><ServiciosManager_SeccionIcon tipo={icon} /></span>}
+                                        <span><strong>{item.nombre}</strong>{!item.activo ? <small>No disponible</small> : descripcion && <small>{descripcion}</small>}</span>
                                     </button>
                                     {isService && selected && <div className="promo-count" style={row}>
                                         <button type="button" aria-label={`Reducir cantidad mensual de ${item.nombre}`} disabled={quantity <= 1} onClick={() => adjust(item.id, -1)}>−</button>
@@ -217,7 +263,10 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
             {error && <p role="alert" className="promo-error">{error}</p>}
             {!visible.length && <p>{catalog.membresias.length ? "No hay suscripciones que coincidan." : "Todavía no hay suscripciones."}</p>}
             <div className="promo-grid">
-                {visible.map(plan => <article key={plan.id} className="promo-card">
+                {visible.map(plan => {
+                    const original = originalPrice(plan)
+                    const professionals = team.filter(person => plan.profesional_ids?.includes(person.id) && canOffer(person.id, plan.servicio_ids))
+                    return <article key={plan.id} className="promo-card">
                     <div className="promo-cover">
                         {plan.imagen_url ? <img src={plan.imagen_url} alt="" loading="lazy" /> : <ServiciosManager_SeccionIcon tipo="promociones" size={48} />}
                         {plan.servicio_ids.length > 0 && <div className="promo-badges"><b>{countLabel(countServices(plan))}</b></div>}
@@ -225,7 +274,8 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
                     <div className="promo-foot">
                         <div className="promo-heading">
                             <strong>{plan.nombre}</strong>
-                            <div className="promo-cost">{money.format(plan.precio_mensual)} / mes</div>
+                            <div className="promo-cost">{money.format(plan.precio_mensual)} / mes {original > plan.precio_mensual && <del>{money.format(original)}</del>}</div>
+                            {professionals.length > 0 && <p style={{ overflowWrap: "anywhere" }}>{professionals.map(professionalName).join(", ")}</p>}
                             {plan.descripcion && <p style={{ overflowWrap: "anywhere" }}>{plan.descripcion}</p>}
                             {sections.map(([label, items, key]) => plan[key].length > 0 &&
                                 <div key={key} style={{ marginTop: 8, overflowWrap: "anywhere" }}><b>{label}</b>
@@ -241,7 +291,7 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
                             {plan.publicado && <button type="button" disabled={busy} onClick={() => void persist("Suscripción despublicada.", `/${plan.id}/despublicar`, "PUT")}>Despublicar</button>}
                         </div>
                     </div>
-                </article>)}
+                </article>})}
             </div>
         </>}
         </section>
