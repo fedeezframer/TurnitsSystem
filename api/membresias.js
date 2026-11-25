@@ -1,6 +1,10 @@
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-const FIELDS = "id,nombre,descripcion,precio_mensual,servicio_ids,producto_ids,publicado";
+const FIELDS = "id,nombre,descripcion,precio_mensual,servicio_ids,producto_ids,publicado,imagen_url,cantidades_servicios";
 const CATALOGS = [["servicios", "servicio_ids"], ["extras", "producto_ids"]];
+
+function parseUrl(value) {
+  try { return new URL(value); } catch { return null; }
+}
 
 export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isActivo, diasHastaVencer }) {
   const path = "/admin/membresias/:slug";
@@ -45,7 +49,7 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
 
   const save = handle(async (req, res, slug) => {
     const { id } = req.params;
-    const { nombre, descripcion, precio_mensual, servicio_ids, producto_ids, publicado } = req.body || {};
+    const { nombre, descripcion, precio_mensual, servicio_ids, producto_ids, publicado, imagen_url, cantidades_servicios } = req.body || {};
     const validIds = ids => Array.isArray(ids) && ids.length <= 100 &&
       ids.every(value => typeof value === "string" && UUID.test(value)) &&
       new Set(ids.map(value => value.toLowerCase())).size === ids.length;
@@ -62,6 +66,30 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
       servicio_ids: servicio_ids.map(value => value.toLowerCase()),
       producto_ids: producto_ids.map(value => value.toLowerCase()),
     };
+    if (imagen_url !== undefined) {
+      if (imagen_url === null) {
+        payload.imagen_url = null;
+      } else {
+        const image = typeof imagen_url === "string" ? parseUrl(imagen_url) : null;
+        const storage = parseUrl(supabase.supabaseUrl || "");
+        if (!image || !storage || image.origin !== storage.origin || image.username || image.password ||
+            image.search || image.hash || !/^\/storage\/v1\/object\/public\/servicios\/[^/]+\/\d+\.(?:png|webp|jpg)$/.test(image.pathname)) {
+          return res.status(400).json({ success: false, error: "Subí una imagen desde el editor de la suscripción." });
+        }
+        payload.imagen_url = image.href;
+      }
+    }
+
+    if (cantidades_servicios !== undefined) {
+      const selection = new Set(payload.servicio_ids);
+      if (!cantidades_servicios || typeof cantidades_servicios !== "object" || Array.isArray(cantidades_servicios) ||
+          Object.entries(cantidades_servicios).some(([key, amount]) =>
+            !selection.has(key) || !Number.isInteger(amount) || amount < 1 || amount > 99)) {
+        return res.status(400).json({ success: false, error: "Cada servicio debe incluir entre 1 y 99 usos al mes." });
+      }
+      payload.cantidades_servicios = cantidades_servicios;
+    }
+
     const maps = await catalog(slug);
     const valid = CATALOGS.every(([, field], index) => payload[field].every(value => maps[index].get(value)?.activo === true));
     if (!valid) {
@@ -104,10 +132,16 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
       return res.json({ success: true, membresias: [] });
     }
 
-    const membresias = plans.flatMap(({ id, nombre, descripcion, precio_mensual, ...plan }) => {
+    const membresias = plans.flatMap(({ id, nombre, descripcion, precio_mensual, imagen_url, cantidades_servicios, ...plan }) => {
       const [servicios, productos] = CATALOGS.map(([, field], index) => plan[field].map(key => maps[index].get(key)));
       if ([...servicios, ...productos].some(item => !item?.activo)) return [];
-      return [{ id, nombre, descripcion, precio_mensual, servicios: servicios.map(item => item.nombre), productos: productos.map(item => item.nombre) }];
+      const servicios_incluidos = servicios.map(item => ({
+        nombre: item.nombre, cantidad: cantidades_servicios[item.id] ?? 1,
+      }));
+      return [{
+        id, nombre, descripcion, precio_mensual, imagen_url, servicios_incluidos,
+        servicios: servicios.map(item => item.nombre), productos: productos.map(item => item.nombre),
+      }];
     });
     res.json({ success: true, membresias });
   }));
