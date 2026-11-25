@@ -914,7 +914,9 @@ const limiterAPI     = rateLimit({
   windowMs: 60 * 1000, max: 600,
   message: { success: false, error: "Demasiadas solicitudes. Probá de nuevo en un momento." },
 });
-const limiterCodigo  = rateLimit({ windowMs: 15 * 60 * 1000, max: 10,  message: "Demasiados intentos. Probá de nuevo en unos minutos.", standardHeaders: true, legacyHeaders: false });
+const opcionesLimiteCodigo = { windowMs: 15 * 60 * 1000, max: 10,  message: "Demasiados intentos. Probá de nuevo en unos minutos.", standardHeaders: true, legacyHeaders: false };
+const limiterCodigo = rateLimit(opcionesLimiteCodigo);
+const limiterRegistroAgenda = rateLimit(opcionesLimiteCodigo);
 
 // ══════════════════════════════════════════════════════════════
 // MIDDLEWARES
@@ -1017,7 +1019,7 @@ async function requireAuth(req, res, next) {
 // ══════════════════════════════════════════════════════════════
 const sucursalesApp=crearSucursales({app,supabase,requireAuth,cleanSlug,isActivo,invalidateCache,multer});
 const branchPanel=createBranchPanel({app,supabase,requireAuth,cleanSlug});
-const consumerAccounts=createConsumerAccounts({app,supabase,bcrypt,jwt,limiterAuth,limiterCodigo,fetch,
+const consumerAccounts=createConsumerAccounts({app,supabase,bcrypt,jwt,limiterAuth,limiterCodigo,limiterRegistroAgenda,fetch,
   mailUrl:APPS_SCRIPT_URL,rounds:BCRYPT_ROUNDS,expiry:JWT_EXPIRY});
 const receiptAccess = createReceiptAccess({ secret: () => process.env.JWT_SECRET, supabase, consumerAccounts });
 const browse=createBrowse({app,supabase,jwt,bcrypt,requireAuth,consumerAccounts,limiterAuth,limiterBooking,limiterRead:rateLimit({windowMs:60000,max:90,standardHeaders:true,legacyHeaders:false}),multer,

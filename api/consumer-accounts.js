@@ -30,6 +30,7 @@ export function createConsumerAccounts({
   jwt,
   limiterAuth,
   limiterCodigo,
+  limiterRegistroAgenda = limiterCodigo,
   fetch,
   mailUrl,
   rounds = 10,
@@ -102,37 +103,49 @@ export function createConsumerAccounts({
   const bookingCodeHash = (id, challenge, code) =>
     crypto.createHmac("sha256", secret).update(`booking:${id}:${challenge}:${code}`).digest("hex");
 
-  app.post("/consumidores/agenda/enviar-codigo", limiterCodigo, async (req, res) => {
+  const limitBookingCode = (req, res, next) =>
+    (req.body?.registro === true ? limiterRegistroAgenda : limiterCodigo)(req, res, next);
+
+  app.post("/consumidores/agenda/enviar-codigo", limitBookingCode, async (req, res) => {
     res.set("Cache-Control", "no-store");
     const email = emailOf(req.body?.email);
     if (!emailValid(email)) return res.status(400).json({ success: false, error: "Ingresá un correo válido." });
 
     try {
       if (!secret || !mailUrl) throw new Error("Missing booking login configuration");
-      const challenge = crypto.randomUUID();
       const signup = req.body?.registro === true;
       const consumer = signup ? null : await findByEmail(email);
-      if (signup || (consumer?.activo === true && consumer.email_verificado === true)) {
-        const codigo = crypto.randomInt(100000, 1000000).toString();
-        const issued = signup
-          ? check(await supabase.rpc("issue_booking_consumer_signup", {
-            p_email: email, p_challenge: challenge, p_hash: bookingCodeHash(`signup:${email}`, challenge, codigo),
-          }))
-          : check(await supabase.rpc("issue_consumer_booking_code", {
-            p_consumer: consumer.id, p_challenge: challenge, p_hash: bookingCodeHash(consumer.id, challenge, codigo),
-          }));
-        if (issued) {
-          await mail({ action: "verificarCodigo", email, nombre: consumer?.nombre_persona || "cliente", codigo })
-            .catch(() => console.error("Booking login email unavailable"));
-        }
+      if (!signup && !consumer) {
+        return res.status(404).json({
+          success: false,
+          code: "consumer_registration_required",
+          error: "No encontramos una cuenta de cliente con ese correo. Tocá Registrarse para crearla.",
+        });
       }
+      if (!signup && (consumer.activo !== true || consumer.email_verificado !== true)) {
+        return res.status(403).json({ success: false, error: "Esta cuenta de cliente no está habilitada para iniciar sesión." });
+      }
+
+      const challenge = crypto.randomUUID();
+      const codigo = crypto.randomInt(100000, 1000000).toString();
+      const issued = signup
+        ? check(await supabase.rpc("issue_booking_consumer_signup", {
+          p_email: email, p_challenge: challenge, p_hash: bookingCodeHash(`signup:${email}`, challenge, codigo),
+        }))
+        : check(await supabase.rpc("issue_consumer_booking_code", {
+          p_consumer: consumer.id, p_challenge: challenge, p_hash: bookingCodeHash(consumer.id, challenge, codigo),
+        }));
+      if (!issued) {
+        return res.status(429).json({ success: false, error: "Esperá un minuto antes de pedir otro código." });
+      }
+      await mail({ action: "verificarCodigo", email, nombre: consumer?.nombre_persona || "cliente", codigo });
       return res.json({ success: true, challenge });
     } catch (error) {
       return fail(res, error);
     }
   });
 
-  app.post("/consumidores/agenda/verificar-codigo", limiterCodigo, async (req, res) => {
+  app.post("/consumidores/agenda/verificar-codigo", limitBookingCode, async (req, res) => {
     res.set("Cache-Control", "no-store");
     const email = emailOf(req.body?.email);
     const { challenge, codigo } = req.body || {};
