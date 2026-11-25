@@ -21,6 +21,7 @@ const Internal = lazy(() => import("./migrated/public/AdminStats"))
 const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))
 const BusinessLanding = lazy(() => import("./pages/BusinessLanding"))
+const MembershipPage = lazy(() => import("./pages/MembershipPage"))
 const QuoteAvailability = lazy(() => import("./pages/QuoteAvailability"))
 
 function PanelRoute() {
@@ -124,6 +125,7 @@ export default function App() {
     <Route path="/renovar" element={<RenewRoute />} />
     <Route path="/agenda" element={<BookingRoute />} />
     <Route path="/agenda/:slug" element={<BookingRoute />} />
+    <Route path="/suscripciones/:slug" element={<MembershipPage />} />
     <Route path="/planes" element={<PublicPlans />} />
     <Route path="/perfil/:slug" element={<LegacyProfileRedirect />} />
     <Route path="/perfil/:slug/publicaciones" element={<LegacyProfileRedirect publications />} />

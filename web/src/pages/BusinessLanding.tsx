@@ -1,3 +1,4 @@
+import type { Membership } from "./MembershipCatalog"
 import BookingLogin from "../components/BookingLogin"
 import * as React from "react"
 import { Link, useParams } from "react-router"
@@ -33,19 +34,7 @@ interface Offer {
   cierre: string
   imagen?: string | null
 }
-interface Membership {
-  id: string
-  nombre: string
-  descripcion: string
-  precio_mensual: number
-  precio_original?: number
-  profesionales?: string[]
-  servicios: string[]
-  servicios_incluidos?: { nombre: string; cantidad: number }[]
-  imagen_url?: string | null
-  productos: string[]
-  productos_incluidos?: { nombre: string; cantidad: number }[]
-}
+
 interface Promo {
   id: string
   nombre: string
@@ -419,7 +408,7 @@ export default function BusinessLanding() {
         <nav className="bl-nav" aria-label="Explorar este negocio">
           {services.length > 0 && <a href="#bl-services">Servicios</a>}
           {works.length > 0 && <a href="#bl-works">Trabajos</a>}
-          {memberships.length > 0 && <a href="#bl-memberships">Suscripciones</a>}
+          {memberships.length > 0 && <Link to={`/suscripciones/${enc}`}>Suscripciones</Link>}
           {rankedPromos.length > 0 && <a href="#bl-promos">Promociones</a>}
           {reviews.cantidad >= 5 && reviewItems.length > 0 && <a href="#bl-reviews">Reseñas</a>}
         </nav>
@@ -479,33 +468,6 @@ export default function BusinessLanding() {
           return <article className="bl-work" key={`${url}-${index}`} aria-hidden={duplicate || undefined}><div className="bl-work-photo"><img src={url} alt={duplicate ? "" : description || "Trabajo realizado por el negocio"} loading="lazy" style={{ objectPosition: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%`, transform: `scale(${post?.zoom ?? 1})`, transformOrigin: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%` }} /></div><div className="bl-work-copy">{linked && <span>{linked.nombre}</span>}{description && <p>{description}</p>}<Link tabIndex={duplicate ? -1 : undefined} to={`/agenda/${enc}${linked ? `?servicio_id=${encodeURIComponent(linked.id)}` : ""}`}>Reservar {linked ? "este servicio" : "turno"} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></div></article>
         })}</div>)}</div></div></section>}
 
-        {memberships.length > 0 && <section id="bl-memberships" className="bl-section">
-          <div className="bl-section-heading"><h2>Suscripciones</h2></div>
-          <div className="bl-promo-grid">
-            {memberships.map(plan => {
-              const included = plan.servicios_incluidos || plan.servicios.map(nombre => ({ nombre, cantidad: 1 }))
-              const products = plan.productos_incluidos || plan.productos.map(nombre => ({ nombre, cantidad: 1 }))
-              const total = included.reduce((sum, service) => sum + service.cantidad, 0)
-              return <article key={plan.id} className="bl-promo">
-                {plan.imagen_url && <div className="bl-promo-img"><img src={plan.imagen_url} alt="" loading="lazy" /></div>}
-                <div className="bl-promo-body" style={{ overflowWrap: "anywhere" }}>
-                  <strong>{plan.nombre}</strong>
-                  <div className="bl-promo-price"><b>{money(plan.precio_mensual)}</b><span>/ mes</span>{Number(plan.precio_original) > plan.precio_mensual && <s>{money(plan.precio_original!)}</s>}</div>
-                  {!!plan.profesionales?.length && <p style={{ margin: 0 }}><b>Profesionales</b> · {plan.profesionales.join(", ")}</p>}
-                  {plan.descripcion && <p style={{ margin: 0 }}>{plan.descripcion}</p>}
-                  {total > 0 && <div>
-                    <b>{total} {total === 1 ? "servicio" : "servicios"} al mes</b>
-                    <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{included.map(({ nombre, cantidad }, index) => <li key={index}>{cantidad} × {nombre}</li>)}</ul>
-                  </div>}
-                  {products.length > 0 && <div>
-                    <b>Productos</b>
-                    <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{products.map(({ nombre, cantidad }, index) => <li key={index}>{cantidad} × {nombre}</li>)}</ul>
-                  </div>}
-                </div>
-              </article>
-            })}
-          </div>
-        </section>}
         {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><div className="bl-section-heading"><div><h2>Más para vos, por menos</h2><p>Combos y beneficios para tu próxima visita.</p></div></div><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
 
         {reviews.cantidad >= 5 && reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} reseñas</p></div></div><div className="bl-review-list">{reviewItems.map(review => <motion.article className="bl-review" key={review.id} initial={reduceMotion ? false : { opacity: .65, x: 14 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: false, amount: .3 }} transition={{ duration: reduceMotion ? 0 : .28 }}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></motion.article>)}</div></section>}
