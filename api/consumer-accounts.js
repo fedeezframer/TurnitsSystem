@@ -33,6 +33,7 @@ export function createConsumerAccounts({
   limiterRegistroAgenda = limiterCodigo,
   fetch,
   mailUrl,
+  resendApiKey = process.env.RESEND_API_KEY,
   rounds = 10,
   expiry = "1d",
   secret = process.env.JWT_SECRET,
@@ -110,6 +111,42 @@ export function createConsumerAccounts({
       }
     }
   }
+  async function sendBookingCode(email, name, codigo, challenge) {
+    if (!resendApiKey) {
+      return mail({ action: "verificarCodigo", email, nombre: name, codigo, expiraEnMinutos: 10 }, true);
+    }
+
+    const instructions = "El código vence en 10 minutos. No lo compartas. Si no lo solicitaste, ignorá este correo.";
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": `booking-code/${challenge}`,
+      },
+      body: JSON.stringify({
+        from: "Turnits <codigos@notificaciones.turnits.com>",
+        to: [email],
+        subject: "Tu código de acceso a Turnits",
+        text: `Tu código de acceso a Turnits es ${codigo}.\n\n${instructions}`,
+        html: `<div lang="es" style="font:16px Arial,sans-serif;color:#202620">
+          <img src="https://turnits.com/assets/browse/LogoTurnitsCompletoB.png" width="120" alt="Turnits">
+          <h1 style="font-size:22px">Tu código de acceso</h1>
+          <p style="color:#1b6b1a;font-size:32px;font-weight:bold;letter-spacing:6px">${codigo}</p>
+          <p>${instructions}</p>
+        </div>`,
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok) {
+      throw Object.assign(new Error("Resend rejected booking email"), { code: `resend_http_${response.status}` });
+    }
+    const receipt = await response.json().catch(() => null);
+    if (typeof receipt?.id !== "string" || !receipt.id) {
+      throw Object.assign(new Error("Resend did not confirm booking email"), { code: "resend_response_unconfirmed" });
+    }
+  }
+
   const bookingCodeHash = (id, challenge, code) =>
     crypto.createHmac("sha256", secret).update(`booking:${id}:${challenge}:${code}`).digest("hex");
 
@@ -122,7 +159,7 @@ export function createConsumerAccounts({
     if (!emailValid(email)) return res.status(400).json({ success: false, error: "Ingresá un correo válido." });
 
     try {
-      if (!secret || !mailUrl) throw new Error("Missing booking login configuration");
+      if (!secret || (!mailUrl && !resendApiKey)) throw new Error("Missing booking login configuration");
       const signup = req.body?.registro === true;
       const consumer = signup ? null : await findByEmail(email);
       if (!signup && !consumer) {
@@ -149,7 +186,7 @@ export function createConsumerAccounts({
         return res.status(429).json({ success: false, error: "Esperá un minuto antes de pedir otro código." });
       }
       try {
-        await mail({ action: "verificarCodigo", email, nombre: consumer?.nombre_persona || "cliente", codigo, expiraEnMinutos: 10 }, true);
+        await sendBookingCode(email, consumer?.nombre_persona || "cliente", codigo, challenge);
       } catch (error) {
         console.error("Booking verification mail failed:", error.code || error.name || "unknown");
         return res.status(503).json({
