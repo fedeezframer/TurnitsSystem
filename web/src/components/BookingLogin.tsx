@@ -254,7 +254,7 @@ export default function BookingLogin({ api, onSession, accent }: {
             )}
             {accent ? "Iniciar sesión" : "Ingresar con mi correo"}
         </button>
-            <style>{`@keyframes booking-login-spin{to{transform:rotate(360deg)}}.booking-login-spinner{animation:booking-login-spin .8s linear infinite}@media(prefers-reduced-motion:reduce){.booking-login-spinner{animation:none}}dialog.turnits-booking-login::backdrop{background:rgba(12,16,13,.42)}.turnits-booking-login input:focus-visible{outline:2px solid ${actionColor};outline-offset:2px}.turnits-booking-login .booking-code:focus-within{outline:2px solid ${actionColor};outline-offset:4px;border-radius:5px}`}</style>
+            <style>{`@keyframes booking-login-step-in{from{opacity:0}to{opacity:1}}@media(prefers-reduced-motion:no-preference){.booking-login-step{animation:booking-login-step-in .22s ease-out both}}@keyframes booking-login-spin{to{transform:rotate(360deg)}}.booking-login-spinner{animation:booking-login-spin .8s linear infinite}@media(prefers-reduced-motion:reduce){.booking-login-spinner{animation:none}}dialog.turnits-booking-login::backdrop{background:rgba(12,16,13,.42)}.turnits-booking-login input:focus-visible{outline:2px solid ${actionColor};outline-offset:2px}.turnits-booking-login .booking-code:focus-within{outline:2px solid ${actionColor};outline-offset:4px;border-radius:5px}`}</style>
             <dialog ref={dialog} className="turnits-booking-login" aria-labelledby={titleId}
                 onCancel={event => { event.preventDefault(); if (!busy) close() }}
                 style={{ width: "min(calc(100% - 32px), 400px)", maxWidth: "none", height: "min(440px, calc(100% - 24px))", boxSizing: "border-box", border: 0, borderRadius: 20, padding: "28px clamp(16px, 5vw, 28px)", color: "#171a17", background: "#fff", boxShadow: "0 24px 90px #1115" }}>
@@ -266,7 +266,7 @@ export default function BookingLogin({ api, onSession, accent }: {
                         else close()
                     }} />
                 <img src="/favicon-light.png" alt="" width={96} height={96} style={{ display: "block", margin: "0 auto 10px" }} />
-                <form onSubmit={submit} style={{ display: "grid", gap: 15 }}>
+                <form key={challenge ? "code" : signup ? "signup" : "login"} className="booking-login-step" onSubmit={submit} style={{ display: "grid", gap: 15 }}>
                     <h2 id={titleId} style={{ margin: 0, fontSize: 19, lineHeight: 1.25 }}>
                         {challenge ? "Ingresá el código de verificación" : "Ingresá tu correo electrónico"}
                     </h2>
