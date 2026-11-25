@@ -1,3 +1,4 @@
+import type { SubscriptionDraft } from "./suscripciones"
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { appConfig } from "../../config"
 import { loadQuoteMode } from "../../shared/agenda-mode"
@@ -91,7 +92,7 @@ function Turnits_useElementWidth(
     return width
 }
 
-type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios" | "productos" | "promociones" | "equipo" | "sucursales"
+type TurnitsGlobalSaveSection = "horarios" | "excepciones" | "pagos" | "tema" | "perfil" | "browse" | "servicios" | "productos" | "promociones" | "suscripciones" | "equipo" | "sucursales"
 
 type TurnitsGlobalPending = Record<string, any>
 
@@ -648,6 +649,42 @@ function TurnitsGlobalSaveManager_get() {
                         errors.promociones = e.message || "No se pudieron guardar las promociones."
                     }
                 }
+                if (current.suscripciones !== undefined) {
+                    const submitted = current.suscripciones as Record<string, SubscriptionDraft>
+                    const saved: Record<string, unknown> = {}
+                    try {
+                        const entries = Object.entries(submitted)
+                        if (entries.some(([, draft]) => !draft.valid))
+                            throw new Error("Completá el nombre, el precio mensual y los elementos incluidos.")
+                        const url = `${api()}/admin/membresias/${encodeURIComponent(slug)}`
+                        for (const [key, draft] of entries) {
+                            const res = await fetch(draft.id ? `${url}/${encodeURIComponent(draft.id)}` : url, {
+                                method: draft.id ? "PUT" : "POST",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify(draft.id ? draft.payload : { ...draft.payload, publicado: true, id_creacion: key }),
+                            })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok || !data.success) throw new Error(data.error || "No se pudo guardar la suscripción.")
+                            saved[key] = data.membresia
+                            const remaining = { ...pending.suscripciones }
+                            if (TurnitsGlobalSave_stable(remaining[key]) === TurnitsGlobalSave_stable(draft)) {
+                                delete remaining[key]
+                                pending = { ...pending }
+                                if (Object.keys(remaining).length) pending.suscripciones = remaining
+                                else delete pending.suscripciones
+                                TurnitsGlobalSave_safeWrite(pending)
+                            }
+                        }
+                        savedData.suscripciones = saved
+                        results.suscripciones = true
+                    } catch (e: any) {
+                        results.suscripciones = false
+                        errors.suscripciones = e.message || "No se pudieron guardar las suscripciones."
+                        if (Object.keys(saved).length) window.dispatchEvent(new CustomEvent("turnits_global_saved", {
+                            detail: { section: "suscripciones", data: saved, submitted },
+                        }))
+                    }
+                }
                 if (current.browse !== undefined && results.servicios !== false) {
                     tasks.push((async () => {
                         try {
@@ -702,7 +739,7 @@ function TurnitsGlobalSaveManager_get() {
                     window.dispatchEvent(
                         new CustomEvent("turnits_global_save_error", {
                             detail: {
-                                error: failed.map((key) => `${({ perfil: "Perfil", equipo: "Equipo", tema: "Temas", productos: "Productos", promociones: "Promociones" } as Record<string, string>)[key] || key}: ${errors[key] || "No se pudo guardar."}`).join(" "),
+                                error: failed.map((key) => `${({ perfil: "Perfil", equipo: "Equipo", tema: "Temas", productos: "Productos", promociones: "Promociones", suscripciones: "Suscripciones" } as Record<string, string>)[key] || key}: ${errors[key] || "No se pudo guardar."}`).join(" "),
                                 failed,
                             },
                         })

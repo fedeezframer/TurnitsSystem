@@ -44,6 +44,7 @@ interface Membership {
   servicios_incluidos?: { nombre: string; cantidad: number }[]
   imagen_url?: string | null
   productos: string[]
+  productos_incluidos?: { nombre: string; cantidad: number }[]
 }
 interface Promo {
   id: string
@@ -483,6 +484,7 @@ export default function BusinessLanding() {
           <div className="bl-promo-grid">
             {memberships.map(plan => {
               const included = plan.servicios_incluidos || plan.servicios.map(nombre => ({ nombre, cantidad: 1 }))
+              const products = plan.productos_incluidos || plan.productos.map(nombre => ({ nombre, cantidad: 1 }))
               const total = included.reduce((sum, service) => sum + service.cantidad, 0)
               return <article key={plan.id} className="bl-promo">
                 {plan.imagen_url && <div className="bl-promo-img"><img src={plan.imagen_url} alt="" loading="lazy" /></div>}
@@ -495,9 +497,9 @@ export default function BusinessLanding() {
                     <b>{total} {total === 1 ? "servicio" : "servicios"} al mes</b>
                     <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{included.map(({ nombre, cantidad }, index) => <li key={index}>{cantidad} × {nombre}</li>)}</ul>
                   </div>}
-                  {plan.productos.length > 0 && <div>
+                  {products.length > 0 && <div>
                     <b>Productos</b>
-                    <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{plan.productos.map((name, index) => <li key={index}>{name}</li>)}</ul>
+                    <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{products.map(({ nombre, cantidad }, index) => <li key={index}>{cantidad} × {nombre}</li>)}</ul>
                   </div>}
                 </div>
               </article>

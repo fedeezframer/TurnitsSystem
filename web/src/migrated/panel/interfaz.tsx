@@ -39,6 +39,7 @@ function TurnitsGlobalSaveBar({
                 ["servicios", "Servicios"],
                 ["productos", "Productos"],
                 ["promociones", "Promociones"],
+                ["suscripciones", "Suscripciones"],
                 ["pagos", "Pagos"],
                 ["tema", "Tema"],
                 ["perfil", "Perfil"],

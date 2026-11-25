@@ -275,7 +275,7 @@ function TurnitsPanel_Inner(props: any) {
                         </> : <>{renderSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg", seccionActiva === "servicios" && serviciosVistaInicial === "servicios", () => abrirCatalogo("servicios"))}
                         {renderSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg", seccionActiva === "servicios" && serviciosVistaInicial === "extras", () => abrirCatalogo("extras"))}
                         {renderSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg", seccionActiva === "servicios" && serviciosVistaInicial === "promociones", () => abrirCatalogo("promociones"))}
-                        {!branchAdmin && renderSubsection("suscripciones","Suscripciones","/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "servicios" && serviciosVistaInicial === "suscripciones", () => abrirCatalogo("suscripciones"))}
+                        {!branchAdmin && renderSubsection("suscripciones","Suscripciones","/assets/panel-nav/iconmind_subscription-upgrade-outline-regular.svg", seccionActiva === "servicios" && serviciosVistaInicial === "suscripciones", () => abrirCatalogo("suscripciones"))}
                         {!branchAdmin && renderSubsection("offers","Ofertas de último momento","/assets/browse/ant-design_fire-outlined.svg", seccionActiva === "servicios" && serviciosVistaInicial === "offers", () => abrirCatalogo("offers"))}</>}
                     </div>
                     <motion.div
