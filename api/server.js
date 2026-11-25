@@ -16,6 +16,7 @@ import { createBranchPanel } from "./branch-panel.js";
 import { businessIcon } from "./business-appearance.js";
 import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appearance.js";
 import { createConsumerAccounts, consumerIdentity } from "./consumer-accounts.js";
+import { registerMembresias } from "./membresias.js";
 import { validCategories } from "../web/src/shared/categories.js";
 import { createBrowse } from "./browse.js";
 import { createQuoteBooking } from "./quote-booking.js";
@@ -1019,6 +1020,7 @@ async function requireAuth(req, res, next) {
 // ══════════════════════════════════════════════════════════════
 const sucursalesApp=crearSucursales({app,supabase,requireAuth,cleanSlug,isActivo,invalidateCache,multer});
 const branchPanel=createBranchPanel({app,supabase,requireAuth,cleanSlug});
+registerMembresias({ app, supabase, requireAuth, cleanSlug, isActivo, diasHastaVencer });
 const consumerAccounts=createConsumerAccounts({app,supabase,bcrypt,jwt,limiterAuth,limiterCodigo,limiterRegistroAgenda,fetch,
   mailUrl:APPS_SCRIPT_URL,rounds:BCRYPT_ROUNDS,expiry:JWT_EXPIRY});
 const receiptAccess = createReceiptAccess({ secret: () => process.env.JWT_SECRET, supabase, consumerAccounts });
