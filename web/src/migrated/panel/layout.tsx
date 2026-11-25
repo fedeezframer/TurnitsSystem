@@ -1,3 +1,4 @@
+import { SuscripcionesPanel } from "./suscripciones"
 import { seccionesPagos, type VistaPagos } from "./secciones-pagos"
 import { useCatalogTransition } from "./catalog-motion"
 import { BackButton } from "../../components/BackButton"
@@ -102,7 +103,7 @@ function TurnitsPanel_Inner(props: any) {
     const [scheduleView,setScheduleView] = React.useState<"weekly"|"exceptions">("weekly")
     const vistaPagos = ["mp_success","mp_error"].includes(searchParams.get("status") || "") ? "metodos" : seccionesPagos.find(s => s.id === searchParams.get("vista"))?.id || "metodos"
     const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(["pagos", "equipo", "perfil", "horarios"].includes(seccionActiva) ? seccionActiva : null)
-    const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones" | "offers">("servicios")
+    const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones" | "suscripciones" | "offers">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
     // Arranca oculta y solo se muestra si confirmamos que el plan es
     // premium, así el plan gratis nunca llega a verla en el menú.
@@ -219,7 +220,7 @@ function TurnitsPanel_Inner(props: any) {
         (item) => item.id !== "consultas" && (!branchAdmin || ["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(item.id)) && (item.id !== "equipo" || equipoDisponible)
     ).sort((a, b) => ["inicio", "servicios", "agenda", "clientes", "horarios", "pagos", "finanzas", "temas", "equipo", "perfil"].indexOf(a.id) - ["inicio", "servicios", "agenda", "clientes", "horarios", "pagos", "finanzas", "temas", "equipo", "perfil"].indexOf(b.id))
 
-    const abrirCatalogo = (vista: "servicios" | "extras" | "promociones" | "offers") => {
+    const abrirCatalogo = (vista: "servicios" | "extras" | "promociones" | "suscripciones" | "offers") => {
         setServiciosVistaInicial(vista)
         setMenuExpandido("servicios")
         irA("servicios")
@@ -274,6 +275,7 @@ function TurnitsPanel_Inner(props: any) {
                         </> : <>{renderSubsection("servicios","Mis Servicios","/assets/panel-nav/ant-design_product-outlined.svg", seccionActiva === "servicios" && serviciosVistaInicial === "servicios", () => abrirCatalogo("servicios"))}
                         {renderSubsection("extras","Productos","/assets/panel-nav/ix_product-management.svg", seccionActiva === "servicios" && serviciosVistaInicial === "extras", () => abrirCatalogo("extras"))}
                         {renderSubsection("promociones","Promociones","/assets/panel-nav/hugeicons_sale-tag-01.svg", seccionActiva === "servicios" && serviciosVistaInicial === "promociones", () => abrirCatalogo("promociones"))}
+                        {!branchAdmin && renderSubsection("suscripciones","Suscripciones","/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "servicios" && serviciosVistaInicial === "suscripciones", () => abrirCatalogo("suscripciones"))}
                         {!branchAdmin && renderSubsection("offers","Ofertas de último momento","/assets/browse/ant-design_fire-outlined.svg", seccionActiva === "servicios" && serviciosVistaInicial === "offers", () => abrirCatalogo("offers"))}</>}
                     </div>
                     <motion.div
@@ -770,12 +772,12 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title={serviciosVistaInicial === "servicios" ? "Servicios" : serviciosVistaInicial === "extras" ? "Productos" : serviciosVistaInicial === "offers" ? "Ofertas de último momento" : "Promociones"}
-                            subtitle={serviciosVistaInicial === "servicios" ? "Administrá los servicios que ofrecés a tus clientes" : serviciosVistaInicial === "extras" ? "Administrá los productos adicionales de tu catálogo" : serviciosVistaInicial === "offers" ? "Elegí qué servicios ofrecer y en qué días y horarios" : "Creá y organizá tus promociones"}
+                            title={serviciosVistaInicial === "servicios" ? "Servicios" : serviciosVistaInicial === "extras" ? "Productos" : serviciosVistaInicial === "offers" ? "Ofertas de último momento" : serviciosVistaInicial === "suscripciones" ? "Suscripciones" : "Promociones"}
+                            subtitle={serviciosVistaInicial === "servicios" ? "Administrá los servicios que ofrecés a tus clientes" : serviciosVistaInicial === "extras" ? "Administrá los productos adicionales de tu catálogo" : serviciosVistaInicial === "offers" ? "Elegí qué servicios ofrecer y en qué días y horarios" : serviciosVistaInicial === "suscripciones" ? "Armá planes con los servicios y productos de tu catálogo" : "Creá y organizá tus promociones"}
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
-                        {serviciosVistaInicial === "offers" ? <React.Suspense fallback={<LoadingRunner card />}><BrowseBusiness api={baseUrl} view="offers" editIcon={iconos.editar} /></React.Suspense> : React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
+                        {serviciosVistaInicial === "suscripciones" && !branchAdmin ? <SuscripcionesPanel api={baseUrl} accentColor={accentColor} /> : serviciosVistaInicial === "offers" ? <React.Suspense fallback={<LoadingRunner card />}><BrowseBusiness api={baseUrl} view="offers" editIcon={iconos.editar} /></React.Suspense> : React.createElement(serviciosVistaInicial === "extras" ? ProductosPanel : serviciosVistaInicial === "promociones" ? PromocionesPanel : MisServiciosPanel, {
                             baseUrl,
                             accentColor,
                             iconoPlaceholderUrl: iconos.servicioPlaceholder,

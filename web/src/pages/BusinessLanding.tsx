@@ -33,6 +33,14 @@ interface Offer {
   cierre: string
   imagen?: string | null
 }
+interface Membership {
+  id: string
+  nombre: string
+  descripcion: string
+  precio_mensual: number
+  servicios: string[]
+  productos: string[]
+}
 interface Promo {
   id: string
   nombre: string
@@ -107,6 +115,7 @@ export default function BusinessLanding() {
   const [perfil, setPerfil] = React.useState<any>(null)
   const [reviews, setReviews] = React.useState({ promedio: 0, cantidad: 0 })
   const [reviewItems, setReviewItems] = React.useState<Review[]>([])
+  const [memberships, setMemberships] = React.useState<Membership[]>([])
   const [promos, setPromos] = React.useState<Promo[]>([])
   const [services, setServices] = React.useState<Service[]>([])
   const [members, setMembers] = React.useState<Member[]>([])
@@ -140,7 +149,7 @@ export default function BusinessLanding() {
   React.useEffect(() => {
     if (!slug) return
     const controller = new AbortController()
-    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setOffers([]); setLogoFailed(false); setBannerFailed(false); setServices([]); setMembers([]); setBranches([]); setReviewItems([]); setAvailability({}); setTodaySlots(null)
+    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setMemberships([]); setOffers([]); setLogoFailed(false); setBannerFailed(false); setServices([]); setMembers([]); setBranches([]); setReviewItems([]); setAvailability({}); setTodaySlots(null)
     const s = encodeURIComponent(slug)
     getJson(`/negocio/${s}`, controller.signal).then(data => {
       if (controller.signal.aborted) return
@@ -154,6 +163,7 @@ export default function BusinessLanding() {
     }
     update(`/perfil/${s}`, data => setPerfil(data.perfil))
     update(`/perfil/${s}/resenas`, data => { setReviews({ promedio: data.promedio || 0, cantidad: data.cantidad || 0 }); setReviewItems(data.resenas || []) })
+    update(`/membresias/${s}`, data => setMemberships(data.membresias || []))
     update(`/promociones/${s}`, data => setPromos(data.promociones || []))
     update(`/sucursales/${s}`, data => setBranches(data.sucursales || []))
     const teamRequest = getJson(`/equipo/${s}`, controller.signal).catch(() => ({ equipo: [] }))
@@ -404,6 +414,7 @@ export default function BusinessLanding() {
         <nav className="bl-nav" aria-label="Explorar este negocio">
           {services.length > 0 && <a href="#bl-services">Servicios</a>}
           {works.length > 0 && <a href="#bl-works">Trabajos</a>}
+          {memberships.length > 0 && <a href="#bl-memberships">Suscripciones</a>}
           {rankedPromos.length > 0 && <a href="#bl-promos">Promociones</a>}
           {reviews.cantidad >= 5 && reviewItems.length > 0 && <a href="#bl-reviews">Reseñas</a>}
         </nav>
@@ -463,6 +474,22 @@ export default function BusinessLanding() {
           return <article className="bl-work" key={`${url}-${index}`} aria-hidden={duplicate || undefined}><div className="bl-work-photo"><img src={url} alt={duplicate ? "" : description || "Trabajo realizado por el negocio"} loading="lazy" style={{ objectPosition: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%`, transform: `scale(${post?.zoom ?? 1})`, transformOrigin: `${post?.encuadre_x ?? 50}% ${post?.encuadre_y ?? 50}%` }} /></div><div className="bl-work-copy">{linked && <span>{linked.nombre}</span>}{description && <p>{description}</p>}<Link tabIndex={duplicate ? -1 : undefined} to={`/agenda/${enc}${linked ? `?servicio_id=${encodeURIComponent(linked.id)}` : ""}`}>Reservar {linked ? "este servicio" : "turno"} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link></div></article>
         })}</div>)}</div></div></section>}
 
+        {memberships.length > 0 && <section id="bl-memberships" className="bl-section">
+          <div className="bl-section-heading"><h2>Suscripciones</h2></div>
+          <div className="bl-promo-grid">
+            {memberships.map(plan => <article key={plan.id} style={{ border: "1px solid #dfe4df", background: "#fff", borderRadius: 16, padding: 16, minWidth: 0, overflowWrap: "anywhere" }}>
+              <h3 style={{ margin: "0 0 8px" }}>{plan.nombre}</h3>
+              <strong>{money(plan.precio_mensual)} / mes</strong>
+              {plan.descripcion && <p>{plan.descripcion}</p>}
+              {([["Servicios", plan.servicios], ["Productos", plan.productos]] as const).map(([label, items]) =>
+                items.length > 0 && <div key={label} style={{ marginTop: 12 }}>
+                  <strong>{label}</strong>
+                  <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{items.map((item, index) => <li key={index}>{item}</li>)}</ul>
+                </div>
+              )}
+            </article>)}
+          </div>
+        </section>}
         {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><div className="bl-section-heading"><div><h2>Más para vos, por menos</h2><p>Combos y beneficios para tu próxima visita.</p></div></div><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
 
         {reviews.cantidad >= 5 && reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} reseñas</p></div></div><div className="bl-review-list">{reviewItems.map(review => <motion.article className="bl-review" key={review.id} initial={reduceMotion ? false : { opacity: .65, x: 14 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: false, amount: .3 }} transition={{ duration: reduceMotion ? 0 : .28 }}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></motion.article>)}</div></section>}
