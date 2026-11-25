@@ -939,7 +939,9 @@ export default function BookingFlow(props: any) {
     const bookingHeaders = () => bookingAuthorization ? { Authorization: bookingAuthorization } : {}
     const [loadingCuenta, setLoadingCuenta] = React.useState(()=>!!bookingAuthorization)
     const [cuentaConDatosCompletos, setCuentaConDatosCompletos] = React.useState(false)
+    const [correoCuentaSinTelefono, setCorreoCuentaSinTelefono] = React.useState("")
     React.useEffect(()=>{
+        setCorreoCuentaSinTelefono("")
         if (!bookingAuthorization) {
             setLoadingCuenta(false)
             setCuentaConDatosCompletos(false)
@@ -961,6 +963,7 @@ export default function BookingFlow(props: any) {
         }).then(data => {
             if (!data?.success || !data.perfil || controller.signal.aborted) return
             const profile = data.perfil
+            if (profile.telefono == null) setCorreoCuentaSinTelefono(String(profile.email || "").trim().toLowerCase())
             setNombre(value => bookingToken ? profile.nombre_persona || "" : value || profile.nombre_persona || "")
             setApellido(value => bookingToken ? profile.apellido || "" : value || profile.apellido || "")
             setEmail(value => bookingToken ? profile.email || "" : value || profile.email || "")
@@ -1987,6 +1990,23 @@ export default function BookingFlow(props: any) {
 
         setSubmitEstado("loading")
 
+        if (bookingAuthorization && correoCuentaSinTelefono && email.trim().toLowerCase() === correoCuentaSinTelefono) {
+            try {
+                const response = await fetch(`${api}/browse/perfil`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json", ...bookingHeaders() },
+                    body: JSON.stringify({ telefono: `${pais.dial}${telefonoDigits}`, completar_telefono: true }),
+                })
+                const data = await response.json().catch(() => null)
+                if (!response.ok || !data?.success) throw new Error("No pudimos guardar tu teléfono. Volvé a intentar.")
+                setCorreoCuentaSinTelefono("")
+            } catch {
+                setSubmitEstado("error")
+                setSubmitError("No pudimos guardar tu teléfono. Volvé a intentar.")
+                return
+            }
+        }
+
         if (groupMode && basket.length) {
             if (!sinPago && !negocio?.agenda_sin_pagos && negocio?.metodo_pago !== "none" && metodo !== "mercadopago") {
                 setSubmitEstado("error")
@@ -2739,6 +2759,9 @@ export default function BookingFlow(props: any) {
                                                     accent={accent}
                                                     error={emailError}
                                                 />
+                                                {correoCuentaSinTelefono && email.trim().toLowerCase() === correoCuentaSinTelefono && (
+                                                    <p style={{ margin: 0, fontSize: 13, color: "var(--bf-text-muted)" }}>Guardamos tu teléfono en tu cuenta para futuras reservas.</p>
+                                                )}
                                                 <TelInput
                                                     pais={pais}
                                                     setPais={setPais}
