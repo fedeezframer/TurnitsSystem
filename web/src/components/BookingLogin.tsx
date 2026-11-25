@@ -31,6 +31,7 @@ export default function BookingLogin({ api, onSession, accent }: {
     const dialog = React.useRef<HTMLDialogElement>(null)
     const titleId = React.useId()
     const googleHost = React.useRef<HTMLDivElement>(null)
+    const [googleReady, setGoogleReady] = React.useState(false)
     const [googleError, setGoogleError] = React.useState("")
     const [email, setEmail] = React.useState("")
     const [challenge, setChallenge] = React.useState("")
@@ -70,6 +71,17 @@ export default function BookingLogin({ api, onSession, accent }: {
         const request = new AbortController()
         let observer: ResizeObserver | undefined
         setGoogleError("")
+        setGoogleReady(false)
+        const started = Date.now()
+        const readiness = window.setInterval(() => {
+            const frame = googleHost.current?.querySelector("iframe")
+            if (frame && frame.getBoundingClientRect().height > 0) {
+                setGoogleReady(true)
+                window.clearInterval(readiness)
+            } else if (Date.now() - started > 8000) {
+                setGoogleError("Google no está disponible en este momento.")
+            }
+        }, 500)
         async function setup() {
             const [google, response] = await Promise.all([
                 import("../migrated/Login"),
@@ -123,7 +135,7 @@ export default function BookingLogin({ api, onSession, accent }: {
         setup().catch(() => {
             if (!request.signal.aborted) setGoogleError("Google no está disponible en este momento.")
         })
-        return () => { request.abort(); observer?.disconnect() }
+        return () => { request.abort(); observer?.disconnect(); window.clearInterval(readiness) }
     }, [api, open, signup, challenge])
 
     function close() {
@@ -261,8 +273,13 @@ export default function BookingLogin({ api, onSession, accent }: {
                             <p style={{ margin: "8px 0 0", color: "#555" }}>Con tu cuenta de Turnits podés acceder a una experiencia personalizada según tus gustos.</p>
                             <p style={{ margin: 0, color: "#555" }}>Al continuar, aceptás los <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: actionColor }}>Términos y Condiciones</a> y la <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: actionColor }}>Política de Privacidad</a>.</p>
                         </> : <>
-                            {open && <div ref={googleHost} style={{ minHeight: 40, marginTop: 8 }} />}
-                            {googleError && <p role="status" style={{ margin: 0, color: "#555", fontSize: 13 }}>{googleError}</p>}
+                            {open && <div style={{ display: "grid", marginTop: 8 }}>
+                                <div ref={googleHost} style={{ gridArea: "1 / 1", minHeight: 40, opacity: googleReady ? 1 : 0 }} aria-hidden={!googleReady} />
+                                {!googleReady && <button type="button" disabled style={{ ...button, gridArea: "1 / 1", minHeight: 40, padding: "6px 12px", cursor: "default", background: "#fff", zIndex: 1 }}>
+                                    {googleError ? "Google no disponible" : "Cargando Google…"}
+                                </button>}
+                            </div>}
+                            {googleReady && googleError && <p role="status" style={{ margin: 0, color: "#555", fontSize: 13 }}>{googleError}</p>}
                             <div style={{ borderTop: "1px solid #d6d9d6", paddingTop: 12, textAlign: "center", color: "#555" }}>
                                 <div>¿No tenés cuenta?</div>
                                 <button type="button" disabled={busy} onClick={() => { setSignup(true); setError("") }}
