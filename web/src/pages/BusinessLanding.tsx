@@ -124,7 +124,10 @@ export default function BusinessLanding() {
     if (!target) return
     event.preventDefault()
     window.history.pushState(null, "", link.hash)
-    target.scrollIntoView({ behavior: reduceMotion ? "instant" : "smooth", block: "start" })
+    const headerHeight = event.currentTarget.querySelector("header")?.getBoundingClientRect().height ?? 0
+    const scrollMargin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0
+    const offset = Math.max(headerHeight + 16, scrollMargin)
+    window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - offset, behavior: reduceMotion ? "instant" : "smooth" })
   }
   const [offerPaused, setOfferPaused] = React.useState(false)
   const [offset, setOffset] = React.useState(0)
@@ -358,13 +361,18 @@ export default function BusinessLanding() {
   return (
     <main className="bl-page" style={style} onClick={scrollToSection}>
       <div className="bl-wrap">
-        <header className="bl-bar">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={`${headline.text}-${headline.href}`} className="bl-bar-slide" initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }} transition={{ duration: reduceMotion ? 0 : .25 }}>
-              <span>{headline.text}</span>
-              {headline.href.startsWith("#") ? <a className="bl-reserve" href={headline.href}>{headline.action}</a> : <Link className="bl-reserve" to={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>}
-            </motion.div>
-          </AnimatePresence>
+        <header style={{ position: "sticky", top: 0, zIndex: 30 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px max(17px, calc((100% - 1160px) / 2))", background: "#fff", color: "var(--bl-ink)" }}>
+            <BookingLogin api={appConfig.apiUrl} />
+          </div>
+          <div className="bl-bar" style={{ position: "relative" }}>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div key={`${headline.text}-${headline.href}`} className="bl-bar-slide" initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }} transition={{ duration: reduceMotion ? 0 : .25 }}>
+                <span>{headline.text}</span>
+                {headline.href.startsWith("#") ? <a className="bl-reserve" href={headline.href}>{headline.action}</a> : <Link className="bl-reserve" to={headline.href}>{headline.action} <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </header>
 
         <section className={`bl-hero${banner ? " bl-hero-with-banner" : ""}`}>
@@ -389,10 +397,6 @@ export default function BusinessLanding() {
           <button className="bl-share" type="button" onClick={sharePage}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7.5 7.5M12 3l4.5 4.5M5 13.5v5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-5" /></svg>Compartir página</button>
           {shareStatus && <span className="bl-share-status" role="status">{shareStatus}</span>}
         </section>
-
-        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
-          <BookingLogin api={appConfig.apiUrl} />
-        </div>
 
         <nav className="bl-nav" aria-label="Explorar este negocio">
           {services.length > 0 && <a href="#bl-services">Servicios</a>}
