@@ -267,7 +267,13 @@ export default function BookingLogin({ api, onSession, accent }: {
                                 maxLength={254} value={email} readOnly={busy} onChange={event => setEmail(event.target.value)}
                                 style={{ ...control, flex: 1, width: 0, borderRadius: 999, fontSize: 16 }} />
                             <button type="submit" disabled={busy} aria-label="Enviar código"
-                                style={{ ...button, borderRadius: "50%", width: 44, flex: "0 0 44px", padding: 0, border: 0, background: actionColor, color: "white", fontSize: 22 }}>{busy ? "…" : "→"}</button>
+                                style={{ ...button, display: "grid", placeItems: "center", borderRadius: "50%", width: 44, flex: "0 0 44px", padding: 0, border: 0, background: actionColor, color: "white", fontSize: 22 }}>
+                                {busy ? "…" : (
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                                        <path d="M20 12L4 12M13 5L20 12L13 19" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" stroke="white" />
+                                    </svg>
+                                )}
+                            </button>
                         </div>
                         {signup ? <>
                             <p style={{ margin: "8px 0 0", color: "#555" }}>Con tu cuenta de Turnits podés acceder a una experiencia personalizada según tus gustos.</p>
