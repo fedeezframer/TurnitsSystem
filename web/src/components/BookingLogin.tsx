@@ -1,3 +1,4 @@
+import BackButton from "./BackButton"
 import React from "react"
 
 const storageKey = "turnits_booking_consumer_token"
@@ -238,15 +239,14 @@ export default function BookingLogin({ api, onSession, accent }: {
             <dialog ref={dialog} className="turnits-booking-login" aria-labelledby={titleId}
                 onCancel={event => { event.preventDefault(); if (!busy) close() }}
                 style={{ width: "min(calc(100% - 32px), 400px)", maxWidth: "none", maxHeight: "calc(100% - 24px)", boxSizing: "border-box", border: 0, borderRadius: 20, padding: "28px clamp(16px, 5vw, 28px)", color: "#171a17", background: "#fff", boxShadow: "0 24px 90px #1115" }}>
-                <button type="button" aria-label={challenge || signup ? "Volver" : "Cerrar"} disabled={busy}
-                    style={{ ...button, position: "absolute", top: 8, right: 8, borderRadius: "50%", padding: 0, width: 44, border: 0, fontSize: 23 }}
+                <BackButton floating aria-label={challenge || signup ? "Volver" : "Cerrar"} disabled={busy}
                     onClick={() => {
                         setError("")
                         if (challenge) { setChallenge(""); setCode("") }
                         else if (signup) setSignup(false)
                         else close()
-                    }}>{challenge || signup ? "↶" : "×"}</button>
-                <img src="/assets/turnits-icon.svg" alt="" width={74} height={74} style={{ display: "block", margin: "0 auto 22px" }} />
+                    }} />
+                <img src="/favicon-light.png" alt="" width={96} height={96} style={{ display: "block", margin: "0 auto 10px" }} />
                 <form onSubmit={submit} style={{ display: "grid", gap: 15 }}>
                     <h2 id={titleId} style={{ margin: 0, fontSize: 19, lineHeight: 1.25 }}>
                         {challenge ? "Ingresá el código de verificación" : "Ingresá tu correo electrónico"}
