@@ -1,12 +1,12 @@
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-const FIELDS = "id,nombre,descripcion,precio_mensual,servicio_ids,producto_ids,publicado,imagen_url,cantidades_servicios";
+const FIELDS = "id,nombre,descripcion,precio_mensual,servicio_ids,producto_ids,publicado,imagen_url,cantidades_servicios,profesional_ids";
 const CATALOGS = [["servicios", "servicio_ids"], ["extras", "producto_ids"]];
 
 function parseUrl(value) {
   try { return new URL(value); } catch { return null; }
 }
 
-export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isActivo, diasHastaVencer }) {
+export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isActivo, diasHastaVencer, catalogoConProfesionales }) {
   const path = "/admin/membresias/:slug";
 
   const handle = (action) => async (req, res) => {
@@ -28,28 +28,36 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
     next();
   };
 
-  async function catalog(slug) {
-    const results = await Promise.all(CATALOGS.map(([table]) =>
-      supabase.from(table).select("id,nombre,activo").eq("slug", slug).order("nombre")
-    ));
-    return results.map(({ data, error }) => {
-      if (error) throw error;
-      return new Map(data.map(item => [item.id, item]));
-    });
+  async function catalog(slug, includeTeam = false) {
+    const base = "id,nombre,activo,precio,descripcion,owner_equipo_id";
+    const [services, products, team] = await Promise.all([
+      supabase.from("servicios").select(base).eq("slug", slug).order("nombre"),
+      supabase.from("extras").select(base + ",imagen_url").eq("slug", slug).order("nombre"),
+      includeTeam ? supabase.from("equipo").select("id,nombre,apellido,foto_url,color").eq("slug", slug).eq("activo", true).order("nombre") : { data: [] },
+    ]);
+    for (const result of [services, products, team]) if (result.error) throw result.error;
+    const enriched = await catalogoConProfesionales(slug, services.data, "servicio");
+    return {
+      maps: [enriched, products.data].map(items => new Map(items.map(item => [item.id, item]))),
+      team: team.data,
+    };
   }
 
+  const offersAll = (services, serviceIds, memberId) =>
+    serviceIds.every(id => services.get(id)?.profesionales.some(person => person.id === memberId));
+
   app.get(path, requireAuth, ownerOnly, handle(async (req, res, slug) => {
-    const [{ data, error }, [services, products]] = await Promise.all([
+    const [{ data, error }, { maps: [services, products], team }] = await Promise.all([
       supabase.from("membresias").select(FIELDS).eq("slug", slug).order("created_at", { ascending: false }),
-      catalog(slug),
+      catalog(slug, true),
     ]);
     if (error) throw error;
-    res.json({ success: true, membresias: data, servicios: [...services.values()], productos: [...products.values()] });
+    res.json({ success: true, membresias: data, servicios: [...services.values()], productos: [...products.values()], equipo: team });
   }));
 
   const save = handle(async (req, res, slug) => {
     const { id } = req.params;
-    const { nombre, descripcion, precio_mensual, servicio_ids, producto_ids, publicado, imagen_url, cantidades_servicios } = req.body || {};
+    const { nombre, descripcion, precio_mensual, servicio_ids, producto_ids, publicado, imagen_url, cantidades_servicios, profesional_ids } = req.body || {};
     const validIds = ids => Array.isArray(ids) && ids.length <= 100 &&
       ids.every(value => typeof value === "string" && UUID.test(value)) &&
       new Set(ids.map(value => value.toLowerCase())).size === ids.length;
@@ -90,10 +98,21 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
       payload.cantidades_servicios = cantidades_servicios;
     }
 
-    const maps = await catalog(slug);
+    if (profesional_ids !== undefined && !validIds(profesional_ids)) {
+      return res.status(400).json({ success: false, error: "La selección de profesionales es inválida." });
+    }
+    const { maps, team } = await catalog(slug, Boolean(profesional_ids?.length));
     const valid = CATALOGS.every(([, field], index) => payload[field].every(value => maps[index].get(value)?.activo === true));
     if (!valid) {
       return res.status(400).json({ success: false, error: "Elegí servicios y productos activos de tu catálogo." });
+    }
+
+    if (profesional_ids !== undefined) {
+      payload.profesional_ids = profesional_ids.map(value => value.toLowerCase());
+      const active = new Set(team.map(person => person.id));
+      if (!payload.profesional_ids.every(member => active.has(member) && offersAll(maps[0], payload.servicio_ids, member))) {
+        return res.status(400).json({ success: false, error: "Elegí profesionales activos que ofrezcan todos los servicios incluidos." });
+      }
     }
 
     const table = supabase.from("membresias");
@@ -122,9 +141,9 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
     if (error) throw error;
     if (!plans.length) return res.json({ success: true, membresias: [] });
 
-    const [{ data: business, error: businessError }, maps] = await Promise.all([
+    const [{ data: business, error: businessError }, { maps, team }] = await Promise.all([
       supabase.from("usuarios").select("activo,estado_suscripcion,fecha_vencimiento").eq("slug", slug).maybeSingle(),
-      catalog(slug),
+      catalog(slug, plans.some(plan => plan.profesional_ids.length > 0)),
     ]);
     if (businessError) throw businessError;
     if (!isActivo(business?.activo) || business.estado_suscripcion === "suspendido" ||
@@ -138,8 +157,12 @@ export function registerMembresias({ app, supabase, requireAuth, cleanSlug, isAc
       const servicios_incluidos = servicios.map(item => ({
         nombre: item.nombre, cantidad: cantidades_servicios[item.id] ?? 1,
       }));
+      const precio_original = servicios.reduce((sum, item) => sum + (Number(item.precio) || 0) * (cantidades_servicios[item.id] ?? 1), 0) +
+        productos.reduce((sum, item) => sum + (Number(item.precio) || 0), 0);
+      const profesionales = team.filter(person => plan.profesional_ids.includes(person.id) && offersAll(maps[0], plan.servicio_ids, person.id))
+        .map(({ nombre, apellido }) => [nombre, apellido].filter(Boolean).join(" "));
       return [{
-        id, nombre, descripcion, precio_mensual, imagen_url, servicios_incluidos,
+        id, nombre, descripcion, precio_mensual, precio_original, imagen_url, servicios_incluidos, profesionales,
         servicios: servicios.map(item => item.nombre), productos: productos.map(item => item.nombre),
       }];
     });

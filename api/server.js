@@ -1020,7 +1020,7 @@ async function requireAuth(req, res, next) {
 // ══════════════════════════════════════════════════════════════
 const sucursalesApp=crearSucursales({app,supabase,requireAuth,cleanSlug,isActivo,invalidateCache,multer});
 const branchPanel=createBranchPanel({app,supabase,requireAuth,cleanSlug});
-registerMembresias({ app, supabase, requireAuth, cleanSlug, isActivo, diasHastaVencer });
+registerMembresias({ app, supabase, requireAuth, cleanSlug, isActivo, diasHastaVencer, catalogoConProfesionales });
 const consumerAccounts=createConsumerAccounts({app,supabase,bcrypt,jwt,limiterAuth,limiterCodigo,limiterRegistroAgenda,fetch,
   mailUrl:APPS_SCRIPT_URL,rounds:BCRYPT_ROUNDS,expiry:JWT_EXPIRY});
 const receiptAccess = createReceiptAccess({ secret: () => process.env.JWT_SECRET, supabase, consumerAccounts });
