@@ -1914,7 +1914,11 @@ function registerGoogleRoutes({ app, limiterAuth, supabase, jwt, bcrypt, crypto,
           if(error) throw error;
           consumer=data;
         }
-        if (!user && !member && !consumer) return res.status(404).json({success:false,code:'google_registration_required',error:'Completá el registro de tu cuenta para empezar.'});
+        if (!user && !member && !consumer) return res.status(404).json({
+          success:false, code:'google_registration_required',
+          error:'Completá el registro de tu cuenta para empezar.',
+          ...(tipo_cuenta === 'usuario' ? { email } : {}),
+        });
       }
       let payload, result;
       if (user) {
