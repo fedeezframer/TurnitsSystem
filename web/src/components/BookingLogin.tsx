@@ -28,6 +28,17 @@ function displayAccountName(profile: { nombre_persona?: string; apellido?: strin
     return alias?.replace(/(^|\s)\p{L}/gu, letter => letter.toLocaleUpperCase("es")) || "Mi cuenta"
 }
 
+async function requestBookingCode(api: string, email: string, registro: boolean, challenge = "", codigo = "", signal?: AbortSignal) {
+    const action = challenge ? "verificar-codigo" : "enviar-codigo"
+    const response = await fetch(`${api}/consumidores/agenda/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, challenge, codigo, registro }),
+        signal,
+    })
+    return { response, data: await response.json().catch(() => null) }
+}
+
 export default function BookingLogin({ api, onSession, accent }: {
     api: string
     onSession?: (token: string) => void
@@ -126,8 +137,26 @@ export default function BookingLogin({ api, onSession, accent }: {
                         })
                         const data = await response.json()
                         if (request.signal.aborted) return
-                        if (data.code === "google_registration_required") {
-                            setSignup(true)
+                        if (response.status === 404 && data.code === "google_registration_required") {
+                            const address = typeof data.email === "string" ? data.email.trim().toLowerCase() : ""
+                            if (!address) {
+                                setSignup(true)
+                                return
+                            }
+                            setEmail(address)
+                            try {
+                                const registration = await requestBookingCode(api, address, true, "", "", request.signal)
+                                if (request.signal.aborted) return
+                                if (!registration.response.ok || !registration.data?.success || typeof registration.data.challenge !== "string") {
+                                    throw new Error(registration.data?.error || "No pudimos enviar el código. Volvé a intentar.")
+                                }
+                                setSignup(true)
+                                setChallenge(registration.data.challenge)
+                            } catch (error) {
+                                if (request.signal.aborted) return
+                                setSignup(true)
+                                setError(error instanceof Error ? error.message : "No pudimos enviar el código. Volvé a intentar.")
+                            }
                             return
                         }
                         if (!response.ok || data.rol !== "consumidor" || !data.token) throw new Error(data.error || "No pudimos iniciar sesión con Google.")
@@ -186,20 +215,11 @@ export default function BookingLogin({ api, onSession, accent }: {
         setError("")
         let register = signup
         try {
-            const action = challenge ? "verificar-codigo" : "enviar-codigo"
             const address = email.trim().toLowerCase()
-            const requestCode = async (registro: boolean) => {
-                const response = await fetch(`${api}/consumidores/agenda/${action}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ email: address, challenge, codigo: code, registro }),
-                })
-                return { response, data: await response.json().catch(() => null) }
-            }
-            let { response, data } = await requestCode(register)
+            let { response, data } = await requestBookingCode(api, address, register, challenge, code)
             if (!challenge && !register && response.status === 404 && data?.code === "consumer_registration_required") {
                 register = true
-                const registration = await requestCode(register)
+                const registration = await requestBookingCode(api, address, register)
                 response = registration.response
                 data = registration.data
             }
