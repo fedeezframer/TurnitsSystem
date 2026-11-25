@@ -21,12 +21,20 @@ export function saveBookingToken(token: string) {
     } catch {}
 }
 
+function displayAccountName(profile: { nombre_persona?: string; apellido?: string; email?: string }) {
+    const name = [profile.nombre_persona, profile.apellido].filter(Boolean).join(" ").trim()
+    if (name) return name
+    const alias = profile.email?.split("@")[0]?.split("+")[0]?.replace(/[._-]+/g, " ").trim()
+    return alias?.replace(/(^|\s)\p{L}/gu, letter => letter.toLocaleUpperCase("es")) || "Mi cuenta"
+}
+
 export default function BookingLogin({ api, onSession, accent }: {
     api: string
     onSession?: (token: string) => void
     accent?: string
 }) {
     const [open, setOpen] = React.useState(false)
+    const [accountName, setAccountName] = React.useState("")
     const [signedIn, setSignedIn] = React.useState(false)
     const [signup, setSignup] = React.useState(false)
     const dialog = React.useRef<HTMLDialogElement>(null)
@@ -56,7 +64,10 @@ export default function BookingLogin({ api, onSession, accent }: {
                 return
             }
             const result = await response.json()
-            if (!request.signal.aborted && readBookingToken() === token && result.success && result.perfil) setSignedIn(true)
+            if (!request.signal.aborted && readBookingToken() === token && result.success && result.perfil) {
+                setAccountName(displayAccountName(result.perfil))
+                setSignedIn(true)
+            }
         }).catch(() => {})
         return () => request.abort()
     }, [api])
@@ -116,7 +127,7 @@ export default function BookingLogin({ api, onSession, accent }: {
                             return
                         }
                         if (!response.ok || data.rol !== "consumidor" || !data.token) throw new Error(data.error || "No pudimos iniciar sesión con Google.")
-                        finish(data.token)
+                        finish(data.token, data)
                     } catch (error) {
                         if (!request.signal.aborted) setGoogleError(error instanceof Error ? error.message : "No pudimos iniciar sesión con Google.")
                     } finally {
@@ -148,7 +159,8 @@ export default function BookingLogin({ api, onSession, accent }: {
         setError("")
     }
 
-    function finish(token: string) {
+    function finish(token: string, profile: Parameters<typeof displayAccountName>[0]) {
+        setAccountName(displayAccountName({ ...profile, email: profile.email || email }))
         saveBookingToken(token)
         onSession?.(token)
         setSignedIn(true)
@@ -172,7 +184,7 @@ export default function BookingLogin({ api, onSession, accent }: {
             if (!response.ok || !data?.success) {
                 throw new Error(response.status === 429 ? "Esperá unos minutos antes de volver a intentar." : data?.error || "No pudimos continuar. Probá de nuevo.")
             }
-            if (challenge && typeof data.token === "string" && data.token) finish(data.token)
+            if (challenge && typeof data.token === "string" && data.token) finish(data.token, data)
             else if (!challenge && typeof data.challenge === "string" && data.challenge) setChallenge(data.challenge)
             else throw new Error("No pudimos continuar. Probá de nuevo.")
         } catch (failure) {
@@ -201,18 +213,25 @@ export default function BookingLogin({ api, onSession, accent }: {
         padding: "10px clamp(12px, 3vw, 17px)",
     } : button
 
+    const actionColor = accent || "#1b6b1a"
+
     if (signedIn) return (
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-            <span role="status">Sesión iniciada</span>
-            <button type="button" style={button} onClick={() => {
+        <details className="booking-account" style={{ position: "relative", maxWidth: "min(68vw, 280px)", color: "#171a17" }}>
+            <style>{`.booking-account summary::-webkit-details-marker{display:none}`}</style>
+            <summary aria-label={accountName} style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 44, cursor: "pointer", listStyle: "none" }}>
+                <span aria-hidden="true" style={{ display: "grid", placeItems: "center", flex: "0 0 25px", height: 25, borderRadius: "50%", background: actionColor, color: "white", fontSize: 13, fontWeight: 700 }}>{Array.from(accountName)[0]?.toLocaleUpperCase("es")}</span>
+                <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14 }}>{accountName}</strong>
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}><path d="m3 5 3 3 3-3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </summary>
+            <button type="button" style={{ ...button, position: "absolute", right: 0, top: "100%", whiteSpace: "nowrap", background: "#fff", zIndex: 2, borderColor: "#d6d9d6", boxShadow: "0 6px 18px #0002" }} onClick={() => {
                 saveBookingToken("")
                 onSession?.("")
                 setSignedIn(false)
+                setAccountName("")
             }}>Cerrar sesión</button>
-        </div>
+        </details>
     )
 
-    const actionColor = accent || "#1b6b1a"
     const [mailName, mailDomain] = email.trim().split("@")
     const maskedEmail = `${mailName.slice(0, 2)}••••${mailDomain ? `@${mailDomain}` : ""}`
 
@@ -235,10 +254,10 @@ export default function BookingLogin({ api, onSession, accent }: {
             )}
             {accent ? "Iniciar sesión" : "Ingresar con mi correo"}
         </button>
-            <style>{`dialog.turnits-booking-login::backdrop{background:rgba(12,16,13,.42)}.turnits-booking-login input:focus-visible{outline:2px solid ${actionColor};outline-offset:2px}.turnits-booking-login .booking-code:focus-within{outline:2px solid ${actionColor};outline-offset:4px;border-radius:5px}`}</style>
+            <style>{`@keyframes booking-login-spin{to{transform:rotate(360deg)}}.booking-login-spinner{animation:booking-login-spin .8s linear infinite}@media(prefers-reduced-motion:reduce){.booking-login-spinner{animation:none}}dialog.turnits-booking-login::backdrop{background:rgba(12,16,13,.42)}.turnits-booking-login input:focus-visible{outline:2px solid ${actionColor};outline-offset:2px}.turnits-booking-login .booking-code:focus-within{outline:2px solid ${actionColor};outline-offset:4px;border-radius:5px}`}</style>
             <dialog ref={dialog} className="turnits-booking-login" aria-labelledby={titleId}
                 onCancel={event => { event.preventDefault(); if (!busy) close() }}
-                style={{ width: "min(calc(100% - 32px), 400px)", maxWidth: "none", maxHeight: "calc(100% - 24px)", boxSizing: "border-box", border: 0, borderRadius: 20, padding: "28px clamp(16px, 5vw, 28px)", color: "#171a17", background: "#fff", boxShadow: "0 24px 90px #1115" }}>
+                style={{ width: "min(calc(100% - 32px), 400px)", maxWidth: "none", height: "min(440px, calc(100% - 24px))", boxSizing: "border-box", border: 0, borderRadius: 20, padding: "28px clamp(16px, 5vw, 28px)", color: "#171a17", background: "#fff", boxShadow: "0 24px 90px #1115" }}>
                 <BackButton floating aria-label={challenge || signup ? "Volver" : "Cerrar"} disabled={busy}
                     onClick={() => {
                         setError("")
@@ -268,7 +287,7 @@ export default function BookingLogin({ api, onSession, accent }: {
                                 style={{ ...control, flex: 1, width: 0, borderRadius: 999, fontSize: 16 }} />
                             <button type="submit" disabled={busy} aria-label="Enviar código"
                                 style={{ ...button, display: "grid", placeItems: "center", borderRadius: "50%", width: 44, flex: "0 0 44px", padding: 0, border: 0, background: actionColor, color: "white", fontSize: 22 }}>
-                                {busy ? "…" : (
+                                {busy ? <img className="booking-login-spinner" src="/assets/mingcute_loading-line.svg" alt="" width={24} height={24} style={{ filter: "invert(1)" }} /> : (
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
                                         <path d="M20 12L4 12M13 5L20 12L13 19" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" stroke="white" />
                                     </svg>
