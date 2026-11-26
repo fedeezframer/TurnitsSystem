@@ -1,5 +1,6 @@
 import React from "react"
 import BackButton from "./BackButton"
+import rescheduleArrow from "./boxicons_arrow-down-right-stroke-filled.svg"
 import "./BookingAccountMenu.css"
 
 type Profile = { nombre_persona?: string; apellido?: string; email?: string; telefono?: string }
@@ -46,6 +47,13 @@ export default function BookingAccountMenu({ api, slug, token, name, accent, onC
     const [editError, setEditError] = React.useState("")
     const [saving, setSaving] = React.useState(false)
     const [retry, setRetry] = React.useState(0)
+    const [closing, setClosing] = React.useState<"close" | "logout" | null>(null)
+    React.useEffect(() => {
+        if (!closing) return
+        const timer = window.setTimeout(closing === "logout" ? onLogout : onClose, 180)
+        return () => window.clearTimeout(timer)
+    }, [closing, onClose, onLogout])
+    const close = () => setClosing(current => current || "close")
     const titleId = React.useId()
 
     const request = React.useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
@@ -60,7 +68,7 @@ export default function BookingAccountMenu({ api, slug, token, name, accent, onC
     const historyPath = (index: number) => `/browse/mi-cuenta/turnos?page=${index}&slug=${encodeURIComponent(slug || "")}`
 
     React.useEffect(() => {
-        dialog.current?.showModal()
+        if (dialog.current && !dialog.current.open) dialog.current.showModal()
     }, [])
     React.useEffect(() => {
         const controller = new AbortController()
@@ -119,18 +127,18 @@ export default function BookingAccountMenu({ api, slug, token, name, accent, onC
         return key === "telefono" && field && !field.startsWith("+") ? "+" + field : field
     }
 
-    return <dialog ref={dialog} className="booking-account-menu" aria-labelledby={titleId}
+    return <dialog ref={dialog} className="booking-account-menu" data-closing={Boolean(closing)} aria-labelledby={titleId}
         style={{ "--bam-accent": accent } as React.CSSProperties}
-        onCancel={event => { event.preventDefault(); onClose() }}
+        onCancel={event => { event.preventDefault(); close() }}
         onClick={event => {
             if (event.target !== event.currentTarget) return
             const panel = event.currentTarget.getBoundingClientRect()
-            if (event.clientX < panel.left || event.clientX > panel.right || event.clientY < panel.top || event.clientY > panel.bottom) onClose()
+            if (event.clientX < panel.left || event.clientX > panel.right || event.clientY < panel.top || event.clientY > panel.bottom) close()
         }}>
         <header className="bam-header">
             <span className="bam-avatar" aria-hidden="true">{Array.from(fullName)[0]?.toLocaleUpperCase("es") || "U"}</span>
             <div className="bam-identity"><h2 id={titleId}>{fullName}</h2>{profile?.email && <p>{profile.email}</p>}</div>
-            <BackButton aria-label="Cerrar menú de cuenta" onClick={onClose} />
+            <BackButton aria-label="Cerrar menú de cuenta" onClick={close} />
         </header>
         <div className="bam-body">
             {!!history?.suscripciones.length && <section className="bam-subscriptions" aria-label="Tu suscripción">
@@ -154,7 +162,7 @@ export default function BookingAccountMenu({ api, slug, token, name, accent, onC
                     {row.imagen ? <img alt="" src={row.imagen} loading="lazy" /> : <span className="bam-thumb" aria-hidden="true">{row.servicio.charAt(0)}</span>}
                     <div className="bam-reservation-name"><strong>{row.servicio}</strong><span>en {row.negocio}</span></div>
                     <div className="bam-reservation-meta"><time dateTime={row.fecha}>{timeLabel(row)}</time>
-                        {row.reprogramar && <a href={row.reprogramar} referrerPolicy="no-referrer">Reprogramar ↘</a>}
+                        {row.reprogramar && <a href={row.reprogramar} referrerPolicy="no-referrer">Reprogramar <img src={rescheduleArrow} alt="" width="12" height="12" /></a>}
                     </div>
                 </li>)}</ul>
                 {expanded && history?.hay_mas && <button type="button" className="bam-text-button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Cargando…" : "Ver más reservas"}</button>}
@@ -179,7 +187,9 @@ export default function BookingAccountMenu({ api, slug, token, name, accent, onC
                         <button type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar"}</button></div>
                 </form>}
             </section>
-            <button type="button" className="bam-text-button bam-logout" onClick={onLogout}>Cerrar sesión</button>
         </div>
+        <footer className="bam-footer">
+            <button type="button" className="bam-logout" disabled={Boolean(closing)} onClick={() => setClosing(current => current || "logout")}>Cerrar sesión</button>
+        </footer>
     </dialog>
 }

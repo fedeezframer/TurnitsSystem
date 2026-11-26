@@ -1,3 +1,4 @@
+import BusinessLocations from "../components/BusinessLocations"
 import { MembershipCatalog, type Membership } from "./MembershipCatalog"
 import BookingLogin from "../components/BookingLogin"
 import * as React from "react"
@@ -119,6 +120,7 @@ export default function BusinessLanding() {
   const [services, setServices] = React.useState<Service[]>([])
   const [members, setMembers] = React.useState<Member[]>([])
   const [branches, setBranches] = React.useState<Branch[]>([])
+  const [locationsOpen, setLocationsOpen] = React.useState(false)
   const [availability, setAvailability] = React.useState<Record<string, { date: string; time: string } | null>>({})
   const [todaySlots, setTodaySlots] = React.useState<number | null>(null)
   const [offers, setOffers] = React.useState<Offer[]>([])
@@ -148,7 +150,7 @@ export default function BusinessLanding() {
   React.useEffect(() => {
     if (!slug) return
     const controller = new AbortController()
-    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setMemberships([]); setOffers([]); setLogoFailed(false); setBannerFailed(false); setServices([]); setMembers([]); setBranches([]); setReviewItems([]); setAvailability({}); setTodaySlots(null)
+    setState("loading"); setNegocio(null); setPerfil(null); setPromos([]); setMemberships([]); setOffers([]); setLogoFailed(false); setBannerFailed(false); setServices([]); setMembers([]); setBranches([]); setLocationsOpen(false); setReviewItems([]); setAvailability({}); setTodaySlots(null)
     const s = encodeURIComponent(slug)
     getJson(`/negocio/${s}`, controller.signal).then(data => {
       if (controller.signal.aborted) return
@@ -392,8 +394,13 @@ export default function BusinessLanding() {
           <div className="bl-logo">{logo ? <img src={logo} alt={`Logo de ${name}`} onError={() => setLogoFailed(true)} /> : <span aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>}</div>
           <h1 className={name.length > 22 ? "bl-name-long bl-name-extra-long" : name.length > 15 ? "bl-name-long" : undefined}>{name}</h1>
           {tagline && <p className="bl-tagline">{tagline}</p>}
+          {locationsOpen && <BusinessLocations branches={branches} onClose={() => setLocationsOpen(false)} />}
           <div className="bl-info">
-            {address.length > 0 && (
+            {branches.length > 1 ? <button type="button" className="bl-info-item" aria-haspopup="dialog" aria-expanded={locationsOpen}
+              onClick={() => setLocationsOpen(true)} style={{ border: 0, background: "transparent", padding: 0, cursor: "pointer" }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11A6.5 6.5 0 0 1 12 3.5 6.5 6.5 0 0 1 18.5 10c0 5.400-6.500 11-6.500 11Z" /><circle cx="12" cy="10" r="2.400" /></svg>
+              <span>Ver ubicaciones</span>
+            </button> : address.length > 0 && (
               <a className="bl-info-item" href={branches[0]?.latitud != null && branches[0]?.longitud != null ? `https://www.google.com/maps/search/?api=1&query=${branches[0].latitud},${branches[0].longitud}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.join(", "))}`} target="_blank" rel="noopener noreferrer">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11A6.5 6.5 0 0 1 12 3.5 6.5 6.5 0 0 1 18.5 10c0 5.400-6.500 11-6.500 11Z" /><circle cx="12" cy="10" r="2.400" /></svg>
                 <span>{address.map((line, i) => <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>)}</span>

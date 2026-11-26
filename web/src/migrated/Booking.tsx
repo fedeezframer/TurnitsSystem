@@ -1,3 +1,5 @@
+import promosArrow from "../components/boxicons_arrow-down-right-stroke-filled.svg"
+import PublicOverlay from "../components/PublicOverlay"
 import BackButton from "../components/BackButton"
 import { fetchMembershipTickets, type MembershipTickets } from "../shared/membership-tickets"
 import BookingLogin, { readBookingToken, saveBookingToken } from "../components/BookingLogin"
@@ -382,9 +384,6 @@ const shimmerCSS = `
     .bf-days-grid {grid-template-columns:repeat(5,minmax(0,1fr))!important}
     .bf-days-grid > button {min-height:80px;padding:14px 16px!important}
     .bf-days-grid > button > span:first-child {font-size:20px!important}
-    .bf-combos-desktop-stage {max-width:1080px;margin:0 auto;gap:24px;padding:24px 20px!important;align-items:center!important}
-    .bf-combos-desktop-stage > .bf-catalog-shell {order:1;flex:0 1 800px;margin:0!important;padding:0 18px!important;min-width:0}
-    .bf-combos-desktop-menu {order:2;flex:0 0 220px;min-width:0}
     .bf-times-grid {grid-template-columns:repeat(4,minmax(0,1fr))!important}
     .bf-extras-desktop-wrap {max-width:100%!important;overflow:visible!important;mask-image:none!important;-webkit-mask-image:none!important}
     .bf-extras-desktop-wrap .bf-extras-row {flex-wrap:wrap;gap:12px!important;justify-content:flex-start!important;width:100%!important;transform:none!important}
@@ -865,8 +864,6 @@ export default function BookingFlow(props: any) {
     const [promocionId,setPromocionId] = React.useState<string|null>(null)
     const [errorPromos,setErrorPromos] = React.useState("")
     const [loadingPromos,setLoadingPromos] = React.useState(false)
-    const [esDesktop,setEsDesktop]=React.useState(false)
-    React.useEffect(()=>{const media=window.matchMedia("(min-width: 861px)");const sync=()=>setEsDesktop(media.matches);sync();media.addEventListener("change",sync);return ()=>media.removeEventListener("change",sync)},[])
     const catalogPromo = promociones.find(p=>p.id===promocionId) || null
     const descuentoServicio = (id:string) => promociones.filter(p=>p.tipo === "descuento" && p.servicio_id===id && p.precio_final < Number(servicios.find(s=>s.id===id)?.precio || 0)).sort((a,b)=>a.precio_final-b.precio_final)[0]
 
@@ -1827,7 +1824,7 @@ export default function BookingFlow(props: any) {
         irAPaso("profesional")
     }
     function elegirPromo(p:BookingPromo) {
-        setPromocionId(p.id);setServicioId(p.servicio_id);setExtrasSeleccionados([]);setFecha("");setHora("");setEquipoIdReservado(null);irSiguientePaso()
+        setPromocionId(p.id);setServicioId(p.servicio_id);setExtrasSeleccionados([]);setFecha("");setHora("");setEquipoIdReservado(null);irAPaso("fecha")
     }
     function elegirServicio(svc: Servicio) {
         if(loadingPromos)return
@@ -2413,9 +2410,10 @@ export default function BookingFlow(props: any) {
     return (
         <div style={{width:"100%",minHeight:"100dvh",margin:0,paddingBottom:basket.length || servicioElegido ? 72 : 0,boxSizing:"border-box",display:"flex",flexDirection:"column",fontFamily:"'DM Sans', -apple-system, sans-serif",...temaVars}}>
             {personal && stepId==="servicio" && !primaryPersonal && <p style={{margin:"12px auto",padding:"0 16px"}}>Elegí un servicio para reservar tu turno. La oferta de {personal.items.map(item=>item.nombre).join(" + ")} se suma por {formatearMoneda(personal.precio)}.</p>}
-            {!esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && <BookingCombosSubheader promociones={promociones.filter(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id))} servicios={servicios} accent={accent} icono={iconoVerCombo} onSelect={elegirPromo} />}
-        <div className={esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && promociones.some(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id)) ? "bf-combos-desktop-stage" : undefined} style={{display:"flex",flex:1,width:"100%",alignItems:enCheckoutStep ? "flex-start" : "center",justifyContent:"center",padding:enCheckoutStep ? 0 : "20px 0",boxSizing:"border-box"}}>
-        {esDesktop && stepId === "servicio" && listoParaServicios && !loadingPromos && <BookingCombosDesktop promociones={promociones.filter(p=>p.tipo === "combo" && servicios.some(s=>s.id===p.servicio_id))} servicios={servicios} accent={accent} onSelect={elegirPromo}/>}
+            {!personalKey && (stepId === "servicio" || stepId === "fecha") && listoParaServicios && !loadingPromos &&
+                <BookingPromos promociones={promociones.filter(promo => servicios.some(service => service.id === promo.servicio_id))}
+                    servicios={servicios} accent={accent} icono={iconoVerCombo} onSelect={elegirPromo} />}
+        <div style={{display:"flex",flex:1,width:"100%",alignItems:enCheckoutStep ? "flex-start" : "center",justifyContent:"center",padding:enCheckoutStep ? 0 : "20px 0",boxSizing:"border-box"}}>
         <div
             ref={rootRef}
             className={enCheckoutStep ? "bf-full-viewport" : "bf-full-viewport bf-catalog-shell"}
@@ -3727,101 +3725,54 @@ function BasketItemEditor({item,index,api,slug,minDate,others,onChange,onRemove}
     </div>
 }
 
-function BookingCombosDesktop({promociones,servicios,accent,onSelect}:{promociones:BookingPromo[];servicios:Servicio[];accent:string;onSelect:(promo:BookingPromo)=>void}) {
-    if(!promociones.length)return null
-    return <aside className="bf-combos-desktop-menu" aria-label="Combos disponibles" style={{display:"flex",flexDirection:"column",gap:12}}>
-        <div style={{fontSize:15,fontWeight:700,color:"var(--bf-text)"}}>Combos disponibles</div>
-        {promociones.map(p=><div key={p.id} style={{padding:14,border:"1px solid var(--bf-border)",borderRadius:"var(--bf-card-radius, 12px)",background:"var(--bf-card-bg)",display:"flex",flexDirection:"column",gap:9,minWidth:0}}>
-            <strong style={{fontSize:13,lineHeight:1.4,color:"var(--bf-text)",overflowWrap:"anywhere"}}>{p.nombre}</strong>
-            {p.dias_semana != null && <span style={{fontSize:11,lineHeight:1.4,color:"var(--bf-text-muted)"}}>Sólo los {promoDaysLabel(p.dias_semana)}</span>}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:5}}>{p.items.map(item=>{const url=p.imagenes?.find(i=>i.tipo===item.tipo && i.id===item.id)?.url || (item.tipo === "servicio" ? servicios.find(s=>s.id===item.id)?.imagen : "");return <span key={item.tipo+item.id} title={`${item.cantidad} × ${item.nombre}`} style={{aspectRatio:"1",position:"relative",display:"grid",placeItems:"center",borderRadius:5,overflow:"hidden",background:"var(--bf-panel-bg)",minWidth:0}}>{url ? <img src={url} alt={item.nombre} style={{width:"100%",height:"100%",objectFit:item.tipo === "producto" ? "contain" : "cover",borderRadius:5}}/> : <span style={{fontSize:10,padding:4,textAlign:"center",color:"var(--bf-text-muted)",overflowWrap:"anywhere"}}>{item.nombre}</span>}{item.cantidad>1 && <span style={{position:"absolute",right:2,bottom:2,fontSize:9,padding:"1px 3px",borderRadius:3,background:"var(--bf-card-bg)",color:"var(--bf-text)"}}>×{item.cantidad}</span>}</span>})}</div>
-            <div style={{fontSize:10,lineHeight:1.5,color:"var(--bf-text-muted)",overflowWrap:"anywhere"}}>Incluye: {p.items.map(i=>`${i.cantidad} × ${i.nombre}`).join(" + ")}</div>
-            <div style={{display:"flex",alignItems:"baseline",gap:6,flexWrap:"wrap",color:"var(--bf-text)"}}><strong style={{fontSize:15}}>$ {p.precio_final.toLocaleString("es-AR")}</strong><del style={{fontSize:11,color:"var(--bf-text-muted)"}}>$ {p.precio_original.toLocaleString("es-AR")}</del></div>
-            <button type="button" onClick={()=>onSelect(p)} style={{border:0,borderRadius:8,padding:"9px 10px",background:accent,color:"white",font:"inherit",fontSize:12,fontWeight:600,cursor:"pointer"}}>Agendar Combo</button>
-        </div>)}
-    </aside>
-}
-
-function BookingCombosSubheader({promociones,servicios,accent,icono,onSelect}:{promociones:BookingPromo[];servicios:Servicio[];accent:string;icono?:string;onSelect:(promo:BookingPromo)=>void}) {
-    const [abierto,setAbierto]=React.useState(false)
-    const [indice,setIndice]=React.useState(0)
-    const id=React.useId()
-    const carrusel=React.useRef<HTMLDivElement>(null)
-    const destinoSlide=React.useRef<number | null>(null)
-    const [progreso,setProgreso]=React.useState(0)
-    const [alturaCombo,setAlturaCombo]=React.useState(34)
-    React.useEffect(()=>{
-        if(!abierto)return
-        const el=carrusel.current
-        const tarjeta=el?.children[Math.min(indice,promociones.length-1)] as HTMLElement | undefined
-        if(!el || !tarjeta)return
-        const medir=()=>setAlturaCombo(Math.ceil(tarjeta.getBoundingClientRect().height)+4)
-        medir()
-        const observer=new ResizeObserver(medir)
-        observer.observe(tarjeta)
-        observer.observe(el)
-        return ()=>observer.disconnect()
-    },[abierto,indice,promociones])
-    React.useEffect(()=>{
-        if(abierto && carrusel.current)carrusel.current.scrollTo({left:indice*carrusel.current.clientWidth,behavior:"auto"})
-    },[abierto])
-    React.useEffect(()=>{
-        if(!abierto || !promociones.length){setProgreso(0);return}
-        let frame=0
-        let inicio:number | null=null
-        let cancelado=false
-        const avanzar=(ahora:number)=>{
-            if(cancelado)return
-            if(inicio===null)inicio=ahora
-            const transcurrido=ahora-inicio
-            setProgreso(Math.min(transcurrido/6000,1))
-            if(transcurrido>=6000){
-                const siguiente=(indice+1)%promociones.length
-                destinoSlide.current=siguiente
-                carrusel.current?.scrollTo({left:siguiente*carrusel.current.clientWidth,behavior:"smooth"})
-                setIndice(siguiente)
-                setProgreso(0)
-                if(siguiente!==indice)return
-                inicio=ahora
-            }
-            frame=requestAnimationFrame(avanzar)
-        }
-        frame=requestAnimationFrame(avanzar)
-        return ()=>{cancelado=true;cancelAnimationFrame(frame)}
-    },[abierto,indice,promociones.length])
-    if(!promociones.length)return null
-    return <div style={{position:"sticky",top:0,height:34,width:"calc(100% - 20px)",maxWidth:420,margin:"0 auto",zIndex:30,flexShrink:0}} onKeyDown={event=>{if(event.key === "Escape")setAbierto(false)}}>
-        <style>{`@keyframes bf-combos-shine {0%,65% {transform:translateX(-140%) skewX(-18deg)} 100% {transform:translateX(520%) skewX(-18deg)}} .bf-combos-shine {animation:bf-combos-shine 4.5s ease-in-out infinite} @media(prefers-reduced-motion:reduce){.bf-combos-shine {animation:none;display:none}}`}</style>
-        <motion.div id={id} initial={false} animate={{height:abierto ? alturaCombo : 34}} transition={{duration:0.3,ease:[0.22,1,0.36,1]}} style={{position:"absolute",inset:"0 0 auto",boxSizing:"border-box",border:"1px solid var(--bf-border)",borderRadius:"var(--bf-card-radius, 4px)",background:"var(--bf-card-bg)",overflow:"hidden"}}>
-        {!abierto ? <button type="button" aria-expanded={false} aria-controls={id} onClick={()=>setAbierto(true)} style={{width:"100%",height:32,boxSizing:"border-box",padding:"6px 8px",textAlign:"left",display:"flex",alignItems:"center",gap:5,border:0,borderRadius:4,position:"relative",overflow:"hidden",background:"transparent",color:"var(--bf-text)",font:"inherit",fontSize:12,fontWeight:700,cursor:"pointer"}}><span>Ver Combos</span>{icono ? <img src={icono} alt="" aria-hidden="true" style={{width:14,height:14,objectFit:"contain",flexShrink:0}}/> : <span aria-hidden="true">↘</span>}<span aria-hidden="true" className="bf-combos-shine" style={{position:"absolute",inset:"0 auto 0 0",width:"28%",background:"linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent)",pointerEvents:"none"}}/></button> : <div>
-            <div ref={carrusel} aria-label="Combos disponibles" onPointerDown={()=>{destinoSlide.current=null}} onWheel={()=>{destinoSlide.current=null}} onScroll={event=>{const el=event.currentTarget;if(!el.clientWidth)return;if(destinoSlide.current!==null){if(Math.abs(el.scrollLeft-destinoSlide.current*el.clientWidth)>1)return;destinoSlide.current=null}setIndice(Math.max(0,Math.min(promociones.length-1,Math.round(el.scrollLeft/el.clientWidth))))}} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",alignItems:"flex-start",scrollbarWidth:"none"}}>
-                {promociones.map(p=>{const imagenes=p.items.map(item=>({...item,url:p.imagenes?.find(image=>image.tipo===item.tipo && image.id===item.id)?.url || (item.tipo === "servicio" ? servicios.find(service=>service.id===item.id)?.imagen : "")}));return <div key={p.id} style={{flex:"0 0 100%",minWidth:0,boxSizing:"border-box",scrollSnapAlign:"start",display:"flex",flexDirection:"column",gap:8,padding:"8px 10px 10px"}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:5}}>
-                            <button type="button" aria-label="Cerrar combos" onClick={()=>setAbierto(false)} style={{display:"block",maxWidth:"100%",border:0,padding:0,background:"transparent",color:"var(--bf-text)",font:"inherit",fontSize:12,lineHeight:"16px",textAlign:"left",overflowWrap:"anywhere",cursor:"pointer"}}>{p.nombre}</button>
-                            {p.dias_semana != null && <span style={{fontSize:10,lineHeight:1.4,color:"var(--bf-text-muted)"}}>Sólo los {promoDaysLabel(p.dias_semana)}</span>}
-                            <div style={{display:"flex",alignItems:"baseline",gap:6,flexWrap:"wrap",fontSize:12,lineHeight:"16px",color:"var(--bf-text)"}}><strong style={{fontWeight:600}}>$ {p.precio_final.toLocaleString("es-AR")}</strong><del style={{fontSize:10,color:"var(--bf-text-muted)",fontWeight:400}}>$ {p.precio_original.toLocaleString("es-AR")}</del></div>
-                            <button type="button" onClick={()=>onSelect(p)} style={{border:0,borderRadius:20,padding:"4px 7px",background:accent,color:"white",font:"inherit",fontSize:10,lineHeight:"13px",cursor:"pointer",whiteSpace:"nowrap"}}>Agendar Combo</button>
+function BookingPromos({ promociones, servicios, accent, icono, onSelect }: {
+    promociones: BookingPromo[]; servicios: Servicio[]; accent: string; icono?: string; onSelect: (promo: BookingPromo) => void
+}) {
+    const [open, setOpen] = React.useState(false)
+    if (!promociones.length) return null
+    const close = () => setOpen(false)
+    return <div style={{ position: "sticky", top: 0, zIndex: 30, width: "100vw", maxWidth: "100%", flexShrink: 0 }}>
+        <button type="button" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}
+            style={{ width: "100%", minHeight: 48, padding: "10px 18px", display: "flex", justifyContent: "center", alignItems: "center",
+                gap: 7, border: 0, background: accent, color: "#fff", font: "inherit", fontWeight: 750, cursor: "pointer" }}>
+            Ver promos <img src={icono || promosArrow} alt="" width="16" height="16" style={{ objectFit: "contain", filter: "brightness(0) invert(1)" }} />
+        </button>
+        {open && <PublicOverlay title="Promos disponibles" onClose={close}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%, 260px),1fr))", gap: 14 }}>
+                {promociones.map(promo => {
+                    const images = (promo.items || []).map(item => ({
+                        ...item,
+                        url: promo.imagenes?.find(image => image.tipo === item.tipo && image.id === item.id)?.url ||
+                            (item.tipo === "servicio" ? servicios.find(service => service.id === item.id)?.imagen : ""),
+                    }))
+                    return <article key={promo.id} style={{ display: "flex", flexDirection: "column", gap: 10, padding: 14,
+                        border: "1px solid var(--bf-border)", borderRadius: "var(--bf-card-radius, 14px)", background: "var(--bf-card-bg)", minWidth: 0, overflowWrap: "anywhere" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                            <strong>{promo.nombre}</strong>
+                            {promo.tipo === "combo" && <small style={{ color: "var(--bf-text-muted)" }}>Combo</small>}
                         </div>
-                        <div aria-label="Imágenes de todos los elementos del combo" style={{display:"grid",gridTemplateColumns:imagenes.length>4 ? "repeat(3,minmax(0,1fr))" : "repeat(2,minmax(0,1fr))",width:imagenes.length>4 ? 126 : 100,gap:4,flexShrink:0}}>
-                            {imagenes.map(item=><span key={item.tipo+item.id} title={`${item.cantidad} × ${item.nombre}`} style={{position:"relative",aspectRatio:"1",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:3,overflow:"hidden",background:"var(--bf-panel-bg)",border:"1px solid var(--bf-border)",boxSizing:"border-box"}}>
-                                {item.url ? <img src={item.url} alt={item.nombre} style={{display:"block",width:item.tipo === "producto" ? "auto" : "100%",height:item.tipo === "producto" ? "auto" : "100%",maxWidth:"100%",maxHeight:"100%",objectFit:item.tipo === "producto" ? "contain" : "cover",borderRadius:3}}/> : <span role="img" aria-label={item.nombre} style={{color:"var(--bf-text-faint)",display:"flex"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1"/><path d="m3 17 5-5 4 4 3-3 6 6"/></svg></span>}
-                                {item.cantidad>1 && <span style={{position:"absolute",right:2,bottom:2,padding:"1px 3px",borderRadius:3,background:"var(--bf-card-bg)",color:"var(--bf-text)",fontSize:9,fontWeight:600}}>×{item.cantidad}</span>}
-                            </span>)}
+                        {promo.dias_semana != null && <small>Sólo los {promoDaysLabel(promo.dias_semana)}</small>}
+                        {!!images.length && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(58px,1fr))", gap: 6 }}>
+                            {images.map(item => <div key={item.tipo + item.id} style={{ textAlign: "center", minWidth: 0 }}>
+                                {item.url && <img src={item.url} alt="" loading="lazy"
+                                    style={{ display: "block", width: "100%", aspectRatio: "1", objectFit: item.tipo === "producto" ? "contain" : "cover", borderRadius: 8 }} />}
+                                <small>{item.cantidad} × {item.nombre}</small>
+                            </div>)}
+                        </div>}
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: "auto" }}>
+                            <strong>{formatearMoneda(promo.precio_final)}</strong>
+                            {promo.precio_original > promo.precio_final && <del style={{ color: "var(--bf-text-muted)" }}>{formatearMoneda(promo.precio_original)}</del>}
                         </div>
-                    </div>
-                    <div style={{fontSize:10,lineHeight:1.5,color:"var(--bf-text-muted)",overflowWrap:"anywhere"}}><strong style={{fontWeight:600}}>Incluye: </strong>{p.items.map(item=>`${item.cantidad} × ${item.nombre}`).join(" + ")}</div>
-                </div>})}
+                        <button type="button" onClick={() => { close(); onSelect(promo) }}
+                            style={{ border: 0, borderRadius: 9, padding: "10px 14px", background: accent, color: "white", font: "inherit", fontWeight: 700, cursor: "pointer" }}>
+                            {promo.tipo === "combo" ? "Reservar combo" : "Reservar promo"}
+                        </button>
+                    </article>
+                })}
             </div>
-            <div aria-hidden="true" style={{position:"absolute",bottom:0,left:0,height:2,width:"100%",transform:`scaleX(${progreso})`,transformOrigin:"left",background:accent}}/>
-        </div>}
-        </motion.div>
+        </PublicOverlay>}
     </div>
 }
-function ComboImagenVacia({ancho}:{ancho:number}) {
-    return <span aria-hidden="true" style={{width:ancho,height:48,display:"grid",placeItems:"center",background:"#eee",borderRadius:ancho===48 ? 9 : 3}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a0a0a0" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1"/><path d="m3 17 5-5 4 4 3-3 6 6"/></svg></span>
-}
-
 function ServicioCard({
     svc,
     ticket = false,
