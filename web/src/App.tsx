@@ -22,6 +22,7 @@ const Reschedule = lazy(() => import("./pages/Reschedule"))
 const AnimationTest = lazy(() => import("./pages/AnimationTest"))
 const BusinessLanding = lazy(() => import("./pages/BusinessLanding"))
 const MembershipPage = lazy(() => import("./pages/MembershipPage"))
+const MembershipCheckout = lazy(() => import("./pages/MembershipCheckout"))
 const QuoteAvailability = lazy(() => import("./pages/QuoteAvailability"))
 
 function PanelRoute() {
@@ -83,6 +84,7 @@ function BookingRoute() {
   if (slug) {
     if (error) return <main className="app-page"><section className="app-card"><h1>No pudimos abrir la agenda</h1><button onClick={() => setRetry(value => value + 1)}>Reintentar</button></section></main>
     if (!business) return <BrandPreloader />
+    if (new URLSearchParams(location.search).has("suscripcion")) return <MembershipCheckout key={slug} slug={slug} business={business} />
     if (business.modo_agenda === "presupuesto") {
       if (appConfig.quoteBookingEnabled && !business.suspendido) return <QuoteAvailability slug={slug} business={business} />
       return <main className="app-page"><section className="app-card"><h1>Agenda no disponible por ahora</h1><p>Este tipo de agenda está pausado temporalmente.</p><Link className="app-button" to="/browse">Volver a Browse</Link></section></main>

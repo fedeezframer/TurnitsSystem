@@ -1,3 +1,4 @@
+import MembershipPaymentReview from "./membership-payment-review"
 import * as React from "react"
 import { MenuFooter_getSlug, MenuFooter_getToken, ServiciosManager_parseDesc, TurnitsGlobalSaveManager_get } from "./common"
 import { BackButton } from "../../components/BackButton"
@@ -253,6 +254,7 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
     if (order === "precio") visible.sort((a, b) => a.precio_mensual - b.precio_mensual)
 
     return <div style={{ display: "grid", gap: 16 }}>
+        {!form && <MembershipPaymentReview request={request} />}
         {!form && <CatalogToolbar<(typeof filters)[number]["id"], (typeof orders)[number]["id"]> label="suscripciones" filters={filters} filterValue={filter} onFilter={setFilter}
             opcionesOrden={orders} sort={order} onSort={setOrder} search={search} onSearch={setSearch}
             onCreate={locked ? undefined : () => open(null)} />}

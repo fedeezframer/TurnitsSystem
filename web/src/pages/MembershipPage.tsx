@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Link, useParams, useSearchParams } from "react-router"
-import BookingLogin, { readBookingToken, saveBookingToken } from "../components/BookingLogin"
+import BookingLogin, { readBookingToken } from "../components/BookingLogin"
 import { fetchMembershipTickets, ticketCount, type MembershipTickets } from "../shared/membership-tickets"
 import BrandPreloader from "../components/BrandPreloader"
 import { appConfig } from "../config"
@@ -16,10 +16,7 @@ export default function MembershipPage() {
   const [error, setError] = React.useState(false)
   const [retry, setRetry] = React.useState(0)
   const [token, setToken] = React.useState(readBookingToken)
-  const [loginRequest, setLoginRequest] = React.useState(0)
   const [plans, setPlans] = React.useState<MembershipTickets[]>([])
-  const [busy, setBusy] = React.useState("")
-  const [message, setMessage] = React.useState("")
   const [paymentState, setPaymentState] = React.useState("")
   const [search] = useSearchParams()
   const order = search.get("pago") || ""
@@ -71,46 +68,18 @@ export default function MembershipPage() {
     return () => { controller.abort(); window.clearInterval(timer) }
   }, [base, order, payment, token, paymentState])
 
-  const checkout = async (plan: Membership) => {
-    if (busy) return
-    setMessage("")
-    if (!token) {
-      setLoginRequest(value => value + 1)
-      setMessage("Iniciá sesión para contratar el plan.")
-      return
-    }
-    setBusy(plan.id)
-    try {
-      const res = await fetch(`${base}/${encodeURIComponent(plan.id)}/checkout`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await res.json()
-      if (res.status === 401) {
-        saveBookingToken("")
-        setToken("")
-        setLoginRequest(value => value + 1)
-      }
-      if (!res.ok || !data.payment_url) throw new Error(data.error || "No pudimos abrir Mercado Pago.")
-      window.location.assign(data.payment_url)
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "No pudimos abrir Mercado Pago.")
-      setBusy("")
-    }
-  }
-
   if (!listing && !error) return <BrandPreloader />
 
   return <main className="bl-page" style={{ paddingBottom: 32 }}>
     <header className="bl-section" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 16 }}>
       <Link to={businessPath}>← Volver al negocio</Link>
-      <BookingLogin api={appConfig.apiUrl} slug={slug} accent="var(--bl-ink)" onSession={setToken} loginRequest={loginRequest} />
+      <BookingLogin api={appConfig.apiUrl} slug={slug} accent="var(--bl-ink)" onSession={setToken} />
     </header>
     <section className="bl-section" aria-labelledby="membership-title">
       <h1 id="membership-title" style={{ margin: "0 0 12px" }}>Suscripciones</h1>
       {error ? <><p>No pudimos cargar las suscripciones.</p><button type="button" onClick={() => setRetry(value => value + 1)}>Reintentar</button></> :
         listing && <>
           <p style={{ margin: "0 0 20px" }}>{listing.name}</p>
-          {message && <p role="alert">{message}</p>}
           {order && <p role="status">{!token ? "Iniciá sesión para consultar el estado del pago." :
             paymentState === "activo" ? "Pago aprobado. Tus tickets aparecen en Mis tickets." :
               paymentState === "vencido" || paymentState === "revertido" ? "El pago no quedó activo." : "Estamos verificando el pago con Mercado Pago."}</p>}
@@ -123,9 +92,7 @@ export default function MembershipPage() {
           </div>}
           {listing.plans.length ? <MembershipCatalog plans={listing.plans} action={plan =>
             !listing.canPurchase ? null : plans.some(period => period.membresia_id === plan.id) ? <Link className="bl-reserve" to={`/agenda${businessPath}`}>Usar mis tickets →</Link> :
-              <button type="button" disabled={Boolean(busy)} className="bl-reserve" onClick={() => void checkout(plan)}>
-                {busy === plan.id ? "Abriendo Mercado Pago…" : "Contratar un mes"}
-              </button>
+              <Link className="bl-membership-buy" to={`/agenda${businessPath}?suscripcion=${encodeURIComponent(plan.id)}`}>Comprar ↗</Link>
           } /> : <p>No hay suscripciones disponibles.</p>}
         </>}
     </section>

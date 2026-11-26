@@ -5820,7 +5820,7 @@ function loadBookingMpSdk(): Promise<void> {
     })
     return bookingMpSdkPromise
 }
-function BookingCardPayment({session,api,accent,onClose}:any) {
+export function BookingCardPayment({session,api,accent,onClose,paymentPath="/api/card-payment",statusPath="/api/card-payment/status",authorization}:any) {
     const [message,setMessage]=React.useState("")
     const [ready,setReady]=React.useState(false)
     const [busy,setBusy]=React.useState(false)
@@ -5828,6 +5828,10 @@ function BookingCardPayment({session,api,accent,onClose}:any) {
     const busyRef=React.useRef(false)
     const stateRef=React.useRef("idle")
     const container=React.useRef("turnits-card-"+Math.random().toString(36).slice(2))
+    const headers = React.useMemo(() => ({
+        "Content-Type": "application/json",
+        ...(authorization ? { Authorization: authorization } : {}),
+    }), [authorization])
     const resultRef=React.useRef<(d:any)=>void>(()=>{})
     resultRef.current=(data:any)=>{
         if(data.success_url){window.location.href=data.success_url;return}
@@ -5850,7 +5854,7 @@ function BookingCardPayment({session,api,accent,onClose}:any) {
                         if(busyRef.current || stateRef.current!=="idle")throw new Error("Consultá el estado del pago.")
                         busyRef.current=true;setBusy(true);setMessage("")
                         try{
-                            const response=await fetch(api+"/api/card-payment",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({checkout_token:session.checkout_token,card})})
+                            const response=await fetch(api+paymentPath,{method:"POST",headers,body:JSON.stringify({checkout_token:session.checkout_token,card})})
                             const data=await response.json()
                             if(cancelled)return
                             resultRef.current(data)
@@ -5863,20 +5867,20 @@ function BookingCardPayment({session,api,accent,onClose}:any) {
             if(cancelled)instance.unmount();else controller=instance
         }).catch(()=>{if(!cancelled)setMessage("No se pudo cargar el formulario. Volvé y elegí Mercado Pago.")})
         return()=>{cancelled=true;controller?.unmount()}
-    },[session,api,accent])
+    },[session,api,accent,paymentPath,headers])
     React.useEffect(()=>{
         if(state!=="pending" && state!=="unknown" && state!=="not_found")return
         let cancelled=false
         const timer=window.setInterval(()=>{
             if(busyRef.current)return
-            fetch(api+"/api/card-payment/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({checkout_token:session.checkout_token})}).then(r=>r.json()).then(d=>{if(!cancelled && d.status && d.status!=="not_found")resultRef.current(d)}).catch(()=>{})
+            fetch(api+statusPath,{method:"POST",headers,body:JSON.stringify({checkout_token:session.checkout_token})}).then(r=>r.json()).then(d=>{if(!cancelled && d.status && d.status!=="not_found")resultRef.current(d)}).catch(()=>{})
         },10000)
         return()=>{cancelled=true;window.clearInterval(timer)}
-    },[state,api,session])
+    },[state,api,session,statusPath,headers])
     async function checkStatus(){
         if(busyRef.current)return
         busyRef.current=true;setBusy(true)
-        try{const r=await fetch(api+"/api/card-payment/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({checkout_token:session.checkout_token})});resultRef.current(await r.json())}
+        try{const r=await fetch(api+statusPath,{method:"POST",headers,body:JSON.stringify({checkout_token:session.checkout_token})});resultRef.current(await r.json())}
         catch{setMessage("No pudimos consultar el pago. Contactá al negocio antes de volver a pagar.")}
         finally{busyRef.current=false;setBusy(false)}
     }

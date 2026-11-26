@@ -1,4 +1,4 @@
-import type { Membership } from "./MembershipCatalog"
+import { MembershipCatalog, type Membership } from "./MembershipCatalog"
 import BookingLogin from "../components/BookingLogin"
 import * as React from "react"
 import { Link, useParams } from "react-router"
@@ -111,6 +111,11 @@ export default function BusinessLanding() {
   const [reviewItems, setReviewItems] = React.useState<Review[]>([])
   const [memberships, setMemberships] = React.useState<Membership[]>([])
   const [promos, setPromos] = React.useState<Promo[]>([])
+  React.useEffect(() => {
+    if (memberships.length && window.location.hash === "#bl-memberships") {
+      document.getElementById("bl-memberships")?.scrollIntoView()
+    }
+  }, [memberships.length])
   const [services, setServices] = React.useState<Service[]>([])
   const [members, setMembers] = React.useState<Member[]>([])
   const [branches, setBranches] = React.useState<Branch[]>([])
@@ -408,10 +413,17 @@ export default function BusinessLanding() {
         <nav className="bl-nav" aria-label="Explorar este negocio">
           {services.length > 0 && <a href="#bl-services">Servicios</a>}
           {works.length > 0 && <a href="#bl-works">Trabajos</a>}
-          {memberships.length > 0 && <Link to={`/suscripciones/${enc}`}>Suscripciones</Link>}
+          {memberships.length > 0 && <a href="#bl-memberships">Suscripciones</a>}
           {rankedPromos.length > 0 && <a href="#bl-promos">Promociones</a>}
           {reviews.cantidad >= 5 && reviewItems.length > 0 && <a href="#bl-reviews">Reseñas</a>}
         </nav>
+
+        {memberships.length > 0 && <section id="bl-memberships" className="bl-section bl-memberships" aria-labelledby="bl-memberships-title">
+          <div className="bl-section-heading"><h2 id="bl-memberships-title">Suscripciones</h2></div>
+          <MembershipCatalog plans={memberships} action={plan => negocio?.modo_agenda !== "presupuesto" && (
+            <Link className="bl-membership-buy" to={`/agenda/${enc}?suscripcion=${encodeURIComponent(plan.id)}`}>Comprar <span aria-hidden="true">↗</span></Link>
+          )} />
+        </section>}
 
         {liveOffers.length > 0 && <section id="bl-offers" className="bl-section bl-last-minute"><div className="bl-section-heading"><div><span className="bl-kicker">Solo por tiempo limitado</span><h2>Oferta de último momento</h2><p>Un horario libre, un mejor precio. Reservalo antes de que termine.</p></div></div>
           <div className="bl-offer-slider" onMouseEnter={() => setOfferPaused(true)} onMouseLeave={() => setOfferPaused(false)} onFocusCapture={() => setOfferPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOfferPaused(false) }}>
