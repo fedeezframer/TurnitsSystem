@@ -16,6 +16,7 @@ import { createBranchPanel } from "./branch-panel.js";
 import { businessIcon } from "./business-appearance.js";
 import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appearance.js";
 import { createConsumerAccounts, consumerIdentity } from "./consumer-accounts.js";
+import { registerBookingAccountMenu } from "./booking-account-menu.js";
 import { registerMembershipPayments } from "./membresia-pagos.js";
 import { registerMembresias } from "./membresias.js";
 import { validCategories } from "../web/src/shared/categories.js";
@@ -7966,6 +7967,12 @@ async function ticketsDisponiblesMembresia(slug, consumidorId) {
   }
   return periods;
 }
+
+registerBookingAccountMenu({
+  app, supabase, auth: browse.auth, cleanSlug, limiterAuth,
+  limiterRead: rateLimit({ windowMs: 60000, max: 45, standardHeaders: true, legacyHeaders: false }),
+  tickets: ticketsDisponiblesMembresia, rescheduleUrl: armarReprogramarUrl, validPhone: validInternationalPhone,
+});
 
 app.get("/membresias/:slug/tickets", async (req, res) => {
   res.set("Cache-Control", "no-store");
