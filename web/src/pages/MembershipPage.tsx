@@ -1,3 +1,4 @@
+import arrowUpRightIcon from "../components/bi_arrow-up-short.svg"
 import * as React from "react"
 import { Link, useParams, useSearchParams } from "react-router"
 import BookingLogin, { readBookingToken } from "../components/BookingLogin"
@@ -72,7 +73,7 @@ export default function MembershipPage() {
 
   return <main className="bl-page" style={{ paddingBottom: 32 }}>
     <header className="bl-section" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 16 }}>
-      <Link to={businessPath}>← Volver al negocio</Link>
+      <Link to={businessPath}>Volver al negocio</Link>
       <BookingLogin api={appConfig.apiUrl} slug={slug} accent="var(--bl-ink)" onSession={setToken} />
     </header>
     <section className="bl-section" aria-labelledby="membership-title">
@@ -87,12 +88,12 @@ export default function MembershipPage() {
             <h2 style={{ margin: "0 0 8px" }}>Mis tickets</h2>
             {plans.map(plan => <div key={plan.id} style={{ marginBottom: 10 }}>
               <b>{plan.nombre}</b> · {ticketCount(plan.servicios)} para servicios · {ticketCount(plan.productos)} para productos
-              <div><Link style={{ color: "var(--bl-ink)", fontWeight: 700 }} to={`/agenda${businessPath}`}>Reservar con tickets →</Link></div>
+              <div><Link style={{ color: "var(--bl-ink)", fontWeight: 700 }} to={`/agenda${businessPath}`}>Reservar con tickets</Link></div>
             </div>)}
           </div>}
           {listing.plans.length ? <MembershipCatalog plans={listing.plans} action={plan =>
-            !listing.canPurchase ? null : plans.some(period => period.membresia_id === plan.id) ? <Link className="bl-reserve" to={`/agenda${businessPath}`}>Usar mis tickets →</Link> :
-              <Link className="bl-membership-buy" to={`/agenda${businessPath}?suscripcion=${encodeURIComponent(plan.id)}`}>Comprar ↗</Link>
+            !listing.canPurchase ? null : plans.some(period => period.membresia_id === plan.id) ? <Link className="bl-reserve" to={`/agenda${businessPath}`}>Usar mis tickets</Link> :
+              <Link className="bl-membership-buy" to={`/agenda${businessPath}?suscripcion=${encodeURIComponent(plan.id)}`}>Comprar <i className="bl-mask-icon" style={{ maskImage: `url("${arrowUpRightIcon}")`, WebkitMaskImage: `url("${arrowUpRightIcon}")` }} aria-hidden="true" /></Link>
           } /> : <p>No hay suscripciones disponibles.</p>}
         </>}
     </section>

@@ -1,16 +1,28 @@
 import * as React from "react"
+import { MenuFooter_getSlug, MenuFooter_getToken } from "./common"
 
 type Payment = {
     id: string; nombre: string; importe: number; metodo_pago: "efectivo" | "transferencia"
     comprobante: boolean; cliente: string; email?: string
 }
-type Request = <T>(suffix: string, init?: RequestInit) => Promise<T>
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" })
 const path = "/pagos-manuales"
 const row: React.CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }
 const action: React.CSSProperties = { padding: "7px 11px", borderRadius: 8, border: "1px solid #d4ddd5", background: "white", color: "#17271b", font: "inherit", cursor: "pointer" }
 
-export default function MembershipPaymentReview({ request }: { request: Request }) {
+export default function MembershipPaymentReview({ api }: { api: string }) {
+    const slug = MenuFooter_getSlug()
+    const token = MenuFooter_getToken()
+    const request = React.useCallback(async <T,>(suffix: string, init: RequestInit = {}): Promise<T> => {
+        if (!slug || !token) throw new Error("Volvé a iniciar sesión para revisar los cobros.")
+        const response = await fetch(`${api}/admin/membresias/${encodeURIComponent(slug)}${suffix}`, {
+            ...init, cache: "no-store", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        })
+        const data = await response.json()
+        if (!response.ok || !data.success) throw new Error(data.error || "No pudimos revisar los cobros.")
+        return data
+    }, [api, slug, token])
+    const [loading, setLoading] = React.useState(true)
     const [payments, setPayments] = React.useState<Payment[]>([])
     const [busy, setBusy] = React.useState("")
     const [error, setError] = React.useState("")
@@ -20,9 +32,11 @@ export default function MembershipPaymentReview({ request }: { request: Request 
     React.useEffect(() => {
         const controller = new AbortController()
         setError("")
+        setLoading(true)
         request<{ pagos: Payment[] }>(path, { signal: controller.signal }).then(data => {
             if (!controller.signal.aborted) setPayments(data.pagos)
         }).catch(err => { if (!controller.signal.aborted) setError(err.message) })
+            .finally(() => { if (!controller.signal.aborted) setLoading(false) })
         return () => controller.abort()
     }, [request, retry])
 
@@ -48,10 +62,13 @@ export default function MembershipPaymentReview({ request }: { request: Request 
         finally { setBusy("") }
     }
 
-    if (!payments.length && !error) return null
     return <section aria-label="Cobros de suscripciones pendientes" style={{ display: "grid", gap: 10 }}>
-        <h3 style={{ margin: 0 }}>Cobros pendientes</h3>
-        {error && <p role="alert" style={{ margin: 0 }}>{error} <button type="button" style={action} onClick={() => setRetry(value => value + 1)}>Actualizar</button></p>}
+        <div style={{ ...row, justifyContent: "space-between" }}>
+            <h3 style={{ margin: 0 }}>Cobros de suscripciones pendientes{payments.length ? ` (${payments.length})` : ""}</h3>
+            <button type="button" style={action} disabled={loading || !!busy} onClick={() => setRetry(value => value + 1)}>Actualizar</button>
+        </div>
+        {error ? <p role="alert" style={{ margin: 0 }}>{error}</p> :
+            !payments.length && <p role="status" style={{ margin: 0 }}>{loading ? "Cargando cobros…" : "No hay cobros de suscripciones pendientes."}</p>}
         {payments.map(payment => <article key={payment.id} style={{ display: "grid", gap: 7, padding: 14, borderRadius: 12, border: "1px solid #d4ddd5", background: "white", overflowWrap: "anywhere" }}>
             <div style={{ ...row, justifyContent: "space-between" }}><b>{payment.nombre}</b><strong>{money.format(payment.importe)}</strong></div>
             <div>{[payment.cliente, payment.email].filter(Boolean).join(" · ")}</div>

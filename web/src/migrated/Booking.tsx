@@ -24,7 +24,7 @@ const MAX_BYTES = 3 * 1024 * 1024 // 3MB
 const GRID_GAP = 10
 const CUALQUIER_PROFESIONAL = "cualquiera"
 
-const DEFAULT_TEMA = {
+export const DEFAULT_TEMA = {
     primario: "#1F2937",
     secundario: "#6B7280",
     fondo: "#FFFFFF",
@@ -622,7 +622,7 @@ function BackLink({ onClick }: { onClick: () => void }) {
 // en reposo) o "outline" (fondo blanco, borde negro, texto negro
 // en reposo — pasa a blanco apenas arranca el relleno).
 // ────────────────────────────────────────────────────────────
-function FillButton({
+export function FillButton({
     onClick,
     disabled,
     fill,
@@ -2416,31 +2416,7 @@ export default function BookingFlow(props: any) {
         !mostrarListaEspera &&
         franjaGrupos.length > 1
 
-    const headerBlock = (
-        <div
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: -6,
-            }}
-        >
-            <LogoBlock negocio={negocio} accent={accent} />
-            <h1
-                style={{
-                    fontFamily: "'Inter Display', serif",
-                    fontSize: 28,
-                    fontWeight: 400,
-                    color: "var(--bf-text)",
-                    margin: 0,
-                    textAlign: "center",
-                }}
-            >
-                {negocio.business_name}
-            </h1>
-        </div>
-    )
+    const headerBlock = <BookingCheckoutHeader business={negocio} accent={accent} />
 
     return (
         <div style={{width:"100%",minHeight:"100dvh",margin:0,paddingBottom:basket.length || servicioElegido ? 72 : 0,boxSizing:"border-box",display:"flex",flexDirection:"column",fontFamily:"'DM Sans', -apple-system, sans-serif",...temaVars}}>
@@ -2926,32 +2902,7 @@ export default function BookingFlow(props: any) {
 
                 {enCheckoutStep && (
                     <div className="bf-checkout-right">
-                        {/* Título con el color de texto del usuario */}
-                        <div
-                            style={{
-                                fontSize: 22,
-                                fontWeight: 700,
-                                color: "var(--bf-text)",
-                            }}
-                        >
-                            {groupMode ? `Resumen de ${basket.length} turno${basket.length===1 ? "" : "s"}` : "Resumen de la reserva"}
-                        </div>
-
-                        {/* Tarjeta de Resumen (Fondo blanco, texto negro, bordes redondeados) */}
-                        <div
-                            style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 8,
-                                minWidth: 0,
-                                background: "#FFFFFF",
-                                borderRadius: 16,
-                                padding: "16px 18px",
-                                border: "1px solid #E5E7EB",
-                                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-                                color: "#111827",
-                            }}
-                        >
+                        <BookingCheckoutSummary title={groupMode ? `Resumen de ${basket.length} turno${basket.length === 1 ? "" : "s"}` : "Resumen de la reserva"}>
                             {groupMode && basket.map((item,index)=><div key={item.id} style={{fontSize:13,borderBottom:"1px solid #e5e7eb",paddingBottom:8}}>
                                 <strong>{index+1}. {item.servicio_nombre}</strong><br/>
                                     {item.fecha ? `${formatearFecha(item.fecha)} · ${item.hora || "Sin horario"}` : "Día y hora pendientes"}
@@ -3074,7 +3025,7 @@ export default function BookingFlow(props: any) {
                                     }
                                 />
                             )}
-                        </div>
+                        </BookingCheckoutSummary>
 
                         {!ticketTotal && metodosDisponibles.length > 0 && (
                             <>
@@ -3387,7 +3338,61 @@ export default function BookingFlow(props: any) {
     )
 }
 
-function LogoBlock({ negocio, accent }: { negocio: Negocio; accent: string }) {
+export type BookingHeaderBusiness = Pick<Negocio, "business_name" | "logo_url"> & { tema?: Partial<Tema> }
+
+export function BookingCheckoutHeader({ business, accent }: { business: BookingHeaderBusiness; accent: string }) {
+    return (
+        <div
+            style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: -6,
+            }}
+        >
+            <LogoBlock negocio={business} accent={accent} />
+            <h1
+                style={{
+                    fontFamily: "'Inter Display', serif",
+                    fontSize: 28,
+                    fontWeight: 400,
+                    color: "var(--bf-text)",
+                    margin: 0,
+                    textAlign: "center",
+                }}
+            >
+                {business.business_name}
+            </h1>
+        </div>
+    )
+
+}
+
+export function BookingCheckoutFrame({ theme, left, right }: {
+    theme?: Partial<Tema>; left: React.ReactNode; right?: React.ReactNode
+}) {
+    return <main className="bf-full-viewport" style={{ width: "100%", maxWidth: 1100, minHeight: "100dvh", margin: "0 auto",
+        fontFamily: "'DM Sans', -apple-system, sans-serif", boxSizing: "border-box", overflowX: "hidden", ...buildTemaVars({ ...DEFAULT_TEMA, ...theme }) }}>
+        <style>{shimmerCSS}</style>
+        <div className="bf-checkout-shell">
+            <div className="bf-checkout-left"><div className="bf-checkout-left-inner">{left}</div></div>
+            {right && <div className="bf-checkout-right">{right}</div>}
+        </div>
+    </main>
+}
+
+export function BookingCheckoutSummary({ title, children }: { title: string; children: React.ReactNode }) {
+    return <>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--bf-text)" }}>{title}</div>
+        <div style={{
+            display: "flex", flexDirection: "column", gap: 8, minWidth: 0, background: "#FFFFFF", borderRadius: 16,
+            padding: "16px 18px", border: "1px solid #E5E7EB", boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)", color: "#111827",
+        }}>{children}</div>
+    </>
+}
+
+function LogoBlock({ negocio, accent }: { negocio: BookingHeaderBusiness; accent: string }) {
     const [error, setError] = React.useState(false)
     React.useEffect(() => setError(false), [negocio.logo_url])
     const size = 64
@@ -3492,7 +3497,7 @@ const filaStyle: React.CSSProperties = {
     color: "var(--bf-text)",
 }
 
-function StepTitle({ title, hint, bottomGap = 16 }: { title: string; hint?: string; bottomGap?: number }) {
+export function StepTitle({ title, hint, bottomGap = 16 }: { title: string; hint?: string; bottomGap?: number }) {
     return (
         <div style={{ marginTop: 10, marginBottom: bottomGap }}>
             <div
@@ -5347,7 +5352,7 @@ function ExtrasBlock({
     )
 }
 
-function PagoBlock({
+export function PagoBlock({
     metodos,
     seleccionado,
     onSelect,
@@ -5362,6 +5367,8 @@ function PagoBlock({
     montoATransferir,
     montoPendienteEnLocal,
     accent,
+    subscription = false,
+    disabled = false,
 }: any) {
     const [avisoCbu, setAvisoCbu] = React.useState("")
     if (metodos.length === 0) return null
@@ -5398,7 +5405,13 @@ function PagoBlock({
                             initial={{ opacity: 0, scale: 0.97 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.97 }}
-                            onClick={() => !esUnica && onSelect(m.key)}
+                            role="radio" aria-checked={activo} aria-disabled={disabled} tabIndex={disabled ? -1 : 0}
+                            onClick={() => !disabled && !esUnica && onSelect(m.key)}
+                            onKeyDown={event => {
+                                if (disabled || esUnica || ![" ", "Enter"].includes(event.key)) return
+                                event.preventDefault()
+                                onSelect(m.key)
+                            }}
                             style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -5687,8 +5700,7 @@ function PagoBlock({
                                 color: "#6B7280",
                             }}
                         >
-                            Tu turno queda como "pendiente" hasta que el negocio
-                            confirme el pago.
+                            {subscription ? "La suscripción se activa cuando el negocio confirme el pago." : 'Tu turno queda como "pendiente" hasta que el negocio confirme el pago.'}
                         </span>
                     </motion.div>
                 )}
@@ -5701,8 +5713,7 @@ function PagoBlock({
                         exit={{ opacity: 0 }}
                         style={{ fontSize: 12, color: "#6B7280" }}
                     >
-                        Tu turno queda como "pendiente" hasta que el negocio lo
-                        confirme.
+                        {subscription ? "Pagá en el local. Los tickets se acreditan cuando el negocio confirme el cobro." : 'Tu turno queda como "pendiente" hasta que el negocio lo confirme.'}
                     </motion.span>
                 )}
             </AnimatePresence>
@@ -5710,7 +5721,7 @@ function PagoBlock({
     )
 }
 
-function FilaResumen({ label, valor }: { label: string; valor: string }) {
+export function FilaResumen({ label, valor }: { label: string; valor: string }) {
     return (
         <div
             style={{

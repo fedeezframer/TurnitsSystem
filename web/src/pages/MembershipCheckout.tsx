@@ -1,17 +1,18 @@
 import * as React from "react"
-import { Link, useSearchParams } from "react-router"
+import { useNavigate, useSearchParams } from "react-router"
 import BookingLogin, { readBookingToken, saveBookingToken } from "../components/BookingLogin"
 import BackButton from "../components/BackButton"
 import BrandPreloader from "../components/BrandPreloader"
 import { appConfig } from "../config"
 import type { Membership } from "./MembershipCatalog"
-import "./MembershipCheckout.css"
-
-const CardPayment = React.lazy(() => import("../migrated/Booking").then(module => ({ default: module.BookingCardPayment })))
+import {
+  BookingCardPayment, BookingCheckoutFrame, BookingCheckoutHeader, BookingCheckoutSummary,
+  FilaResumen, FillButton, PagoBlock, StepTitle, DEFAULT_TEMA, type BookingHeaderBusiness,
+} from "../migrated/Booking"
 type Method = "mercadopago" | "tarjeta" | "transferencia" | "efectivo"
-type Business = {
-  business_name?: string; modo_agenda?: string; suspendido?: boolean; logo_url?: string
-  tema?: { primario?: string }; metodos_pago_disponibles?: Method[]
+type Business = Omit<BookingHeaderBusiness, "business_name" | "logo_url"> & {
+  business_name?: string; modo_agenda?: string; suspendido?: boolean; logo_url?: string | null
+  metodos_pago_disponibles?: Method[]
   datos_bancarios?: { alias?: string; cbu?: string; titular?: string; banco?: string }
 }
 type PaymentState = { estado: string; nombre?: string; metodo?: Method; plan_id?: string }
@@ -27,6 +28,7 @@ const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i
 
 export default function MembershipCheckout({ slug, business }: { slug: string; business: Business }) {
   const [search, setSearch] = useSearchParams()
+  const navigate = useNavigate()
   const planId = search.get("suscripcion") || ""
   const order = search.get("pago") || ""
   const paymentId = search.get("payment_id") || ""
@@ -40,6 +42,7 @@ export default function MembershipCheckout({ slug, business }: { slug: string; b
   const [card, setCard] = React.useState<CardSession | null>(null)
   const [method, setMethod] = React.useState<Method | "">("")
   const [proof, setProof] = React.useState<File | null>(null)
+  const [fileError, setFileError] = React.useState("")
   const [error, setError] = React.useState("")
   const [busy, setBusy] = React.useState(false)
   const bank = business.datos_bancarios
@@ -47,7 +50,7 @@ export default function MembershipCheckout({ slug, business }: { slug: string; b
     value === "mercadopago" && cardEnabled ? [value, "tarjeta" as const] :
       value === "transferencia" && !bank?.alias && !bank?.cbu ? [] : [value])
   const chosen = methods.includes(method as Method) ? method : methods.length === 1 ? methods[0] : ""
-  const accent = /^#[\da-f]{6}$/i.test(business.tema?.primario || "") ? business.tema!.primario! : "#196b1f"
+  const accent = /^#[\da-f]{6}$/i.test(business.tema?.primario || "") ? business.tema!.primario! : DEFAULT_TEMA.primario
 
   React.useEffect(() => { window.scrollTo(0, 0) }, [planId])
 
@@ -86,8 +89,7 @@ export default function MembershipCheckout({ slug, business }: { slug: string; b
     return () => { controller.abort(); window.clearInterval(timer) }
   }, [endpoint, order, paymentId, token, status?.estado])
 
-  const pay = async (event: React.FormEvent) => {
-    event.preventDefault()
+  const pay = async () => {
     if (!plan || !chosen || busy) return
     setError("")
     if (!token) { setLoginRequest(value => value + 1); return }
@@ -130,67 +132,64 @@ export default function MembershipCheckout({ slug, business }: { slug: string; b
   const online = status?.metodo === "mercadopago" || !status?.metodo
   const returnUrl = businessPath + "#bl-memberships"
   const openForSale = !business.suspendido && business.modo_agenda !== "presupuesto"
-  return <main className="membership-checkout" style={{ "--membership-accent": accent } as React.CSSProperties}>
-    <header className="mc-header">
-      <div className="mc-business">{business.logo_url && <img src={business.logo_url} alt="" />}<strong>{business.business_name || slug}</strong></div>
-      <BookingLogin api={appConfig.apiUrl} slug={slug} accent={accent} loginRequest={loginRequest} onSession={setToken} />
-    </header>
-    <div className="mc-inner">
-      <div className="mc-back"><BackButton aria-label="Volver a suscripciones" onClick={() => window.location.assign(returnUrl)} /><span>Suscripciones</span></div>
-      <h1>Confirmá tu suscripción</h1>
-      {order ? <div className="mc-status" role="status">
-        <strong>{status?.nombre || plan?.nombre || "Estado del pago"}</strong>
-        <p>{!token ? "Iniciá sesión para consultar el pago." : status?.estado === "activo" ? "Pago confirmado. Tus tickets ya están disponibles." :
-          status?.estado === "no_encontrado" ? "Este pago no está disponible para tu cuenta." :
-          status?.estado === "revertido" || status?.estado === "vencido" ? "El pago no quedó activo." :
-          !online ? "El pago está pendiente de confirmación del negocio." : "Estamos verificando el pago con Mercado Pago."}</p>
-        {!token && <button type="button" className="mc-button" onClick={() => setLoginRequest(value => value + 1)}>Iniciar sesión</button>}
-        {status?.estado === "activo" && <Link className="mc-button" to={`/agenda${businessPath}`}>Reservar con tickets</Link>}
-        {status && ["revertido", "vencido"].includes(status.estado) && plan && <button className="mc-button" onClick={() => {
-          setStatus(null); setSearch({ suscripcion: plan.id }, { replace: true })
-        }}>Volver al checkout</button>}
-      </div> : !plan || !openForSale ? <p>Esta suscripción ya no está disponible.</p> : <div className="mc-grid">
-        <form className="mc-card" onSubmit={pay}>
-          <h2>Método de pago</h2>
-          {methods.length === 0 ? <p>El negocio todavía no configuró un medio de pago.</p> : <fieldset className="mc-methods" aria-label="Método de pago" disabled={busy}>
-            {methods.map(item => <label key={item} data-selected={chosen === item}>
-              <img src={methodData[item].logo} alt="" />
-              <span><b>{methodData[item].label}</b><small>{methodData[item].hint}</small></span>
-              <input type="radio" name="membership-method" value={item} checked={chosen === item} onChange={() => { setMethod(item); setError("") }} />
-            </label>)}
-          </fieldset>}
-          {chosen === "transferencia" && <div className="mc-bank">
-            {bank?.titular && <div>Titular: <b>{bank.titular}</b></div>}
-            {bank?.banco && <div>Banco: <b>{bank.banco}</b></div>}
-            {bank?.alias && <div>Alias: <b>{bank.alias}</b></div>}
-            {bank?.cbu && <div>CBU: <b>{bank.cbu}</b></div>}
-            <label>Comprobante<input type="file" accept="image/jpeg,image/png,image/webp" onChange={event => {
-              const file = event.target.files?.[0] || null
-              if (file && (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 3 * 1024 * 1024)) {
-                setError("Adjuntá una imagen JPG, PNG o WEBP de hasta 3 MB."); event.target.value = ""; setProof(null)
-              } else { setError(""); setProof(file) }
-            }} /></label>
-          </div>}
-          {error && <p className="mc-error" role="alert">{error}</p>}
-          <button className="mc-button" disabled={!chosen || busy} type="submit">
-            {busy ? "Procesando…" : !token ? "Iniciar sesión para continuar" : chosen === "efectivo" ? "Elegir pago en el local" :
-              chosen === "transferencia" ? "Enviar comprobante" : chosen === "tarjeta" ? "Continuar con tarjeta" : "Continuar a Mercado Pago"}
-          </button>
-        </form>
-        <aside className="mc-card mc-summary" aria-label="Resumen de la compra">
-          <h2>Resumen de la compra</h2>
-          {plan.imagen_url && <img src={plan.imagen_url} alt="" />}
-          <div><strong>{plan.nombre}</strong><p>Vigencia de un mes · renovación manual</p></div>
-          <ul>
-            {(plan.servicios_incluidos || plan.servicios.map(nombre => ({ nombre, cantidad: 1 }))).map((item, i) => <li key={`s${i}`}>{item.cantidad} × {item.nombre}</li>)}
-            {(plan.productos_incluidos || plan.productos.map(nombre => ({ nombre, cantidad: 1 }))).map((item, i) => <li key={`p${i}`}>{item.cantidad} × {item.nombre}</li>)}
-          </ul>
-          <div className="mc-total"><span>Total del mes</span><strong>{money.format(plan.precio_mensual)}</strong></div>
-        </aside>
+  const header = <BookingCheckoutHeader business={{ ...business, business_name: business.business_name || slug, logo_url: business.logo_url || null }} accent={accent} />
+  const buttonStyle = { width: "100%", marginTop: 4, padding: 14, borderRadius: 12, fontSize: 14, fontWeight: 700 }
+  const left = <>
+    {header}
+    <BackButton aria-label="Volver a suscripciones" onClick={() => navigate(returnUrl)} />
+    <BookingLogin api={appConfig.apiUrl} slug={slug} loginRequest={loginRequest} onSession={setToken} />
+    <StepTitle title={order ? "Estado de tu suscripción" : "Confirmá tu suscripción"} />
+    {order ? <div role="status" style={{ display: "grid", gap: 12, color: "var(--bf-text)" }}>
+      <strong>{status?.nombre || plan?.nombre || "Estado del pago"}</strong>
+      <small>{!token ? "Iniciá sesión para consultar el pago." : status?.estado === "activo" ? "Pago confirmado. Tus tickets ya están disponibles." :
+        status?.estado === "no_encontrado" ? "Este pago no está disponible para tu cuenta." :
+        status?.estado === "revertido" || status?.estado === "vencido" ? "El pago no quedó activo." :
+        !online ? "El pago está pendiente de confirmación del negocio." : "Estamos verificando el pago con Mercado Pago."}</small>
+      {!token && <FillButton fill={accent} style={buttonStyle} onClick={() => setLoginRequest(value => value + 1)}>Iniciar sesión</FillButton>}
+      {status?.estado === "activo" && <FillButton fill={accent} style={buttonStyle} onClick={() => navigate(`/agenda${businessPath}`)}>Reservar con tickets</FillButton>}
+      {status && ["revertido", "vencido"].includes(status.estado) && plan && <FillButton fill={accent} style={buttonStyle} onClick={() => {
+        setStatus(null); setSearch({ suscripcion: plan.id }, { replace: true })
+      }}>Volver al checkout</FillButton>}
+    </div> : !plan || !openForSale ? <p style={{ color: "var(--bf-text)" }}>Esta suscripción ya no está disponible.</p> :
+      <div style={{ display: "grid", gap: 10, color: "var(--bf-text)" }}>
+        {plan.imagen_url && <img src={plan.imagen_url} alt="" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 16 }} />}
+        <strong>{plan.nombre}</strong><small>Vigencia de un mes · renovación manual</small>
       </div>}
-    </div>
-    {card && <React.Suspense fallback={<BrandPreloader />}><CardPayment session={card} api={appConfig.apiUrl}
-      accent={accent} authorization={`Bearer ${token}`} paymentPath={`/membresias${businessPath}/tarjeta`}
-      statusPath={`/membresias${businessPath}/tarjeta/estado`} onClose={() => setCard(null)} /></React.Suspense>}
-  </main>
+  </>
+  const right = !order && plan && openForSale ? <>
+    <BookingCheckoutSummary title="Resumen de la suscripción">
+      <strong>{plan.nombre}</strong>
+      {[...(plan.servicios_incluidos || plan.servicios.map(nombre => ({ nombre, cantidad: 1 }))),
+        ...(plan.productos_incluidos || plan.productos.map(nombre => ({ nombre, cantidad: 1 })))].map((item, index) =>
+          <span key={index} style={{ color: "#4B5563", fontSize: 13 }}>{item.cantidad} × {item.nombre}</span>)}
+      <div style={{ height: 1, background: "#E5E7EB", margin: "8px 0" }} />
+      <FilaResumen label="Total a pagar" valor={money.format(plan.precio_mensual)} />
+    </BookingCheckoutSummary>
+    {methods.length === 0 ? <p style={{ color: "var(--bf-text)" }}>El negocio todavía no configuró un medio de pago.</p> : <>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", textTransform: "uppercase" }}>Método de pago</div>
+      <div role="radiogroup" aria-label="Método de pago">
+        <PagoBlock metodos={methods.map(key => ({ key, label: methodData[key].label, detalle: methodData[key].hint }))}
+          seleccionado={chosen} onSelect={(value: Method) => { setMethod(previous => previous === value ? "" : value); setError(""); setFileError("") }}
+          logos={Object.fromEntries(Object.entries(methodData).map(([key, item]) => [key, item.logo]))}
+          iconoAdjuntar={appConfig.booking.iconoAdjuntar} datosBancarios={bank} comprobante={proof} errorArchivo={fileError}
+          onArchivo={(file: File | null) => {
+            if (file && (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 3 * 1024 * 1024)) {
+              setFileError("Adjuntá una imagen JPG, PNG o WEBP de hasta 3 MB."); setProof(null)
+            } else { setFileError(""); setProof(file) }
+          }} onQuitarArchivo={() => { setFileError(""); setProof(null) }}
+          montoATransferir={plan.precio_mensual} accent={accent} subscription disabled={busy} />
+      </div>
+    </>}
+    {error && <div role="alert" style={{ fontSize: 12.5, color: "#DC2626" }}>{error}</div>}
+    <FillButton fill={accent} style={buttonStyle} disabled={!chosen || busy} onClick={() => void pay()}>
+      {busy ? "Procesando…" : !token ? "Iniciar sesión para continuar" : chosen === "efectivo" ? "Elegir pago en el local" :
+        chosen === "transferencia" ? "Enviar comprobante" : chosen === "tarjeta" ? "Continuar con tarjeta" : "Continuar a Mercado Pago"}
+    </FillButton>
+  </> : undefined
+
+  return <>
+    <BookingCheckoutFrame theme={business.tema} left={left} right={right} />
+    {card && <BookingCardPayment session={card} api={appConfig.apiUrl} accent={accent} authorization={`Bearer ${token}`}
+      paymentPath={`/membresias${businessPath}/tarjeta`} statusPath={`/membresias${businessPath}/tarjeta/estado`} onClose={() => setCard(null)} />}
+  </>
 }

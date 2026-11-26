@@ -1197,6 +1197,7 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
     const seccionDeNotif = (
         n: NotificacionesPanel_Notificacion
     ): string | undefined => {
+        if (n.data?.membresia_periodo_id) return "agenda"
         const desdeData = n.data?.seccion
         if (typeof desdeData === "string" && desdeData) return desdeData
         const tipoNormalizado = NotificacionesPanel_normalizarTipo(n.tipo)

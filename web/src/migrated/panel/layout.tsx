@@ -35,6 +35,7 @@ const Consultations = React.lazy(() => import("../../pages/Consultations"))
 const SetupGuide = React.lazy(() => import("../../components/SetupGuide"))
 const OnboardingNube = React.lazy(() => import("./onboarding").then(module => ({ default: module.OnboardingNube })))
 const BrowseBusiness = React.lazy(() => import("./browse-config"))
+const MembershipPaymentReview = React.lazy(() => import("./membership-payment-review"))
 const SuscripcionesPanel = React.lazy(() => import("./suscripciones").then(module => ({ default: module.SuscripcionesPanel })))
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
@@ -828,6 +829,7 @@ function TurnitsPanel_Inner(props: any) {
                             isMobile={isMobile}
                         />
                         <SectionLoadingBoundary>
+                        {!branchAdmin && <React.Suspense fallback={<LoadingRunner card />}><MembershipPaymentReview api={baseUrl} /></React.Suspense>}
                         <AgendaPanel
                             baseUrl={baseUrl}
                             accentColor={accentColor}

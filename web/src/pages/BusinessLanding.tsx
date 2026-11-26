@@ -418,13 +418,6 @@ export default function BusinessLanding() {
           {reviews.cantidad >= 5 && reviewItems.length > 0 && <a href="#bl-reviews">Reseñas</a>}
         </nav>
 
-        {memberships.length > 0 && <section id="bl-memberships" className="bl-section bl-memberships" aria-labelledby="bl-memberships-title">
-          <div className="bl-section-heading"><h2 id="bl-memberships-title">Suscripciones</h2></div>
-          <MembershipCatalog plans={memberships} action={plan => negocio?.modo_agenda !== "presupuesto" && (
-            <Link className="bl-membership-buy" to={`/agenda/${enc}?suscripcion=${encodeURIComponent(plan.id)}`}>Comprar <span aria-hidden="true">↗</span></Link>
-          )} />
-        </section>}
-
         {liveOffers.length > 0 && <section id="bl-offers" className="bl-section bl-last-minute"><div className="bl-section-heading"><div><span className="bl-kicker">Solo por tiempo limitado</span><h2>Oferta de último momento</h2><p>Un horario libre, un mejor precio. Reservalo antes de que termine.</p></div></div>
           <div className="bl-offer-slider" onMouseEnter={() => setOfferPaused(true)} onMouseLeave={() => setOfferPaused(false)} onFocusCapture={() => setOfferPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOfferPaused(false) }}>
             <AnimatePresence mode="wait" initial={false}>
@@ -481,6 +474,13 @@ export default function BusinessLanding() {
         })}</div>)}</div></div></section>}
 
         {rankedPromos.length > 0 && <section id="bl-promos" className="bl-section bl-promotions"><div className="bl-section-heading"><div><h2>Más para vos, por menos</h2><p>Combos y beneficios para tu próxima visita.</p></div></div><div className="bl-promo-grid">{rankedPromos.map(promoCard)}</div></section>}
+
+        {memberships.length > 0 && <section id="bl-memberships" className="bl-section bl-memberships" aria-labelledby="bl-memberships-title">
+          <div className="bl-section-heading"><h2 id="bl-memberships-title">Suscripciones</h2></div>
+          <MembershipCatalog plans={memberships} action={plan => negocio?.modo_agenda !== "presupuesto" && (
+            <Link className="bl-membership-buy" to={`/agenda/${enc}?suscripcion=${encodeURIComponent(plan.id)}`}>Comprar <i className="bl-mask-icon" style={maskedIcon(arrowUpRightIcon)} aria-hidden="true" /></Link>
+          )} />
+        </section>}
 
         {reviews.cantidad >= 5 && reviewItems.length > 0 && <section id="bl-reviews" className="bl-section bl-reviews-section"><div className="bl-section-heading"><div><h2>Lo dicen quienes ya vinieron</h2><p>{reviews.promedio.toLocaleString("es-AR")} de 5 · {reviews.cantidad} reseñas</p></div></div><div className="bl-review-list">{reviewItems.map(review => <motion.article className="bl-review" key={review.id} initial={reduceMotion ? false : { opacity: .65, x: 14 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: false, amount: .3 }} transition={{ duration: reduceMotion ? 0 : .28 }}><div className="bl-stars" aria-label={`${review.puntuacion} de 5 estrellas`}>{"★".repeat(Math.max(0, Math.min(5, Number(review.puntuacion))))}</div>{review.comentario && <p>“{review.comentario}”</p>}<strong>{review.nombre}</strong></motion.article>)}</div></section>}
 
