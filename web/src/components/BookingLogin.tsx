@@ -1,4 +1,5 @@
 import BackButton from "./BackButton"
+import BookingAccountMenu from "./BookingAccountMenu"
 import React from "react"
 
 const storageKey = "turnits_booking_consumer_token"
@@ -39,15 +40,19 @@ async function requestBookingCode(api: string, email: string, registro: boolean,
     return { response, data: await response.json().catch(() => null) }
 }
 
-export default function BookingLogin({ api, onSession, accent, loginRequest }: {
+export default function BookingLogin({ api, onSession, accent, loginRequest, slug, onProfileChange }: {
     api: string
     onSession?: (token: string) => void
     accent?: string
     loginRequest?: number
+    slug?: string
+    onProfileChange?: () => void
 }) {
     const [open, setOpen] = React.useState(false)
     const [accountName, setAccountName] = React.useState("")
     const [signedIn, setSignedIn] = React.useState(false)
+    const [accountOpen, setAccountOpen] = React.useState(false)
+    const accountButton = React.useRef<HTMLButtonElement>(null)
     const [signup, setSignup] = React.useState(false)
     const [registrationRetry, setRegistrationRetry] = React.useState(false)
     const dialog = React.useRef<HTMLDialogElement>(null)
@@ -274,20 +279,26 @@ export default function BookingLogin({ api, onSession, accent, loginRequest }: {
     const actionColor = accent || "#1b6b1a"
 
     if (signedIn) return (
-        <details className="booking-account" style={{ position: "relative", zIndex: 31, maxWidth: "min(68vw, 280px)", color: "#171a17" }}>
-            <style>{`.booking-account summary::-webkit-details-marker{display:none}`}</style>
-            <summary aria-label={accountName} style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 44, cursor: "pointer", listStyle: "none" }}>
+        <>
+            <button ref={accountButton} type="button" aria-haspopup="dialog" aria-expanded={accountOpen}
+                onClick={() => setAccountOpen(true)}
+                style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 44, maxWidth: "min(68vw, 280px)", padding: "0 4px", border: 0,
+                    background: "transparent", color: "#171a17", font: "inherit", cursor: "pointer" }}>
                 <span aria-hidden="true" style={{ display: "grid", placeItems: "center", flex: "0 0 25px", height: 25, borderRadius: "50%", background: actionColor, color: "white", fontSize: 13, fontWeight: 700 }}>{Array.from(accountName)[0]?.toLocaleUpperCase("es")}</span>
                 <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14 }}>{accountName}</strong>
                 <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}><path d="m3 5 3 3 3-3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </summary>
-            <button type="button" style={{ ...button, position: "absolute", right: 0, top: "100%", whiteSpace: "nowrap", background: "#fff", zIndex: 2, borderColor: "#d6d9d6", boxShadow: "0 6px 18px #0002" }} onClick={() => {
-                saveBookingToken("")
-                onSession?.("")
-                setSignedIn(false)
-                setAccountName("")
-            }}>Cerrar sesión</button>
-        </details>
+            </button>
+            {accountOpen && <BookingAccountMenu api={api} slug={slug} token={readBookingToken()} name={accountName} accent={accent ? "#196b1f" : actionColor}
+                onClose={() => { setAccountOpen(false); requestAnimationFrame(() => accountButton.current?.focus()) }}
+                onProfileChange={profile => { setAccountName(displayAccountName(profile)); onProfileChange?.() }}
+                onLogout={() => {
+                    saveBookingToken("")
+                    onSession?.("")
+                    setAccountOpen(false)
+                    setSignedIn(false)
+                    setAccountName("")
+                }} />}
+        </>
     )
 
     const [mailName, mailDomain] = email.trim().split("@")

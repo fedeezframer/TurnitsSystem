@@ -949,6 +949,7 @@ export default function BookingFlow(props: any) {
             .then(result => { if (!controller.signal.aborted) setTicketPlans(result) }).catch(() => {})
         return () => controller.abort()
     }, [api, slug, bookingAuthorization, ticketRevision])
+    const [accountRevision, setAccountRevision] = React.useState(0)
     const [loadingCuenta, setLoadingCuenta] = React.useState(()=>!!bookingAuthorization)
     const [cuentaConDatosCompletos, setCuentaConDatosCompletos] = React.useState(false)
     const [correoCuentaSinTelefono, setCorreoCuentaSinTelefono] = React.useState("")
@@ -992,7 +993,7 @@ export default function BookingFlow(props: any) {
             if (!controller.signal.aborted) setLoadingCuenta(false)
         })
         return () => controller.abort()
-    }, [api, bookingAuthorization, bookingToken]);
+    }, [api, bookingAuthorization, bookingToken, accountRevision]);
     const browsePreselect=React.useRef(false)
     React.useEffect(()=>{
         if (browsePreselect.current || !servicios.length || !bookingServiceId) return
@@ -2761,7 +2762,7 @@ export default function BookingFlow(props: any) {
                                         {stepIndex > 0 && <BackLink onClick={volverPaso} />}
 
                                         {(!bookingAuthorization || bookingToken) && (
-                                            <BookingLogin api={api} onSession={token => {
+                                            <BookingLogin api={api} slug={slug} onProfileChange={() => setAccountRevision(value => value + 1)} onSession={token => {
                                                 setLoadingCuenta(Boolean(token))
                                                 setCuentaConDatosCompletos(false)
                                                 setBookingToken(token)

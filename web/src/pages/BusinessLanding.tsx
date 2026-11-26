@@ -369,7 +369,7 @@ export default function BusinessLanding() {
           <div style={{ background: "linear-gradient(110deg, color-mix(in srgb, var(--bl-color) 10%, white), white 55%)", color: "var(--bl-ink)" }}>
             <div style={{ width: "min(calc(100% - 34px), 1160px)", margin: "0 auto", padding: "9px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px 16px" }}>
               <img src="/assets/browse/LogoTurnitsCompletoB.png" alt="Turnits" style={{ width: "clamp(68px, 24vw, 108px)", height: 28, objectFit: "contain", objectPosition: "left" }} />
-              <BookingLogin api={appConfig.apiUrl} accent="var(--bl-ink)" />
+              <BookingLogin api={appConfig.apiUrl} slug={slug} accent="var(--bl-ink)" />
             </div>
           </div>
           <div className="bl-bar" style={{ position: "relative" }}>

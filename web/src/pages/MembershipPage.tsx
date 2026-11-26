@@ -103,7 +103,7 @@ export default function MembershipPage() {
   return <main className="bl-page" style={{ paddingBottom: 32 }}>
     <header className="bl-section" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 16 }}>
       <Link to={businessPath}>← Volver al negocio</Link>
-      <BookingLogin api={appConfig.apiUrl} accent="var(--bl-ink)" onSession={setToken} loginRequest={loginRequest} />
+      <BookingLogin api={appConfig.apiUrl} slug={slug} accent="var(--bl-ink)" onSession={setToken} loginRequest={loginRequest} />
     </header>
     <section className="bl-section" aria-labelledby="membership-title">
       <h1 id="membership-title" style={{ margin: "0 0 12px" }}>Suscripciones</h1>
