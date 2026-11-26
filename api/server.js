@@ -1087,7 +1087,7 @@ async function consumidorReserva(req) {
 
 const membershipBusiness = async (slug, { allowInactive = false } = {}) => {
   const { data: user, error } = await supabase.from("usuarios").select(
-    "slug,business_name,activo,fecha_vencimiento,plan,estado_suscripcion,modo_agenda,mp_access_token,mp_refresh_token,mp_token_expires_at"
+    "slug,business_name,activo,fecha_vencimiento,plan,estado_suscripcion,modo_agenda,acepta_transferencia,acepta_efectivo,datos_bancarios,agenda_sin_pagos,metodo_pago,mp_access_token,mp_refresh_token,mp_token_expires_at"
   ).eq("slug", cleanSlug(slug)).maybeSingle();
   if (error) throw error;
   if (!user || (!allowInactive && (!isActivo(user.activo) || user.estado_suscripcion === "suspendido" || user.modo_agenda === "presupuesto" ||
@@ -1098,10 +1098,42 @@ const membershipBusiness = async (slug, { allowInactive = false } = {}) => {
   return { user, member: null };
 };
 
+function membershipMethods(ctx) {
+  const user = limitarPagosPorPlan(ctx.user);
+  if (user.agenda_sin_pagos) return [];
+  const bank = user.datos_bancarios || {};
+  const online = !!user.mp_access_token && ["sena", "total"].includes(user.metodo_pago);
+  return [
+    ...(online ? ["mercadopago", ...(process.env.MP_TURNERO_PUBLIC_KEY && process.env.JWT_SECRET ? ["tarjeta"] : [])] : []),
+    ...(user.acepta_transferencia && (bank.cbu || bank.alias) ? ["transferencia"] : []),
+    ...(user.acepta_efectivo ? ["efectivo"] : []),
+  ];
+}
+
 registerMembershipPayments({
   app, supabase, consumerId: consumidorReserva, business: membershipBusiness, apiUrl: API_URL, siteUrl: WEB_URL,
-  limiter: limiterBooking,
+  limiter: limiterBooking, requireAuth, methods: membershipMethods,
+  uploadProof: (req, res) => new Promise((resolve, reject) => {
+    upload.single("comprobante")(req, res, error => error
+      ? reject(Object.assign(new Error(error.message), { status: 400 })) : resolve());
+  }),
+  notify: order => crearNotificacion({
+    slug: order.slug, tipo: "sistema", titulo: "Pago de suscripción pendiente",
+    mensaje: `Revisá el cobro de ${order.nombre} en Servicios → Suscripciones.`,
+    data: { seccion: "servicios", membresia_periodo_id: order.id },
+  }),
   gateway: {
+    publicKey: process.env.MP_TURNERO_PUBLIC_KEY,
+    search: (ctx, id) => quoteGatewayRequest(ctx, `/v1/payments/search?external_reference=${encodeURIComponent(id)}&sort=date_created&criteria=desc&limit=20`),
+    cardMethods: ctx => quoteGatewayRequest(ctx, "/v1/payment_methods"),
+    card: (ctx, body, key) => {
+      const fee = process.env.APP_ENV === "staging" ? 0 : planCobraComision(ctx.user.plan, ctx.user.estado_suscripcion)
+        ? calcularComisionTurnits(body.transaction_amount, ctx.user.plan, ctx.user.estado_suscripcion) : 0;
+      return quoteGatewayRequest(ctx, "/v1/payments", {
+        method: "POST", headers: { "X-Idempotency-Key": key },
+        body: JSON.stringify({ ...body, ...(fee > 0 ? { application_fee: fee } : {}) }),
+      });
+    },
     seller: ctx => quoteGatewayRequest(ctx, "/users/me"),
     preference: async (ctx, body, key) => {
       const fee = process.env.APP_ENV === "staging" ? 0 : planCobraComision(ctx.user.plan, ctx.user.estado_suscripcion)
