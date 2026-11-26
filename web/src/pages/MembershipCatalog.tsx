@@ -14,7 +14,7 @@ export interface Membership {
 
 const money = (value: number) => `$${Number(value || 0).toLocaleString("es-AR")}`
 
-export function MembershipCatalog({ plans }: { plans: Membership[] }) {
+export function MembershipCatalog({ plans, action }: { plans: Membership[]; action?: (plan: Membership) => React.ReactNode }) {
   return (
     <div className="bl-promo-grid">
       {plans.map(plan => {
@@ -36,6 +36,7 @@ export function MembershipCatalog({ plans }: { plans: Membership[] }) {
               <b>Productos</b>
               <ul style={{ paddingLeft: 19, margin: "4px 0" }}>{products.map(({ nombre, cantidad }, index) => <li key={index}>{cantidad} × {nombre}</li>)}</ul>
             </div>}
+            {action && <div style={{ marginTop: "auto", paddingTop: 8 }}>{action(plan)}</div>}
           </div>
         </article>
       })}

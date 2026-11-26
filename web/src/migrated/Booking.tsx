@@ -1,3 +1,4 @@
+import { fetchMembershipTickets, type MembershipTickets } from "../shared/membership-tickets"
 import BookingLogin, { readBookingToken, saveBookingToken } from "../components/BookingLogin"
 import { appConfig } from "../config"
 import { validNationalPhone, phoneLimit, parsePhoneInput, phoneHint, validInternationalPhone } from "../shared/phone-policy.js"
@@ -937,6 +938,17 @@ export default function BookingFlow(props: any) {
     const [bookingToken, setBookingToken] = React.useState(readBookingToken)
     const bookingAuthorization = bookingToken ? `Bearer ${bookingToken}` : consumerHeaders().Authorization
     const bookingHeaders = () => bookingAuthorization ? { Authorization: bookingAuthorization } : {}
+    const [ticketPlans, setTicketPlans] = React.useState<MembershipTickets[]>([])
+    const [usarTickets, setUsarTickets] = React.useState(true)
+    const [ticketRevision, setTicketRevision] = React.useState(0)
+    React.useEffect(() => {
+        setTicketPlans([])
+        if (!bookingAuthorization || !slug) return
+        const controller = new AbortController()
+        fetchMembershipTickets(api, slug, bookingAuthorization, controller.signal)
+            .then(result => { if (!controller.signal.aborted) setTicketPlans(result) }).catch(() => {})
+        return () => controller.abort()
+    }, [api, slug, bookingAuthorization, ticketRevision])
     const [loadingCuenta, setLoadingCuenta] = React.useState(()=>!!bookingAuthorization)
     const [cuentaConDatosCompletos, setCuentaConDatosCompletos] = React.useState(false)
     const [correoCuentaSinTelefono, setCorreoCuentaSinTelefono] = React.useState("")
@@ -1553,13 +1565,32 @@ export default function BookingFlow(props: any) {
         [extrasSeleccionados]
     )
 
+    const ticketsCompatibles = ticketPlans.filter(plan => {
+        const turno = fecha && hora ? Date.parse(`${fecha}T${hora.slice(0, 5)}:00-03:00`) : NaN
+        return (!Number.isFinite(turno) || turno < Date.parse(plan.vence_at)) &&
+            (!plan.profesional_ids.length || (equipoIdParaEnviar ? plan.profesional_ids.includes(equipoIdParaEnviar) : !fecha || !hora))
+    })
+    const eligibleForRedemption = !groupMode && !browseOfferId && !promoAplicada && !personalKey
+    const candidate = eligibleForRedemption && (ticketsCompatibles.find(plan => plan.servicios[servicioId] > 0) ||
+        ticketsCompatibles.find(plan => extrasSeleccionados.some(extra => plan.productos[extra.id] > 0)))
+    const activeTicketPlan = usarTickets && candidate ? candidate : null
+    const serviceTicket = Boolean(activeTicketPlan && activeTicketPlan.servicios[servicioId] > 0)
+    const productTickets = Object.fromEntries(extrasSeleccionados.flatMap(extra => {
+        const amount = Math.min(extra.cantidad, activeTicketPlan?.productos[extra.id] ?? 0)
+        return amount > 0 ? [[extra.id, amount]] : []
+    })) as Record<string, number>
+    const ticketTotal = Number(serviceTicket) + Object.values(productTickets).reduce((sum, count) => sum + count, 0)
+    const ticketLabel = `${ticketTotal} ${ticketTotal === 1 ? "ticket" : "tickets"}`
+    const ticketCharge = Math.round(((serviceTicket ? 0 : (servicioElegido?.precio ?? 0)) +
+        extrasSeleccionados.reduce((sum, extra) => sum + (extra.cantidad - (productTickets[extra.id] ?? 0)) * extra.precio, 0)) * 100) / 100
     const metodoPagoRequerido = React.useMemo(() => {
+        if (ticketTotal) return false
         if (browseOfferId) return true
         if (!negocio) return false
         if (negocio.agenda_sin_pagos) return false
         if (negocio.plan === "gratis" && !negocio.tiene_mp) return false
         return (negocio.metodos_pago_disponibles || []).length > 0
-    }, [negocio,browseOfferId])
+    }, [negocio,browseOfferId,ticketTotal])
 
     const metodosDisponibles = React.useMemo(() => {
         if (negocio?.agenda_sin_pagos) return []
@@ -1981,7 +2012,7 @@ export default function BookingFlow(props: any) {
             return setSubmitError("El email ingresado no es válido.")
         if (metodoPagoRequerido && !sinPago && !metodo)
             return setSubmitError("Elegí un método de pago para continuar.")
-        if (!sinPago && metodo === "transferencia" && !comprobante)
+        if (!ticketTotal && !sinPago && metodo === "transferencia" && !comprobante)
             return setSubmitError("Adjuntá el comprobante de la transferencia.")
         if (!slug)
             return setSubmitError(
@@ -2058,6 +2089,29 @@ export default function BookingFlow(props: any) {
         const nombreTrim = nombre.trim()
         const apellidoTrim = apellido.trim() || null
         const emailTrim = email.trim() || null
+
+        if (activeTicketPlan && ticketTotal) {
+            try {
+                const res = await fetch(`${api}/membresias/${encodeURIComponent(slug)}/canjear`, {
+                    method: "POST", headers: { "Content-Type": "application/json", ...bookingHeaders() },
+                    body: JSON.stringify({
+                        periodo_id: activeTicketPlan.id, servicio_id: servicioId, equipo_id: equipoIdParaEnviar, fecha, hora,
+                        nombre: nombreTrim, apellido: apellidoTrim, telefono: telefonoCompleto,
+                        extra_ids: extraIds, extra_cantidades: extraCantidades,
+                        tickets_servicio: serviceTicket, tickets_productos: productTickets,
+                    }),
+                })
+                const result = await res.json()
+                const destination = result.comprobante_url || result.payment_url
+                if (!res.ok || !destination) throw new Error(result.error || "No pudimos confirmar el canje.")
+                window.location.assign(destination)
+            } catch (error) {
+                setSubmitEstado("error")
+                setSubmitError(error instanceof Error ? error.message : "No pudimos confirmar el canje.")
+                setTicketRevision(value => value + 1)
+            }
+            return
+        }
 
         try {
             if (browseOfferId) {
@@ -2218,10 +2272,10 @@ export default function BookingFlow(props: any) {
     }
 
     const esSena =
-        !browseOfferId && !negocio?.agenda_sin_pagos && negocio?.metodo_pago === "sena" &&
+        !ticketTotal && !browseOfferId && !negocio?.agenda_sin_pagos && negocio?.metodo_pago === "sena" &&
         (!!servicioElegido || (groupMode && basket.length>0)) &&
         metodo !== "efectivo"
-    const totalServicioYExtras = groupMode && basket.length
+    const totalServicioYExtras = ticketTotal ? ticketCharge : groupMode && basket.length
         ? basket.reduce((sum,item)=>sum+item.precio,0)
         : (servicioElegido?.precio ?? 0) + totalExtras || null
     const montoASenar =
@@ -2611,6 +2665,7 @@ export default function BookingFlow(props: any) {
                                                     servicios.map((svc) => (
                                                         <ServicioCard
                                                             key={svc.id}
+                                                            ticket={eligibleForRedemption && ticketsCompatibles.some(plan => plan.servicios[svc.id] > 0)}
                                                             svc={descuentoServicio(svc.id) ? {...svc,precio:descuentoServicio(svc.id)!.precio_final,precio_original:svc.precio,promo_id:descuentoServicio(svc.id)!.id} : svc}
                                                             isSelected={
                                                                 servicioId ===
@@ -2847,6 +2902,9 @@ export default function BookingFlow(props: any) {
                                                         accent={accent}
                                                         loading={loadingExtras}
                                                         extras={extras.filter(e=>!promoElegida?.items.some(i=>i.tipo === "producto" && i.id===e.id))}
+                                                        tickets={eligibleForRedemption && usarTickets
+                                                            ? (candidate || ticketsCompatibles.find(plan => extras.some(extra => plan.productos[extra.id] > 0)))?.productos
+                                                            : undefined}
                                                         seleccionados={
                                                             extrasSeleccionados
                                                         }
@@ -2949,7 +3007,7 @@ export default function BookingFlow(props: any) {
                                 >
                                     +{" "}
                                     {extrasSeleccionados
-                                        .map((e) => `${e.cantidad} × ${e.nombre}`)
+                                        .map((e) => `${e.cantidad} × ${e.nombre}${productTickets[e.id] ? ` · ${productTickets[e.id]} con ticket` : ""}`)
                                         .join(", ")}
                                 </div>
                             )}
@@ -2962,6 +3020,14 @@ export default function BookingFlow(props: any) {
                                 }}
                             />
 
+                            {groupMode && ticketPlans.length > 0 && <p style={{ fontSize: 12, margin: 0 }}>Los tickets se canjean confirmando un turno por vez.</p>}
+                            {candidate && <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 650, color: "var(--bf-text)" }}>
+                                <input type="checkbox" checked={usarTickets} onChange={event => setUsarTickets(event.target.checked)} />
+                                Usar tickets de {candidate.nombre}
+                            </label>}
+                            {ticketTotal > 0 && <FilaResumen label={serviceTicket ? (ticketTotal === 1 ? "Ticket aplicado al servicio" : "Tickets aplicados al servicio y productos") : "Tickets aplicados a productos"}
+                                valor={ticketLabel} />}
+                            {ticketTotal > 0 && ticketCharge > 0 && <p style={{ fontSize: 12, margin: 0 }}>El saldo se paga con Mercado Pago.</p>}
                             {esSena ? (
                                 <>
                                     <FilaResumen
@@ -2996,7 +3062,7 @@ export default function BookingFlow(props: any) {
                             ) : (
                                 <FilaResumen
                                     label={
-                                        negocio?.agenda_sin_pagos
+                                        !ticketTotal && negocio?.agenda_sin_pagos
                                             ? "Valor del turno"
                                             : "Total a pagar"
                                     }
@@ -3009,7 +3075,7 @@ export default function BookingFlow(props: any) {
                             )}
                         </div>
 
-                        {metodosDisponibles.length > 0 && (
+                        {!ticketTotal && metodosDisponibles.length > 0 && (
                             <>
                                 <div
                                     style={{
@@ -3098,7 +3164,7 @@ export default function BookingFlow(props: any) {
                         borderTop:"1px solid #e5e7eb",background:"#fff",color:"#111827",boxShadow:"0 -8px 28px #11182716",cursor:"pointer",fontFamily:"inherit"}}>
                     <span style={{textAlign:"left",minWidth:0}}><strong style={{display:"block",fontSize:14}}>Mis reservas · {basket.length || 1}</strong>
                         <span style={{display:"block",fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                            {basket.length ? `${basket.filter(item => item.fecha && item.hora).length} con horario · ${formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}`
+                            {ticketTotal && basket.length ? `${ticketLabel}${ticketCharge ? ` + ${formatearMoneda(ticketCharge)}` : ""}` : basket.length ? `${basket.filter(item => item.fecha && item.hora).length} con horario · ${formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}`
                                 : `${servicioElegido?.nombre || "Elegí un servicio"}${fecha ? ` · ${formatearFecha(fecha)}` : ""}${hora ? ` · ${hora}` : ""}`}
                         </span></span>
                     <strong style={{color:accent,fontSize:13,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:7}}><span aria-hidden="true" style={{width:19,height:19,display:"inline-block",backgroundColor:accent,mask:"url('/icons/shopping-cart.svg') center / contain no-repeat"}}/>Ver carrito ↑</strong>
@@ -3133,8 +3199,8 @@ export default function BookingFlow(props: any) {
                         })}
                         {!pagoGrupoDisponible && <p style={{fontSize:13,color:"#6b7280"}}>Para pagar varios turnos juntos, este negocio necesita tener Mercado Pago habilitado.</p>}
                         <button type="button" disabled={basket.length>=8 || !pagoGrupoDisponible} onClick={addOtherService} style={{width:"100%",padding:15,border:`1px solid ${accent}`,borderRadius:12,background:"#fff",color:accent,fontWeight:700,fontSize:14,cursor:"pointer",opacity:basket.length>=8 || !pagoGrupoDisponible ? .5 : 1}}>+ Agregar otro servicio</button>
-                        <div style={{display:"flex",justifyContent:"space-between",padding:"20px 2px",fontWeight:700}}><span>Total de los servicios</span><span>{formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}</span></div>
-                        <button type="button" onClick={() => {setBasketOpen(false); if(stepId !== "checkout" && basket.length) setStepId("checkout")}} style={{width:"100%",padding:15,border:0,borderRadius:12,background:accent,color:"#fff",fontWeight:700,cursor:"pointer"}}>{basket.length && basket.every(item=>item.fecha && item.hora) ? "Continuar al pago" : "Seguir eligiendo"}</button>
+                        <div style={{display:"flex",justifyContent:"space-between",padding:"20px 2px",fontWeight:700}}><span>{ticketTotal ? "Total de la reserva" : "Total de los servicios"}</span><span>{ticketTotal ? `${ticketLabel}${ticketCharge ? ` + ${formatearMoneda(ticketCharge)}` : ""}` : formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}</span></div>
+                        <button type="button" onClick={() => {setBasketOpen(false); if(stepId !== "checkout" && basket.length) setStepId("checkout")}} style={{width:"100%",padding:15,border:0,borderRadius:12,background:accent,color:"#fff",fontWeight:700,cursor:"pointer"}}>{basket.length && basket.every(item=>item.fecha && item.hora) ? ticketTotal && !ticketCharge ? "Continuar a confirmar" : "Continuar al pago" : "Seguir eligiendo"}</button>
                     </div>
                 </div>}
             </>}
@@ -3756,12 +3822,14 @@ function ComboImagenVacia({ancho}:{ancho:number}) {
 
 function ServicioCard({
     svc,
+    ticket = false,
     isSelected,
     accentColor,
     placeholderImage,
     onSelect,
 }: {
     svc: Servicio
+    ticket?: boolean
     isSelected: boolean
     accentColor: string
     placeholderImage?: string
@@ -4060,6 +4128,7 @@ function ServicioCard({
                 >
                     {svc.nombre}
                 </div>
+                {ticket && <span style={{ alignSelf: "start", fontSize: 11, fontWeight: 700, color: accentColor }}>Disponible con ticket</span>}
                 <div
                     style={{
                         display: "flex",
@@ -4966,6 +5035,7 @@ function ExtrasBlock({
     accent,
     loading,
     extras,
+    tickets,
     seleccionados,
     onToggle,
     onCantidad,
@@ -4974,6 +5044,7 @@ function ExtrasBlock({
     accent: string
     loading: boolean
     extras: Extra[]
+    tickets?: Record<string, number>
     seleccionados: ExtraSeleccionado[]
     onToggle: (extra: Extra) => void
     onCantidad: (extra: Extra, cambio: number) => void
@@ -5104,6 +5175,8 @@ function ExtrasBlock({
     function renderCard(extra: Extra, key: string) {
         const activo = estaSeleccionado(extra.id)
         const cantidad = seleccionados.find(s=>s.id===extra.id)?.cantidad || 0
+        const quantityForPrice = Math.max(1, cantidad)
+        const covered = Math.min(tickets?.[extra.id] ?? 0, quantityForPrice)
         return (
             <div
                 key={key}
@@ -5166,7 +5239,9 @@ function ExtrasBlock({
                             boxShadow: "0 1px 4px rgba(0,0,0,0.12)",
                         }}
                     >
-                        {formatearMoneda(Number(extra.precio) || 0)}
+                        {covered
+                            ? `${covered} ${covered === 1 ? "ticket" : "tickets"}${quantityForPrice > covered ? ` + ${formatearMoneda((quantityForPrice - covered) * extra.precio)}` : ""}`
+                            : formatearMoneda(Number(extra.precio) || 0)}
                     </div>
                 </div>
                 <div
@@ -5193,6 +5268,7 @@ function ExtrasBlock({
                     >
                         {extra.nombre}
                     </div>
+                    {!!tickets?.[extra.id] && <span style={{ color: accent, fontSize: 11, fontWeight: 700 }}>{tickets[extra.id]} {tickets[extra.id] === 1 ? "ticket disponible" : "tickets disponibles"}</span>}
                     {activo ? <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4,border:"1px solid var(--bf-border-strong)",borderRadius:8,padding:2}}>
                         <button type="button" aria-label={`Quitar una unidad de ${extra.nombre}`} onClick={()=>onCantidad(extra,-1)} style={{width:30,height:28,border:0,borderRadius:6,background:"transparent",color:"var(--bf-text)",fontSize:18,cursor:"pointer"}}>−</button>
                         <span aria-live="polite" style={{fontSize:12,fontWeight:700,color:"var(--bf-text)"}}>{cantidad}</span>
@@ -5213,7 +5289,7 @@ function ExtrasBlock({
                             cursor: "pointer",
                         }}
                     >
-                        {activo ? "Agregado" : "+ Agregar"}
+                        {tickets?.[extra.id] ? "+ Agregar con ticket" : "+ Agregar"}
                     </button>}
 
                 </div>

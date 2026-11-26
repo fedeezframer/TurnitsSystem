@@ -39,10 +39,11 @@ async function requestBookingCode(api: string, email: string, registro: boolean,
     return { response, data: await response.json().catch(() => null) }
 }
 
-export default function BookingLogin({ api, onSession, accent }: {
+export default function BookingLogin({ api, onSession, accent, loginRequest }: {
     api: string
     onSession?: (token: string) => void
     accent?: string
+    loginRequest?: number
 }) {
     const [open, setOpen] = React.useState(false)
     const [accountName, setAccountName] = React.useState("")
@@ -60,6 +61,13 @@ export default function BookingLogin({ api, onSession, accent }: {
     const [busy, setBusy] = React.useState(false)
     const [error, setError] = React.useState("")
     const pending = React.useRef(false)
+
+    React.useEffect(() => {
+        if (loginRequest) {
+            if (!readBookingToken()) setSignedIn(false)
+            setOpen(true)
+        }
+    }, [loginRequest])
 
     React.useEffect(() => {
         const token = readBookingToken()
