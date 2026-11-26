@@ -16,6 +16,7 @@ import { createBranchPanel } from "./branch-panel.js";
 import { businessIcon } from "./business-appearance.js";
 import { appearanceChanges, DEFAULT_APPEARANCE } from "../web/src/shared/appearance.js";
 import { createConsumerAccounts, consumerIdentity } from "./consumer-accounts.js";
+import { registerMembershipPayments } from "./membresia-pagos.js";
 import { registerMembresias } from "./membresias.js";
 import { validCategories } from "../web/src/shared/categories.js";
 import { createBrowse } from "./browse.js";
@@ -1082,6 +1083,37 @@ async function consumidorReserva(req) {
  const c=await consumerAccounts.findById(payload.consumidorId);
  if(!c?.activo||!c?.email_verificado)throw new Error('La cuenta de usuario ya no está activa.');return c.id;
 }
+
+const membershipBusiness = async (slug, { allowInactive = false } = {}) => {
+  const { data: user, error } = await supabase.from("usuarios").select(
+    "slug,business_name,activo,fecha_vencimiento,plan,estado_suscripcion,modo_agenda,mp_access_token,mp_refresh_token,mp_token_expires_at"
+  ).eq("slug", cleanSlug(slug)).maybeSingle();
+  if (error) throw error;
+  if (!user || (!allowInactive && (!isActivo(user.activo) || user.estado_suscripcion === "suspendido" || user.modo_agenda === "presupuesto" ||
+    (user.fecha_vencimiento && diasHastaVencer(user.fecha_vencimiento) <= 0) ||
+    await agendaPausadaPorComisiones(user.slug, user.plan)))) {
+    throw Object.assign(new Error("El negocio no está disponible para contratar la suscripción."), { status: 404 });
+  }
+  return { user, member: null };
+};
+
+registerMembershipPayments({
+  app, supabase, consumerId: consumidorReserva, business: membershipBusiness, apiUrl: API_URL, siteUrl: WEB_URL,
+  limiter: limiterBooking,
+  gateway: {
+    seller: ctx => quoteGatewayRequest(ctx, "/users/me"),
+    preference: async (ctx, body, key) => {
+      const fee = process.env.APP_ENV === "staging" ? 0 : planCobraComision(ctx.user.plan, ctx.user.estado_suscripcion)
+        ? calcularComisionTurnits(body.items[0].unit_price, ctx.user.plan, ctx.user.estado_suscripcion) : 0;
+      return new Preference(new MercadoPagoConfig({ accessToken: await quoteGatewayToken(ctx) }))
+        .create({ body: { ...body, ...(fee > 0 ? { marketplace_fee: fee } : {}) }, requestOptions: { idempotencyKey: key } });
+    },
+    payment: (ctx, id) => quoteGatewayRequest(ctx, `/v1/payments/${encodeURIComponent(id)}`),
+    refund: (ctx, id, key) => quoteGatewayRequest(ctx, `/v1/payments/${encodeURIComponent(id)}/refunds`, {
+      method: "POST", headers: { "X-Idempotency-Key": key }, body: "{}",
+    }),
+  },
+});
 
 app.get("/comisiones-turnits/:slug", requireAuth, async (req, res) => {
   try {
@@ -7913,6 +7945,131 @@ app.post("/api/create-group-preference",limiterBooking,async(req,res)=>{
   }catch(e){console.error("Error en pago grupal:",e.message);return res.status(e.promoValidacion ? 400 : 500).json({success:false,error:e.promoValidacion ? e.message : "No se pudo iniciar el pago de los turnos."});}
 });
 
+async function ticketsDisponiblesMembresia(slug, consumidorId) {
+  const now = new Date().toISOString();
+  const { data: periods, error } = await supabase.from("membresia_periodos")
+    .select("id,membresia_id,nombre,servicios,productos,profesional_ids,vence_at")
+    .eq("slug", slug).eq("consumidor_id", consumidorId).eq("estado", "activo")
+    .lte("empieza_at", now).gt("vence_at", now).order("vence_at");
+  if (error) throw error;
+  if (!periods.length) return [];
+  const { data: holds, error: holdsError } = await supabase.from("membresia_canje")
+    .select("periodo_id,servicio_id,usa_servicio,productos").in("periodo_id", periods.map(period => period.id))
+    .is("devuelto_at", null).or(`turno_id.not.is.null,vence_at.gt.${now}`);
+  if (holdsError) throw holdsError;
+  for (const hold of holds) {
+    const plan = periods.find(period => period.id === hold.periodo_id);
+    if (hold.usa_servicio) plan.servicios[hold.servicio_id] = Math.max(0, (plan.servicios[hold.servicio_id] ?? 0) - 1);
+    for (const [id, units] of Object.entries(hold.productos)) {
+      plan.productos[id] = Math.max(0, (plan.productos[id] ?? 0) - units);
+    }
+  }
+  return periods;
+}
+
+app.get("/membresias/:slug/tickets", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const id = await consumidorReserva(req);
+    if (!id) return res.status(401).json({ success: false, error: "Iniciá sesión con tu cuenta de cliente." });
+    return res.json({ success: true, planes: await ticketsDisponiblesMembresia(cleanSlug(req.params.slug), id) });
+  } catch (error) {
+    return res.status(error.status || 500).json({ success: false, error: "No pudimos consultar tus tickets." });
+  }
+});
+
+app.post("/membresias/:slug/canjear", limiterBooking, async (req, res) => {
+  let pendingId;
+  let paymentOpened = false;
+  try {
+    const consumidorId = await consumidorReserva(req);
+    if (!consumidorId) return res.status(401).json({ success: false, error: "Iniciá sesión con tu cuenta de cliente." });
+    const slug = cleanSlug(req.params.slug);
+    const { periodo_id, servicio_id, equipo_id, fecha, hora, extra_ids, extra_cantidades, tickets_servicio, tickets_productos } = req.body || {};
+    if (!UUID_REGEX.test(periodo_id || "") || typeof tickets_servicio !== "boolean" ||
+        !tickets_productos || typeof tickets_productos !== "object" || Array.isArray(tickets_productos) ||
+        (!tickets_servicio && !Object.keys(tickets_productos).length)) throw promoError("Elegí al menos un ticket para canjear.");
+    const customer = await consumerAccounts.findById(consumidorId);
+    const group = await prepararReservaGrupo({ body: {
+      slug, nombre: req.body.nombre, apellido: req.body.apellido, telefono: req.body.telefono,
+      email: customer.email, reservas: [{ servicio_id, equipo_id, fecha, hora }],
+    } });
+    group.consumidorId = consumidorId;
+    const item = group.items[0];
+    const { extras } = await resolverExtras(slug, item.servicio_id, extra_ids, extra_cantidades, item.equipo_id);
+    const redeemed = Object.entries(tickets_productos);
+    if (redeemed.some(([id, units]) =>
+      !Number.isInteger(units) || units < 1 || units > (extras.find(extra => extra.id === id)?.cantidad ?? 0)
+    ) || (Array.isArray(extra_ids) && new Set(extra_ids).size !== extras.length)) throw promoError("Revisá los productos elegidos.");
+    item.extras = extras.map(extra => {
+      const tickets = tickets_productos[extra.id] ?? 0;
+      return { ...extra, tickets, precio: Math.round(extra.precio_unitario * (extra.cantidad - tickets) * 100) / 100 };
+    });
+    item.monto_extras = item.extras.reduce((sum, extra) => sum + extra.precio, 0);
+    item.precio = Math.round(((tickets_servicio ? 0 : item.precio) + item.monto_extras) * 100) / 100;
+    item.canje_membresia = true;
+    group.total = item.precio;
+    let ctx;
+    if (group.total > 0) {
+      ctx = group.sellerId === "negocio" ? { user: group.user, member: null } : await quoteGatewayContext(slug, group.sellerId);
+      try { await quoteGatewayToken(ctx); }
+      catch { throw promoError("El negocio debe conectar Mercado Pago para cobrar el saldo."); }
+    }
+    // La parte cubierta no integra el cobro ni la base de la comisión.
+    group.config = { ...group.config, metodo_pago: "total" };
+    pendingId = await guardarGrupoPendiente(group, group.total);
+    const { error } = await supabase.rpc("reservar_tickets_membresia", {
+      p_periodo_id: periodo_id, p_pending_id: pendingId, p_usa_servicio: tickets_servicio, p_productos: tickets_productos,
+    });
+    if (error) {
+      if (error.code === "P0001") throw promoError(error.message);
+      throw error;
+    }
+
+    if (group.total === 0) {
+      const { data: ids, error: bookingError } = await supabase.rpc("confirmar_reserva_grupo", {
+        p_pending_id: pendingId, p_payment_id: null, p_paid: false,
+      });
+      if (bookingError) {
+        if (bookingError.code === "P0001") throw promoError(bookingError.message);
+        throw bookingError;
+      }
+      await supabase.from("pagos_pendientes").update({ estado: "aprobado" }).eq("id", pendingId);
+      notificarReservaGrupo(slug, ids, false, 0).catch(error => console.error("Aviso canje:", error.code || error.name));
+      invalidateCache(slug);
+      return res.json({ success: true, comprobante_url: receiptAccess.url(SUCCESS_URL, { slug, turnoId: ids[0] }) });
+    }
+    const fee = planCobraComision(group.user.plan, group.user.estado_suscripcion)
+      ? calcularComisionTurnits(group.total, group.user.plan, group.user.estado_suscripcion) : 0;
+    const preference = await new Preference(new MercadoPagoConfig({ accessToken: await quoteGatewayToken(ctx) })).create({
+      body: {
+        items: [{ title: `Saldo del turno · ${item.servicio_nombre}`, unit_price: group.total, quantity: 1, currency_id: "ARS" }],
+        payer: { email: group.email, name: group.nombre }, external_reference: pendingId,
+        metadata: { slug, tipo: "canje_membresia" }, notification_url: `${API_URL}/webhook/mp?membresia_reserva=${pendingId}`,
+        back_urls: {
+          success: receiptAccess.url(SUCCESS_URL, { slug, pendingId }),
+          pending: receiptAccess.url(PENDIENTE_URL, { slug, pendingId }),
+          failure: receiptAccess.url(ERROR_URL, { slug, pendingId }),
+        },
+        expires: true, expiration_date_to: new Date(Date.now() + 15 * 60_000).toISOString(), auto_return: "approved",
+        ...(fee > 0 ? { marketplace_fee: fee } : {}),
+      },
+      requestOptions: { idempotencyKey: pendingId },
+    });
+    paymentOpened = true;
+    await supabase.from("pagos_pendientes").update({ preference_id: preference.id }).eq("id", pendingId);
+    return res.json({ success: true, payment_url: preference.init_point, monto: group.total });
+  } catch (error) {
+    if (!paymentOpened && pendingId) {
+      await supabase.from("membresia_canje").update({ devuelto_at: new Date().toISOString() }).eq("pago_pendiente_id", pendingId).is("turno_id", null);
+    }
+    if (!error.promoValidacion && !error.status) console.error("Canje de membresía:", error.code || error.name);
+    return res.status(error.status || (error.promoValidacion ? 409 : 500)).json({
+      success: false, error: error.promoValidacion ? error.message : "No pudimos confirmar el canje. Revisá tus tickets.",
+    });
+  }
+});
+
 app.post("/api/create-preference", limiterBooking, async (req, res) => {
   if(req.body?.browse_offer_id)return res.status(409).json({success:false,error:"Continuá desde el pago de la oferta en la agenda."});
   console.log("📥 create-preference:", JSON.stringify({
@@ -9038,7 +9195,7 @@ app.post("/webhook/mp", async (req, res) => {
 
       // 1) Intentar resolver por external_reference contra pagos_pendientes (fuente confiable)
       let pendiente = null;
-      const externalRef = payData.external_reference || body.external_reference;
+      const externalRef = payData.external_reference || body.external_reference || (UUID_REGEX.test(String(query.membresia_reserva || "")) ? query.membresia_reserva : null);
       if (externalRef) {
         const { data } = await supabase.from("pagos_pendientes").select("*").eq("id", externalRef).maybeSingle();
         pendiente = data;
@@ -9060,9 +9217,9 @@ app.post("/webhook/mp", async (req, res) => {
       let tokenVendedor = null;
       if (pendiente?.equipo_id) {
         const { data: integrante } = await supabase.from("equipo")
-          .select("id, mp_access_token, mp_refresh_token, mp_token_expires_at")
+          .select("id, mp_access_token, mp_refresh_token, mp_token_expires_at, puede_recibir_pagos_personales")
           .eq("id", pendiente.equipo_id).eq("slug", slug).maybeSingle();
-        if (integrante?.mp_access_token)
+        if (integrante?.mp_access_token && (!pendiente.reserva_items?.[0]?.canje_membresia || usaCuentaMpPersonal(integrante)))
           tokenVendedor = await obtenerTokenMpVigenteEquipo(slug, integrante.id, integrante);
       }
       if (!tokenVendedor && userNegocio) tokenVendedor = await obtenerTokenMpVigente(slug, userNegocio);
@@ -9098,6 +9255,11 @@ app.post("/webhook/mp", async (req, res) => {
       }
 
       if(Array.isArray(meta.reserva_items)) {
+        const claim = meta.reserva_items[0]?.canje_membresia === true;
+        if (claim && (!leidoConTokenVendedor || finalPayData.currency_id !== "ARS" ||
+          finalPayData.metadata?.tipo !== "canje_membresia" || finalPayData.external_reference !== pendiente.id)) {
+          return res.sendStatus(503);
+        }
         if(["refunded","charged_back"].includes(finalPayData.status)) {
           await supabase.from("turnos").update({pago_estado:finalPayData.status === "refunded" ? "reembolsado" : "contracargo"}).eq("grupo_reserva_id",pendiente.id);
           return res.sendStatus(200);
@@ -9110,6 +9272,20 @@ app.post("/webhook/mp", async (req, res) => {
             p_pending_id:pendiente.id,p_payment_id:String(paymentId),p_paid:true
           });
           if(groupError){
+            if (claim && groupError.code === "P0001") {
+              const refund = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}/refunds`, {
+                method: "POST", headers: {
+                  Authorization: `Bearer ${tokenVendedor}`, "Content-Type": "application/json",
+                  "X-Idempotency-Key": `refund-membership-${pendiente.id}-${paymentId}`,
+                }, body: "{}", signal: AbortSignal.timeout(20000),
+              }).catch(() => null);
+              if (!refund?.ok) return res.sendStatus(503);
+              await supabase.from("membresia_canje").update({ devuelto_at: new Date().toISOString() })
+                .eq("pago_pendiente_id", pendiente.id).is("turno_id", null);
+              await supabase.from("pagos_pendientes").update({ estado: "rechazado", payment_id: String(paymentId) }).eq("id", pendiente.id);
+              return res.sendStatus(200);
+            }
+            if (claim) return res.sendStatus(503);
             console.error("Pago grupal aprobado sin turnos:",pendiente.id,groupError.message);
             enviarMailConflictoTurno({adminEmail:userNegocio?.email,nombreCliente:meta.nombre,fechaHora:"varios turnos",slug,payment_id:paymentId,monto:meta.monto});
             crearNotificacion({slug,tipo:"sistema",titulo:"Pago grupal requiere atención",mensaje:`El pago ${paymentId} se aprobó pero un horario del carrito ya no estaba disponible. Revisá el cobro y contactá al cliente.`,data:{payment_id:paymentId,seccion:"agenda"}});
