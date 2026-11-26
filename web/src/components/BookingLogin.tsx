@@ -1,3 +1,4 @@
+import { useNativeDialogExit } from "./useNativeDialogExit"
 import BackButton from "./BackButton"
 import BookingAccountMenu from "./BookingAccountMenu"
 import React from "react"
@@ -66,11 +67,18 @@ export default function BookingLogin({ api, onSession, accent, loginRequest, slu
     const [busy, setBusy] = React.useState(false)
     const [error, setError] = React.useState("")
     const pending = React.useRef(false)
+    const afterExit = React.useRef<(() => void) | null>(null)
+    const onDialogClosed = useNativeDialogExit(() => {
+        resetForm()
+        const completeSession = afterExit.current
+        afterExit.current = null
+        completeSession?.()
+    })
 
     React.useEffect(() => {
         if (loginRequest) {
             if (!readBookingToken()) setSignedIn(false)
-            setOpen(true)
+            openLogin()
         }
     }, [loginRequest])
 
@@ -205,8 +213,17 @@ export default function BookingLogin({ api, onSession, accent, loginRequest, slu
         }
     }, [api, open, signup, challenge])
 
+    function openLogin() {
+        if (open || afterExit.current) return
+        resetForm()
+        setOpen(true)
+    }
+
     function close() {
         setOpen(false)
+    }
+
+    function resetForm() {
         setSignup(false)
         setRegistrationRetry(false)
         setEmail("")
@@ -216,10 +233,18 @@ export default function BookingLogin({ api, onSession, accent, loginRequest, slu
     }
 
     function finish(token: string, profile: Parameters<typeof displayAccountName>[0]) {
-        setAccountName(displayAccountName({ ...profile, email: profile.email || email }))
-        saveBookingToken(token)
-        onSession?.(token)
-        setSignedIn(true)
+        const name = displayAccountName({ ...profile, email: profile.email || email })
+        const completeSession = () => {
+            setAccountName(name)
+            saveBookingToken(token)
+            onSession?.(token)
+            setSignedIn(true)
+        }
+        if (!dialog.current?.open) {
+            completeSession()
+            return
+        }
+        afterExit.current = completeSession
         close()
     }
 
@@ -313,7 +338,7 @@ export default function BookingLogin({ api, onSession, accent, loginRequest, slu
                 border: 0, background: "transparent", color: accent,
                 padding: "0 4px", font: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer",
             } : button}
-            onClick={() => setOpen(true)}
+            onClick={openLogin}
         >
             {accent && (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" focusable="false">
@@ -326,6 +351,7 @@ export default function BookingLogin({ api, onSession, accent, loginRequest, slu
             <style>{`@keyframes booking-login-step-in{from{opacity:0}to{opacity:1}}@media(prefers-reduced-motion:no-preference){.booking-login-step{animation:booking-login-step-in .22s ease-out both}}@keyframes booking-login-spin{to{transform:rotate(360deg)}}.booking-login-spinner{animation:booking-login-spin .8s linear infinite}@media(prefers-reduced-motion:reduce){.booking-login-spinner{animation:none}}html:has(dialog.turnits-booking-login[open]){overflow:hidden;overscroll-behavior:none;scrollbar-gutter:stable}dialog.turnits-booking-login{overscroll-behavior:contain}dialog.turnits-booking-login::backdrop{background:rgba(12,16,13,.42)}.turnits-booking-login input:focus-visible{outline:2px solid ${actionColor};outline-offset:2px}.turnits-booking-login .booking-code:focus-within{outline:2px solid ${actionColor};outline-offset:4px;border-radius:5px}`}</style>
             <dialog ref={dialog} className="turnits-booking-login" aria-labelledby={titleId}
                 onCancel={event => { event.preventDefault(); if (!busy) close() }}
+                onClose={onDialogClosed}
                 style={{ width: "min(calc(100% - 32px), 400px)", maxWidth: "none", height: "min(440px, calc(100% - 24px))", boxSizing: "border-box", border: 0, borderRadius: 20, padding: "28px clamp(16px, 5vw, 28px)", color: "#171a17", background: "#fff", boxShadow: "0 24px 90px #1115" }}>
                 <BackButton floating aria-label={challenge || signup ? "Volver" : "Cerrar"} disabled={busy}
                     onClick={() => {

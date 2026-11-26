@@ -3,6 +3,8 @@ import {
   SeccionHeader,
   MercadoPagoConexion_getSlug as getSlug,
   MercadoPagoConexion_getToken as getToken,
+  MercadoPagoConexion_CBU_REGEX,
+  MercadoPagoConexion_ALIAS_REGEX,
   Pagos_baselineDesdeSettings,
   TurnitsGlobalSaveManager_get,
 } from "./common";
@@ -36,6 +38,9 @@ type Config = {
   cbu_final: string;
   mp_conectado: boolean;
 };
+
+const emptyBank = { titular: "", banco: "", cbu: "", alias: "" };
+type BankFields = typeof emptyBank;
 
 async function json(url: string, init: RequestInit = {}) {
   const token = getToken();
@@ -226,11 +231,16 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
     porcentaje_sena: 20,
     agenda_sin_pagos: false,
   });
-  const [cbu, setCbu] = useState(""),
+  const [bank, setBank] = useState(emptyBank),
+    [bankLoading, setBankLoading] = useState(false),
     [editBank, editar] = useState(false),
     [busy, setBusy] = useState(false),
+    [saving, setSaving] = useState(() => Boolean(TurnitsGlobalSaveManager_get()?.isSaving())),
     [notice, setNotice] = useState("");
-  const bankDraftStart = React.useRef<any>(null);
+  const bankDraftStart = React.useRef<{ datos_bancarios: BankFields; acepta_transferencia: boolean } | null>(null);
+  const previousCbu = React.useRef("");
+  const bankMaskedStart = React.useRef("");
+  const bankRequest = React.useRef<AbortController | null>(null);
   const logos = [
     iconos?.logoMercadoPago,
     iconos?.logoTransferencia,
@@ -294,13 +304,35 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
         porcentaje_sena: Math.min(100, Math.max(20, Number(saved.porcentaje_sena) || 20)),
         agenda_sin_pagos: saved.agenda_sin_pagos === true,
       }));
-      setCbu("");
-      editar(false);
-      bankDraftStart.current = null;
+      if (event.detail.submitted?.datos_bancarios) {
+        setBank(emptyBank);
+        editar(false);
+        previousCbu.current = "";
+        bankDraftStart.current = null;
+      } else if (bankDraftStart.current) {
+        bankDraftStart.current.acepta_transferencia = saved.acepta_transferencia === true;
+      }
       setNotice("");
     };
+    const onDiscarded = () => {
+      bankRequest.current?.abort();
+      bankDraftStart.current = null;
+      previousCbu.current = "";
+      setBank(emptyBank);
+      setBankLoading(false);
+      editar(false);
+      retry(value => value + 1);
+    };
+    const onSaveState = (event: Event) => setSaving((event as CustomEvent).detail?.saving === true);
+    window.addEventListener("turnits_global_save_state", onSaveState);
     window.addEventListener("turnits_global_saved", onSaved);
-    return () => window.removeEventListener("turnits_global_saved", onSaved);
+    window.addEventListener("turnits_global_discarded", onDiscarded);
+    return () => {
+      bankRequest.current?.abort();
+      window.removeEventListener("turnits_global_save_state", onSaveState);
+      window.removeEventListener("turnits_global_saved", onSaved);
+      window.removeEventListener("turnits_global_discarded", onDiscarded);
+    };
   }, []);
   useEffect(() => () => TurnitsGlobalSaveManager_get()?.setBlocker("pagos", ""), []);
   if (!config)
@@ -321,13 +353,73 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
     setConfig((current) => current ? {
       ...current,
       ...cambios,
-      ...(cambios.datos_bancarios ? { cbu_final: cambios.datos_bancarios.cbu?.slice(-4) || "" } : {}),
+      ...(cambios.datos_bancarios ? {
+        cbu_final: cambios.datos_bancarios.cbu?.slice(-4) || bankMaskedStart.current,
+      } : {}),
     } : current);
   }
   function actualizarBorradorPagos(next: typeof draft) {
     setDraft(next);
     publicarPagos(next);
   }
+  async function openBank() {
+    const current = (window as any).getPagosConfig?.() || Pagos_baselineDesdeSettings(config);
+    bankDraftStart.current = {
+      datos_bancarios: current.datos_bancarios,
+      acepta_transferencia: current.acepta_transferencia,
+    };
+    bankMaskedStart.current = config?.cbu_final || "";
+    let stored = current.datos_bancarios;
+    setNotice("");
+    if (bankMaskedStart.current && !stored.cbu) {
+      const request = new AbortController();
+      bankRequest.current = request;
+      setBankLoading(true);
+      try {
+        const { settings } = await json(api + "/settings/" + slug, { signal: request.signal });
+        stored = Pagos_baselineDesdeSettings(settings).datos_bancarios;
+        if (!stored.cbu) throw Error("No pudimos cargar los datos bancarios.");
+      } catch (error) {
+        if (!request.signal.aborted) setNotice(error instanceof Error ? error.message : "No pudimos cargar los datos bancarios.");
+        return;
+      } finally {
+        if (!request.signal.aborted) setBankLoading(false);
+      }
+      if (request.signal.aborted) return;
+    }
+    previousCbu.current = stored.cbu;
+    setBank({ ...stored, cbu: "" });
+    editar(true);
+  }
+
+  function updateBank(next: BankFields) {
+    setBank(next);
+    const start = bankDraftStart.current;
+    const cbu = next.cbu || previousCbu.current;
+    const alias = next.alias.trim();
+    const error = !MercadoPagoConexion_CBU_REGEX.test(cbu) ? "Ingresá los 22 dígitos del CBU para guardar los cambios."
+      : alias && !MercadoPagoConexion_ALIAS_REGEX.test(alias) ? "Revisá el alias antes de guardar."
+      : "";
+    TurnitsGlobalSaveManager_get()?.setBlocker("pagos", error);
+    if (error) {
+      if (start) publicarPagos(start);
+      return;
+    }
+    publicarPagos({
+      acepta_transferencia: next.cbu ? true : start?.acepta_transferencia,
+      datos_bancarios: { ...next, titular: next.titular.trim(), banco: next.banco.trim(), alias, cbu },
+    });
+  }
+
+  function cancelBank() {
+    if (bankDraftStart.current) publicarPagos(bankDraftStart.current);
+    TurnitsGlobalSaveManager_get()?.setBlocker("pagos", "");
+    bankDraftStart.current = null;
+    previousCbu.current = "";
+    editar(false);
+    setBank(emptyBank);
+  }
+
   async function conectar() {
     setBusy(true);
     setNotice("Abriendo Mercado Pago…");
@@ -344,7 +436,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
   return (
     <div className="cb-panel">
       <SeccionHeader title={seccion.titulo} subtitle={seccion.descripcion} isMobile={isMobile} />
-      <fieldset disabled={busy} aria-label={seccion.titulo} className={"cb-card cb-" + vista}>
+      <fieldset disabled={busy || saving} aria-label={seccion.titulo} className={"cb-card cb-" + vista}>
         {vista === "costos" && (
           <Calculadora config={config} api={api} slug={slug} logos={logos} />
         )}
@@ -425,11 +517,8 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                         ? "Cuenta vinculada"
                         : "Cuenta sin vincular"}
                     </p>
-                    <button className="cb-mp" onClick={conectar}>
-                      {config.mp_conectado
-                        ? "Volver a vincular"
-                        : "Vincular tu cuenta"}{" "}
-                      ↗
+                    <button type="button" className="cb-payment-action" onClick={conectar}>
+                      {config.mp_conectado ? "Volver a vincular" : "Vincular tu cuenta"}
                     </button>
                   </>
                 ) : !offline ? (
@@ -441,69 +530,24 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                         ? "CBU •••• " + config.cbu_final
                         : "Sin CBU vinculado"}
                     </p>
-                    {editBank ? (
-                      <>
-                        <input
-                          aria-label="Nuevo CBU de 22 dígitos"
-                          autoComplete="off"
-                          type="password"
-                          inputMode="numeric"
-                          maxLength={22}
-                          value={cbu}
-                          onChange={(e) => {
-                            if (!/^\d*$/.test(e.target.value)) return;
-                            const value = e.target.value;
-                            setCbu(value);
-                            TurnitsGlobalSaveManager_get()?.setBlocker(
-                              "pagos",
-                              value.length === 22 ? "" : "Ingresá los 22 dígitos del CBU para guardar los cambios."
-                            );
-                            if (value.length === 22) {
-                              publicarPagos({ acepta_transferencia: true, datos_bancarios: { cbu: value } });
-                            } else if (bankDraftStart.current) {
-                              publicarPagos(bankDraftStart.current);
-                            }
-                          }}
-                        />
-                        <button
-                          onClick={() => {
-                            if (bankDraftStart.current) publicarPagos(bankDraftStart.current);
-                            TurnitsGlobalSaveManager_get()?.setBlocker("pagos", "");
-                            bankDraftStart.current = null;
-                            editar(false);
-                            setCbu("");
-                          }}
-                        >
-                          Cancelar
+                    {!editBank && (
+                      <div className="cb-payment-actions">
+                        <button type="button" className="cb-payment-action" disabled={bankLoading} onClick={openBank}>
+                          {bankLoading ? "Cargando datos…" : config.cbu_final ? "Editar datos bancarios" : "Vincular un CBU"}
                         </button>
-                      </>
-                    ) : (
-                      <button className="cb-bank" onClick={() => {
-                        const current = (window as any).getPagosConfig?.() || Pagos_baselineDesdeSettings(config);
-                        bankDraftStart.current = {
-                          datos_bancarios: current.datos_bancarios,
-                          acepta_transferencia: current.acepta_transferencia,
-                        };
-                        editar(true);
-                      }}>
-                        {config.cbu_final ? "Cambiar CBU" : "Vincular un CBU"}{" "}
-                        ↗
-                      </button>
-                    )}
-                    {config.cbu_final && !editBank && (
-                      <button
-                        onClick={() => publicarPagos({ acepta_transferencia: !config.acepta_transferencia })}
-                      >
-                        {config.acepta_transferencia
-                          ? "Deshabilitar"
-                          : "Habilitar"}{" "}
-                        transferencia
-                      </button>
+                        {config.cbu_final && (
+                          <button type="button" className="cb-payment-action"
+                            onClick={() => publicarPagos({ acepta_transferencia: !config.acepta_transferencia })}>
+                            {config.acepta_transferencia ? "Deshabilitar transferencia" : "Habilitar transferencia"}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </>
                 ) : (
                   <button
-                    className="cb-green"
+                    type="button"
+                    className="cb-payment-action"
                     onClick={() => publicarPagos({ acepta_efectivo: !config.acepta_efectivo })}
                   >
                     {config.acepta_efectivo ? "Deshabilitar" : "Habilitar"}{" "}
@@ -530,6 +574,41 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                 </div>
               ) : (
                 <div className="cb-detail">Sin comisión de Mercado Pago</div>
+              )}
+              {i === 1 && offline && editBank && (
+                <div className="cb-bank-form" role="group" aria-labelledby="cb-bank-heading">
+                  <header>
+                    <h3 id="cb-bank-heading">Datos de la cuenta bancaria</h3>
+                    <p>Estos datos se muestran al cliente cuando elige pagar por transferencia.</p>
+                  </header>
+                  <div className="cb-bank-fields">
+                    <label>Nombre del titular
+                      <input value={bank.titular} placeholder="Nombre y apellido" maxLength={80}
+                        onChange={event => updateBank({ ...bank, titular: event.target.value })} />
+                    </label>
+                    <label>Banco
+                      <input value={bank.banco} placeholder="Nombre del banco" maxLength={60}
+                        onChange={event => updateBank({ ...bank, banco: event.target.value })} />
+                    </label>
+                    <label>{previousCbu.current ? "Nuevo CBU (opcional)" : "CBU"}
+                      <input value={bank.cbu} placeholder={previousCbu.current ? "Conservar CBU actual" : "22 dígitos"}
+                        type="password" inputMode="numeric" autoComplete="off" maxLength={22}
+                        onChange={event => updateBank({ ...bank, cbu: event.target.value.replace(/\D/g, "") })} />
+                      {bank.cbu.length > 0 && bank.cbu.length < 22 && <small>{bank.cbu.length} de 22 dígitos</small>}
+                    </label>
+                    <label>Alias (opcional)
+                      <input value={bank.alias} placeholder="Ej. mi.alias.banco" maxLength={30}
+                        autoCapitalize="none" spellCheck={false}
+                        onChange={event => updateBank({ ...bank, alias: event.target.value })} />
+                      {bank.alias.trim() && !MercadoPagoConexion_ALIAS_REGEX.test(bank.alias.trim()) &&
+                        <small>Usá entre 6 y 30 letras, números, puntos o guiones.</small>}
+                    </label>
+                  </div>
+                  <footer>
+                    <span>Aplicá los cambios con Guardar en el encabezado.</span>
+                    <button type="button" onClick={cancelBank}>Cancelar edición</button>
+                  </footer>
+                </div>
               )}
             </div>
           ))}

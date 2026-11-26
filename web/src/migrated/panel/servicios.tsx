@@ -1,3 +1,4 @@
+import { OverlayFade } from "../../components/OverlayFade"
 import { PromotionDiscountArrow } from "./PromotionDiscountArrow"
 import { CatalogToolbar } from "./CatalogToolbar"
 import { useCatalogTransition } from "./catalog-motion"
@@ -160,7 +161,7 @@ function Turnits_ImageAdjustDialog({
     if (typeof document === "undefined") return null
 
     return createPortal(
-        <div
+        <OverlayFade
             style={{
                 position: "fixed",
                 inset: 0,
@@ -342,7 +343,7 @@ function Turnits_ImageAdjustDialog({
                     </button>
                 </div>
             </div>
-        </div>,
+        </OverlayFade>,
         document.body
     )
 }
@@ -440,7 +441,7 @@ function ServiciosManager_ImageUploader({
 
     return (
         <>
-            {cropFile && (
+            <AnimatePresence>{cropFile && (
                 <Turnits_ImageAdjustDialog
                     file={cropFile}
                     aspect={1}
@@ -450,7 +451,7 @@ function ServiciosManager_ImageUploader({
                         uploadFile(adjusted)
                     }}
                 />
-            )}
+            )}</AnimatePresence>
             <div
                 style={{
                     display: size > 100 ? "block" : "flex",

@@ -754,7 +754,10 @@ function AgendaPanel(props: any) {
                         </select>
                     </label>
                 )}
-                <button className="agenda-add" type="button" onClick={abrirNuevo}>Crear +</button>
+                <button className="agenda-add" type="button" onClick={abrirNuevo}>
+                    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M8 3v10M3 8h10" /></svg>
+                    Crear turno
+                </button>
             </div>
             <div
                 ref={containerRef}

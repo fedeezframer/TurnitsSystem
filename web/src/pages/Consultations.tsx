@@ -1,3 +1,4 @@
+import { useNativeDialogExit } from "../components/useNativeDialogExit"
 import { BackButton } from "../components/BackButton";
 import * as React from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
@@ -200,6 +201,7 @@ function ConsultationsContent({ embedded, guestToken = "", guestAccessMissing = 
     setPendingPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [pendingFile]);
+  const finishReferenceClose = useNativeDialogExit(() => setReference(""));
   React.useEffect(() => { if (reference && referenceDialog.current && !referenceDialog.current.open) referenceDialog.current.showModal(); }, [reference]);
   React.useEffect(() => {
     setReceipt(null);
@@ -392,6 +394,6 @@ function ConsultationsContent({ embedded, guestToken = "", guestAccessMissing = 
       {current ? <aside className="chat-panel-sidebar">{inboxView}</aside> : inboxView}
       {threadView || <div className="chat-panel-empty"><ChatIcon name="chat" size={34} /><strong>Tus conversaciones</strong><span>Elegí un chat para ver los mensajes y coordinar la consulta.</span></div>}
     </> : current ? threadView : inboxView}
-    <dialog className="chat-reference-dialog" ref={referenceDialog} onCancel={() => setReference("")} onClose={() => setReference("")}><button type="button" className="chat-reference-close" aria-label="Cerrar foto" onClick={() => { referenceDialog.current?.close(); setReference(""); }}><ChatIcon name="close" /></button>{reference && <img src={reference} alt="Foto de referencia ampliada" />}</dialog>
+    <dialog className="chat-reference-dialog" ref={referenceDialog} onClose={finishReferenceClose}><button type="button" className="chat-reference-close" aria-label="Cerrar foto" onClick={() => referenceDialog.current?.close()}><ChatIcon name="close" /></button>{reference && <img src={reference} alt="Foto de referencia ampliada" />}</dialog>
   </Container>;
 }

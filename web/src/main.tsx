@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router"
 import App from "./App"
 import SiteMetadata from "./SiteMetadata"
 import "./styles.css"
+import "./components/overlay-motion.css"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <BrowserRouter><SiteMetadata /><App /></BrowserRouter>,

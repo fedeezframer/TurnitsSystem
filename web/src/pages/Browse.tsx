@@ -1,3 +1,5 @@
+import { AnimatePresence } from "framer-motion"
+import { OverlayFade } from "../components/OverlayFade"
 import * as React from "react";
 import { PASSWORD_MIN_LENGTH } from "../shared/password-policy.js";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -300,7 +302,7 @@ function Modal({ title, children, onClose, busy = false }: any) {
     };
   }, []);
   return (
-    <div
+    <OverlayFade
       className="browse-overlay"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
@@ -347,7 +349,7 @@ function Modal({ title, children, onClose, busy = false }: any) {
         <h2 id={heading}>{title}</h2>
         {children}
       </div>
-    </div>
+    </OverlayFade>
   );
 }
 
@@ -1301,7 +1303,7 @@ function BrowseContent() {
           <button type="button" className="browse-message-notice-close" aria-label="Cerrar notificación" onClick={() => setMessageNotice(null)}><ChatIcon name="close" size={16} /></button>
         </div>}
       </>}
-      {modal && (
+      <AnimatePresence>{modal && (
         <Modal
           title={
             {
@@ -1652,7 +1654,7 @@ function BrowseContent() {
             </p>
           )}
         </Modal>
-      )}
+      )}</AnimatePresence>
     </div>
   );
 }

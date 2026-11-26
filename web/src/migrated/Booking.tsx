@@ -1,3 +1,4 @@
+import { OverlayFade } from "../components/OverlayFade"
 import promosArrow from "../components/boxicons_arrow-down-right-stroke-filled.svg"
 import PublicOverlay from "../components/PublicOverlay"
 import BackButton from "../components/BackButton"
@@ -3115,7 +3116,7 @@ export default function BookingFlow(props: any) {
                         </span></span>
                     <strong style={{color:accent,fontSize:13,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:7}}><span aria-hidden="true" style={{width:19,height:19,display:"inline-block",backgroundColor:accent,mask:"url('/icons/shopping-cart.svg') center / contain no-repeat"}}/>Ver carrito ↑</strong>
                 </button>
-                {basketOpen && <div role="dialog" aria-modal="true" aria-label="Mis reservas" style={{position:"fixed",inset:0,zIndex:4000,background:"#fff",color:"#111827",overflowY:"auto",fontFamily:"'DM Sans', sans-serif"}}>
+                <AnimatePresence>{basketOpen && <OverlayFade role="dialog" aria-modal="true" aria-label="Mis reservas" style={{position:"fixed",inset:0,zIndex:4000,background:"#fff",color:"#111827",overflowY:"auto",fontFamily:"'DM Sans', sans-serif"}}>
                     <div style={{maxWidth:760,margin:"0 auto",padding:"24px 18px 120px"}}>
                         <div style={{marginBottom:18}}><BookingBackButton onClick={() => setBasketOpen(false)}/></div>
                         <div style={{marginBottom:20}}><h2 style={{margin:0,fontSize:24}}>Mis reservas</h2><p style={{margin:"5px 0 0",color:"#6b7280",fontSize:13}}>Elegí un horario para cada turno.</p></div>
@@ -3148,11 +3149,11 @@ export default function BookingFlow(props: any) {
                         <div style={{display:"flex",justifyContent:"space-between",padding:"20px 2px",fontWeight:700}}><span>{ticketTotal ? "Total de la reserva" : "Total de los servicios"}</span><span>{ticketTotal ? `${ticketLabel}${ticketCharge ? ` + ${formatearMoneda(ticketCharge)}` : ""}` : formatearMoneda(basket.reduce((sum,item)=>sum+item.precio,0))}</span></div>
                         <button type="button" onClick={() => {setBasketOpen(false); if(stepId !== "checkout" && basket.length) setStepId("checkout")}} style={{width:"100%",padding:15,border:0,borderRadius:12,background:accent,color:"#fff",fontWeight:700,cursor:"pointer"}}>{basket.length && basket.every(item=>item.fecha && item.hora) ? ticketTotal && !ticketCharge ? "Continuar a confirmar" : "Continuar al pago" : "Seguir eligiendo"}</button>
                     </div>
-                </div>}
+                </OverlayFade>}</AnimatePresence>
             </>}
-            {cardSession && <BookingCardPayment session={cardSession} api={api} accent={accent} onClose={()=>setCardSession(null)} />}
-            {notaAbierta && (
-                <div
+            <AnimatePresence>{cardSession && <BookingCardPayment session={cardSession} api={api} accent={accent} onClose={()=>setCardSession(null)} />}</AnimatePresence>
+            <AnimatePresence>{notaAbierta && (
+                <OverlayFade
                     style={{
                         position: "fixed",
                         inset: 0,
@@ -3236,11 +3237,11 @@ export default function BookingFlow(props: any) {
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                </OverlayFade>
+            )}</AnimatePresence>
 
-            {modalSinPago && (
-                <div
+            <AnimatePresence>{modalSinPago && (
+                <OverlayFade
                     onClick={() => setModalSinPago(false)}
                     style={{
                         position: "fixed",
@@ -3324,8 +3325,8 @@ export default function BookingFlow(props: any) {
                             Entendido
                         </button>
                     </div>
-                </div>
-            )}
+                </OverlayFade>
+            )}</AnimatePresence>
         </div>
         </div>
         </div>
@@ -3729,15 +3730,21 @@ function BookingPromos({ promociones, servicios, accent, icono, onSelect }: {
     promociones: BookingPromo[]; servicios: Servicio[]; accent: string; icono?: string; onSelect: (promo: BookingPromo) => void
 }) {
     const [open, setOpen] = React.useState(false)
+    const pendingPromo = React.useRef<BookingPromo | null>(null)
     if (!promociones.length) return null
-    const close = () => setOpen(false)
+    const close = () => {
+        setOpen(false)
+        const promo = pendingPromo.current
+        pendingPromo.current = null
+        if (promo) onSelect(promo)
+    }
     return <div style={{ position: "sticky", top: 0, zIndex: 30, width: "100vw", maxWidth: "100%", flexShrink: 0 }}>
         <button type="button" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}
             style={{ width: "100%", minHeight: 48, padding: "10px 18px", display: "flex", justifyContent: "center", alignItems: "center",
                 gap: 7, border: 0, background: accent, color: "#fff", font: "inherit", fontWeight: 750, cursor: "pointer" }}>
             Ver promos <img src={icono || promosArrow} alt="" width="16" height="16" style={{ objectFit: "contain", filter: "brightness(0) invert(1)" }} />
         </button>
-        {open && <PublicOverlay title="Promos disponibles" onClose={close}>
+        <PublicOverlay title="Promos disponibles" open={open} onClose={close}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%, 260px),1fr))", gap: 14 }}>
                 {promociones.map(promo => {
                     const images = (promo.items || []).map(item => ({
@@ -3763,14 +3770,14 @@ function BookingPromos({ promociones, servicios, accent, icono, onSelect }: {
                             <strong>{formatearMoneda(promo.precio_final)}</strong>
                             {promo.precio_original > promo.precio_final && <del style={{ color: "var(--bf-text-muted)" }}>{formatearMoneda(promo.precio_original)}</del>}
                         </div>
-                        <button type="button" onClick={() => { close(); onSelect(promo) }}
+                        <button type="button" onClick={() => { pendingPromo.current = promo; setOpen(false) }}
                             style={{ border: 0, borderRadius: 9, padding: "10px 14px", background: accent, color: "white", font: "inherit", fontWeight: 700, cursor: "pointer" }}>
                             {promo.tipo === "combo" ? "Reservar combo" : "Reservar promo"}
                         </button>
                     </article>
                 })}
             </div>
-        </PublicOverlay>}
+        </PublicOverlay>
     </div>
 }
 function ServicioCard({
@@ -5843,7 +5850,7 @@ export function BookingCardPayment({session,api,accent,onClose,paymentPath="/api
         finally{busyRef.current=false;setBusy(false)}
     }
     const unresolved=["pending","unknown","not_found","review"].includes(state)
-    return <div role="dialog" aria-modal="true" aria-label="Pago con tarjeta" style={{position:"fixed",inset:0,zIndex:10001,background:"rgba(15,23,42,.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    return <OverlayFade role="dialog" aria-modal="true" aria-label="Pago con tarjeta" style={{position:"fixed",inset:0,zIndex:10001,background:"rgba(15,23,42,.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
         <div style={{width:"100%",maxWidth:480,maxHeight:"calc(100dvh - 32px)",overflowY:"auto",background:"var(--bf-card-bg, #fff)",color:"var(--bf-text, #111827)",borderRadius:20,padding:24,boxShadow:"0 24px 80px rgba(0,0,0,.2)"}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
                 <strong style={{fontSize:19}}>Pagá con tarjeta</strong>
@@ -5858,5 +5865,5 @@ export function BookingCardPayment({session,api,accent,onClose,paymentPath="/api
             {(state==="rejected" || state==="not_charged") && <button type="button" onClick={onClose} style={{background:accent,color:"#fff",border:0,borderRadius:10,padding:"12px 16px",cursor:"pointer"}}>Volver al checkout</button>}
             <p style={{fontSize:11,color:"var(--bf-text-muted, #6b7280)",marginTop:16}}>Pago procesado por Mercado Pago. Turnits no guarda el número de tarjeta ni el CVV.</p>
         </div>
-    </div>
+    </OverlayFade>
 }

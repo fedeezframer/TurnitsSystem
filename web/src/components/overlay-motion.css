@@ -1,0 +1,29 @@
+@media (prefers-reduced-motion: no-preference) {
+  @supports (transition-behavior: allow-discrete) {
+    dialog:not(.booking-account-menu) {
+      opacity: 0;
+      translate: 0 6px;
+      transition: opacity 180ms ease-out, translate 180ms ease-out,
+        display 180ms allow-discrete, overlay 180ms allow-discrete;
+    }
+
+    dialog[open]:not(.booking-account-menu) {
+      opacity: 1;
+      translate: 0 0;
+    }
+
+    dialog:not(.booking-account-menu)::backdrop {
+      opacity: 0;
+      transition: opacity 180ms ease-out, display 180ms allow-discrete, overlay 180ms allow-discrete;
+    }
+
+    dialog[open]:not(.booking-account-menu)::backdrop {
+      opacity: 1;
+    }
+
+    @starting-style {
+      dialog[open]:not(.booking-account-menu) { opacity: 0; translate: 0 6px; }
+      dialog[open]:not(.booking-account-menu)::backdrop { opacity: 0; }
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { useNativeDialogExit } from "../../components/useNativeDialogExit"
 import { PromotionDiscountArrow } from "./PromotionDiscountArrow"
 import { ScheduleTimeInput } from "./ScheduleTimeInput"
 import { PanelDatePicker } from "./PanelDatePicker"
@@ -111,7 +112,8 @@ export function ClientOfferDraft({bookingId,name,baseUrl,onClose}:{bookingId:str
     const selected=Object.values(lines)
     const total=selected.reduce((sum,line)=>sum+line.count*line.item.precio,0)
     const image=selected.find(line=>line.item.imagen)?.item.imagen || items.find(item=>item.imagen)?.imagen
-    return <dialog ref={dialog} className="client-offer" onClose={onClose} aria-labelledby="client-offer-title">
+  const finishClose = useNativeDialogExit(onClose)
+    return <dialog ref={dialog} className="client-offer" onClose={finishClose} aria-labelledby="client-offer-title">
         <BackButton floating onClick={()=>dialog.current?.close()}/>
         <h2 id="client-offer-title">Promoción para {name}</h2><p>Impulsa a que este cliente vuelva</p>
         <div className="offer-main"><div className="offer-cover">{image && <img src={image} alt=""/>}</div>

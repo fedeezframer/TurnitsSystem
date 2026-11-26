@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from "framer-motion"
+import { useNativeDialogExit } from "../../components/useNativeDialogExit"
 import * as React from "react"
 import { BackButton } from "../../components/BackButton"
 import { AgendaPanel_getSlug, AgendaPanel_getToken, AgendaPanel_formatMonto, ServiciosManager_parseDesc } from "./common"
@@ -9,6 +9,7 @@ type Turno = { id:string; nombre:string; hora:string; estado?:string; reprograma
 type Dia = { fecha:string; turnos:Turno[] }
 type Item = { id:string; nombre:string; imagen_url?:string; descripcion?:string }
 const month = new Intl.DateTimeFormat("es-AR",{month:"short",timeZone:"UTC"})
+const weekday = new Intl.DateTimeFormat("es-AR",{weekday:"long",timeZone:"UTC"})
 function shortDate(iso:string) {
     const date = new Date(iso+"T12:00:00Z")
     const name = month.format(date).replace(".","")
@@ -20,69 +21,17 @@ function photo(items:Item[],id?:string,name?:string) {
     return matches[0].imagen_url || ServiciosManager_parseDesc(matches[0].descripcion || "").imagen
 }
 
-// Keep each composition tied to its date, including when branches are filtered.
-function ribbonFrames(seed: number) {
-    let state = seed >>> 0
-    const sample = () => {
-        state = (Math.imul(state, 1664525) + 1013904223) >>> 0
-        return state / 4294967296
-    }
-    const circle = Math.PI * 2
-    const angle = sample() * Math.PI
-    const bend = 45 + sample() * 70
-    const frequency = 1.2 + sample() * 1.7
-    const offset = sample() * circle
-    const centerY = 105 + sample() * 105
-    const frames = Array.from({length: 12}, (_, frame) => {
-        const phase = frame * circle / 12
-        const points = Array.from({length: 19}, (_, index) => {
-            const t = index / 18
-            const wave = t * circle + offset
-            const along = (t - 0.5) * 640 + 55 * Math.sin(wave * frequency + phase)
-            const across = bend * Math.sin(wave * frequency + 0.65 * Math.cos(phase))
-                + 36 * Math.cos(wave * 1.6 - phase)
-            return [
-                Math.round(160 + along * Math.cos(angle) - across * Math.sin(angle)),
-                Math.round(centerY + along * Math.sin(angle) + across * Math.cos(angle)),
-            ]
-        })
-        const commands = [`M ${points[0].join(" ")}`]
-        for (let i = 1; i < points.length - 1; i++) {
-            const [x,y] = points[i]
-            const [nx,ny] = points[i + 1]
-            commands.push(`Q ${x} ${y} ${(x + nx) / 2} ${(y + ny) / 2}`)
-        }
-        commands.push(`T ${points[points.length - 1].join(" ")}`)
-        return commands.join(" ")
-    })
-    return [...frames, frames[0]]
-}
-
-function DayBackdrop({date}: {date:string}) {
-    const reduced = useReducedMotion()
-    const day = Math.floor(Date.parse(date) / 86400000)
-    const ribbons = React.useMemo(() => [13, 4].map((width, index) => ({
-        width,
-        frames: ribbonFrames(Math.imul(day, 2654435761) + index * 1013904223),
-        duration: 13 + day % 5 + index * 4,
-    })), [day])
-    return <div aria-hidden="true" className="agenda-day-backdrop">
-        <motion.span className="agenda-day-glow" initial={{x:0,y:0}}
-            animate={reduced ? {x:0,y:0} : {x:[0,57,-28,0],y:[0,-38,27,0]}}
-            transition={{duration:13 + day % 5,repeat:Infinity,ease:"easeInOut"}} />
-        <svg className="agenda-day-ribbons" viewBox="0 0 320 300" preserveAspectRatio="none">
-            {ribbons.map(({width, frames, duration}) => <motion.path key={width} strokeWidth={width}
-                initial={{d:frames[0]}} animate={{d:reduced ? frames[0] : frames}}
-                transition={{duration:reduced ? 0 : duration, repeat:reduced ? 0 : Infinity, ease:"linear"}} />)}
-        </svg>
-    </div>
-}
-
 export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick}:{
     dias:Dia[];today:string;baseUrl:string;turnoOpen:boolean;onTurnoClick:(turno:Turno,fecha:string)=>void
 }) {
     const [selected,setSelected] = React.useState("")
     const dialog = React.useRef<HTMLDialogElement>(null)
+    const dismissingDay = React.useRef(false)
+    const finishDayClose = useNativeDialogExit(() => setSelected(""))
+    const dismissDay = () => {
+        dismissingDay.current = true
+        dialog.current?.close()
+    }
     const [services,setServices] = React.useState<Item[]>([])
     const [extras,setExtras] = React.useState<Item[]>([])
     const [loadPhotos,setLoadPhotos] = React.useState(false)
@@ -110,31 +59,63 @@ export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick}:{
         (day.fecha > today || (day.fecha === today && t.hora >= time)) &&
         (!t.estado || t.estado === "confirmado" || t.estado === "pendiente")
     ))[0]
-    function appointmentLabel(turno: Turno) {
-        const status = turno.reprogramacion_pendiente ? "Reprogramación pendiente"
-            : turno.id === next?.id ? "Próximo turno" : undefined
-        return <span className="agenda-appointment-label" data-status={status} title={status}>
-            {turno.nombre} <time>{turno.hora}</time>
-            {status && <span className="agenda-status-description"> · {status}</span>}
-        </span>
+    function appointmentStatus(turno: Turno) {
+        if (turno.reprogramacion_pendiente) return "Reprogramación pendiente"
+        if (turno.id === next?.id) return "Próximo turno"
+        return {pendiente:"Pendiente", cancelado:"Cancelado"}[turno.estado as "pendiente" | "cancelado"]
     }
-    const openDay = (fecha:string) => {setSelected(fecha);setLoadPhotos(true)}
+    const openDay = (fecha: string) => {
+        if (fecha === selected && !turnoOpen && dialog.current && !dialog.current.open) dialog.current.showModal()
+        setSelected(fecha)
+        setLoadPhotos(true)
+    }
     const selectedTurns = days.find(day => day.fecha === selected)?.turnos || []
     return <>
         <div className="agenda-day-grid">
-            {days.length === 0 && <p className="agenda-empty-note" role="status">Aún no tienes reservas</p>}
-            {days.map(day=>{
-                return <article className="agenda-day" data-today={day.fecha===today} key={day.fecha}>
-                    {day.fecha === today && <DayBackdrop date={day.fecha} />}
-                    <header><h3>{day.fecha===today?"Hoy":shortDate(day.fecha)}</h3><button onClick={()=>openDay(day.fecha)} aria-label={"Ver detalles del "+shortDate(day.fecha)}>Ver detalles</button></header>
-                    <ol>{day.turnos.map(t=><li key={t.id} data-state={t.id===next?.id?"next":day.fecha===today && t.hora<time?"past":"upcoming"}>
-                        <button onClick={()=>onTurnoClick(t,day.fecha)}>{appointmentLabel(t)}</button>
-                    </li>)}</ol>
+            {days.length === 0 && <div className="agenda-empty-note" role="status">
+                <strong>Sin reservas</strong>
+                <p>Los turnos agendados aparecen acá.</p>
+            </div>}
+            {days.map(day => (
+                <article className="agenda-day" data-today={day.fecha === today} key={day.fecha}>
+                    <header>
+                        <div>
+                            <p className="agenda-weekday">{day.fecha === today ? "Hoy" : weekday.format(new Date(day.fecha + "T12:00:00Z"))}</p>
+                            <h3><time dateTime={day.fecha}>{shortDate(day.fecha)}</time></h3>
+                        </div>
+                        <button type="button" className="agenda-view-day" onClick={() => openDay(day.fecha)}
+                            aria-label={"Ver detalles del " + shortDate(day.fecha)}>{day.turnos.length} {day.turnos.length === 1 ? "turno" : "turnos"}</button>
+                    </header>
+                    <ol>{day.turnos.map(turno => {
+                        const status = appointmentStatus(turno)
+                        return <li key={turno.id}>
+                            <button className="agenda-appointment" type="button" onClick={() => onTurnoClick(turno, day.fecha)}>
+                                <time>{turno.hora}</time>
+                                <span className="agenda-appointment-body">
+                                    <strong>{turno.nombre}</strong>
+                                    {turno.servicio && <span>{turno.servicio}</span>}
+                                    {status && <small data-status={status}>{status}</small>}
+                                </span>
+                            </button>
+                        </li>
+                    })}</ol>
                 </article>
-            })}
+            ))}
         </div>
-        <dialog ref={dialog} className="agenda-day-dialog" aria-labelledby="agenda-day-title" onCancel={()=>setSelected("")} onClick={e=>{if(e.target===dialog.current){const r=dialog.current.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)setSelected("")}}}>
-            <BackButton floating onClick={()=>setSelected("")} aria-label="Volver a Mi Agenda"/>
+        <dialog ref={dialog} className="agenda-day-dialog" aria-labelledby="agenda-day-title"
+            onCancel={event => { event.preventDefault(); dismissDay() }}
+            onClose={event => {
+                if (!dismissingDay.current) return
+                dismissingDay.current = false
+                finishDayClose(event)
+            }}
+            onClick={event => {
+                if (event.target !== event.currentTarget) return
+                const bounds = event.currentTarget.getBoundingClientRect()
+                if (event.clientX < bounds.left || event.clientX > bounds.right ||
+                    event.clientY < bounds.top || event.clientY > bounds.bottom) dismissDay()
+            }}>
+            <BackButton floating onClick={dismissDay} aria-label="Volver a Mi Agenda"/>
             <h2 id="agenda-day-title">{selected && shortDate(selected)}</h2><p>Detalles de tus reservas</p>
             <div className="agenda-reservas">{selectedTurns.map(t=>{
                 const cover=photo(services,t.servicio_id,t.servicio)
@@ -146,7 +127,8 @@ export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick}:{
                             return url && <img key={i} src={url} alt={item.nombre || "Producto adicional"}/>
                         })}</span>
                     </span>
-                    <span className="agenda-reserva-body">{appointmentLabel(t)}<strong>{t.servicio || "Turno"} {!!t.extras?.length && <small>+ extra</small>}</strong>
+                    <span className="agenda-reserva-body"><strong>{t.nombre} <time>{t.hora}</time></strong><strong>{t.servicio || "Turno"} {!!t.extras?.length && <small>+ extra</small>}</strong>
+                        {appointmentStatus(t) && <span>{appointmentStatus(t)}</span>}
                         <span>Abonado: {AgendaPanel_formatMonto(t.monto_pagado)}</span><span>Debe pagar: {AgendaPanel_formatMonto(Math.max(0,t.precio_cobrado-t.monto_pagado))}</span>
                     </span>
                 </button>

@@ -56,9 +56,6 @@
 .cb-method:last-child { padding-bottom: 0; }
 .cb-method + .cb-method { border-top: 1px solid #e3e9e1; }
 .cb-method p { margin-top: 7px; }
-.cb-method button, .cb-method input { margin: 12px 6px 0 0; }
-.cb-method .cb-mp { color: #005778; background: #e3f5ff; border-color: #b3dcea; }
-.cb-method .cb-bank { color: #5c319a; background: #f3ecff; border-color: #ded1f1; }
 .cb-detail, .cb-rates { border: 1px solid #e0e8dd; border-radius: 14px; background: #f8faf7; }
 .cb-detail { padding: 22px; text-align: center; color: #37543c; font-weight: 550; }
 .cb-rates { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin-top: 12px; }
@@ -107,5 +104,18 @@
 .cb-results output { color:#18221c; }
 .cb-detail,.cb-rates { background:#fff; }
 @container (max-width:650px) { .cb-method { gap:12px; padding:18px; }.cb-method:first-child,.cb-method:last-child { padding-block:18px; } }
-.cb-method .cb-mp,.cb-method .cb-bank { color:#1b6b1a; background:#edf7ed; border-color:#b9d8b9; }
-.cb-method .cb-mp:hover,.cb-method .cb-bank:hover { background:#e2f1e2; border-color:#78b078; }
+.cb-payment-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.cb-method > div > .cb-payment-action { margin-top:12px; }
+.cb-method .cb-payment-action { display:inline-flex; align-items:center; justify-content:center; min-height:42px; padding:8px 15px; color:#195e20; background:#edf7ed; border:1px solid #bbdabb; border-radius:12px; font-weight:700; }
+.cb-method .cb-payment-action:hover { background:#e2f1e2; border-color:#78b078; }
+.cb-method .cb-payment-action:disabled { opacity:.65; cursor:wait; }
+.cb-bank-form { grid-column:1 / -1; display:grid; gap:18px; padding:clamp(14px,3cqw,24px); background:#f6faf5; border:1px solid #dce8da; border-radius:16px; }
+.cb-bank-form header h3 { font-size:17px; color:#18271a; }
+.cb-bank-form header p { color:#526352; font-size:14px; }
+.cb-bank-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 18px; }
+.cb-bank-fields label { display:grid; align-content:start; gap:6px; font-size:14px; font-weight:650; color:#243326; }
+.cb-bank-fields input { width:100%; min-width:0; min-height:44px; box-sizing:border-box; background:#fff; }
+.cb-bank-fields small, .cb-bank-form footer span { color:#536452; font-size:13px; font-weight:500; }
+.cb-bank-form footer { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.cb-bank-form footer button { background:#fff; }
+@container (max-width:480px) { .cb-bank-fields { grid-template-columns:1fr; } }

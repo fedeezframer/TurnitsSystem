@@ -2213,13 +2213,12 @@ function TurnitsDashboardSidePanel({
     // más abajo — antes este panel repetía su propio fetch de
     // settings + equipo + resumen, calculado por separado del widget
     // de Inicio.
-    if (!panel) return null
     const isPremiumPanel = panel === "basico"
     const width = isMobile ? "100%" : 430
 
     return (
         <AnimatePresence>
-            <motion.div
+            {panel && <motion.div
                 key="turnits-side-overlay"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -2233,8 +2232,8 @@ function TurnitsDashboardSidePanel({
                     backdropFilter: "blur(2px)",
                     WebkitBackdropFilter: "blur(2px)",
                 }}
-            />
-            <motion.aside
+            />}
+            {panel && <motion.aside
                 key="turnits-side-panel"
                 initial={{ x: "100%" }}
                 animate={{ x: 0 }}
@@ -2420,7 +2419,7 @@ function TurnitsDashboardSidePanel({
                         </>
                     )}
                 </div>
-            </motion.aside>
+            </motion.aside>}
         </AnimatePresence>
     )
 }

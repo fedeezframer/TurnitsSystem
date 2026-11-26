@@ -1,3 +1,4 @@
+import { OverlayFade } from "../../components/OverlayFade"
 import { BackButton } from "../../components/BackButton"
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { InlineLoading } from "../../components/LoadingRunner"
@@ -322,7 +323,7 @@ function MenuCuentaEliminarModal({
     }
 
     return (
-        <div
+        <OverlayFade
             onMouseDown={(e) => {
                 if (e.target === e.currentTarget && !cargando) onClose()
             }}
@@ -523,7 +524,7 @@ function MenuCuentaEliminarModal({
                     </button>
                 </div>
             </motion.div>
-        </div>
+        </OverlayFade>
     )
 }
 
@@ -859,7 +860,7 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
     React.useLayoutEffect(() => {
         if (dialog.current) dialog.current.scrollTop = 0
     }, [isCheckout, metodoActual, seleccion?.id, avisoPlan?.id])
-    return <div className="tn-planes-overlay" onMouseDown={e => { if (e.target === e.currentTarget && !busyRef.current) closeRef.current() }}>
+    return <OverlayFade className="tn-planes-overlay" onMouseDown={e => { if (e.target === e.currentTarget && !busyRef.current) closeRef.current() }}>
         <style>{`
           .tn-planes-overlay{position:fixed;inset:0;z-index:100020;background:rgba(15,23,42,.38);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;overflow:auto}
           .tn-planes-dialog{width:100%;max-width:1040px;max-height:calc(100dvh - 48px);overflow:auto;padding:30px;border-radius:24px;background:#fff;box-shadow:0 24px 80px #0f172a26;box-sizing:border-box;color:#111827;font-family:${MenuCuenta_FONT};outline:none}
@@ -1004,7 +1005,7 @@ function MenuCuentaPlanesModal({ api, checkoutLogo, planInicial, onClose }: { ap
                 </div>
             </div>}
         </motion.div>
-    </div>
+    </OverlayFade>
 }
 
 function MenuCuentaGraciasDemo({ api, logo, onClose }: { api: string; logo?: string; onClose: () => void }) {
@@ -1024,7 +1025,7 @@ function MenuCuentaGraciasDemo({ api, logo, onClose }: { api: string; logo?: str
     }, [api])
     const nombre = cuenta?.plan === "premium" ? "Premium" : "Básico"
     const fecha = cuenta?.fecha_vencimiento || new Date(Date.now() + 30 * 86400000).toISOString()
-    return <div className="tn-planes-overlay" data-preview="gracias-pagarplan" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}><style>{MenuCuentaGraciasPreviewCSS}</style><div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="tn-planes-title" className="tn-planes-dialog tn-thanks-dialog"><div className="tn-checkout-controls"><BackButton aria-label="Cerrar vista previa" onClick={onClose} /></div><MenuCuentaGraciasPlanes logo={logo} nombre={nombre} fecha={fecha} /><span style={{position:"absolute",bottom:22,left:0,right:0,textAlign:"center",fontSize:11,color:"#94a3b8"}}>Vista previa · no confirma ni realiza un pago</span></div></div>
+    return <OverlayFade className="tn-planes-overlay" data-preview="gracias-pagarplan" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}><style>{MenuCuentaGraciasPreviewCSS}</style><div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="tn-planes-title" className="tn-planes-dialog tn-thanks-dialog"><div className="tn-checkout-controls"><BackButton aria-label="Cerrar vista previa" onClick={onClose} /></div><MenuCuentaGraciasPlanes logo={logo} nombre={nombre} fecha={fecha} /><span style={{position:"absolute",bottom:22,left:0,right:0,textAlign:"center",fontSize:11,color:"#94a3b8"}}>Vista previa · no confirma ni realiza un pago</span></div></OverlayFade>
 }
 
 function MenuCuentaPagoRetorno({ api, logo }: { api: string; logo?: string }) {
@@ -1043,9 +1044,8 @@ function MenuCuentaPagoRetorno({ api, logo }: { api: string; logo?: string }) {
         window.addEventListener("turnits:abrir-checkout-plan", abrir)
         return () => window.removeEventListener("turnits:abrir-checkout-plan", abrir)
     }, [])
-    if (!visible || typeof document === "undefined") return null
-    if (graciasDemo) return createPortal(<MenuCuentaGraciasDemo api={api} logo={logo} onClose={() => { const url = new URL(window.location.href); url.searchParams.delete("gracias"); url.searchParams.delete("status"); window.history.replaceState(window.history.state, "", url.toString()); setVisible(false); setGraciasDemo(false) }} />, document.body)
-    return createPortal(<MenuCuentaPlanesModal api={String(api).replace(/\/+$/, "")} checkoutLogo={logo} planInicial={planInicial} onClose={() => { const url = new URL(window.location.href); url.searchParams.delete("status"); url.searchParams.delete("planes"); window.history.replaceState(window.history.state, "", url.toString()); setVisible(false); setPlanInicial(undefined) }} />, document.body)
+    if (typeof document === "undefined") return null
+    return createPortal(<AnimatePresence>{visible && (graciasDemo ? <MenuCuentaGraciasDemo key="thank-you" api={api} logo={logo} onClose={() => { const url = new URL(window.location.href); url.searchParams.delete("gracias"); url.searchParams.delete("status"); window.history.replaceState(window.history.state, "", url.toString()); setVisible(false); setGraciasDemo(false) }} /> : <MenuCuentaPlanesModal key="checkout" api={String(api).replace(/\/+$/, "")} checkoutLogo={logo} planInicial={planInicial} onClose={() => { const url = new URL(window.location.href); url.searchParams.delete("status"); url.searchParams.delete("planes"); window.history.replaceState(window.history.state, "", url.toString()); setVisible(false); setPlanInicial(undefined) }} />)}</AnimatePresence>, document.body)
 }
 
 function MenuCuenta({
@@ -1392,9 +1392,11 @@ function MenuCuenta({
                             )}
                         </AnimatePresence>
 
-                        {planesAbierto && <MenuCuentaPlanesModal api={api} checkoutLogo={checkoutLogo} onClose={() => setPlanesAbierto(false)} />}
+                        <AnimatePresence>
+                        {planesAbierto && <MenuCuentaPlanesModal key="planes" api={api} checkoutLogo={checkoutLogo} onClose={() => setPlanesAbierto(false)} />}
                         {borrarAbierto && (
                             <MenuCuentaEliminarModal
+                                key="eliminar"
                                 api={api}
                                 email={email}
                                 plan={plan}
@@ -1402,6 +1404,7 @@ function MenuCuenta({
                                 onClose={() => setBorrarAbierto(false)}
                             />
                         )}
+                        </AnimatePresence>
                     </>,
                     document.body
                 )}

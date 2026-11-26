@@ -1,3 +1,4 @@
+import { useNativeDialogExit } from "./useNativeDialogExit"
 import { BackButton } from "./BackButton";
 import * as React from "react";
 import { createPortal } from "react-dom";
@@ -32,12 +33,13 @@ export function ProfileMapDialog({
     id: branch.id, nombre: locations.length === 1 && branch.id === "principal" ? "Local" : branch.nombre,
     latitud: branch.latitud!, longitud: branch.longitud!,
   })), [locations]);
+  const finishClose = useNativeDialogExit(onClose)
   return createPortal(
     <dialog
       className="perfil-map-dialog"
       ref={ref}
       aria-labelledby={title}
-      onClose={onClose}
+      onClose={finishClose}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           const b = e.currentTarget.getBoundingClientRect();

@@ -1,3 +1,4 @@
+import { AnimatePresence } from "framer-motion"
 import * as React from "react"
 import { useNavigate, useSearchParams } from "react-router"
 import BookingLogin, { readBookingToken, saveBookingToken } from "../components/BookingLogin"
@@ -187,7 +188,7 @@ export default function MembershipCheckout({ slug, business }: { slug: string; b
 
   return <>
     <BookingCheckoutFrame theme={business.tema} left={left} right={right} />
-    {card && <BookingCardPayment session={card} api={appConfig.apiUrl} accent={accent} authorization={`Bearer ${token}`}
-      paymentPath={`/membresias${businessPath}/tarjeta`} statusPath={`/membresias${businessPath}/tarjeta/estado`} onClose={() => setCard(null)} />}
+    <AnimatePresence>{card && <BookingCardPayment session={card} api={appConfig.apiUrl} accent={accent} authorization={`Bearer ${token}`}
+      paymentPath={`/membresias${businessPath}/tarjeta`} statusPath={`/membresias${businessPath}/tarjeta/estado`} onClose={() => setCard(null)} />}</AnimatePresence>
   </>
 }

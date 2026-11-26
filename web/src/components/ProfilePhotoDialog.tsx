@@ -1,3 +1,4 @@
+import { useNativeDialogExit } from "./useNativeDialogExit"
 import { BackButton } from "./BackButton";
 import * as React from "react";
 import { createPortal } from "react-dom";
@@ -24,12 +25,13 @@ export function ProfilePhotoDialog({
       document.body.style.overflow = overflow;
     };
   }, []);
+  const finishClose = useNativeDialogExit(onClose)
   return createPortal(
     <dialog
       ref={ref}
       className="perfil-photo-dialog"
       aria-label={alt}
-      onClose={onClose}
+      onClose={finishClose}
       onClick={(e) => {
         if (e.target !== e.currentTarget) return;
         const b = e.currentTarget.getBoundingClientRect();

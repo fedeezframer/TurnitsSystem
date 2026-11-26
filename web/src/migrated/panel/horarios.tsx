@@ -1,3 +1,4 @@
+import { useNativeDialogExit } from "../../components/useNativeDialogExit"
 import "./horarios.css"
 import { ScheduleTimeInput as HorariosConfig_TimeInput } from "./ScheduleTimeInput"
 import { BackButton } from "../../components/BackButton"
@@ -758,6 +759,7 @@ function ExcepcionesConfig_DayPanel({
     const [type,setType] = React.useState(excepcion?.type ?? null)
     const [slots,setSlots] = React.useState<ExcepcionesConfig_Slot[]>(excepcion?.slots?.length ? excepcion.slots : [["09:00","18:00"]])
     const [error,setError] = React.useState("")
+    const result = React.useRef<Parameters<typeof onSave>[1] | undefined>(undefined)
     React.useLayoutEffect(()=>{
         const node = dialog.current
         node?.showModal()
@@ -768,16 +770,21 @@ function ExcepcionesConfig_DayPanel({
             setError("Completá cada intervalo con una hora de fin posterior al inicio.")
             return
         }
-        onSave(dayKey,type==="custom" ? {type,slots} : type ? {type} : null)
+        result.current = type==="custom" ? {type,slots} : type ? {type} : null
+        dialog.current?.close()
     }
     const date = new Date(dayKey+"T12:00:00")
+    const finishClose = useNativeDialogExit(() => {
+        if (result.current !== undefined) onSave(dayKey, result.current)
+        else onClose()
+    })
     return <dialog className="exception-editor" ref={dialog} aria-labelledby={titleId}
-        onCancel={event=>{event.preventDefault();onClose()}}
-        onClick={event=>{if(event.target===event.currentTarget) onClose()}}>
+        onClose={finishClose}
+        onClick={event=>{if(event.target===event.currentTarget) dialog.current?.close()}}>
         <div className="exception-sheet">
             <div className="exception-heading"><div><small>Disponibilidad del día</small>
                 <h2 id={titleId}>{date.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</h2></div>
-                <BackButton onClick={onClose} aria-label="Cerrar"/>
+                <BackButton onClick={() => dialog.current?.close()} aria-label="Cerrar"/>
             </div>
             {habitual && <div className="exception-usual"><strong>Jornada semanal</strong>
                 <span>{habitual.activo && habitual.jornada?.every(Boolean) ? habitual.jornada.join(" – ") : "Cerrado"}</span>

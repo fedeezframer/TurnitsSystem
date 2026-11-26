@@ -1,82 +1,47 @@
 .agenda-section .turnits-section-heading-subtitle {color:#171717!important}
-.agenda-board {display:flex;flex-direction:column;container-type:inline-size;position:relative;box-sizing:border-box;width:100%;min-height:70dvh;padding:clamp(22px,3vw,40px) 5.7%;border:1px solid #b8b8b8;border-radius:clamp(24px,3vw,45px);background:white;color:#101010}
-.agenda-day-grid,.agenda-reservas {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3.4%;row-gap:26px}
-.agenda-day {padding:clamp(14px,1.55cqw,22px);min-height:clamp(245px,30.5cqw,365px);box-sizing:border-box;border:1px solid #dce7dc;border-radius:18px;position:relative;isolation:isolate;background:#fbfefb;box-shadow:0 4px 16px #1723190a}
-.agenda-day-backdrop {position:absolute;inset:0;z-index:-1;overflow:hidden;border-radius:inherit;pointer-events:none}
-.agenda-day-glow {position:absolute;left:-16%;top:20%;width:82%;height:64%;border-radius:44% 58% 39% 66%;background:#b1f3ab;filter:blur(24px)}
-.agenda-day-ribbons {position:absolute;inset:-12%;width:124%;height:124%;fill:none;stroke:#c2edb9;stroke-linecap:round;filter:blur(3px)}
-.agenda-day[data-today=true] {background:#b7f5ae;border-color:#91cb88}
-.agenda-day[data-today=true] .agenda-day-glow {left:-4%;top:-19%;width:109%;height:88%;background:#99ed90}
-.agenda-day[data-today=true] .agenda-day-ribbons {stroke:#dcffd4}
-.agenda-day header {display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
-.agenda-day h3,.agenda-day-dialog h2 {margin:0;font-weight:730;line-height:1.06;letter-spacing:-.035em}
-.agenda-day h3 {font-size:clamp(26px,3.7cqw,45px)}
-.agenda-day button {font:inherit;border:0;background:transparent;color:inherit;cursor:pointer;text-align:left;padding:0}
-.agenda-day header button {padding-block:4px;font-size:clamp(12px,1.2cqw,15px);font-weight:650}
-.agenda-day ol {list-style:none;margin:clamp(25px,4.5cqw,56px) 0 0;padding:0}
-.agenda-day li {position:relative;padding:0 0 8px 1.4em;font-size:clamp(15px,1.8cqw,22px);font-weight:650;line-height:1.32;overflow-wrap:anywhere}
-.agenda-day li:before {content:"";position:absolute;left:0;top:.28em;width:.68em;height:.68em;border-radius:50%;background:#fffc;border:1px solid #6b836a}
-.agenda-day li:not(:last-child):after {content:"";position:absolute;left:.35em;top:1.25em;bottom:0;border-left:1px dashed #688565}
-.agenda-day li[data-state=past] {color:#40543d}.agenda-day li[data-state=past]:before {background:#41553d}
-.agenda-day li[data-state=next] {color:#176c21}.agenda-day li[data-state=next]:before {background:#82c783}
-.agenda-appointment-label[data-status="Reprogramación pendiente"] {--pulse-ink:#174b8a;--pulse-bright:#205da4;--pulse-glow:#438cec80}
-.agenda-appointment-label[data-status="Próximo turno"] {--pulse-ink:#14551d;--pulse-bright:#196825;--pulse-glow:#37a44d80}
-.agenda-appointment-label[data-status] {color:var(--pulse-ink)}
-.agenda-status-description {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-@media (prefers-reduced-motion:no-preference) {
-    .agenda-appointment-label[data-status] {animation:agenda-status-pulse 2.8s ease-in-out infinite}
-    @keyframes agenda-status-pulse {
-        0%,100% {color:var(--pulse-ink);text-shadow:0 0 0 transparent}
-        50% {color:var(--pulse-bright);text-shadow:0 0 6px var(--pulse-glow)}
-    }
-}
-.agenda-day p,.agenda-day-dialog>p {color:#5a605c}
+.agenda-board {display:flex;flex-direction:column;container-type:inline-size;position:relative;box-sizing:border-box;width:100%;padding:clamp(13px,2.8vw,28px);border:1px solid #dfe8dc;border-radius:clamp(16px,2vw,25px);background:#f6f9f5;color:#19291b}
+.agenda-day-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:16px}
+.agenda-day {border:1px solid #dfe8dd;border-radius:16px;min-width:0;background:#fff;box-shadow:0 4px 14px #17231908}
+.agenda-day header {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px 14px 12px;border-bottom:1px solid #edf1eb}
+.agenda-day[data-today=true] {border-color:#aacaab}
+.agenda-day[data-today=true] header {background:#e8f4e6;border-radius:15px 15px 0 0}
+.agenda-weekday {margin:0 0 4px;color:#4d654f;font-size:13px;font-weight:650;text-transform:capitalize}
+.agenda-day h3 {margin:0;line-height:1.1;font-size:clamp(22px,3cqw,29px);letter-spacing:-.045em}
+.agenda-day button {font:inherit;cursor:pointer;color:inherit}
+.agenda-day .agenda-view-day {border:1px solid #dce8da;border-radius:999px;background:#fff;color:#315536;padding:7px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+.agenda-day .agenda-view-day:hover {border-color:#82b183;background:#f0f8ef}
+.agenda-day ol {list-style:none;margin:0;padding:5px 8px}
+.agenda-day li + li {border-top:1px solid #edf1eb}
+.agenda-appointment {display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;width:100%;text-align:left;border:0;background:transparent;border-radius:9px;padding:10px 6px}
+.agenda-appointment:hover {background:#f1f7ef}
+.agenda-appointment > time {align-self:start;background:#eff3ee;color:#415842;border-radius:6px;padding:4px 5px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.agenda-appointment-body {display:grid;gap:2px;align-self:center;overflow-wrap:anywhere}
+.agenda-appointment-body strong {font-size:14px}
+.agenda-appointment-body span {color:#586859;font-size:13px}
+.agenda-appointment-body small {width:fit-content;margin-top:2px;border-radius:5px;padding:3px 6px;background:#f3f2ee;color:#635933;font-size:11px;font-weight:700}
+.agenda-appointment-body small[data-status="Próximo turno"] {background:#e7f4e4;color:#216025}
+.agenda-appointment-body small[data-status="Reprogramación pendiente"] {background:#eaf2fc;color:#284f7f}
+.agenda-appointment-body small[data-status="Cancelado"] {background:#faeeee;color:#7b3434}
 .agenda-actions {display:flex;align-items:flex-end;justify-content:flex-end;gap:12px}
-.agenda-actions .negocio-field {flex:1 1 320px;max-width:320px;margin-right:auto}
-.agenda-actions select, .agenda-actions .agenda-add {box-sizing:border-box;height:40px}
-.agenda-actions .agenda-add {flex:none;white-space:nowrap}
-.agenda-add {padding:8px 13px;border:1px solid #b8beb7;border-radius:8px;background:white;color:#263826;font:inherit;cursor:pointer}
+.agenda-actions .negocio-field {flex:1 1 auto;max-width:320px;min-width:0;margin-right:auto}
+.agenda-actions select,.agenda-actions .agenda-add {box-sizing:border-box;min-height:42px}
+.agenda-actions .agenda-add {display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap;padding:9px 13px;border:1px solid #1b6b1a;border-radius:11px;background:#1b6b1a;color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.agenda-actions .agenda-add:hover {background:#145415}
+.agenda-empty-note {grid-column:1 / -1;padding:clamp(26px,6vw,54px) 16px;text-align:center;border:1px dashed #c9dac6;border-radius:14px;background:#fff}
+.agenda-empty-note strong {font-size:18px}
+.agenda-empty-note p {margin:6px 0 0;color:#586859;font-size:14px}
+@container(max-width:760px){.agenda-day-grid {grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container(max-width:500px){.agenda-day-grid {grid-template-columns:1fr}}
 .agenda-day-dialog {box-sizing:border-box;width:min(86vw,1186px);max-width:none;height:82dvh;max-height:92dvh;padding:clamp(26px,4.9vw,68px);border:1px solid #bbb;border-radius:clamp(22px,3vw,45px);color:#101010;background:#fff;overflow:auto}
 .agenda-day-dialog::backdrop {background:#0005}
-.agenda-day-dialog h2 {font-size:clamp(36px,4.8vw,66px)}
+.agenda-day-dialog h2 {margin:0;font-size:clamp(28px,4.8vw,50px);letter-spacing:-.04em}
 .agenda-day-dialog>p {margin:12px 0 26px}
-.agenda-reservas {grid-template-columns:repeat(3,minmax(0,26%));justify-content:space-between;gap:24px 0;grid-auto-rows:1fr;align-items:stretch}
-.agenda-reserva {width:100%;max-width:274px;justify-self:start;display:flex;flex-direction:column;text-align:left;padding:0;overflow:hidden;border:1px solid #929292;border-radius:13px;font:inherit;color:inherit;background:#fff;cursor:pointer}
-.agenda-photo {flex:none;width:100%;position:relative;display:grid;place-items:center;aspect-ratio:1;background:#f1f4ef}
+.agenda-reservas {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,215px),1fr));gap:14px;align-items:stretch}
+.agenda-reserva {width:100%;justify-self:start;display:flex;flex-direction:column;text-align:left;padding:0;overflow:hidden;border:1px solid #dce6dc;border-radius:13px;font:inherit;color:inherit;background:#fff;cursor:pointer}
+.agenda-photo {flex:none;width:100%;position:relative;display:grid;place-items:center;aspect-ratio:1.6;background:#f1f4ef}
 .agenda-photo>img {width:100%;height:100%;object-fit:cover}.agenda-photo>img.agenda-placeholder {width:22%;height:auto;opacity:.4}
 .agenda-extra-photos {position:absolute;right:5%;top:6%;display:flex;flex-wrap:wrap;justify-content:end;gap:4px;max-width:90%}
 .agenda-extra-photos img {width:clamp(24px,3vw,44px);aspect-ratio:1;object-fit:contain;background:white;border-radius:50%}
 .agenda-reserva-body {display:grid;gap:2px;padding:8px 10px;font-size:clamp(13px,1.2vw,17px);overflow-wrap:anywhere}
 .agenda-reserva-body>span:first-child,.agenda-reserva-body strong {font-size:1.25em}.agenda-reserva-body small {font-size:.6em}.agenda-reserva-body>span:last-child {color:#595959}
-@container(max-width:690px){.agenda-day-grid {grid-template-columns:repeat(2,minmax(0,1fr))}}
-@container(max-width:450px){.agenda-day-grid {grid-template-columns:1fr}.agenda-day {min-height:190px}.agenda-day ol {margin-top:24px}}
 @media(max-width:650px){.agenda-day-dialog {width:94vw;padding:38px 16px 24px}.agenda-reservas {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
-
-.agenda-empty-note {
-  grid-column: 1 / -1;
-  justify-self: center;
-  position: relative;
-  box-sizing: border-box;
-  width: min(212px, 90%);
-  margin: 40px 0;
-  padding: 24px 16px 28px;
-  transform: rotate(-2.5deg);
-  background: #fef3c7;
-  box-shadow: 0 12px 26px #0f172a24, 0 2px 6px #0f172a14;
-  color: #78350f;
-  font-size: 15.5px;
-  font-weight: 800;
-  line-height: 1.45;
-  text-align: center;
-}
-.agenda-empty-note::before {
-  content: "";
-  position: absolute;
-  top: -9px;
-  left: 50%;
-  width: 44px;
-  height: 16px;
-  transform: translateX(-50%) rotate(-3deg);
-  background: #facc1599;
-  box-shadow: 0 1px 3px #0003;
-}
