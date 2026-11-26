@@ -1,3 +1,4 @@
+import BackButton from "../components/BackButton"
 import { fetchMembershipTickets, type MembershipTickets } from "../shared/membership-tickets"
 import BookingLogin, { readBookingToken, saveBookingToken } from "../components/BookingLogin"
 import { appConfig } from "../config"
@@ -592,27 +593,18 @@ function ProgressBar({
     )
 }
 
-function BackLink({ onClick }: { onClick: () => void }) {
-    return (
-        <button
-            onClick={onClick}
-            style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                border: "none",
-                background: "transparent",
-                color: "var(--bf-text-muted)",
-                fontSize: 12.5,
-                fontWeight: 600,
-                cursor: "pointer",
-                padding: 0,
-                marginBottom: 2,
-            }}
-        >
-            ‹ Volver
-        </button>
-    )
+export function BookingBackButton({ onClick, label = "Volver" }: { onClick: () => void; label?: string }) {
+    return <div style={{ display: "flex", justifyContent: "flex-end", width: "100%", marginBottom: 2 }}>
+        <BackButton aria-label={label} onClick={onClick} />
+    </div>
+}
+
+export function bookingPaymentLabel(method: MetodoKey | "", fallback: string) {
+    if (method === "mercadopago") return "Pagar con Mercado Pago"
+    if (method === "tarjeta") return "Pagar con tarjeta"
+    if (method === "transferencia") return "Enviar comprobante"
+    if (method === "efectivo") return "Pagar en el local"
+    return fallback
 }
 
 // ────────────────────────────────────────────────────────────
@@ -2532,7 +2524,7 @@ export default function BookingFlow(props: any) {
                                 {stepId === "sucursal" && <div><StepTitle title="Elegí la sucursal" bottomGap={4}/><React.Suspense fallback={<Skeleton/>}><BranchSelection branches={sucursales} selected={sucursalId} accent={accent} onSelect={elegirSucursal} onChoose={id=>elegirSucursal(id,true)}/></React.Suspense></div>}
                                 {stepId === "profesional" && (
                                     <div>
-                                        {stepIndex>0 && <div style={{marginBottom:14}}><BackLink onClick={volverPaso}/></div>}
+                                        {stepIndex>0 && <div style={{marginBottom:14}}><BookingBackButton onClick={volverPaso}/></div>}
                                         <StepTitle
                                             title="Elegí profesional"
                                             hint={sucursales.length?`Elegí con quién querés el turno en ${sucursales.find(s=>s.id===sucursalId)?.nombre || 'esta sede'}.`:'Elegí con quién querés el turno.'}
@@ -2591,7 +2583,7 @@ export default function BookingFlow(props: any) {
                                     listoParaServicios && (
                                         <div>
                                             {stepIndex > 0 && (
-                                                <BackLink
+                                                <BookingBackButton
                                                     onClick={volverPaso}
                                                 />
                                             )}
@@ -2666,7 +2658,7 @@ export default function BookingFlow(props: any) {
 
                                 {stepId === "fecha" && (
                                     <div>
-                                        {stepIndex>0 && <BackLink onClick={volverPaso} />}
+                                        {stepIndex>0 && <BookingBackButton onClick={volverPaso} />}
                                         <StepTitle title="Elegí el día" />
                                         {promoElegida?.dias_semana != null && <p style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)",margin:"0 0 12px"}}>Esta promo se aplica los {promoDaysLabel(promoElegida.dias_semana)} dentro de su vigencia.</p>}
                                         {promoElegida?.tipo === "descuento" && <p style={{fontSize:12,lineHeight:1.5,color:"var(--bf-text-muted)",margin:"-4px 0 14px"}}>Los días OFF tienen descuento. Las demás fechas se reservan al precio normal.</p>}
@@ -2692,7 +2684,7 @@ export default function BookingFlow(props: any) {
 
                                 {stepId === "hora" && (
                                     <div>
-                                        <BackLink onClick={volverPaso} />
+                                        <BookingBackButton onClick={volverPaso} />
                                         <StepTitle title="Elegí el horario" />
                                         <HorarioBlock
                                             accent={accent}
@@ -2735,7 +2727,7 @@ export default function BookingFlow(props: any) {
                                             width: "100%",
                                         }}
                                     >
-                                        {stepIndex > 0 && <BackLink onClick={volverPaso} />}
+                                        {stepIndex > 0 && <BookingBackButton onClick={volverPaso} />}
 
                                         {(!bookingAuthorization || bookingToken) && (
                                             <BookingLogin api={api} slug={slug} onProfileChange={() => setAccountRevision(value => value + 1)} onSession={token => {
@@ -3102,7 +3094,11 @@ export default function BookingFlow(props: any) {
                         >
                             {submitEstado === "loading"
                                 ? "Procesando..."
-                                : basket.length > 1 ? `Confirmar ${basket.length} turnos` : "Confirmar reserva"}
+                                : ticketTotal ? (ticketCharge > 0 ? bookingPaymentLabel("mercadopago", "Confirmar reserva") : "Confirmar con tickets")
+                                : bookingPaymentLabel(
+                                    browseOfferId ? "mercadopago" : metodoPagoRequerido && Number(totalServicioYExtras) > 0 ? metodo : "",
+                                    basket.length > 1 ? `Confirmar ${basket.length} turnos` : "Confirmar reserva"
+                                )}
                         </FillButton>
                     </div>
                 )}
@@ -3123,7 +3119,7 @@ export default function BookingFlow(props: any) {
                 </button>
                 {basketOpen && <div role="dialog" aria-modal="true" aria-label="Mis reservas" style={{position:"fixed",inset:0,zIndex:4000,background:"#fff",color:"#111827",overflowY:"auto",fontFamily:"'DM Sans', sans-serif"}}>
                     <div style={{maxWidth:760,margin:"0 auto",padding:"24px 18px 120px"}}>
-                        <div style={{marginBottom:18}}><BackLink onClick={() => setBasketOpen(false)}/></div>
+                        <div style={{marginBottom:18}}><BookingBackButton onClick={() => setBasketOpen(false)}/></div>
                         <div style={{marginBottom:20}}><h2 style={{margin:0,fontSize:24}}>Mis reservas</h2><p style={{margin:"5px 0 0",color:"#6b7280",fontSize:13}}>Elegí un horario para cada turno.</p></div>
                         {basket.length === 0 && <div style={{padding:20,border:"1px solid #e5e7eb",borderRadius:14}}>Terminá de elegir día y hora para agregar {servicioElegido?.nombre} al carrito.</div>}
                         {[...new Set(basket.map(item => `${item.servicio_id}|${item.equipo_id || ""}`))].map(key => {

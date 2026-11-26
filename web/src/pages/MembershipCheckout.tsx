@@ -1,12 +1,11 @@
 import * as React from "react"
 import { useNavigate, useSearchParams } from "react-router"
 import BookingLogin, { readBookingToken, saveBookingToken } from "../components/BookingLogin"
-import BackButton from "../components/BackButton"
 import BrandPreloader from "../components/BrandPreloader"
 import { appConfig } from "../config"
 import type { Membership } from "./MembershipCatalog"
 import {
-  BookingCardPayment, BookingCheckoutFrame, BookingCheckoutHeader, BookingCheckoutSummary,
+  BookingBackButton, bookingPaymentLabel, BookingCardPayment, BookingCheckoutFrame, BookingCheckoutHeader, BookingCheckoutSummary,
   FilaResumen, FillButton, PagoBlock, StepTitle, DEFAULT_TEMA, type BookingHeaderBusiness,
 } from "../migrated/Booking"
 type Method = "mercadopago" | "tarjeta" | "transferencia" | "efectivo"
@@ -136,7 +135,7 @@ export default function MembershipCheckout({ slug, business }: { slug: string; b
   const buttonStyle = { width: "100%", marginTop: 4, padding: 14, borderRadius: 12, fontSize: 14, fontWeight: 700 }
   const left = <>
     {header}
-    <BackButton aria-label="Volver a suscripciones" onClick={() => navigate(returnUrl)} />
+    <BookingBackButton label="Volver a suscripciones" onClick={() => navigate(returnUrl)} />
     <BookingLogin api={appConfig.apiUrl} slug={slug} loginRequest={loginRequest} onSession={setToken} />
     <StepTitle title={order ? "Estado de tu suscripción" : "Confirmá tu suscripción"} />
     {order ? <div role="status" style={{ display: "grid", gap: 12, color: "var(--bf-text)" }}>
@@ -182,8 +181,7 @@ export default function MembershipCheckout({ slug, business }: { slug: string; b
     </>}
     {error && <div role="alert" style={{ fontSize: 12.5, color: "#DC2626" }}>{error}</div>}
     <FillButton fill={accent} style={buttonStyle} disabled={!chosen || busy} onClick={() => void pay()}>
-      {busy ? "Procesando…" : !token ? "Iniciar sesión para continuar" : chosen === "efectivo" ? "Elegir pago en el local" :
-        chosen === "transferencia" ? "Enviar comprobante" : chosen === "tarjeta" ? "Continuar con tarjeta" : "Continuar a Mercado Pago"}
+      {busy ? "Procesando…" : !token ? "Iniciar sesión para continuar" : bookingPaymentLabel(chosen, "Elegí un medio de pago")}
     </FillButton>
   </> : undefined
 

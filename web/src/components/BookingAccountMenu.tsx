@@ -5,7 +5,7 @@ import "./BookingAccountMenu.css"
 type Profile = { nombre_persona?: string; apellido?: string; email?: string; telefono?: string }
 type Field = "nombre_persona" | "apellido" | "telefono"
 type Reservation = { id: string; servicio: string; negocio: string; fecha: string; hora: string; estado: string; actual: boolean; imagen?: string; reprogramar?: string }
-type Subscription = { id: string; nombre: string; tickets: number; usos: { nombre: string; cantidad: number }[] }
+type Subscription = { id: string; tickets: number; usos: { nombre: string; cantidad: number }[] }
 type History = { reservas: Reservation[]; suscripciones: Subscription[]; hay_mas: boolean }
 
 const labels = { nombre_persona: "Nombre", apellido: "Apellido", email: "Correo electrónico", telefono: "Teléfono" }
@@ -139,7 +139,7 @@ export default function BookingAccountMenu({ api, slug, token, name, accent, onC
                         {index === 0 && <h3>Tu suscripción</h3>}
                         <div className="bam-tickets"><span>Tickets</span><strong>{plan.tickets} <Ticket /></strong></div>
                     </div>
-                    <div className="bam-usage"><h3>{plan.nombre}</h3>
+                    <div className="bam-usage">
                         {plan.usos.map((use, n) => <p key={n}>−{use.cantidad} <Ticket /> {use.nombre}</p>)}
                     </div>
                 </div>)}
