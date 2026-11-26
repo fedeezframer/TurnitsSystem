@@ -22,14 +22,14 @@
 .cb-panel small, .cb-help, .cb-method p { color: var(--turnits-muted, #68736a); font-size: 14px; line-height: 1.5; }
 .cb-card p { margin: 0; }
 .cb-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.cb-card button, .cb-card input:not([type=range]), .cb-card select {
+.cb-card button:where(:not(.turnits-back-button)), .cb-card input:not([type=range]), .cb-card select {
   max-width: 100%; min-height: 42px; border: 1px solid #d0dbcf; border-radius: 11px;
   padding: 9px 15px; background: white; color: inherit; font: inherit;
 }
-.cb-card button { cursor: pointer; font-size: 14px; font-weight: 600; transition: background .15s, border-color .15s; }
-.cb-card button:hover:not(:disabled) { border-color: #72a774; }
+.cb-card button:where(:not(.turnits-back-button)) { cursor: pointer; font-size: 14px; font-weight: 600; transition: background .15s, border-color .15s; }
+.cb-card button:hover:not(:disabled, .turnits-back-button) { border-color: #72a774; }
 .cb-card button[aria-pressed=true], .cb-card .cb-green, .cb-card .cb-save { background: var(--turnits-green,#1b6b1a); color: white; border-color: transparent; }
-.cb-card button:disabled { cursor: default; opacity: .55; }
+.cb-card button:disabled:where(:not(.turnits-back-button)) { cursor: default; opacity: .55; }
 .cb-card :focus-visible { outline: 2px solid #237c39; outline-offset: 3px; }
 .cb-line select { margin-left: auto; font-weight: 600; }
 .cb-card label { display: grid; gap: 8px; font-size: 15px; font-weight: 600; }
@@ -109,13 +109,13 @@
 .cb-method .cb-payment-action { display:inline-flex; align-items:center; justify-content:center; min-height:42px; padding:8px 15px; color:#195e20; background:#edf7ed; border:1px solid #bbdabb; border-radius:12px; font-weight:700; }
 .cb-method .cb-payment-action:hover { background:#e2f1e2; border-color:#78b078; }
 .cb-method .cb-payment-action:disabled { opacity:.65; cursor:wait; }
-.cb-bank-form { grid-column:1 / -1; display:grid; gap:18px; padding:clamp(14px,3cqw,24px); background:#f6faf5; border:1px solid #dce8da; border-radius:16px; }
+.cb-bank-panel { grid-column:1 / -1; overflow:clip; }
+.cb-bank-form { display:grid; gap:18px; padding:clamp(14px,3cqw,24px); background:#f6faf5; border:1px solid #dce8da; border-radius:16px; }
+.cb-bank-form header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
 .cb-bank-form header h3 { font-size:17px; color:#18271a; }
 .cb-bank-form header p { color:#526352; font-size:14px; }
 .cb-bank-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 18px; }
 .cb-bank-fields label { display:grid; align-content:start; gap:6px; font-size:14px; font-weight:650; color:#243326; }
 .cb-bank-fields input { width:100%; min-width:0; min-height:44px; box-sizing:border-box; background:#fff; }
-.cb-bank-fields small, .cb-bank-form footer span { color:#536452; font-size:13px; font-weight:500; }
-.cb-bank-form footer { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-.cb-bank-form footer button { background:#fff; }
+.cb-bank-fields small, .cb-bank-form .cb-bank-save-hint { color:#536452; font-size:13px; font-weight:500; }
 @container (max-width:480px) { .cb-bank-fields { grid-template-columns:1fr; } }

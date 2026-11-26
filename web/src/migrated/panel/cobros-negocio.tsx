@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   SeccionHeader,
   MercadoPagoConexion_getSlug as getSlug,
@@ -12,6 +13,7 @@ import { costos, type Regla } from "./costos";
 import "./cobros-negocio.css";
 import { seccionesPagos } from "./secciones-pagos";
 import LoadingRunner from "../../components/LoadingRunner";
+import BackButton from "../../components/BackButton";
 
 const acreditacion = [
   ["al instante", 6.6],
@@ -241,6 +243,18 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
   const previousCbu = React.useRef("");
   const bankMaskedStart = React.useRef("");
   const bankRequest = React.useRef<AbortController | null>(null);
+  const bankTrigger = React.useRef<HTMLButtonElement>(null);
+  const bankBack = React.useRef<HTMLButtonElement>(null);
+  const restoreBankFocus = React.useRef(false);
+  const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    if (editBank) {
+      bankBack.current?.focus({ preventScroll: true });
+    } else if (restoreBankFocus.current) {
+      restoreBankFocus.current = false;
+      bankTrigger.current?.focus({ preventScroll: true });
+    }
+  }, [editBank]);
   const logos = [
     iconos?.logoMercadoPago,
     iconos?.logoTransferencia,
@@ -416,6 +430,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
     TurnitsGlobalSaveManager_get()?.setBlocker("pagos", "");
     bankDraftStart.current = null;
     previousCbu.current = "";
+    restoreBankFocus.current = true;
     editar(false);
     setBank(emptyBank);
   }
@@ -532,7 +547,7 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
                     </p>
                     {!editBank && (
                       <div className="cb-payment-actions">
-                        <button type="button" className="cb-payment-action" disabled={bankLoading} onClick={openBank}>
+                        <button ref={bankTrigger} type="button" className="cb-payment-action" disabled={bankLoading} onClick={openBank}>
                           {bankLoading ? "Cargando datos…" : config.cbu_final ? "Editar datos bancarios" : "Vincular un CBU"}
                         </button>
                         {config.cbu_final && (
@@ -575,40 +590,50 @@ export default function CobrosNegocio({ baseUrl, iconos, vista, isMobile }: any)
               ) : (
                 <div className="cb-detail">Sin comisión de Mercado Pago</div>
               )}
-              {i === 1 && offline && editBank && (
-                <div className="cb-bank-form" role="group" aria-labelledby="cb-bank-heading">
-                  <header>
-                    <h3 id="cb-bank-heading">Datos de la cuenta bancaria</h3>
-                    <p>Estos datos se muestran al cliente cuando elige pagar por transferencia.</p>
-                  </header>
-                  <div className="cb-bank-fields">
-                    <label>Nombre del titular
-                      <input value={bank.titular} placeholder="Nombre y apellido" maxLength={80}
-                        onChange={event => updateBank({ ...bank, titular: event.target.value })} />
-                    </label>
-                    <label>Banco
-                      <input value={bank.banco} placeholder="Nombre del banco" maxLength={60}
-                        onChange={event => updateBank({ ...bank, banco: event.target.value })} />
-                    </label>
-                    <label>{previousCbu.current ? "Nuevo CBU (opcional)" : "CBU"}
-                      <input value={bank.cbu} placeholder={previousCbu.current ? "Conservar CBU actual" : "22 dígitos"}
-                        type="password" inputMode="numeric" autoComplete="off" maxLength={22}
-                        onChange={event => updateBank({ ...bank, cbu: event.target.value.replace(/\D/g, "") })} />
-                      {bank.cbu.length > 0 && bank.cbu.length < 22 && <small>{bank.cbu.length} de 22 dígitos</small>}
-                    </label>
-                    <label>Alias (opcional)
-                      <input value={bank.alias} placeholder="Ej. mi.alias.banco" maxLength={30}
-                        autoCapitalize="none" spellCheck={false}
-                        onChange={event => updateBank({ ...bank, alias: event.target.value })} />
-                      {bank.alias.trim() && !MercadoPagoConexion_ALIAS_REGEX.test(bank.alias.trim()) &&
-                        <small>Usá entre 6 y 30 letras, números, puntos o guiones.</small>}
-                    </label>
-                  </div>
-                  <footer>
-                    <span>Aplicá los cambios con Guardar en el encabezado.</span>
-                    <button type="button" onClick={cancelBank}>Cancelar edición</button>
-                  </footer>
-                </div>
+              {i === 1 && offline && (
+                <AnimatePresence initial={false}>
+                  {editBank && (
+                    <motion.div className="cb-bank-panel"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0, pointerEvents: "none" }}
+                      transition={{ duration: reduceMotion ? 0 : 0.18, ease: "easeInOut" }}>
+                      <div className="cb-bank-form" role="group" aria-labelledby="cb-bank-heading">
+                        <header>
+                          <div>
+                            <h3 id="cb-bank-heading">Datos de la cuenta bancaria</h3>
+                            <p>Estos datos se muestran al cliente cuando elige pagar por transferencia.</p>
+                          </div>
+                          <BackButton ref={bankBack} onClick={cancelBank} aria-label="Volver a medios de pago" />
+                        </header>
+                        <div className="cb-bank-fields">
+                          <label>Nombre del titular
+                            <input value={bank.titular} placeholder="Nombre y apellido" maxLength={80}
+                              onChange={event => updateBank({ ...bank, titular: event.target.value })} />
+                          </label>
+                          <label>Banco
+                            <input value={bank.banco} placeholder="Nombre del banco" maxLength={60}
+                              onChange={event => updateBank({ ...bank, banco: event.target.value })} />
+                          </label>
+                          <label>{previousCbu.current ? "Nuevo CBU (opcional)" : "CBU"}
+                            <input value={bank.cbu} placeholder={previousCbu.current ? "Conservar CBU actual" : "22 dígitos"}
+                              type="password" inputMode="numeric" autoComplete="off" maxLength={22}
+                              onChange={event => updateBank({ ...bank, cbu: event.target.value.replace(/\D/g, "") })} />
+                            {bank.cbu.length > 0 && bank.cbu.length < 22 && <small>{bank.cbu.length} de 22 dígitos</small>}
+                          </label>
+                          <label>Alias (opcional)
+                            <input value={bank.alias} placeholder="Ej. mi.alias.banco" maxLength={30}
+                              autoCapitalize="none" spellCheck={false}
+                              onChange={event => updateBank({ ...bank, alias: event.target.value })} />
+                            {bank.alias.trim() && !MercadoPagoConexion_ALIAS_REGEX.test(bank.alias.trim()) &&
+                              <small>Usá entre 6 y 30 letras, números, puntos o guiones.</small>}
+                          </label>
+                        </div>
+                        <p className="cb-bank-save-hint">Aplicá los cambios con Guardar en el encabezado.</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               )}
             </div>
           ))}
