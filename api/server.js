@@ -1119,8 +1119,8 @@ registerMembershipPayments({
   }),
   notify: order => crearNotificacion({
     slug: order.slug, tipo: "sistema", titulo: "Pago de suscripción pendiente",
-    mensaje: `Revisá el cobro de ${order.nombre} en Servicios → Suscripciones.`,
-    data: { seccion: "servicios", membresia_periodo_id: order.id },
+    mensaje: `Revisá el cobro de ${order.nombre} en Mi Agenda.`,
+    data: { seccion: "agenda", membresia_periodo_id: order.id },
   }),
   gateway: {
     publicKey: process.env.MP_TURNERO_PUBLIC_KEY,
