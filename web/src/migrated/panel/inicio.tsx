@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import { fetchPanelRead } from "../../shared/panel-requests"
 import { InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
@@ -1546,16 +1547,7 @@ function NotificacionesPanel(props: NotificacionesPanel_Props) {
             )}
 
             {!cargando && !error && notifs.length === 0 && (
-                <div
-                    style={{
-                        padding: 24,
-                        textAlign: "center",
-                        color: "#999",
-                        fontSize: 13,
-                    }}
-                >
-                    No tenés notificaciones por ahora.
-                </div>
+                <PanelEmptyState artwork="activity" compact>No tenés notificaciones por ahora.</PanelEmptyState>
             )}
 
             {!cargando && !error && notifs.length > 0 && (
@@ -1926,15 +1918,7 @@ function TurnosHoy_ErrorState({ error, style }: any) {
                     justifyContent: "center",
                 }}
             >
-                <span
-                    style={{
-                        fontSize: 13,
-                        color: "#cbd5e1",
-                        fontStyle: "italic",
-                    }}
-                >
-                    {error || "Aún no hay datos."}
-                </span>
+                {error ? <span role="alert" style={{ color: "#cbd5e1", fontSize: 13, fontStyle: "italic" }}>{error}</span> : <PanelEmptyState artwork="calendar" compact>Aún no hay datos.</PanelEmptyState>}
             </div>
         </div>
     )
@@ -2127,15 +2111,7 @@ function TurnosHoy_CardShell({ accentColor, stats, onVerAgenda, style }: any) {
                                 padding: "20px 0",
                             }}
                         >
-                            <span
-                                style={{
-                                    fontSize: 13,
-                                    color: "#cbd5e1",
-                                    fontStyle: "italic",
-                                }}
-                            >
-                                Aún no tienes turnos
-                            </span>
+                            <PanelEmptyState artwork="calendar" compact>Aún no tenés turnos.</PanelEmptyState>
                         </div>
                     ) : (
                         turnos
@@ -2306,6 +2282,8 @@ function RendimientoEquipo_EmptyState({
     isMobile: boolean
     grow?: boolean
 }) {
+    if (!imagen) return <PanelEmptyState artwork="people">{texto}</PanelEmptyState>
+
     return (
         <div
             style={{
@@ -3340,15 +3318,7 @@ function IngresosEstimados_ErrorState({ error, style }: any) {
                     justifyContent: "center",
                 }}
             >
-                <span
-                    style={{
-                        fontSize: 13,
-                        color: "#cbd5e1",
-                        fontStyle: "italic",
-                    }}
-                >
-                    {error || "Aún no hay datos."}
-                </span>
+                {error ? <span role="alert" style={{ color: "#cbd5e1", fontSize: 13, fontStyle: "italic" }}>{error}</span> : <PanelEmptyState artwork="payments" compact>Aún no hay datos.</PanelEmptyState>}
             </div>
         </div>
     )
@@ -3812,16 +3782,7 @@ function TurnosMes_ErrorState({ error, style }: any) {
                     justifyContent: "center",
                 }}
             >
-                <span
-                    style={{
-                        fontSize: 13,
-                        color: "#cbd5e1",
-                        fontStyle: "italic",
-                        textAlign: "center",
-                    }}
-                >
-                    {error || "Aún no hay datos."}
-                </span>
+                {error ? <span role="alert" style={{ color: "#cbd5e1", fontSize: 13, fontStyle: "italic" }}>{error}</span> : <PanelEmptyState artwork="calendar" compact>Aún no hay datos.</PanelEmptyState>}
             </div>
         </div>
     )
@@ -4022,15 +3983,7 @@ function TurnosMes_CardShell({ stats, accentColor, onVerAgenda, style }: any) {
                         justifyContent: "center",
                     }}
                 >
-                    <span
-                        style={{
-                            fontSize: 13,
-                            color: "#cbd5e1",
-                            fontStyle: "italic",
-                        }}
-                    >
-                        Sin turnos este mes.
-                    </span>
+                    <PanelEmptyState artwork="calendar" compact>Sin turnos este mes.</PanelEmptyState>
                 </div>
             )}
 
@@ -4194,16 +4147,7 @@ function ClientesCard_ErrorState({ error, style }: any) {
                     justifyContent: "center",
                 }}
             >
-                <span
-                    style={{
-                        fontSize: 13,
-                        color: "#cbd5e1",
-                        fontStyle: "italic",
-                        textAlign: "center",
-                    }}
-                >
-                    {error || "Aún no hay datos."}
-                </span>
+                {error ? <span role="alert" style={{ color: "#cbd5e1", fontSize: 13, fontStyle: "italic" }}>{error}</span> : <PanelEmptyState artwork="people" compact>Aún no hay datos.</PanelEmptyState>}
             </div>
         </div>
     )
@@ -4567,15 +4511,7 @@ function MejoresDias_ErrorState({ error, style }: any) {
                     justifyContent: "center",
                 }}
             >
-                <span
-                    style={{
-                        fontSize: 13,
-                        color: "#cbd5e1",
-                        fontStyle: "italic",
-                    }}
-                >
-                    {error || "Aún no hay datos."}
-                </span>
+                {error ? <span role="alert" style={{ color: "#cbd5e1", fontSize: 13, fontStyle: "italic" }}>{error}</span> : <PanelEmptyState artwork="activity" compact>Aún no hay datos.</PanelEmptyState>}
             </div>
         </div>
     )
@@ -4654,15 +4590,7 @@ function MejoresDias_CardShell({ stats, accentColor, style }: any) {
                             justifyContent: "center",
                         }}
                     >
-                        <span
-                            style={{
-                                fontSize: 13,
-                                color: "#cbd5e1",
-                                fontStyle: "italic",
-                            }}
-                        >
-                            Aún no hay turnos registrados
-                        </span>
+                        <PanelEmptyState artwork="calendar" compact>Aún no hay turnos registrados.</PanelEmptyState>
                     </div>
                 ) : (
                     ranking.map((item, i) => {
@@ -4973,15 +4901,7 @@ function TopServicios_ErrorState({ error, style }: any) {
                     justifyContent: "center",
                 }}
             >
-                <span
-                    style={{
-                        fontSize: 13,
-                        color: "#cbd5e1",
-                        fontStyle: "italic",
-                    }}
-                >
-                    {error || "Aún no hay servicios registrados."}
-                </span>
+                {error ? <span role="alert" style={{ color: "#cbd5e1", fontSize: 13, fontStyle: "italic" }}>{error}</span> : <PanelEmptyState artwork="catalog" compact>Aún no hay servicios registrados.</PanelEmptyState>}
             </div>
         </div>
     )
@@ -5838,15 +5758,7 @@ function HorasTrabajadas_ErrorState({ error, style }: any) {
                     justifyContent: "center",
                 }}
             >
-                <span
-                    style={{
-                        fontSize: 13,
-                        color: "#cbd5e1",
-                        fontStyle: "italic",
-                    }}
-                >
-                    {error || "Aún no hay datos."}
-                </span>
+                {error ? <span role="alert" style={{ color: "#cbd5e1", fontSize: 13, fontStyle: "italic" }}>{error}</span> : <PanelEmptyState artwork="activity" compact>Aún no hay datos.</PanelEmptyState>}
             </div>
         </div>
     )

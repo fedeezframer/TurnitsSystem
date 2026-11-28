@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import { OverlayFade } from "../../components/OverlayFade"
 import { PromotionDiscountArrow } from "./PromotionDiscountArrow"
 import { CatalogToolbar } from "./CatalogToolbar"
@@ -1133,10 +1134,7 @@ function ServiciosManager_ExtrasVinculados({
 
     if (extras.length === 0) {
         return (
-            <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>
-                Todavía no cargaste productos extra. Creá el primero desde la
-                pestaña «Productos extra» y volvé acá para vincularlo.
-            </span>
+            <PanelEmptyState artwork="catalog" compact>Todavía no cargaste productos extra. Creá uno en Productos para vincularlo.</PanelEmptyState>
         )
     }
 
@@ -2639,11 +2637,8 @@ function ServiciosManager_ServiciosSection(props: any) {
 <CatalogToolbar filters={catalogFilters} label="servicios" filterValue={filtroServicios} onFilter={setFiltroServicios} sort={ordenServicios} onSort={setOrdenServicios} opcionesOrden={opcionesOrden} search={busquedaServicio} onSearch={setBusquedaServicio} onCreate={!branch && (!employeeMode || employeeCanCreate) ? abrirCreacion : undefined} />
                     {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 10 }}>{error}</div>}
                     <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: isMobile ? 5 : 6 }}>
-                        {serviciosVisibles.length === 0 && (
-                            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, opacity: .5, paddingTop: 40 }}>
-                                <ServiciosManager_PlaceholderIcon src={iconoVacioUrl || undefined} size={36} />
-                                <span style={{ fontSize: 13, color: "#94a3b8" }}>{busquedaServicio || filtroServicios === "pausados" ? "No hay servicios que coincidan con este filtro" : "Todavía no hay servicios"}</span>
-                            </div>
+                        {!error && serviciosVisibles.length === 0 && (
+                            <PanelEmptyState artwork="catalog">{busquedaServicio || filtroServicios === "pausados" ? "No hay servicios que coincidan con este filtro." : "Todavía no hay servicios."}</PanelEmptyState>
                         )}
                         <AnimatePresence mode="popLayout">
                             {serviciosVisibles.map((svc) => (
@@ -2734,28 +2729,7 @@ function ServiciosManager_ProductosSection(props: any) {
                         }}
                     >
                         {extrasVisibles.length === 0 && !mostrarFormExtra && (
-                            <div
-                                style={{
-                                    flex: 1,
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 10,
-                                    opacity: 0.5,
-                                    paddingTop: 40,
-                                }}
-                            >
-                                <ServiciosManager_PlaceholderIcon
-                                    src={iconoVacioUrl || undefined}
-                                    size={36}
-                                />
-                                <span
-                                    style={{ fontSize: 13, color: "#94a3b8" }}
-                                >
-                                    {busquedaProducto || filtroProductos === "pausados" ? "No hay productos que coincidan con este filtro" : "Todavía no hay productos extra"}
-                                </span>
-                            </div>
+                            <PanelEmptyState artwork="catalog">{busquedaProducto || filtroProductos === "pausados" ? "No hay productos que coincidan con este filtro." : "Todavía no hay productos extra."}</PanelEmptyState>
                         )}
                         <AnimatePresence mode="popLayout">
                             {extrasVisibles.map((extra) =>
@@ -3009,7 +2983,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                             <div className="promo-count"><b>{money(Number(item.precio))}</b>{entry && <div><button aria-label={`Aumentar cantidad de ${item.nombre}`} type="button" disabled={entry.cantidad>=99} onClick={()=>quantity(1)}>+</button> {entry.cantidad} <button aria-label={`Reducir cantidad de ${item.nombre}`} type="button" disabled={entry.cantidad<=1} onClick={()=>quantity(-1)}>−</button></div>}</div>
                         </div>
                     })}
-                    {!catalogo.some(i=>i.tipo===tipo) && <p>No hay {tipo==="servicio"?"servicios":"productos"} activos.</p>}
+                    {!catalogo.some(i=>i.tipo===tipo) && <PanelEmptyState artwork="catalog" compact>No hay {tipo==="servicio"?"servicios":"productos"} activos.</PanelEmptyState>}
                 </section>)}
                 {diasHabilitados && <section className="promo-options" aria-labelledby="promo-valid-days">
                     <h3 id="promo-valid-days" className="catalog-field-title"><ServiciosManager_FieldIcon name="calendar" size={16} color="#566257"/>Días de vigencia</h3>
@@ -3042,8 +3016,8 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </section>
                 {readyToSave && !globalEdit && <CatalogSaveState message={editando ? "Cambios en la promoción" : "Promoción lista para guardar"} label="Guardar promoción" saving={busy} onSave={()=>formRef.current?.requestSubmit()} />}
             </fieldset>
-        </motion.form> : loading ? <InlineLoading label="Cargando promociones…"/> : lista.length===0 ? <p>Todavía no hay promociones.</p> :
-        !visibles.length ? <p>No hay promociones que coincidan.</p> : <motion.div key="list" {...transition} className="promo-grid">{visibles.map(p=>{
+        </motion.form> : loading ? <InlineLoading label="Cargando promociones…"/> : lista.length===0 ? <PanelEmptyState artwork="catalog">Todavía no hay promociones.</PanelEmptyState> :
+        !visibles.length ? <PanelEmptyState artwork="catalog">No hay promociones que coincidan.</PanelEmptyState> : <motion.div key="list" {...transition} className="promo-grid">{visibles.map(p=>{
             const active=promoActiva(p),cover=p.imagen_url || fallbackCover(p.items)
             const repeated=p.items.length===1 && p.items[0].cantidad>1
             return <article className="promo-card" key={p.id}><div className="promo-cover">

@@ -283,8 +283,8 @@ function TurnitsPanel_Inner(props: any) {
                             {renderSubsection("miembros", "Miembros", "/assets/panel-nav/streamline-ultimate_team-meeting-bold.svg", seccionActiva === "equipo" && !sucursales, () => irA("equipo", "miembros"))}
                             {renderSubsection("sucursales", "Sucursales", "/assets/panel-nav/famicons_storefront-outline.svg", seccionActiva === "equipo" && sucursales, () => irA("equipo", "sucursales"))}
                         </> : item.id === "agenda" ? <>
-                            {renderSubsection("calendario", "Calendario", "/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "agenda" && vistaAgenda === "calendario", () => irA("agenda", "calendario"))}
-                            {renderSubsection("turnos", "Turnos", "/assets/panel-nav/hugeicons_time-quarter-02.svg", seccionActiva === "agenda" && vistaAgenda === "turnos", () => irA("agenda", "turnos"))}
+                            {renderSubsection("calendario", "Calendario", "/assets/panel-nav/agenda-calendar.svg", seccionActiva === "agenda" && vistaAgenda === "calendario", () => irA("agenda", "calendario"))}
+                            {renderSubsection("turnos", "Turnos", "/assets/panel-nav/agenda-appointments.svg", seccionActiva === "agenda" && vistaAgenda === "turnos", () => irA("agenda", "turnos"))}
                         </> : item.id === "pagos" ? seccionesPagos.map(({id,titulo,icono}) => renderSubsection(id,titulo,icono,seccionActiva === "pagos" && vistaPagos === id, () => irA("pagos",id))) : item.id==="horarios" ? <>
                             {renderSubsection("weekly","Horario semanal","/assets/panel-nav/hugeicons_time-quarter-02.svg", seccionActiva === "horarios" && scheduleView === "weekly", () => {setScheduleView("weekly");irA("horarios")})}
                             {renderSubsection("exceptions","Excepciones laborales","/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "horarios" && scheduleView === "exceptions", () => {setScheduleView("exceptions");irA("horarios")})}

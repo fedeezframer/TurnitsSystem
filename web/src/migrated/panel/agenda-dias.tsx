@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import * as React from "react"
 import { BackButton } from "../../components/BackButton"
 import BookingReceipt from "../../components/BookingReceipt"
@@ -140,6 +141,7 @@ export function AgendaPanel_Layout({ dias, today, onTurnoClick }: ReservasProps 
             {appointments.length > 0 && <ul className="agenda-appointment-list">
                 {appointments.map(turno => <ReservaRow key={turno.id} turno={turno} fecha={selected} onClick={() => onTurnoClick(turno, selected)} />)}
             </ul>}
+            {!appointments.length && <PanelEmptyState artwork="calendar" compact>No hay reservas para este día.</PanelEmptyState>}
         </section>}
     </div>
 }
@@ -180,7 +182,7 @@ export function AgendaTurnos({ dias, onTurnoClick, membership, includeMembership
         {loading && visible.length === 0 && <p className="agenda-empty-note" role="status">Cargando cobros…</p>}
         {error && <p className="agenda-empty-note" role="alert">{error} <button type="button" onClick={membership.retry}>Reintentar</button></p>}
         {visible.length === 0 && !loading && !error &&
-            <p className="agenda-empty-note" role="status">{pendingOnly ? "No hay reservas ni cobros pendientes de revisión." : "No hay reservas ni cobros para mostrar."}</p>}
+            <PanelEmptyState artwork="calendar">{pendingOnly ? "No hay reservas ni cobros pendientes de revisión." : "No hay reservas ni cobros para mostrar."}</PanelEmptyState>}
         {visible.length > 0 && <ul className="agenda-appointment-list">
             {visible.map(entry => {
                 if (entry.kind === "reserva") return <ReservaRow key={`reserva-${entry.turno.id}`} turno={entry.turno} fecha={entry.fecha}

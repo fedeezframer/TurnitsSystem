@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
@@ -16,7 +17,6 @@ import { createPortal } from "react-dom"
 import { ServiciosManager_parseDesc, TeamManager_getSlug, TeamManager_getToken, TeamManager_COLORES, TeamManager_ServicioAsignable, TeamManager_NetoData, TeamManager_PERIODOS_NETO, TeamManager_fmtPesos, TeamManager_FORM_EMPTY, TeamManager_FormData, TeamManager_ROLES, TeamManager_OwnerFallback, TeamManager_Miembro, TeamManager_cardBase, TeamManager_shimmerCSS, TeamManager_useContainerWidth, TurnitsLockedStyle, SeccionId, TurnitsGlobalSaveManager_get } from "./common"
 import { Turnits_ImageAdjustDialog } from "./servicios"
 import { TurnitsPlanRequirement } from "./shared"
-import { TeamManager_PlaceholderIcon } from "./temas"
 
 function TeamManager_formatPhone(value?: string) {
     const digits = String(value || "").replace(/\D/g, "")
@@ -468,10 +468,7 @@ function TeamManager_ServiciosVinculados({
 
     if (servicios.length === 0) {
         return (
-            <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>
-                Todavía no cargaste servicios. Creá el primero desde el panel de
-                Servicios y volvé acá para asignárselo a este profesional.
-            </span>
+            <PanelEmptyState artwork="catalog" compact>Todavía no cargaste servicios. Creá el primero en Servicios para asignárselo a este profesional.</PanelEmptyState>
         )
     }
 
@@ -625,9 +622,7 @@ function TeamManager_PromocionesVinculadas({
 
     if (promociones.length === 0) {
         return (
-            <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>
-                Todavía no cargaste promociones. Creá una desde Servicios → Promociones y volvé acá para asignarla.
-            </span>
+            <PanelEmptyState artwork="catalog" compact>Todavía no cargaste promociones. Creá una en Promociones para poder asignarla.</PanelEmptyState>
         )
     }
 
@@ -2348,26 +2343,7 @@ function TeamManager(props: any) {
                 )}
 
                 {miembros.length === 0 && !mostrarForm && !editando && (
-                    <div
-                        style={{
-                            flex: 1,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 10,
-                            opacity: 0.5,
-                            paddingTop: 24,
-                        }}
-                    >
-                        <TeamManager_PlaceholderIcon
-                            src={iconoVacioUrl || undefined}
-                            size={36}
-                        />
-                        <span style={{ fontSize: 13, color: "#94a3b8" }}>
-                            Todavía no sumaste colaboradores
-                        </span>
-                    </div>
+                    <PanelEmptyState artwork="people">Todavía no sumaste colaboradores.</PanelEmptyState>
                 )}
 
                 <AnimatePresence mode="popLayout">
