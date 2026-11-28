@@ -42,6 +42,10 @@
 .agenda-turn-filters button { gap:7px; padding-inline:12px; }
 .agenda-turn-filters button[aria-pressed=true] { background:#e8f4e6; border-color:#aacaab; color:#195821; }
 .agenda-turn-filters span { font-variant-numeric:tabular-nums; }
+.agenda-empty-state { display:grid; justify-items:center; text-align:center; padding:12px 0; }
+.agenda-empty-state picture { width:min(100%,360px); }
+.agenda-empty-state img { display:block; width:100%; height:auto; }
+.agenda-empty-state .agenda-empty-note { padding-top:0; }
 .agenda-empty-note { padding:16px 6px; margin:0; color:#586859; font-size:14px; }
 .agenda-reservation-dialog { box-sizing:border-box; width:min(550px,calc(100% - 24px)); max-height:min(88dvh,780px); overflow:auto; padding:clamp(16px,4vw,26px); color:#1c2b1d; background:white; border:1px solid #dfe8dd; border-radius:20px; }
 .agenda-reservation-dialog::backdrop { background:#10221470; }
