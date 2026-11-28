@@ -36,7 +36,6 @@ const Consultations = React.lazy(() => import("../../pages/Consultations"))
 const SetupGuide = React.lazy(() => import("../../components/SetupGuide"))
 const OnboardingNube = React.lazy(() => import("./onboarding").then(module => ({ default: module.OnboardingNube })))
 const BrowseBusiness = React.lazy(() => import("./browse-config"))
-const MembershipPaymentReview = React.lazy(() => import("./membership-payment-review"))
 const SuscripcionesPanel = React.lazy(() => import("./suscripciones").then(module => ({ default: module.SuscripcionesPanel })))
 
 function MenuFooter(props: any) { const branch = useBranchAdmin(); return branch ? <BranchAccountFooter {...props}/> : <OwnerMenuFooter {...props}/> }
@@ -841,7 +840,7 @@ function TurnitsPanel_Inner(props: any) {
                     >
                         <SeccionHeader
                             title={vistaAgenda === "calendario" ? "Calendario" : "Turnos"}
-                            subtitle={vistaAgenda === "calendario" ? "Elegí un día para ver sus reservas." : "Revisá tus reservas, solicitudes de reprogramación y cobros de suscripciones."}
+                            subtitle={vistaAgenda === "calendario" ? "Elegí un día para ver sus reservas." : "Consultá tus reservas y gestioná los cobros y solicitudes pendientes."}
                             isMobile={isMobile}
                         />
                         {isMobile && <nav className="agenda-mobile-views" aria-label="Vistas de Agenda">
@@ -855,10 +854,6 @@ function TurnitsPanel_Inner(props: any) {
                                 accentColor={accentColor}
                                 iconoReprogramacion={iconosNotificaciones.reprogramacion}
                             />
-                            {vistaAgenda === "turnos" && !branchAdmin &&
-                                <section className="agenda-membership-payments" aria-label="Cobros de suscripciones">
-                                    <React.Suspense fallback={<LoadingRunner card />}><MembershipPaymentReview api={baseUrl} /></React.Suspense>
-                                </section>}
                         </SectionLoadingBoundary>
                     </div>
                 )}

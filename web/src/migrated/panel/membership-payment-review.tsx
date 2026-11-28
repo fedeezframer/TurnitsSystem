@@ -1,86 +1,115 @@
 import * as React from "react"
-import { MenuFooter_getSlug, MenuFooter_getToken } from "./common"
+import { BackButton } from "../../components/BackButton"
+import { useNativeDialogExit } from "../../components/useNativeDialogExit"
+import { AgendaPanel_formatMonto, AgendaPanel_metodoPagoLabel, MenuFooter_getSlug, MenuFooter_getToken } from "./common"
 
-type Payment = {
-    id: string; nombre: string; importe: number; metodo_pago: "efectivo" | "transferencia"
+export type MembershipPayment = {
+    id: string; nombre: string; importe: number; metodo_pago: string
     comprobante: boolean; cliente: string; email?: string
+    created_at: string; pagado_at?: string; estado?: "pendiente" | "cobrado"
 }
-const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" })
-const path = "/pagos-manuales"
-const row: React.CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }
-const action: React.CSSProperties = { padding: "7px 11px", borderRadius: 8, border: "1px solid #d4ddd5", background: "white", color: "#17271b", font: "inherit", cursor: "pointer" }
 
-export default function MembershipPaymentReview({ api }: { api: string }) {
-    const slug = MenuFooter_getSlug()
-    const token = MenuFooter_getToken()
-    const request = React.useCallback(async <T,>(suffix: string, init: RequestInit = {}): Promise<T> => {
-        if (!slug || !token) throw new Error("Volvé a iniciar sesión para revisar los cobros.")
-        const response = await fetch(`${api}/admin/membresias/${encodeURIComponent(slug)}${suffix}`, {
-            ...init, cache: "no-store", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+export function useAgendaMembershipPayments(api: string, enabled: boolean) {
+    const [payments, setPayments] = React.useState<MembershipPayment[]>([])
+    const [loading, setLoading] = React.useState(enabled)
+    const [error, setError] = React.useState("")
+    const [revision, retry] = React.useReducer(value => value + 1, 0)
+    const request = React.useCallback(async <T,>(suffix = "", init: RequestInit = {}): Promise<T> => {
+        const slug = MenuFooter_getSlug()
+        const token = MenuFooter_getToken()
+        if (!slug || !token) throw Error("Volvé a iniciar sesión para revisar los cobros.")
+        const response = await fetch(`${api.replace(/\/+$/, "")}/admin/membresias/${encodeURIComponent(slug)}/pagos-manuales${suffix}`, {
+            ...init, cache: "no-store", headers: { Authorization: `Bearer ${token}`, ...(init.body ? { "Content-Type": "application/json" } : {}) },
         })
         const data = await response.json()
-        if (!response.ok || !data.success) throw new Error(data.error || "No pudimos revisar los cobros.")
+        if (!response.ok || !data.success) throw Error(data.error || "No pudimos revisar los cobros.")
         return data
-    }, [api, slug, token])
-    const [loading, setLoading] = React.useState(true)
-    const [payments, setPayments] = React.useState<Payment[]>([])
-    const [busy, setBusy] = React.useState("")
-    const [error, setError] = React.useState("")
-    const [proof, setProof] = React.useState<{ id: string; url: string } | null>(null)
-    const [retry, setRetry] = React.useState(0)
+    }, [api])
 
     React.useEffect(() => {
+        if (!enabled) return
         const controller = new AbortController()
-        setError("")
         setLoading(true)
-        request<{ pagos: Payment[] }>(path, { signal: controller.signal }).then(data => {
+        setError("")
+        request<{ pagos: MembershipPayment[] }>("?vista=turnos", { signal: controller.signal }).then(data => {
             if (!controller.signal.aborted) setPayments(data.pagos)
-        }).catch(err => { if (!controller.signal.aborted) setError(err.message) })
-            .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+        }).catch(err => {
+            if (!controller.signal.aborted) setError(err.message)
+        }).finally(() => {
+            if (!controller.signal.aborted) setLoading(false)
+        })
         return () => controller.abort()
-    }, [request, retry])
+    }, [enabled, request, revision])
 
-    async function showProof(payment: Payment) {
-        setBusy(payment.id)
-        setError("")
-        try {
-            const data = await request<{ url: string }>(`${path}/${payment.id}/comprobante`)
-            setProof({ id: payment.id, url: data.url })
-        } catch (err) { setError(err instanceof Error ? err.message : "No pudimos abrir el comprobante.") }
-        finally { setBusy("") }
+    async function review(payment: MembershipPayment, approve: boolean) {
+        await request(`/${encodeURIComponent(payment.id)}`, { method: "PUT", body: JSON.stringify({ aprobar: approve }) })
+        setPayments(items => approve ? items.map(item => item.id === payment.id
+            ? { ...item, estado: "cobrado", pagado_at: new Date().toISOString() } : item) : items.filter(item => item.id !== payment.id))
+        retry()
     }
 
-    async function review(payment: Payment, approve: boolean) {
-        if (!window.confirm(approve ? `¿Confirmar el cobro de ${money.format(payment.importe)} y acreditar los tickets?` : "¿Rechazar este pago de suscripción?")) return
-        setBusy(payment.id)
+    return { payments, loading, error, retry, request, review }
+}
+
+const dateFormat = new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Argentina/Buenos_Aires" })
+
+export function MembershipPaymentReview({ payment, request, review, onClose }: {
+    payment: MembershipPayment
+    request: ReturnType<typeof useAgendaMembershipPayments>["request"]
+    review: ReturnType<typeof useAgendaMembershipPayments>["review"]
+    onClose: () => void
+}) {
+    const dialog = React.useRef<HTMLDialogElement>(null)
+    const title = React.useId()
+    const finishClose = useNativeDialogExit(onClose)
+    const [busy, setBusy] = React.useState(false)
+    const [error, setError] = React.useState("")
+    const [proof, setProof] = React.useState("")
+    const date = new Date(payment.pagado_at || payment.created_at)
+    React.useEffect(() => {
+        if (!dialog.current?.open) dialog.current?.showModal()
+    }, [])
+
+    async function perform(action: () => Promise<void>) {
+        setBusy(true)
         setError("")
-        try {
-            await request(`${path}/${payment.id}`, { method: "PUT", body: JSON.stringify({ aprobar: approve }) })
-            setPayments(items => items.filter(item => item.id !== payment.id))
-            if (proof?.id === payment.id) setProof(null)
-        } catch (err) { setError(err instanceof Error ? err.message : "No pudimos revisar el pago.") }
-        finally { setBusy("") }
+        try { await action() }
+        catch (err) { setError(err instanceof Error ? err.message : "No pudimos revisar el cobro.") }
+        finally { setBusy(false) }
     }
 
-    return <section aria-label="Cobros de suscripciones pendientes" style={{ display: "grid", gap: 10 }}>
-        <div style={{ ...row, justifyContent: "space-between" }}>
-            <h3 style={{ margin: 0 }}>Cobros de suscripciones pendientes{payments.length ? ` (${payments.length})` : ""}</h3>
-            <button type="button" style={action} disabled={loading || !!busy} onClick={() => setRetry(value => value + 1)}>Actualizar</button>
+    function confirm(approve: boolean) {
+        if (!window.confirm(approve ? `¿Confirmar el cobro de ${AgendaPanel_formatMonto(payment.importe)} y acreditar los tickets?` : "¿Rechazar este pago de suscripción?")) return
+        void perform(async () => {
+            await review(payment, approve)
+            dialog.current?.close()
+        })
+    }
+
+    return <dialog className="agenda-reservation-dialog" ref={dialog} aria-labelledby={title} onClose={finishClose}
+        onCancel={event => { if (busy) event.preventDefault() }}>
+        <header>
+            <div><h2 id={title}>{payment.nombre}</h2><p>Suscripción</p></div>
+            <BackButton onClick={() => dialog.current?.close()} aria-label="Cerrar detalle de cobro" disabled={busy} autoFocus />
+        </header>
+        <dl className="agenda-reservation-facts">
+            <div><dt>Cliente</dt><dd>{payment.cliente || payment.email || "Cliente"}</dd></div>
+            <div><dt>Importe</dt><dd>{AgendaPanel_formatMonto(payment.importe)}</dd></div>
+            <div><dt>Medio de pago</dt><dd>{AgendaPanel_metodoPagoLabel(payment.metodo_pago)}</dd></div>
+            <div><dt>Estado</dt><dd>{payment.estado === "cobrado" ? "Cobrado" : "Por confirmar"}</dd></div>
+            {Number.isFinite(date.getTime()) && <div><dt>{payment.estado === "cobrado" ? "Cobrado el" : "Registrado el"}</dt><dd>{dateFormat.format(date)}</dd></div>}
+        </dl>
+        {proof && <a className="agenda-proof" href={proof} target="_blank" rel="noopener noreferrer">Abrir comprobante de transferencia</a>}
+        {error && <p role="alert">{error}</p>}
+        <div className="agenda-payment-actions">
+            {payment.comprobante && !proof && <button type="button" disabled={busy} onClick={() => void perform(async () => {
+                const data = await request<{ url: string }>(`/${encodeURIComponent(payment.id)}/comprobante`)
+                setProof(data.url)
+            })}>Ver comprobante</button>}
+            {payment.estado !== "cobrado" && <>
+                <button type="button" disabled={busy} onClick={() => confirm(false)}>Rechazar cobro</button>
+                <button type="button" className="agenda-payment-confirm" disabled={busy} onClick={() => confirm(true)}>Confirmar cobro</button>
+            </>}
         </div>
-        {error ? <p role="alert" style={{ margin: 0 }}>{error}</p> :
-            !payments.length && <p role="status" style={{ margin: 0 }}>{loading ? "Cargando cobros…" : "No hay cobros de suscripciones pendientes."}</p>}
-        {payments.map(payment => <article key={payment.id} style={{ display: "grid", gap: 7, padding: 14, borderRadius: 12, border: "1px solid #d4ddd5", background: "white", overflowWrap: "anywhere" }}>
-            <div style={{ ...row, justifyContent: "space-between" }}><b>{payment.nombre}</b><strong>{money.format(payment.importe)}</strong></div>
-            <div>{[payment.cliente, payment.email].filter(Boolean).join(" · ")}</div>
-            <small>{payment.metodo_pago === "transferencia" ? "Transferencia bancaria" : "Efectivo en el local"}</small>
-            {proof?.id === payment.id && <a href={proof.url} target="_blank" rel="noreferrer">
-                <img src={proof.url} alt="Comprobante de la transferencia" style={{ maxWidth: "min(100%, 360px)", maxHeight: 300, objectFit: "contain" }} />
-            </a>}
-            <div style={row}>
-                {payment.comprobante && <button type="button" disabled={!!busy} style={action} onClick={() => void showProof(payment)}>Ver comprobante</button>}
-                <button type="button" disabled={!!busy} style={action} onClick={() => void review(payment, false)}>Rechazar</button>
-                <button type="button" disabled={!!busy} style={{ ...action, background: "#196b1f", color: "white" }} onClick={() => void review(payment, true)}>Confirmar cobro</button>
-            </div>
-        </article>)}
-    </section>
+    </dialog>
 }

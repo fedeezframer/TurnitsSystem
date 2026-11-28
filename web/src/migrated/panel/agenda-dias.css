@@ -4,14 +4,15 @@
 .agenda-actions select,.agenda-actions .agenda-add { box-sizing:border-box; min-height:42px; }
 .agenda-actions .agenda-add { display:inline-flex;align-items:center;gap:7px;white-space:nowrap;padding:9px 13px;border:0;border-radius:11px;background:#1b6b1a;color:white;font:inherit;font-size:14px;font-weight:700;cursor:pointer; }
 .agenda-actions .agenda-add:hover { background:#145415; }
-.agenda-calendar-layout { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr); gap:16px; align-items:start; }
-.agenda-calendar,.agenda-day-reservations,.agenda-turn-list,.agenda-membership-payments { min-width:0; padding:clamp(12px,2cqw,22px); background:white; border:1px solid #dfe8dd; border-radius:18px; box-shadow:0 5px 16px #17231908; }
+.agenda-calendar-layout { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,0fr); row-gap:16px; column-gap:0; align-items:start; transition:grid-template-columns .24s ease, column-gap .24s ease; }
+.agenda-calendar,.agenda-day-reservations,.agenda-turn-list { min-width:0; padding:clamp(12px,2cqw,22px); background:white; border:1px solid #dfe8dd; border-radius:18px; box-shadow:0 5px 16px #17231908; }
 .agenda-calendar-head,.agenda-day-reservations header,.agenda-reservation-dialog header { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px 12px; margin-bottom:14px; }
 .agenda-calendar-head { align-items:center; }
 .agenda-calendar-head h2,.agenda-day-reservations h2,.agenda-reservation-dialog h2 { margin:0; color:#1c2b1d; font-size:clamp(17px,2.6cqw,24px); line-height:1.2; letter-spacing:-.035em; }
 .agenda-calendar-head h2,.agenda-day-reservations h2,.agenda-reservation-dialog header p { text-transform:capitalize; }
-.agenda-day-reservations header { flex-direction:column; }
-.agenda-day-reservations header p,.agenda-reservation-dialog header p { margin:0; color:#586859; font-size:14px; }
+.agenda-day-reservations { overflow:clip; animation:agenda-day-enter .24s ease both; }
+.agenda-day-reservations header { flex-wrap:nowrap; }
+.agenda-day-reservations header p,.agenda-reservation-dialog header p { margin:4px 0 0; color:#586859; font-size:14px; }
 .agenda-calendar-controls,.agenda-turn-filters { display:flex; gap:6px; flex-wrap:wrap; }
 .agenda-calendar-controls button,.agenda-turn-filters button { display:inline-flex; align-items:center; justify-content:center; min-width:36px; min-height:36px; padding:0 8px; color:#244629; background:white; border:1px solid #d7e5d5; border-radius:9px; font:inherit; font-size:13px; font-weight:650; cursor:pointer; }
 .agenda-calendar-controls button:disabled { opacity:.36; cursor:default; }
@@ -36,7 +37,7 @@
 .agenda-status { border-radius:6px; padding:4px 6px; background:#edf5eb; color:#315a34; font-size:11px; font-weight:700; }
 .agenda-status[data-action=true] { background:#fff3d9; color:#745717; }
 .agenda-day-reservations .agenda-appointment { grid-template-columns:48px minmax(0,1fr); }
-.agenda-day-reservations .agenda-status { grid-column:2; justify-self:start; }
+
 .agenda-turn-filters { margin-bottom:12px; }
 .agenda-turn-filters button { gap:7px; padding-inline:12px; }
 .agenda-turn-filters button[aria-pressed=true] { background:#e8f4e6; border-color:#aacaab; color:#195821; }
@@ -52,16 +53,31 @@
 .agenda-proof { display:grid; gap:6px; padding:12px 0; font-size:14px; }
 .agenda-proof a { color:#196521; justify-self:start; }
 .agenda-receipt summary { padding:10px 0; font-size:14px; font-weight:700; cursor:pointer; }
-@container (max-width:830px) {
-    .agenda-calendar-layout { grid-template-columns:1fr; }
-}
 @container (max-width:530px) {
     .agenda-calendar-day { min-height:46px; padding:3px; font-size:13px; }
     .agenda-calendar-day small span { display:none; }
     .agenda-turn-list .agenda-appointment { grid-template-columns:60px minmax(0,1fr); }
-    .agenda-turn-list .agenda-status { grid-column:2; justify-self:start; }
+    .agenda-turn-list .agenda-appointment-summary { grid-column:2; justify-self:start; justify-items:start; text-align:left; }
 }
 
 .agenda-mobile-views { display:flex; gap:8px; }
 .agenda-mobile-views button { min-height:42px; padding:8px 15px; color:#344837; background:white; border:1px solid #d7e5d5; border-radius:10px; font:inherit; cursor:pointer; }
 .agenda-mobile-views button[aria-current=page] { color:#1b5b21; background:#e8f4e6; border-color:#aacaab; font-weight:700; }
+
+.agenda-calendar-layout[data-day-open=true] { grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); column-gap:16px; }
+.agenda-appointment-summary { display:grid; gap:4px; justify-items:end; color:#3b513e; font-size:12px; text-align:right; }
+.agenda-appointment-summary span { font-variant-numeric:tabular-nums; }
+.agenda-day-reservations .agenda-appointment-summary { grid-column:2; justify-self:start; justify-items:start; text-align:left; }
+.agenda-payment-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.agenda-payment-actions:empty { display:none; }
+.agenda-payment-actions button { padding:9px 12px; border:1px solid #d7e5d5; border-radius:9px; color:#244629; background:white; font:inherit; font-weight:650; cursor:pointer; }
+.agenda-payment-actions button.agenda-payment-confirm { color:white; background:#1b6b1a; border-color:#1b6b1a; }
+.agenda-payment-actions button:disabled { opacity:.55; cursor:wait; }
+@keyframes agenda-day-enter { from { opacity:0; } to { opacity:1; } }
+@container (max-width:830px) {
+    .agenda-calendar-layout, .agenda-calendar-layout[data-day-open=true] { grid-template-columns:minmax(0,1fr); }
+}
+@media (prefers-reduced-motion:reduce) {
+    .agenda-calendar-layout { transition:none; }
+    .agenda-day-reservations { animation:none; }
+}

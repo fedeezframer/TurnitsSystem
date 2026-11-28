@@ -1,3 +1,4 @@
+import { useAgendaMembershipPayments } from "./membership-payment-review"
 import { AgendaPanel_Layout, AgendaReservaDetalle, AgendaTurnos } from "./agenda-dias"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner from "../../components/LoadingRunner"
@@ -33,6 +34,7 @@ function AgendaPanel(props: any) {
     } = props
 
     const calendario = vista === "calendario"
+    const membershipPayments = useAgendaMembershipPayments(baseUrl, !calendario && !branchAdmin)
     const containerRef = React.useRef<HTMLDivElement>(null)
     const containerWidth = AgendaPanel_useContainerWidth(containerRef)
 
@@ -132,7 +134,7 @@ function AgendaPanel(props: any) {
         }
         const api = baseUrl.replace(/\/+$/, "")
         try {
-            const res = await fetch(`${api}/agenda/${slug}`, {
+            const res = await fetch(`${api}/agenda/${encodeURIComponent(slug)}${calendario ? "" : "?vista=turnos"}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 cache: "no-store",
             })
@@ -156,7 +158,7 @@ function AgendaPanel(props: any) {
         } finally {
             if (requestId === agendaRequestId.current) setLoading(false)
         }
-    }, [baseUrl])
+    }, [baseUrl, calendario])
 
     React.useEffect(() => {
         if (false) {
@@ -758,7 +760,7 @@ function AgendaPanel(props: any) {
             >
                 {calendario
                     ? <AgendaPanel_Layout dias={diasVisibles} today={today} onTurnoClick={abrirTurno} />
-                    : <AgendaTurnos dias={diasVisibles} onTurnoClick={abrirTurno} />}
+                    : <AgendaTurnos dias={diasVisibles} onTurnoClick={abrirTurno} membership={membershipPayments} includeMembership={sucursalFiltro === "todas"} />}
                 <style>{AgendaPanel_globalCSS}</style>
             </div>
 

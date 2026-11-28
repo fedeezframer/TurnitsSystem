@@ -3,13 +3,14 @@ import { BackButton } from "../../components/BackButton"
 import BookingReceipt from "../../components/BookingReceipt"
 import { useNativeDialogExit } from "../../components/useNativeDialogExit"
 import { AgendaPanel_esPendienteAprobacion, AgendaPanel_formatMonto, AgendaPanel_getSlug, AgendaPanel_metodoPagoLabel } from "./common"
+import { MembershipPaymentReview, type MembershipPayment, type useAgendaMembershipPayments } from "./membership-payment-review"
 import "./agenda-dias.css"
 
 export type VistaAgenda = "calendario" | "turnos"
 type Turno = {
-    id: string; nombre: string; apellido?: string; hora: string; estado?: string
+    id: string; created_at?: string; fecha_pago?: string | null; nombre: string; apellido?: string; hora: string; estado?: string
     servicio?: string; equipo_nombre?: string; sucursal_id?: string
-    metodo_pago?: string; notas?: string; precio_cobrado: number; monto_pagado: number
+    metodo_pago?: string; tipo_cobro?: string; porcentaje_sena?: number; notas?: string; precio_cobrado: number; monto_pagado: number
     reprogramacion_pendiente?: { id: string } | null
 }
 type Dia = { fecha: string; turnos: Turno[] }
@@ -19,6 +20,8 @@ type Comprobante = { url: string; loading: boolean; error: string }
 const dateFormat = new Intl.DateTimeFormat("es-AR", { dateStyle: "full", timeZone: "UTC" })
 const monthFormat = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })
 const listDate = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
+const activityDate = new Intl.DateTimeFormat("es-AR", { month: "short", day: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
+const activityTime = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" })
 const weekdays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 const toDate = (day: string) => new Date(day + "T12:00:00Z")
 const toIso = (date: Date) => date.toISOString().slice(0, 10)
@@ -40,46 +43,70 @@ function statusOf(turno: Turno) {
     if (AgendaPanel_esPendienteAprobacion(turno)) return "Por aprobar"
     return { confirmado: "Confirmado", completado: "Completado", pendiente: "Pendiente", no_asistio: "No asistió" }[turno.estado || ""] || ""
 }
-function ReservaRow({ turno, fecha, showDate, onClick }: { turno: Turno; fecha: string; showDate?: boolean; onClick: () => void }) {
-    const status = statusOf(turno)
+function AgendaRow({ date, time, name, description, status, pending, amount, onClick }: {
+    date?: string; time?: string; name: string; description: string; status: string
+    pending: boolean; amount?: string; onClick: () => void
+}) {
     return <li>
         <button type="button" className="agenda-appointment" onClick={onClick}>
             <span className="agenda-appointment-time">
-                <time dateTime={fecha + "T" + turno.hora}>{turno.hora}</time>
-                {showDate && <span>{listDate.format(toDate(fecha))}</span>}
+                {time && <time>{time}</time>}
+                {date && <span>{date}</span>}
             </span>
             <span className="agenda-appointment-body">
-                <strong>{nameOf(turno)}</strong>
-                <span>{[turno.servicio, turno.equipo_nombre].filter(Boolean).join(" · ") || "Reserva"}</span>
+                <strong>{name}</strong>
+                <span>{description}</span>
             </span>
-            {status && <small className="agenda-status" data-action={Boolean(turno.reprogramacion_pendiente || AgendaPanel_esPendienteAprobacion(turno))}>{status}</small>}
+            {(status || amount) && <span className="agenda-appointment-summary">
+                {status && <small className="agenda-status" data-action={pending}>{status}</small>}
+                {amount && <span>{amount}</span>}
+            </span>}
         </button>
     </li>
+}
+
+function ReservaRow({ turno, fecha, showDate, onClick }: { turno: Turno; fecha: string; showDate?: boolean; onClick: () => void }) {
+    const pending = Boolean(turno.reprogramacion_pendiente || AgendaPanel_esPendienteAprobacion(turno))
+    const paid = Number(turno.monto_pagado) || 0
+    const deposit = turno.tipo_cobro === "sena"
+    const expected = deposit ? Math.round(turno.precio_cobrado * (turno.porcentaje_sena || 30) / 100) : turno.precio_cobrado
+    const amount = paid > 0 ? `${paid < turno.precio_cobrado ? "Abonado" : "Cobrado"} ${AgendaPanel_formatMonto(paid)}`
+        : AgendaPanel_esPendienteAprobacion(turno) ? `${deposit ? "Seña por cobrar" : "Por cobrar"} ${AgendaPanel_formatMonto(expected)}` : undefined
+    return <AgendaRow date={showDate ? listDate.format(toDate(fecha)) : undefined} time={turno.hora}
+        name={nameOf(turno)} description={[turno.servicio, turno.equipo_nombre].filter(Boolean).join(" · ") || "Reserva"}
+        status={statusOf(turno)} pending={pending} amount={showDate ? amount : undefined} onClick={onClick} />
 }
 
 export function AgendaPanel_Layout({ dias, today, onTurnoClick }: ReservasProps & { today: string }) {
     // La agenda existente entrega los 30 días siguientes, incluidos los turnos de hoy.
     const lastDay = shiftDay(today, 30)
-    const [selectedDay, selectDay] = React.useState(today)
-    const selected = selectedDay >= today && selectedDay <= lastDay ? selectedDay : today
-    const month = shiftMonth(selected, 0)
+    const [selectedDay, selectDay] = React.useState("")
+    const [browsedMonth, setBrowsedMonth] = React.useState("")
+    const dateTrigger = React.useRef<HTMLButtonElement>(null)
+    const firstMonth = shiftMonth(today, 0)
+    const selected = selectedDay >= today && selectedDay <= lastDay ? selectedDay : ""
+    const month = browsedMonth >= firstMonth && browsedMonth <= shiftMonth(lastDay, 0) ? browsedMonth : firstMonth
+    function browseMonth(next: string) {
+        setBrowsedMonth(next)
+        selectDay("")
+    }
     const prevMonth = shiftMonth(month, -1)
     const nextMonth = shiftMonth(month, 1)
     const offset = (toDate(month).getUTCDay() + 6) % 7
     const size = toDate(shiftDay(nextMonth, -1)).getUTCDate()
     const days = new Map(dias.map(day => [day.fecha, day.turnos]))
     const appointments = days.get(selected) || []
-    return <div className="agenda-calendar-layout">
+    return <div className="agenda-calendar-layout" data-day-open={Boolean(selected)}>
         <section className="agenda-calendar" aria-label="Calendario de reservas">
             <header className="agenda-calendar-head">
                 <h2 aria-live="polite">{monthFormat.format(toDate(month))}</h2>
                 <div className="agenda-calendar-controls">
-                    <button type="button" className="agenda-today" onClick={() => selectDay(today)}>Hoy</button>
-                    <button type="button" aria-label="Mes anterior" disabled={prevMonth < shiftMonth(today, 0)}
-                        onClick={() => selectDay(prevMonth < today ? today : prevMonth)}>
+                    <button type="button" className="agenda-today" onClick={event => { dateTrigger.current = event.currentTarget; setBrowsedMonth(firstMonth); selectDay(today) }}>Hoy</button>
+                    <button type="button" aria-label="Mes anterior" disabled={prevMonth < firstMonth}
+                        onClick={() => browseMonth(prevMonth)}>
                         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="m10 3-5 5 5 5" /></svg>
                     </button>
-                    <button type="button" aria-label="Mes siguiente" disabled={nextMonth > lastDay} onClick={() => selectDay(nextMonth)}>
+                    <button type="button" aria-label="Mes siguiente" disabled={nextMonth > lastDay} onClick={() => browseMonth(nextMonth)}>
                         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="m6 3 5 5-5 5" /></svg>
                     </button>
                 </div>
@@ -94,39 +121,79 @@ export function AgendaPanel_Layout({ dias, today, onTurnoClick }: ReservasProps 
                     return <button type="button" key={day} disabled={!available} aria-pressed={selected === day}
                         aria-current={day === today ? "date" : undefined}
                         aria-label={`${dateFormat.format(toDate(day))}${available ? `, ${count} ${count === 1 ? "reserva" : "reservas"}` : ""}`}
-                        className="agenda-calendar-day" onClick={() => selectDay(day)}>
+                        className="agenda-calendar-day" onClick={event => { dateTrigger.current = event.currentTarget; selectDay(day) }}>
                         <span>{index + 1}</span>
                         {count > 0 && <small aria-hidden="true">{count}<span> {count === 1 ? "reserva" : "reservas"}</span></small>}
                     </button>
                 })}
             </div>
         </section>
-        <section className="agenda-day-reservations" aria-labelledby="agenda-selected-day">
+        {selected && <section className="agenda-day-reservations" aria-labelledby="agenda-selected-day">
             <header>
-                <h2 id="agenda-selected-day">{dateFormat.format(toDate(selected))}</h2>
-                <p aria-live="polite">{appointments.length} {appointments.length === 1 ? "reserva" : "reservas"}</p>
+                <div>
+                    <h2 id="agenda-selected-day">{dateFormat.format(toDate(selected))}</h2>
+                    <p aria-live="polite">{appointments.length} {appointments.length === 1 ? "reserva" : "reservas"}</p>
+                </div>
+                <BackButton aria-label="Cerrar reservas del día" onClick={() => { selectDay(""); dateTrigger.current?.focus({ preventScroll: true }) }} />
             </header>
             {appointments.length > 0 && <ul className="agenda-appointment-list">
                 {appointments.map(turno => <ReservaRow key={turno.id} turno={turno} fecha={selected} onClick={() => onTurnoClick(turno, selected)} />)}
             </ul>}
-        </section>
+        </section>}
     </div>
 }
 
-export function AgendaTurnos({ dias, onTurnoClick }: ReservasProps) {
+type Activity = { timestamp: number; pending: boolean } & (
+    { kind: "reserva"; turno: Turno; fecha: string } |
+    { kind: "suscripcion"; payment: MembershipPayment }
+)
+
+export function AgendaTurnos({ dias, onTurnoClick, membership, includeMembership }: ReservasProps & {
+    includeMembership: boolean
+    membership: ReturnType<typeof useAgendaMembershipPayments>
+}) {
     const [pendingOnly, setPendingOnly] = React.useState(false)
-    const turnos = dias.flatMap(day => day.turnos.map(turno => ({ turno, fecha: day.fecha })))
-    const pendientes = turnos.filter(({ turno }) => AgendaPanel_esPendienteAprobacion(turno) || turno.reprogramacion_pendiente)
-    const visible = pendingOnly ? pendientes : turnos
+    const [selectedPayment, selectPayment] = React.useState<MembershipPayment | null>(null)
+    const entries: Activity[] = [
+        ...dias.flatMap(day => day.turnos.map(turno => ({
+            kind: "reserva" as const, turno, fecha: day.fecha,
+            timestamp: Date.parse(turno.fecha_pago || turno.created_at || day.fecha + "T" + turno.hora + ":00-03:00") || 0,
+            pending: Boolean(AgendaPanel_esPendienteAprobacion(turno) || turno.reprogramacion_pendiente),
+        }))),
+        ...(includeMembership ? membership.payments : []).map(payment => ({
+            kind: "suscripcion" as const, payment,
+            timestamp: Date.parse(payment.pagado_at || payment.created_at) || 0,
+            pending: payment.estado !== "cobrado",
+        })),
+    ]
+    entries.sort((a, b) => b.timestamp - a.timestamp)
+    const pendientes = entries.filter(entry => entry.pending)
+    const visible = pendingOnly ? pendientes : entries
+    const loading = includeMembership && membership.loading
+    const error = includeMembership ? membership.error : ""
     return <section className="agenda-turn-list" aria-label="Listado de turnos">
-        <div className="agenda-turn-filters" role="group" aria-label="Filtrar turnos">
-            <button type="button" aria-pressed={!pendingOnly} onClick={() => setPendingOnly(false)}>Todos <span>{turnos.length}</span></button>
+        <div className="agenda-turn-filters" role="group" aria-label="Filtrar turnos y cobros">
+            <button type="button" aria-pressed={!pendingOnly} onClick={() => setPendingOnly(false)}>Todos <span>{entries.length}</span></button>
             <button type="button" aria-pressed={pendingOnly} onClick={() => setPendingOnly(true)}>Pendientes <span>{pendientes.length}</span></button>
         </div>
-        {visible.length === 0 ? <p className="agenda-empty-note" role="status">{pendingOnly ? "No hay turnos pendientes de revisión." : "No hay reservas para los próximos días."}</p>
-            : <ul className="agenda-appointment-list">
-                {visible.map(({ turno, fecha }) => <ReservaRow key={turno.id} turno={turno} fecha={fecha} showDate onClick={() => onTurnoClick(turno, fecha)} />)}
-            </ul>}
+        {loading && visible.length === 0 && <p className="agenda-empty-note" role="status">Cargando cobros…</p>}
+        {error && <p className="agenda-empty-note" role="alert">{error} <button type="button" onClick={membership.retry}>Reintentar</button></p>}
+        {visible.length === 0 && !loading && !error &&
+            <p className="agenda-empty-note" role="status">{pendingOnly ? "No hay reservas ni cobros pendientes de revisión." : "No hay reservas ni cobros para mostrar."}</p>}
+        {visible.length > 0 && <ul className="agenda-appointment-list">
+            {visible.map(entry => {
+                if (entry.kind === "reserva") return <ReservaRow key={`reserva-${entry.turno.id}`} turno={entry.turno} fecha={entry.fecha}
+                    showDate onClick={() => onTurnoClick(entry.turno, entry.fecha)} />
+                const { payment, timestamp, pending } = entry
+                return <AgendaRow key={`suscripcion-${payment.id}`}
+                    date={timestamp ? activityDate.format(timestamp) : undefined} time={timestamp ? activityTime.format(timestamp) : undefined}
+                    name={payment.cliente || payment.email || "Cliente"} description={`Suscripción · ${payment.nombre}`}
+                    status={pending ? "Por confirmar" : "Cobrado"} pending={pending} amount={AgendaPanel_formatMonto(payment.importe)}
+                    onClick={() => selectPayment(payment)} />
+            })}
+        </ul>}
+        {selectedPayment && <MembershipPaymentReview payment={selectedPayment} request={membership.request}
+            review={membership.review} onClose={() => selectPayment(null)} />}
     </section>
 }
 
