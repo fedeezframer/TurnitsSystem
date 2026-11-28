@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { OwnerOnly, useBranchAdmin } from "../../components/BranchAdmin"
@@ -16,7 +17,6 @@ import { createPortal } from "react-dom"
 import { ServiciosManager_parseDesc, TeamManager_getSlug, TeamManager_getToken, TeamManager_COLORES, TeamManager_ServicioAsignable, TeamManager_NetoData, TeamManager_PERIODOS_NETO, TeamManager_fmtPesos, TeamManager_FORM_EMPTY, TeamManager_FormData, TeamManager_ROLES, TeamManager_OwnerFallback, TeamManager_Miembro, TeamManager_cardBase, TeamManager_shimmerCSS, TeamManager_useContainerWidth, TurnitsLockedStyle, SeccionId, TurnitsGlobalSaveManager_get } from "./common"
 import { Turnits_ImageAdjustDialog } from "./servicios"
 import { TurnitsPlanRequirement } from "./shared"
-import { TeamManager_PlaceholderIcon } from "./temas"
 
 function TeamManager_formatPhone(value?: string) {
     const digits = String(value || "").replace(/\D/g, "")
@@ -2347,27 +2347,8 @@ function TeamManager(props: any) {
                     )
                 )}
 
-                {miembros.length === 0 && !mostrarForm && !editando && (
-                    <div
-                        style={{
-                            flex: 1,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 10,
-                            opacity: 0.5,
-                            paddingTop: 24,
-                        }}
-                    >
-                        <TeamManager_PlaceholderIcon
-                            src={iconoVacioUrl || undefined}
-                            size={36}
-                        />
-                        <span style={{ fontSize: 13, color: "#94a3b8" }}>
-                            Todavía no sumaste colaboradores
-                        </span>
-                    </div>
+                {!error && miembros.length === 0 && !mostrarForm && !editando && (
+                    <PanelEmptyState>Todavía no sumaste colaboradores.</PanelEmptyState>
                 )}
 
                 <AnimatePresence mode="popLayout">

@@ -1,3 +1,4 @@
+import PanelEmptyState from "../components/PanelEmptyState";
 import { useNativeDialogExit } from "../components/useNativeDialogExit"
 import { BackButton } from "../components/BackButton";
 import * as React from "react";
@@ -325,7 +326,9 @@ function ConsultationsContent({ embedded, guestToken = "", guestAccessMissing = 
   const inboxView = <section className="chat-inbox" aria-labelledby="chat-inbox-title"><div className="chat-inbox-heading"><h1 id="chat-inbox-title">Mensajes</h1>{embedded === "panel" && onExit && <BackButton className="chat-inbox-exit" aria-label="Volver al panel" onClick={onExit} />}</div>
     {error && <div className="chat-error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>Reintentar</button></div>}
     {loading && !inbox.length && <p className="chat-empty" role="status">Cargando mensajes…</p>}
-    {!loading && !inbox.length && !error && <p className="chat-empty">Todavía no tenés mensajes. Tus consultas van a aparecer acá.</p>}
+    {!loading && !inbox.length && !error && (embedded === "panel"
+      ? <PanelEmptyState>Todavía no tenés mensajes. Tus consultas van a aparecer acá.</PanelEmptyState>
+      : <p className="chat-empty">Todavía no tenés mensajes. Tus consultas van a aparecer acá.</p>)}
     <div className="chat-inbox-list">{inbox.map(item => <button className={`chat-inbox-item${Number(item.no_leidos) > 0 ? " unread" : ""}${item.id === current ? " active" : ""}`} key={item.id} onClick={() => setThread(item.id)} aria-label={`${item.interlocutor_nombre || item.slug}: ${messagePreview(item, business)}${Number(item.no_leidos) > 0 ? ", mensajes sin leer" : ""}`} aria-current={item.id === current ? "true" : undefined}><ChatAvatar name={item.interlocutor_nombre || item.slug} src={item.foto_url} /><span className="chat-inbox-copy"><strong>{item.interlocutor_nombre || item.slug}</strong><span>{messagePreview(item, business)}</span></span>{Number(item.no_leidos) > 0 && <span className="chat-unread-dot" aria-hidden="true" />}</button>)}</div>
   </section>;
   const Container = embedded ? "section" : "main";

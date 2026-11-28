@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import * as React from "react"
 import { BackButton } from "../../components/BackButton"
 import BookingReceipt from "../../components/BookingReceipt"
@@ -140,6 +141,7 @@ export function AgendaPanel_Layout({ dias, today, onTurnoClick }: ReservasProps 
             {appointments.length > 0 && <ul className="agenda-appointment-list">
                 {appointments.map(turno => <ReservaRow key={turno.id} turno={turno} fecha={selected} onClick={() => onTurnoClick(turno, selected)} />)}
             </ul>}
+            {!appointments.length && <PanelEmptyState>No hay reservas para este día.</PanelEmptyState>}
         </section>}
     </div>
 }
@@ -179,13 +181,8 @@ export function AgendaTurnos({ dias, onTurnoClick, membership, includeMembership
         </div>
         {loading && visible.length === 0 && <p className="agenda-empty-note" role="status">Cargando cobros…</p>}
         {error && <p className="agenda-empty-note" role="alert">{error} <button type="button" onClick={membership.retry}>Reintentar</button></p>}
-        {visible.length === 0 && !loading && !error && <div className="agenda-empty-state" role="status">
-            <picture>
-                <source media="(prefers-reduced-motion: reduce)" srcSet="/assets/agenda/agendita-quieta.png" />
-                <img src="/assets/agenda/agendita-rodadoras.gif" width={560} height={300} alt="" />
-            </picture>
-            <p className="agenda-empty-note">{pendingOnly ? "No hay reservas ni cobros pendientes de revisión." : "No hay reservas ni cobros para mostrar."}</p>
-        </div>}
+        {visible.length === 0 && !loading && !error &&
+            <PanelEmptyState>{pendingOnly ? "No hay reservas ni cobros pendientes de revisión." : "No hay reservas ni cobros para mostrar."}</PanelEmptyState>}
         {visible.length > 0 && <ul className="agenda-appointment-list">
             {visible.map(entry => {
                 if (entry.kind === "reserva") return <ReservaRow key={`reserva-${entry.turno.id}`} turno={entry.turno} fecha={entry.fecha}

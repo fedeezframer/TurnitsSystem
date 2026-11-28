@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
@@ -321,12 +322,13 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0, range = 
                     width: "100%",
                     minWidth: 0,
                     maxWidth: "100%",
-                    height: h,
+                    height: hasActivity ? h : undefined,
+                    minHeight: h,
                     overflow: "hidden",
                     marginTop: 0,
                 }}
             >
-                {data.length > 0 ? (
+                {hasActivity ? (
                     <svg
                         viewBox={`0 0 ${w} ${h}`}
                         className="turnits-dashboard-chart-plot"
@@ -454,21 +456,9 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0, range = 
                         ))}
                     </svg>
                 ) : (
-                    <div
-                        style={{
-                            height: 220,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#94a3b8",
-                            fontSize: 13,
-                        }}
-                    >
-                        Todavía no hay suficiente actividad para mostrar el
-                        gráfico.
-                    </div>
+                    <PanelEmptyState>Todavía no hay suficiente actividad para mostrar el gráfico.</PanelEmptyState>
                 )}
-                {hovered && (
+                {hasActivity && hovered && (
                     <div
                         className="turnits-dashboard-chart-tooltip"
                         style={{
@@ -803,17 +793,7 @@ function TurnitsDashboard_ServicesMostRequested({
                     </div>
                 ))}
                 {!servicios.length && (
-                    <div
-                        style={{
-                            padding: "20px 0",
-                            textAlign: "center",
-                            color: "#94a3b8",
-                            fontSize: 11.5,
-                        }}
-                    >
-                        Todavía no hay reservas suficientes para mostrar
-                        servicios pedidos.
-                    </div>
+                    <PanelEmptyState>Todavía no hay reservas suficientes para mostrar los servicios más pedidos.</PanelEmptyState>
                 )}
             </div>
         </div>
@@ -952,16 +932,7 @@ function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
                     </div>
                 ))}
                 {!dias.length && (
-                    <div
-                        style={{
-                            padding: "18px 0",
-                            textAlign: "center",
-                            color: "#94a3b8",
-                            fontSize: 11.5,
-                        }}
-                    >
-                        Todavía no hay turnos confirmados para mostrar el ranking.
-                    </div>
+                    <PanelEmptyState>Todavía no hay turnos confirmados para mostrar el ranking.</PanelEmptyState>
                 )}
             </div>
         </div>
@@ -1209,16 +1180,7 @@ function TurnitsDashboard_RecentClients({ stats }: any) {
                         )
                     })
                 ) : (
-                    <div
-                        style={{
-                            padding: "25px 0",
-                            textAlign: "center",
-                            color: "#94a3b8",
-                            fontSize: 12.5,
-                        }}
-                    >
-                        Todavía no hay clientes registrados.
-                    </div>
+                    <PanelEmptyState>Todavía no hay clientes registrados.</PanelEmptyState>
                 )}
             </div>
         </div>

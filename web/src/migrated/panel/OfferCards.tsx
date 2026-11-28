@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import * as React from "react";
 import { CatalogToolbar } from "./CatalogToolbar";
 import { ServiciosManager_RowMenu } from "./servicios";
@@ -46,8 +47,8 @@ export function OfferCards({ offers, services, members, busy, editIcon, onCreate
   }).sort((a, b) => sort === "service" ? String(services.find(item => item.id === a.servicio_id)?.nombre || "").localeCompare(String(services.find(item => item.id === b.servicio_id)?.nombre || ""), "es") : sort === "price" ? Number(a.precio_minimo) - Number(b.precio_minimo) : Number(b.activo) - Number(a.activo));
   return <div className="offer-catalog">
     <CatalogToolbar<"all" | "active" | "paused", "status" | "service" | "price"> filters={[{id:"all",label:"Todas"},{id:"active",label:"Activas"},{id:"paused",label:"Pausadas"}]} label="ofertas" filterValue={filter} onFilter={setFilter} sort={sort} onSort={setSort} opcionesOrden={[{id:"status",label:"Activas primero"},{id:"service",label:"Servicio A-Z"},{id:"price",label:"Tarifa más baja"}]} search={search} onSearch={setSearch} onCreate={!busy && services.length && members.length ? onCreate : undefined} />
-    {!offers.length && <p className="offer-catalog-empty">Todavía no hay ofertas. Creá una para ocupar horarios libres con un precio especial.</p>}
-    {!!offers.length && !rows.length && <p className="offer-catalog-empty">No hay ofertas que coincidan con esos filtros.</p>}
+    {!offers.length && <PanelEmptyState>Todavía no hay ofertas. Creá una para ocupar horarios libres con un precio especial.</PanelEmptyState>}
+    {!!offers.length && !rows.length && <PanelEmptyState>No hay ofertas que coincidan con esos filtros.</PanelEmptyState>}
     <div className="offer-catalog-grid">{rows.map(offer => {
       const service = services.find(item => item.id === offer.servicio_id);
       const member = members.find(item => item.id === offer.equipo_id);

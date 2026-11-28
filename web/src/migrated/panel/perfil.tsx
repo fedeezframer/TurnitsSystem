@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import { AnimatePresence } from "framer-motion";
 import { OverlayFade } from "../../components/OverlayFade";
 import { BackButton } from "../../components/BackButton"
@@ -467,6 +468,7 @@ export function PerfilNegocio({
                     </article>
                   ))}
                 </div>
+                {!form.fotos.length && <PanelEmptyState>Todavía no hay publicaciones.</PanelEmptyState>}
               </>}
               <AnimatePresence>{editingUrl && <PublicationEditor key={editingUrl} url={editingUrl} post={{ servicio_id: "", servicio_nombre: "", descripcion: form.titulos_fotos[editingUrl] || "", ...form.publicaciones[editingUrl] }} services={servicios} onClose={() => setEditingUrl(null)} onApply={(post) => { updatePost(editingUrl, post); setEditingUrl(null); }} />}</AnimatePresence>
               {createPortal(<AnimatePresence>{deleteUrl && (<OverlayFade className="publicacion-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setDeleteUrl(null); }}><section className="publicacion-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publicacion-delete-title" aria-describedby="publicacion-delete-description"><BackButton aria-label="Volver" onClick={() => setDeleteUrl(null)} /><h2 id="publicacion-delete-title">¿Eliminar publicación?</h2><p id="publicacion-delete-description">Se quitará la foto y su descripción cuando guardes los cambios.</p><div><button type="button" onClick={() => setDeleteUrl(null)}>Cancelar</button><button type="button" onClick={() => { updateDraft((f) => { const titles = { ...f.titulos_fotos }; delete titles[deleteUrl]; const posts = { ...f.publicaciones }; delete posts[deleteUrl]; return { ...f, titulos_fotos: titles, publicaciones: posts, fotos: f.fotos.filter((photo) => photo !== deleteUrl) }; }); setDeleteUrl(null); }}>Sí, eliminar</button></div></section></OverlayFade>)}</AnimatePresence>, document.body)}
@@ -1124,7 +1126,7 @@ export function SucursalEmpleado({
               Próximos turnos de esta sede. Hasta 500 reservas.
             </p>
             {!data.turnos.length && (
-              <p className="negocio-muted">Todavía no hay turnos.</p>
+              <PanelEmptyState>Todavía no hay turnos en esta sucursal.</PanelEmptyState>
             )}
             {data.turnos.map((t: any) => (
               <div

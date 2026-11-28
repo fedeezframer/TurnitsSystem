@@ -1,3 +1,4 @@
+import PanelEmptyState from "../../components/PanelEmptyState"
 import * as React from "react"
 import { MenuFooter_getSlug, MenuFooter_getToken, ServiciosManager_parseDesc, TurnitsGlobalSaveManager_get } from "./common"
 import { BackButton } from "../../components/BackButton"
@@ -351,7 +352,7 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
             </form>
         ) : <>
             {error && <p role="alert" className="promo-error">{error}</p>}
-            {!visible.length && <p>{catalog.membresias.length ? "No hay suscripciones que coincidan." : "Todavía no hay suscripciones."}</p>}
+            {!error && !visible.length && <PanelEmptyState>{catalog.membresias.length ? "No hay suscripciones que coincidan." : "Todavía no hay suscripciones."}</PanelEmptyState>}
             <div className="promo-grid">
                 {visible.map(plan => {
                     const original = originalPrice(plan)
