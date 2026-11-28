@@ -271,15 +271,22 @@ export function registerMembershipPayments({ app, supabase, consumerId, business
     next();
   };
   app.get(admin, requireAuth, owner, wrap(async (req, res) => {
-    const orders = read(await table().select("id,nombre,importe,metodo_pago,comprobante_path,created_at,consumidor_id")
-      .eq("slug", req.params.slug).eq("estado", "pendiente")
+    const includePaid = req.query.vista === "turnos";
+    const columns = "id,nombre,importe,metodo_pago,comprobante_path,created_at,consumidor_id";
+    const pending = table().select(columns).eq("slug", req.params.slug).eq("estado", "pendiente")
       .or("metodo_pago.eq.efectivo,and(metodo_pago.eq.transferencia,comprobante_path.not.is.null)")
-      .order("created_at", { ascending: true }).limit(100));
+      .order("created_at", { ascending: true }).limit(100);
+    const since = new Date(Date.now() - 30 * 86400_000).toISOString();
+    const paid = includePaid ? table().select(columns + ",pagado_at")
+      .eq("slug", req.params.slug).eq("estado", "activo").gte("pagado_at", since)
+      .order("pagado_at", { ascending: false }).limit(100) : Promise.resolve({ data: [] });
+    const [pendingResult, paidResult] = await Promise.all([pending, paid]);
+    const orders = [...read(pendingResult), ...read(paidResult)];
     const ids = [...new Set(orders.map(order => order.consumidor_id))];
     const customers = ids.length ? read(await supabase.from("consumidores").select("id,nombre_persona,apellido,email").in("id", ids)) : [];
     res.json({ success: true, pagos: orders.map(({ consumidor_id, comprobante_path, ...order }) => {
       const customer = customers.find(person => person.id === consumidor_id);
-      return { ...order, comprobante: Boolean(comprobante_path), cliente: [customer?.nombre_persona, customer?.apellido].filter(Boolean).join(" "), email: customer?.email };
+      return { ...order, ...(includePaid ? { estado: order.pagado_at ? "cobrado" : "pendiente" } : {}), comprobante: Boolean(comprobante_path), cliente: [customer?.nombre_persona, customer?.apellido].filter(Boolean).join(" "), email: customer?.email };
     }) });
   }));
   app.get(admin + "/:order/comprobante", requireAuth, owner, wrap(async (req, res) => {

@@ -4639,10 +4639,16 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
     const hasta    = new Date(ahoraArg); hasta.setDate(hasta.getDate() + 30);
     const hastaISO = hasta.toISOString().split("T")[0];
 
-    const { data: turnos, error } = await branchPanel.from(req, "turnos").select("*")
+    const upcoming = branchPanel.from(req, "turnos").select("*")
       .eq("slug", slug).gte("fecha", hoyISO).lte("fecha", hastaISO).neq("estado", "cancelado")
       .order("fecha", { ascending: true }).order("hora", { ascending: true });
-    if (error) throw error;
+    const since = new Date(Date.now() - 30 * 86400_000).toISOString();
+    const recentPayments = req.query.vista === "turnos" ? branchPanel.from(req, "turnos").select("*")
+      .eq("slug", slug).lt("fecha", hoyISO).neq("estado", "cancelado").gt("monto_pagado", 0)
+      .gte("fecha_pago", since).order("fecha_pago", { ascending: false }).limit(100) : Promise.resolve({ data: [] });
+    const [future, recent] = await Promise.all([upcoming, recentPayments]);
+    if (future.error || recent.error) throw future.error || recent.error;
+    const turnos = [...(future.data || []), ...(recent.data || [])];
 
     // ── Reprogramaciones pendientes ──
     const { data: pendientesReprog } = await branchPanel.from(req, "reprogramaciones")
@@ -4656,6 +4662,8 @@ app.get("/agenda/:slug", requireAuth, async (req, res) => {
       if (!porFecha[t.fecha]) porFecha[t.fecha] = [];
       porFecha[t.fecha].push({
         id:             t.id,
+        created_at:     t.created_at,
+        fecha_pago:     t.fecha_pago || null,
         nombre:         t.nombre,
         apellido:       t.apellido || null,
         hora:           t.hora.slice(0, 5),
