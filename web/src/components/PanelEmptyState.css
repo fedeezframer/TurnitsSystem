@@ -6,11 +6,16 @@
     align-content: center;
     gap: 3px;
     min-width: 0;
-    min-height: 180px;
+    min-height: 225px;
     padding: 6px 10px 9px;
     text-align: center;
 }
 
-.panel-empty-state picture { display: block; width: min(100%, 296px); }
+.panel-empty-state picture { display: block; width: min(100%, 384px); }
 .panel-empty-state img { display: block; width: 100%; height: auto; }
 .panel-empty-state > p { margin: 0; color: #586859; font-size: 13px; line-height: 1.4; }
+
+.panel-empty-state[data-full-page=true] { min-height: clamp(250px, calc(100svh - 240px), 820px); }
+@media (max-width: 860px) {
+    .panel-empty-state[data-full-page=true] { min-height: clamp(230px, 53svh, 450px); }
+}

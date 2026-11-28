@@ -182,7 +182,7 @@ export function AgendaTurnos({ dias, onTurnoClick, membership, includeMembership
         {loading && visible.length === 0 && <p className="agenda-empty-note" role="status">Cargando cobros…</p>}
         {error && <p className="agenda-empty-note" role="alert">{error} <button type="button" onClick={membership.retry}>Reintentar</button></p>}
         {visible.length === 0 && !loading && !error &&
-            <PanelEmptyState>{pendingOnly ? "No hay reservas ni cobros pendientes de revisión." : "No hay reservas ni cobros para mostrar."}</PanelEmptyState>}
+            <PanelEmptyState fullPage>{pendingOnly ? "No hay reservas ni cobros pendientes de revisión." : "No hay reservas ni cobros para mostrar."}</PanelEmptyState>}
         {visible.length > 0 && <ul className="agenda-appointment-list">
             {visible.map(entry => {
                 if (entry.kind === "reserva") return <ReservaRow key={`reserva-${entry.turno.id}`} turno={entry.turno} fecha={entry.fecha}

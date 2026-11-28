@@ -2348,7 +2348,7 @@ function TeamManager(props: any) {
                 )}
 
                 {!error && miembros.length === 0 && !mostrarForm && !editando && (
-                    <PanelEmptyState>Todavía no sumaste colaboradores.</PanelEmptyState>
+                    <PanelEmptyState fullPage>Todavía no sumaste colaboradores.</PanelEmptyState>
                 )}
 
                 <AnimatePresence mode="popLayout">

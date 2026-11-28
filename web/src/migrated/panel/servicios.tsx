@@ -2641,7 +2641,7 @@ function ServiciosManager_ServiciosSection(props: any) {
                     {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 10 }}>{error}</div>}
                     <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: isMobile ? 5 : 6 }}>
                         {!error && serviciosVisibles.length === 0 && (
-                            <PanelEmptyState>{busquedaServicio || filtroServicios === "pausados" ? "No hay servicios que coincidan con este filtro." : "Todavía no hay servicios."}</PanelEmptyState>
+                            <PanelEmptyState fullPage>{busquedaServicio || filtroServicios === "pausados" ? "No hay servicios que coincidan con este filtro." : "Todavía no hay servicios."}</PanelEmptyState>
                         )}
                         <AnimatePresence mode="popLayout">
                             {serviciosVisibles.map((svc) => (
@@ -2732,7 +2732,7 @@ function ServiciosManager_ProductosSection(props: any) {
                         }}
                     >
                         {!errorExtras && !mostrarFormExtra && extrasVisibles.length === 0 && (
-                            <PanelEmptyState>{busquedaProducto || filtroProductos === "pausados" ? "No hay productos que coincidan con este filtro." : "Todavía no hay productos extra."}</PanelEmptyState>
+                            <PanelEmptyState fullPage>{busquedaProducto || filtroProductos === "pausados" ? "No hay productos que coincidan con este filtro." : "Todavía no hay productos extra."}</PanelEmptyState>
                         )}
                         <AnimatePresence mode="popLayout">
                             {extrasVisibles.map((extra) =>
@@ -3019,7 +3019,7 @@ function ServiciosManager_Promociones({api,servicios,productos,accentColor,isMob
                 </section>
                 {readyToSave && !globalEdit && <CatalogSaveState message={editando ? "Cambios en la promoción" : "Promoción lista para guardar"} label="Guardar promoción" saving={busy} onSave={()=>formRef.current?.requestSubmit()} />}
             </fieldset>
-        </motion.form> : loading ? <InlineLoading label="Cargando promociones…"/> : !visibles.length ? (!error && <PanelEmptyState>{lista.length ? "No hay promociones que coincidan." : "Todavía no hay promociones."}</PanelEmptyState>) : <motion.div key="list" {...transition} className="promo-grid">{visibles.map(p=>{
+        </motion.form> : loading ? <InlineLoading label="Cargando promociones…"/> : !visibles.length ? (!error && <PanelEmptyState fullPage>{lista.length ? "No hay promociones que coincidan." : "Todavía no hay promociones."}</PanelEmptyState>) : <motion.div key="list" {...transition} className="promo-grid">{visibles.map(p=>{
             const active=promoActiva(p),cover=p.imagen_url || fallbackCover(p.items)
             const repeated=p.items.length===1 && p.items[0].cantidad>1
             return <article className="promo-card" key={p.id}><div className="promo-cover">
