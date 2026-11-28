@@ -19,9 +19,9 @@ type Comprobante = { url: string; loading: boolean; error: string }
 
 const dateFormat = new Intl.DateTimeFormat("es-AR", { dateStyle: "full", timeZone: "UTC" })
 const monthFormat = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })
-const listDate = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
-const activityDate = new Intl.DateTimeFormat("es-AR", { month: "short", day: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
-const activityTime = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" })
+const agendaTimeZone = "America/Argentina/Buenos_Aires"
+const listDate = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "numeric", month: "short", timeZone: agendaTimeZone })
+const activityTime = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: agendaTimeZone })
 const weekdays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 const toDate = (day: string) => new Date(day + "T12:00:00Z")
 const toIso = (date: Date) => date.toISOString().slice(0, 10)
@@ -72,9 +72,10 @@ function ReservaRow({ turno, fecha, showDate, onClick }: { turno: Turno; fecha: 
     const expected = deposit ? Math.round(turno.precio_cobrado * (turno.porcentaje_sena || 30) / 100) : turno.precio_cobrado
     const amount = paid > 0 ? `${paid < turno.precio_cobrado ? "Abonado" : "Cobrado"} ${AgendaPanel_formatMonto(paid)}`
         : AgendaPanel_esPendienteAprobacion(turno) ? `${deposit ? "Seña por cobrar" : "Por cobrar"} ${AgendaPanel_formatMonto(expected)}` : undefined
+    const status = statusOf(turno)
     return <AgendaRow date={showDate ? listDate.format(toDate(fecha)) : undefined} time={turno.hora}
         name={nameOf(turno)} description={[turno.servicio, turno.equipo_nombre].filter(Boolean).join(" · ") || "Reserva"}
-        status={statusOf(turno)} pending={pending} amount={showDate ? amount : undefined} onClick={onClick} />
+        status={showDate && status === "Confirmado" ? "Turno confirmado" : status} pending={pending} amount={showDate ? amount : undefined} onClick={onClick} />
 }
 
 export function AgendaPanel_Layout({ dias, today, onTurnoClick }: ReservasProps & { today: string }) {
@@ -186,7 +187,7 @@ export function AgendaTurnos({ dias, onTurnoClick, membership, includeMembership
                     showDate onClick={() => onTurnoClick(entry.turno, entry.fecha)} />
                 const { payment, timestamp, pending } = entry
                 return <AgendaRow key={`suscripcion-${payment.id}`}
-                    date={timestamp ? activityDate.format(timestamp) : undefined} time={timestamp ? activityTime.format(timestamp) : undefined}
+                    date={timestamp ? listDate.format(timestamp) : undefined} time={timestamp ? activityTime.format(timestamp) : undefined}
                     name={payment.cliente || payment.email || "Cliente"} description={`Suscripción · ${payment.nombre}`}
                     status={pending ? "Por confirmar" : "Cobrado"} pending={pending} amount={AgendaPanel_formatMonto(payment.importe)}
                     onClick={() => selectPayment(payment)} />
@@ -217,7 +218,7 @@ export function AgendaReservaDetalle({ turno, fecha, comprobante, onClose }: { t
         <dl className="agenda-reservation-facts">
             <div><dt>Servicio</dt><dd>{turno.servicio || "Reserva"}</dd></div>
             {turno.equipo_nombre && <div><dt>Profesional</dt><dd>{turno.equipo_nombre}</dd></div>}
-            {statusOf(turno) && <div><dt>Estado</dt><dd>{statusOf(turno)}</dd></div>}
+            {statusOf(turno) && <div><dt>Estado del turno</dt><dd>{statusOf(turno)}</dd></div>}
             {turno.metodo_pago && turno.metodo_pago !== "none" && <div><dt>Medio de pago</dt><dd>{AgendaPanel_metodoPagoLabel(turno.metodo_pago)}</dd></div>}
             <div><dt>Total</dt><dd>{AgendaPanel_formatMonto(turno.precio_cobrado)}</dd></div>
             <div><dt>Abonado</dt><dd>{AgendaPanel_formatMonto(turno.monto_pagado)}</dd></div>

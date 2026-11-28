@@ -51,7 +51,7 @@ export function useAgendaMembershipPayments(api: string, enabled: boolean) {
     return { payments, loading, error, retry, request, review }
 }
 
-const dateFormat = new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Argentina/Buenos_Aires" })
+const dateFormat = new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short", hourCycle: "h23", timeZone: "America/Argentina/Buenos_Aires" })
 
 export function MembershipPaymentReview({ payment, request, review, onClose }: {
     payment: MembershipPayment
@@ -96,7 +96,7 @@ export function MembershipPaymentReview({ payment, request, review, onClose }: {
             <div><dt>Cliente</dt><dd>{payment.cliente || payment.email || "Cliente"}</dd></div>
             <div><dt>Importe</dt><dd>{AgendaPanel_formatMonto(payment.importe)}</dd></div>
             <div><dt>Medio de pago</dt><dd>{AgendaPanel_metodoPagoLabel(payment.metodo_pago)}</dd></div>
-            <div><dt>Estado</dt><dd>{payment.estado === "cobrado" ? "Cobrado" : "Por confirmar"}</dd></div>
+            <div><dt>Estado del pago</dt><dd>{payment.estado === "cobrado" ? "Cobrado" : "Por confirmar"}</dd></div>
             {Number.isFinite(date.getTime()) && <div><dt>{payment.estado === "cobrado" ? "Cobrado el" : "Registrado el"}</dt><dd>{dateFormat.format(date)}</dd></div>}
         </dl>
         {proof && <a className="agenda-proof" href={proof} target="_blank" rel="noopener noreferrer">Abrir comprobante de transferencia</a>}
