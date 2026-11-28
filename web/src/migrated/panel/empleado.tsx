@@ -1,4 +1,3 @@
-import PanelEmptyState from "../../components/PanelEmptyState"
 import { BackButton } from "../../components/BackButton"
 import { ServiciosManager, HorariosConfig, ExcepcionesConfig, MercadoPagoConexion, ConfigPagos, SucursalEmpleado } from "./section-components"
 import LoadingRunner, { SectionLoadingBoundary, InlineLoading } from "../../components/LoadingRunner"
@@ -945,7 +944,16 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                                     </button>
                                 ))
                             ) : (
-                                <div style={card}><PanelEmptyState artwork="calendar">Todavía no tenés turnos asignados.</PanelEmptyState></div>
+                                <div
+                                    style={{
+                                        ...card,
+                                        color: "#8491a3",
+                                        textAlign: "center",
+                                        padding: 32,
+                                    }}
+                                >
+                                    Todavía no tenés turnos asignados.
+                                </div>
                             )}
                         </section>
                     ) : tab === "servicios" ? (
@@ -1097,7 +1105,16 @@ function TurnitsEmpleadoPanel({ props, slug }: { props: any; slug: string }) {
                                     </article>
                                 ))
                             ) : (
-                                <div style={card}><PanelEmptyState artwork="people">Todavía no tenés clientes registrados.</PanelEmptyState></div>
+                                <div
+                                    style={{
+                                        ...card,
+                                        color: "#8491a3",
+                                        textAlign: "center",
+                                        padding: 32,
+                                    }}
+                                >
+                                    Todavía no tenés clientes registrados.
+                                </div>
                             )}
                         </section>
                     )}

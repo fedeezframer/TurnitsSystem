@@ -1,4 +1,3 @@
-import PanelEmptyState from "../../components/PanelEmptyState"
 import parsePhoneNumber from "libphonenumber-js/min"
 import * as React from "react"
 import { CatalogToolbar } from "./CatalogToolbar"
@@ -158,7 +157,7 @@ export function ClientesGrid({baseUrl = appConfig.apiUrl, porPagina = 12}: {base
                 {esPremium && <footer><button disabled={!c.telefono || !c.email} title={!c.telefono || !c.email ? "Se necesita teléfono y correo para enviar una promoción." : undefined} onClick={()=>setRecipient(c)}>Ofrecer Promoción</button>
                 {c.telefono && <a target="_blank" rel="noreferrer" href={"https://wa.me/"+c.telefono.replace(/\D/g,"")}><img src={whatsappIcon} alt="" width="16" height="16" />Contactar</a>}</footer>}
             </article>)}
-            {!results.length && <PanelEmptyState artwork="people">{clientes.length ? "No hay clientes que coincidan." : "Aún no hay clientes registrados."}</PanelEmptyState>}
+            {!results.length && <p>{clientes.length ? "No hay clientes que coincidan." : "Aún no hay clientes registrados."}</p>}
         </div>
         {visibles < results.length && <button onClick={()=>setVisibles(v=>v+porPagina)}>Ver más</button>}
         {total > limiteClientes && <p>{total-limiteClientes} clientes más <TurnitsPlanRequirement premiumOnly={plan==="basico"}/></p>}

@@ -1,4 +1,3 @@
-import PanelEmptyState from "../../components/PanelEmptyState"
 import * as React from "react"
 import { MenuFooter_getSlug, MenuFooter_getToken, ServiciosManager_parseDesc, TurnitsGlobalSaveManager_get } from "./common"
 import { BackButton } from "../../components/BackButton"
@@ -311,7 +310,7 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
                                             {selected && <small><img src="/assets/panel-nav/akar-icons_check.svg" alt="" width="12" height="12" /></small>}
                                         </button>
                                     })}
-                                </div> : <PanelEmptyState artwork="people" compact>No hay profesionales activos.</PanelEmptyState>}
+                                </div> : <small className="catalog-hint">No hay profesionales activos.</small>}
                                 <div aria-live="polite" style={{ marginTop: 8, overflowWrap: "anywhere" }}>
                                     {team.filter(person => form.profesional_ids.includes(person.id) && canOffer(person.id, form.servicio_ids)).map(professionalName).join(", ")}
                                 </div>
@@ -326,7 +325,7 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
                         return <section className="promo-items" key={key}>
                             <h3 className="catalog-field-title"><ServiciosManager_SeccionIcon tipo={icon} size={16} />{label} incluidos</h3>
                             {isService && <output aria-live="polite" style={{ fontWeight: 700 }}>{countLabel(countServices(form))}</output>}
-                            {!options.length && !missing.length && <PanelEmptyState artwork="catalog" compact>No hay {label.toLowerCase()} activos en tu catálogo.</PanelEmptyState>}
+                            {!options.length && !missing.length && <p>No hay {label.toLowerCase()} activos en tu catálogo.</p>}
                             {[...options, ...missing.map(id => ({ id, nombre: "Elemento eliminado", activo: false } as CatalogItem))].map(item => {
                                 const { descripcion } = ServiciosManager_parseDesc(item.descripcion || "")
                                 const photo = photoOf(item)
@@ -352,7 +351,7 @@ export function SuscripcionesPanel({ api, accentColor }: { api: string; accentCo
             </form>
         ) : <>
             {error && <p role="alert" className="promo-error">{error}</p>}
-            {!visible.length && <PanelEmptyState artwork="catalog">{catalog.membresias.length ? "No hay suscripciones que coincidan." : "Todavía no hay suscripciones."}</PanelEmptyState>}
+            {!visible.length && <p>{catalog.membresias.length ? "No hay suscripciones que coincidan." : "Todavía no hay suscripciones."}</p>}
             <div className="promo-grid">
                 {visible.map(plan => {
                     const original = originalPrice(plan)

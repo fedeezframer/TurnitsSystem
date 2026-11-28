@@ -4,10 +4,7 @@
 .fin-toolbar > div { flex-wrap:wrap; }
 .fin-toolbar > div > button { border-radius:12px!important; box-shadow:0 5px 15px #1b691d20; }
 .fin-kpi { position:relative; min-height:126px; overflow:hidden; border-radius:20px!important; background:#fff!important; }
-.fin-kpi::before { content:""; display:block; width:36px; height:4px; margin-bottom:14px; border-radius:10px; background:#a8d775; }
-.fin-kpi:nth-child(2)::before { background:#e8ae8f; }
 .fin-kpi:nth-child(3) { border-color:#c8dfb9!important; background:linear-gradient(145deg,#eff8e8,#fff 75%)!important; }
-.fin-kpi:nth-child(4)::before { background:#9cbaea; }
 .fin-kpi > div:first-child { color:#607260!important; font-weight:600; }
 .fin-kpi > div:nth-child(2) { font-size:clamp(23px,2.6vw,30px)!important; letter-spacing:-.04em; overflow-wrap:anywhere; }
 .fin-distribution,.fin-indicators,.fin-expenses { border-radius:22px!important; background:#fff!important; }

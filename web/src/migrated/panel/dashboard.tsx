@@ -1,4 +1,3 @@
-import PanelEmptyState from "../../components/PanelEmptyState"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner, { InlineLoading } from "../../components/LoadingRunner"
 import { appConfig } from "../../config"
@@ -327,7 +326,7 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0, range = 
                     marginTop: 0,
                 }}
             >
-                {hasActivity ? (
+                {data.length > 0 ? (
                     <svg
                         viewBox={`0 0 ${w} ${h}`}
                         className="turnits-dashboard-chart-plot"
@@ -455,7 +454,19 @@ function TurnitsDashboard_Chart({ stats, accentColor, monthRevenue = 0, range = 
                         ))}
                     </svg>
                 ) : (
-                    <div style={{ height: h, display: "flex" }}><PanelEmptyState artwork="activity" compact>Todavía no hay suficiente actividad para mostrar el gráfico.</PanelEmptyState></div>
+                    <div
+                        style={{
+                            height: 220,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#94a3b8",
+                            fontSize: 13,
+                        }}
+                    >
+                        Todavía no hay suficiente actividad para mostrar el
+                        gráfico.
+                    </div>
                 )}
                 {hovered && (
                     <div
@@ -648,18 +659,20 @@ function TurnitsDashboard_Upcoming({
                             gap: 10,
                         }}
                     >
-                        <img
-                            src={ilustracionVacia || "/assets/framer/2AHO8lTnQ55sjzJjkRiQ8yFTlA.png"}
-                            alt=""
-                            style={{
-                                maxWidth: 250,
-                                maxHeight: 250,
-                                width: "100%",
-                                height: "auto",
-                                objectFit: "contain",
-                                opacity: 0.9,
-                            }}
-                        />
+                        {ilustracionVacia && (
+                            <img
+                                src={ilustracionVacia}
+                                alt=""
+                                style={{
+                                    maxWidth: 250,
+                                    maxHeight: 250,
+                                    width: "100%",
+                                    height: "auto",
+                                    objectFit: "contain",
+                                    opacity: 0.9,
+                                }}
+                            />
+                        )}
                         <span style={{ color: "#94a3b8", fontSize: 12.5 }}>
                             No tenés turnos para hoy.
                         </span>
@@ -790,7 +803,17 @@ function TurnitsDashboard_ServicesMostRequested({
                     </div>
                 ))}
                 {!servicios.length && (
-                    <PanelEmptyState artwork="catalog" compact>Todavía no hay reservas suficientes para mostrar los servicios más pedidos.</PanelEmptyState>
+                    <div
+                        style={{
+                            padding: "20px 0",
+                            textAlign: "center",
+                            color: "#94a3b8",
+                            fontSize: 11.5,
+                        }}
+                    >
+                        Todavía no hay reservas suficientes para mostrar
+                        servicios pedidos.
+                    </div>
                 )}
             </div>
         </div>
@@ -929,7 +952,16 @@ function TurnitsDashboard_BusinessMetrics({ stats, accentColor }: any) {
                     </div>
                 ))}
                 {!dias.length && (
-                    <PanelEmptyState artwork="activity" compact>Todavía no hay turnos confirmados para mostrar el ranking.</PanelEmptyState>
+                    <div
+                        style={{
+                            padding: "18px 0",
+                            textAlign: "center",
+                            color: "#94a3b8",
+                            fontSize: 11.5,
+                        }}
+                    >
+                        Todavía no hay turnos confirmados para mostrar el ranking.
+                    </div>
                 )}
             </div>
         </div>
@@ -1177,7 +1209,16 @@ function TurnitsDashboard_RecentClients({ stats }: any) {
                         )
                     })
                 ) : (
-                    <PanelEmptyState artwork="people" compact>Todavía no hay clientes registrados.</PanelEmptyState>
+                    <div
+                        style={{
+                            padding: "25px 0",
+                            textAlign: "center",
+                            color: "#94a3b8",
+                            fontSize: 12.5,
+                        }}
+                    >
+                        Todavía no hay clientes registrados.
+                    </div>
                 )}
             </div>
         </div>
@@ -1472,7 +1513,17 @@ function TurnitsDashboard_WeeklySummary({ stats, accentColor }: any) {
                     })}
                 </div>
             ) : (
-                <PanelEmptyState artwork="activity" compact>La comparación semanal todavía no está disponible.</PanelEmptyState>
+                <div
+                    style={{
+                        marginTop: 12,
+                        padding: "18px 8px",
+                        textAlign: "center",
+                        color: "#94a3b8",
+                        fontSize: 12,
+                    }}
+                >
+                    La comparación semanal todavía no está disponible.
+                </div>
             )}
         </div>
     )
@@ -1871,7 +1922,17 @@ function TurnitsDashboard_ReferralCard({ accentColor, baseUrl, icono }: any) {
 
                     {!data.como_invitado &&
                         (data.grupos || []).length === 0 && (
-                            <PanelEmptyState artwork="people" compact>Todavía no se registró nadie con tu código. Compartí tu link para armar tu primer grupo.</PanelEmptyState>
+                            <div
+                                style={{
+                                    marginTop: 10,
+                                    fontSize: 10.5,
+                                    color: "#94a3b8",
+                                    lineHeight: 1.45,
+                                }}
+                            >
+                                Todavía no se registró nadie con tu código.
+                                Compartí tu link para armar tu primer grupo.
+                            </div>
                         )}
                 </>
             )}

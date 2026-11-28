@@ -1,4 +1,3 @@
-import PanelEmptyState from "../../components/PanelEmptyState"
 import { PanelDatePicker as FinanzasDatePicker } from "./PanelDatePicker"
 import { IconOptionPicker } from "./IconOptionPicker"
 import { BackButton } from "../../components/BackButton"
@@ -620,7 +619,11 @@ function FinanzasPanel({
                             </div>
                         </div>
                         {gastos.length === 0 ? (
-                            <PanelEmptyState artwork="payments">Todavía no cargaste gastos para este mes.</PanelEmptyState>
+                            <div
+                                style={{ color: "#8290a3", padding: "20px 0" }}
+                            >
+                                Todavía no cargaste gastos para este mes.
+                            </div>
                         ) : (
                             gastos.map((g) => (
                                 <div
