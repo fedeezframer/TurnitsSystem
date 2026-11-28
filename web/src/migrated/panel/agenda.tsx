@@ -1,4 +1,4 @@
-import { AgendaPanel_Layout } from "./agenda-dias"
+import { AgendaPanel_Layout, AgendaReservaDetalle, AgendaTurnos } from "./agenda-dias"
 import { BackButton } from "../../components/BackButton"
 import LoadingRunner from "../../components/LoadingRunner"
 import BookingReceipt from "../../components/BookingReceipt"
@@ -28,9 +28,11 @@ function AgendaPanel(props: any) {
         colorSinProfesional = "#8B5CF6",
         iconoReprogramacion,
         columnasDias = 2,
+        vista = "calendario",
         style,
     } = props
 
+    const calendario = vista === "calendario"
     const containerRef = React.useRef<HTMLDivElement>(null)
     const containerWidth = AgendaPanel_useContainerWidth(containerRef)
 
@@ -181,7 +183,7 @@ function AgendaPanel(props: any) {
     // en el modal). No es crítico para ver la agenda, así que un error
     // acá no bloquea nada: el selector simplemente no aparece.
     React.useEffect(() => {
-        if (false) return
+        if (calendario) return
         const slug = AgendaPanel_getSlug()
         const token = AgendaPanel_getToken()
         if (!slug || !token) return
@@ -198,7 +200,7 @@ function AgendaPanel(props: any) {
                 setEquipo(lista)
             })
             .catch(() => {})
-    }, [baseUrl])
+    }, [baseUrl, calendario])
 
     React.useEffect(() => {
         if (false) return
@@ -219,11 +221,7 @@ function AgendaPanel(props: any) {
         }
     }, [fetchAgenda])
 
-    // ─── Cuando se abre el modal de un turno pendiente por
-    // transferencia, pedimos la signed URL del comprobante. Nunca
-    // se guarda/expone como URL pública (ver backend). Aprovechamos
-    // este mismo efecto (se dispara al abrir/cerrar cualquier modal)
-    // para resetear también el estado de reprogramación.
+    // La URL temporal del comprobante se pide al abrir una reserva por transferencia.
     React.useEffect(() => {
         setAprobarOk(false)
         setAprobarError("")
@@ -232,42 +230,26 @@ function AgendaPanel(props: any) {
         setReprogramarError("")
         setAsignarProfesionalError("")
 
-        if (!modal) return
-        if (false) return
-
-        const pendiente = AgendaPanel_esPendienteAprobacion(modal.turno)
-        if (!pendiente || modal.turno.metodo_pago !== "transferencia") return
-
-        const slug = AgendaPanel_getSlug()
+        if (modal?.turno.metodo_pago !== "transferencia") return
+        const slug = encodeURIComponent(AgendaPanel_getSlug())
         const token = AgendaPanel_getToken()
         const api = baseUrl.replace(/\/+$/, "")
+        const controller = new AbortController()
 
         setComprobante({ url: "", loading: true, error: "" })
         fetch(
-            `${api}/admin/turnos/${modal.turno.id}/comprobante?slug=${encodeURIComponent(slug)}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-        )
-            .then((r) => r.json())
-            .then((data) => {
-                if (data.success && data.url) {
-                    setComprobante({ url: data.url, loading: false, error: "" })
-                } else {
-                    setComprobante({
-                        url: "",
-                        loading: false,
-                        error:
-                            data.error || "No hay comprobante para este turno.",
-                    })
-                }
-            })
-            .catch(() => {
-                setComprobante({
-                    url: "",
-                    loading: false,
-                    error: "No se pudo cargar el comprobante.",
-                })
-            })
-    }, [modal, baseUrl])
+            `${api}/admin/turnos/${encodeURIComponent(modal.turno.id)}/comprobante?slug=${slug}`,
+            { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal }
+        ).then(async response => {
+            const data = await response.json()
+            if (!response.ok || !data.success || !data.url) throw Error(data.error || "No se pudo cargar el comprobante.")
+            if (!controller.signal.aborted) setComprobante({ url: data.url, loading: false, error: "" })
+        }).catch(error => {
+            if (!controller.signal.aborted) setComprobante({ url: "", loading: false, error: error.message || "No se pudo cargar el comprobante." })
+        })
+
+        return () => controller.abort()
+    }, [modal?.turno.id, modal?.turno.metodo_pago, baseUrl])
 
     // ─── Al abrir/cerrar el overlay del turno, avisamos al menú
     // rápido de teléfono (override withMenuSlideOut) mediante el
@@ -741,9 +723,20 @@ function AgendaPanel(props: any) {
     // por la app siempre traen teléfono).
     const modalManual = !!modal && !modal.turno.telefono && !modal.turno.email
 
+    const diasVisibles = sucursalFiltro === "todas" ? dias : dias.map(dia => ({
+        ...dia,
+        turnos: dia.turnos.filter(turno => (turno.sucursal_id || "principal") === sucursalFiltro),
+    }))
+    function abrirTurno(turno: any, fecha: string) {
+        setCancelOk(false)
+        setCancelError("")
+        setComprobante({ url: "", loading: turno.metodo_pago === "transferencia", error: "" })
+        setModal({ turno, fecha })
+    }
+
     return (
         <>
-            <div className="agenda-actions">
+            {(sucursales.length > 0 || !calendario) && <div className="agenda-actions">
                 {sucursales.length > 0 && (
                     <label className="negocio-field">
                         Sucursal
@@ -754,32 +747,27 @@ function AgendaPanel(props: any) {
                         </select>
                     </label>
                 )}
-                <button className="agenda-add" type="button" onClick={abrirNuevo}>
+                {!calendario && <button className="agenda-add" type="button" onClick={abrirNuevo}>
                     <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M8 3v10M3 8h10" /></svg>
                     Crear turno
-                </button>
-            </div>
+                </button>}
+            </div>}
             <div
                 ref={containerRef}
                 className="agenda-board" style={style}
             >
-                <AgendaPanel_Layout
-                    dias={sucursalFiltro==='todas'?dias:dias.map(d=>({...d,turnos:d.turnos.filter((t:any)=>(t.sucursal_id || 'principal')===sucursalFiltro)})).filter(d=>d.turnos.length)}
-                    today={today}
-                    baseUrl={baseUrl}
-                    turnoOpen={!!modal}
-                    onTurnoClick={(turno: any, fecha: string) => {
-                        setCancelOk(false)
-                        setCancelError("")
-                        setModal({ turno, fecha })
-                    }}
-                />
+                {calendario
+                    ? <AgendaPanel_Layout dias={diasVisibles} today={today} onTurnoClick={abrirTurno} />
+                    : <AgendaTurnos dias={diasVisibles} onTurnoClick={abrirTurno} />}
                 <style>{AgendaPanel_globalCSS}</style>
             </div>
 
+            {calendario && modal && <AgendaReservaDetalle turno={modal.turno} fecha={modal.fecha}
+                comprobante={comprobante} onClose={() => setModal(null)} />}
+
             {/* MODAL */}
             <AnimatePresence>
-                {modal && (
+                {!calendario && modal && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -1401,8 +1389,7 @@ function AgendaPanel(props: any) {
 
                                     {/* Comprobante de transferencia — signed URL
                                 de corta duración, nunca URL pública. */}
-                                    {modalPendiente &&
-                                        modal.turno.metodo_pago ===
+                                    {modal.turno.metodo_pago ===
                                             "transferencia" && (
                                             <div style={{ marginBottom: 14 }}>
                                                 <div

@@ -1,139 +1,170 @@
-import { useNativeDialogExit } from "../../components/useNativeDialogExit"
 import * as React from "react"
 import { BackButton } from "../../components/BackButton"
-import { AgendaPanel_getSlug, AgendaPanel_getToken, AgendaPanel_formatMonto, ServiciosManager_parseDesc } from "./common"
+import BookingReceipt from "../../components/BookingReceipt"
+import { useNativeDialogExit } from "../../components/useNativeDialogExit"
+import { AgendaPanel_esPendienteAprobacion, AgendaPanel_formatMonto, AgendaPanel_getSlug, AgendaPanel_metodoPagoLabel } from "./common"
 import "./agenda-dias.css"
 
-type Extra = { id?: string; extra_id?: string; nombre?: string; imagen_url?: string }
-type Turno = { id:string; nombre:string; hora:string; estado?:string; reprogramacion_pendiente?:{id:string}|null; servicio?:string; servicio_id?:string; precio_cobrado:number; monto_pagado:number; extras?:Array<string|Extra> }
-type Dia = { fecha:string; turnos:Turno[] }
-type Item = { id:string; nombre:string; imagen_url?:string; descripcion?:string }
-const month = new Intl.DateTimeFormat("es-AR",{month:"short",timeZone:"UTC"})
-const weekday = new Intl.DateTimeFormat("es-AR",{weekday:"long",timeZone:"UTC"})
-function shortDate(iso:string) {
-    const date = new Date(iso+"T12:00:00Z")
-    const name = month.format(date).replace(".","")
-    return date.getUTCDate()+" "+name[0].toUpperCase()+name.slice(1)
+export type VistaAgenda = "calendario" | "turnos"
+type Turno = {
+    id: string; nombre: string; apellido?: string; hora: string; estado?: string
+    servicio?: string; equipo_nombre?: string; sucursal_id?: string
+    metodo_pago?: string; notas?: string; precio_cobrado: number; monto_pagado: number
+    reprogramacion_pendiente?: { id: string } | null
 }
-function photo(items:Item[],id?:string,name?:string) {
-    const matches = id ? items.filter(i => i.id === id) : items.filter(i => i.nombre === name)
-    if(matches.length !== 1) return ""
-    return matches[0].imagen_url || ServiciosManager_parseDesc(matches[0].descripcion || "").imagen
+type Dia = { fecha: string; turnos: Turno[] }
+type ReservasProps = { dias: Dia[]; onTurnoClick: (turno: Turno, fecha: string) => void }
+type Comprobante = { url: string; loading: boolean; error: string }
+
+const dateFormat = new Intl.DateTimeFormat("es-AR", { dateStyle: "full", timeZone: "UTC" })
+const monthFormat = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })
+const listDate = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
+const weekdays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+const toDate = (day: string) => new Date(day + "T12:00:00Z")
+const toIso = (date: Date) => date.toISOString().slice(0, 10)
+function shiftDay(iso: string, count: number) {
+    const date = toDate(iso)
+    date.setUTCDate(date.getUTCDate() + count)
+    return toIso(date)
+}
+function shiftMonth(iso: string, count: number) {
+    const date = toDate(iso.slice(0, 7) + "-01")
+    date.setUTCMonth(date.getUTCMonth() + count)
+    return toIso(date)
+}
+function nameOf(turno: Turno) {
+    return [turno.nombre, turno.apellido].filter(Boolean).join(" ")
+}
+function statusOf(turno: Turno) {
+    if (turno.reprogramacion_pendiente) return "Reprogramación solicitada"
+    if (AgendaPanel_esPendienteAprobacion(turno)) return "Por aprobar"
+    return { confirmado: "Confirmado", completado: "Completado", pendiente: "Pendiente", no_asistio: "No asistió" }[turno.estado || ""] || ""
+}
+function ReservaRow({ turno, fecha, showDate, onClick }: { turno: Turno; fecha: string; showDate?: boolean; onClick: () => void }) {
+    const status = statusOf(turno)
+    return <li>
+        <button type="button" className="agenda-appointment" onClick={onClick}>
+            <span className="agenda-appointment-time">
+                <time dateTime={fecha + "T" + turno.hora}>{turno.hora}</time>
+                {showDate && <span>{listDate.format(toDate(fecha))}</span>}
+            </span>
+            <span className="agenda-appointment-body">
+                <strong>{nameOf(turno)}</strong>
+                <span>{[turno.servicio, turno.equipo_nombre].filter(Boolean).join(" · ") || "Reserva"}</span>
+            </span>
+            {status && <small className="agenda-status" data-action={Boolean(turno.reprogramacion_pendiente || AgendaPanel_esPendienteAprobacion(turno))}>{status}</small>}
+        </button>
+    </li>
 }
 
-export function AgendaPanel_Layout({dias,today,baseUrl,turnoOpen,onTurnoClick}:{
-    dias:Dia[];today:string;baseUrl:string;turnoOpen:boolean;onTurnoClick:(turno:Turno,fecha:string)=>void
-}) {
-    const [selected,setSelected] = React.useState("")
-    const dialog = React.useRef<HTMLDialogElement>(null)
-    const dismissingDay = React.useRef(false)
-    const finishDayClose = useNativeDialogExit(() => setSelected(""))
-    const dismissDay = () => {
-        dismissingDay.current = true
-        dialog.current?.close()
-    }
-    const [services,setServices] = React.useState<Item[]>([])
-    const [extras,setExtras] = React.useState<Item[]>([])
-    const [loadPhotos,setLoadPhotos] = React.useState(false)
-    React.useEffect(()=>{
-        if (!loadPhotos) return
-        const controller = new AbortController()
-        const slug = encodeURIComponent(AgendaPanel_getSlug())
-        for (const key of ["servicios","extras"] as const) {
-            fetch(baseUrl.replace(/\/$/,"")+"/admin/"+key+"/"+slug,{signal:controller.signal,headers:{Authorization:"Bearer "+AgendaPanel_getToken()}})
-                .then(async r=>r.ok ? (await r.json())[key] : [])
-                .then(items=>{if(Array.isArray(items) && !controller.signal.aborted)(key==="extras"?setExtras:setServices)(items)})
-                .catch(()=>{})
-        }
-        return ()=>controller.abort()
-    },[baseUrl,loadPhotos])
-    React.useEffect(()=>{
-        const el = dialog.current
-        if(selected && !turnoOpen && el && !el.open) el.showModal()
-        else if(el?.open && (!selected || turnoOpen)) el.close()
-    },[selected,turnoOpen])
-    const days = dias.filter(day => day.turnos.length > 0).sort((a,b) => a.fecha.localeCompare(b.fecha))
-    const time = new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"America/Argentina/Buenos_Aires"}).format(new Date())
-    // La API entrega los turnos de cada día ordenados por hora.
-    const next = days.flatMap(day => day.turnos.filter(t =>
-        (day.fecha > today || (day.fecha === today && t.hora >= time)) &&
-        (!t.estado || t.estado === "confirmado" || t.estado === "pendiente")
-    ))[0]
-    function appointmentStatus(turno: Turno) {
-        if (turno.reprogramacion_pendiente) return "Reprogramación pendiente"
-        if (turno.id === next?.id) return "Próximo turno"
-        return {pendiente:"Pendiente", cancelado:"Cancelado"}[turno.estado as "pendiente" | "cancelado"]
-    }
-    const openDay = (fecha: string) => {
-        if (fecha === selected && !turnoOpen && dialog.current && !dialog.current.open) dialog.current.showModal()
-        setSelected(fecha)
-        setLoadPhotos(true)
-    }
-    const selectedTurns = days.find(day => day.fecha === selected)?.turnos || []
-    return <>
-        <div className="agenda-day-grid">
-            {days.length === 0 && <div className="agenda-empty-note" role="status">
-                <strong>Sin reservas</strong>
-                <p>Los turnos agendados aparecen acá.</p>
-            </div>}
-            {days.map(day => (
-                <article className="agenda-day" data-today={day.fecha === today} key={day.fecha}>
-                    <header>
-                        <div>
-                            <p className="agenda-weekday">{day.fecha === today ? "Hoy" : weekday.format(new Date(day.fecha + "T12:00:00Z"))}</p>
-                            <h3><time dateTime={day.fecha}>{shortDate(day.fecha)}</time></h3>
-                        </div>
-                        <button type="button" className="agenda-view-day" onClick={() => openDay(day.fecha)}
-                            aria-label={"Ver detalles del " + shortDate(day.fecha)}>{day.turnos.length} {day.turnos.length === 1 ? "turno" : "turnos"}</button>
-                    </header>
-                    <ol>{day.turnos.map(turno => {
-                        const status = appointmentStatus(turno)
-                        return <li key={turno.id}>
-                            <button className="agenda-appointment" type="button" onClick={() => onTurnoClick(turno, day.fecha)}>
-                                <time>{turno.hora}</time>
-                                <span className="agenda-appointment-body">
-                                    <strong>{turno.nombre}</strong>
-                                    {turno.servicio && <span>{turno.servicio}</span>}
-                                    {status && <small data-status={status}>{status}</small>}
-                                </span>
-                            </button>
-                        </li>
-                    })}</ol>
-                </article>
-            ))}
+export function AgendaPanel_Layout({ dias, today, onTurnoClick }: ReservasProps & { today: string }) {
+    // La agenda existente entrega los 30 días siguientes, incluidos los turnos de hoy.
+    const lastDay = shiftDay(today, 30)
+    const [selectedDay, selectDay] = React.useState(today)
+    const selected = selectedDay >= today && selectedDay <= lastDay ? selectedDay : today
+    const month = shiftMonth(selected, 0)
+    const prevMonth = shiftMonth(month, -1)
+    const nextMonth = shiftMonth(month, 1)
+    const offset = (toDate(month).getUTCDay() + 6) % 7
+    const size = toDate(shiftDay(nextMonth, -1)).getUTCDate()
+    const days = new Map(dias.map(day => [day.fecha, day.turnos]))
+    const appointments = days.get(selected) || []
+    return <div className="agenda-calendar-layout">
+        <section className="agenda-calendar" aria-label="Calendario de reservas">
+            <header className="agenda-calendar-head">
+                <h2 aria-live="polite">{monthFormat.format(toDate(month))}</h2>
+                <div className="agenda-calendar-controls">
+                    <button type="button" className="agenda-today" onClick={() => selectDay(today)}>Hoy</button>
+                    <button type="button" aria-label="Mes anterior" disabled={prevMonth < shiftMonth(today, 0)}
+                        onClick={() => selectDay(prevMonth < today ? today : prevMonth)}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="m10 3-5 5 5 5" /></svg>
+                    </button>
+                    <button type="button" aria-label="Mes siguiente" disabled={nextMonth > lastDay} onClick={() => selectDay(nextMonth)}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="m6 3 5 5-5 5" /></svg>
+                    </button>
+                </div>
+            </header>
+            <div className="agenda-calendar-grid">
+                {weekdays.map(day => <span className="agenda-weekday" key={day} aria-hidden="true">{day}</span>)}
+                {Array.from({ length: offset }, (_, index) => <span aria-hidden="true" key={`pad-${index}`} />)}
+                {Array.from({ length: size }, (_, index) => {
+                    const day = shiftDay(month, index)
+                    const count = days.get(day)?.length || 0
+                    const available = day >= today && day <= lastDay
+                    return <button type="button" key={day} disabled={!available} aria-pressed={selected === day}
+                        aria-current={day === today ? "date" : undefined}
+                        aria-label={`${dateFormat.format(toDate(day))}${available ? `, ${count} ${count === 1 ? "reserva" : "reservas"}` : ""}`}
+                        className="agenda-calendar-day" onClick={() => selectDay(day)}>
+                        <span>{index + 1}</span>
+                        {count > 0 && <small aria-hidden="true">{count}<span> {count === 1 ? "reserva" : "reservas"}</span></small>}
+                    </button>
+                })}
+            </div>
+        </section>
+        <section className="agenda-day-reservations" aria-labelledby="agenda-selected-day">
+            <header>
+                <h2 id="agenda-selected-day">{dateFormat.format(toDate(selected))}</h2>
+                <p aria-live="polite">{appointments.length} {appointments.length === 1 ? "reserva" : "reservas"}</p>
+            </header>
+            {appointments.length > 0 && <ul className="agenda-appointment-list">
+                {appointments.map(turno => <ReservaRow key={turno.id} turno={turno} fecha={selected} onClick={() => onTurnoClick(turno, selected)} />)}
+            </ul>}
+        </section>
+    </div>
+}
+
+export function AgendaTurnos({ dias, onTurnoClick }: ReservasProps) {
+    const [pendingOnly, setPendingOnly] = React.useState(false)
+    const turnos = dias.flatMap(day => day.turnos.map(turno => ({ turno, fecha: day.fecha })))
+    const pendientes = turnos.filter(({ turno }) => AgendaPanel_esPendienteAprobacion(turno) || turno.reprogramacion_pendiente)
+    const visible = pendingOnly ? pendientes : turnos
+    return <section className="agenda-turn-list" aria-label="Listado de turnos">
+        <div className="agenda-turn-filters" role="group" aria-label="Filtrar turnos">
+            <button type="button" aria-pressed={!pendingOnly} onClick={() => setPendingOnly(false)}>Todos <span>{turnos.length}</span></button>
+            <button type="button" aria-pressed={pendingOnly} onClick={() => setPendingOnly(true)}>Pendientes <span>{pendientes.length}</span></button>
         </div>
-        <dialog ref={dialog} className="agenda-day-dialog" aria-labelledby="agenda-day-title"
-            onCancel={event => { event.preventDefault(); dismissDay() }}
-            onClose={event => {
-                if (!dismissingDay.current) return
-                dismissingDay.current = false
-                finishDayClose(event)
-            }}
-            onClick={event => {
-                if (event.target !== event.currentTarget) return
-                const bounds = event.currentTarget.getBoundingClientRect()
-                if (event.clientX < bounds.left || event.clientX > bounds.right ||
-                    event.clientY < bounds.top || event.clientY > bounds.bottom) dismissDay()
-            }}>
-            <BackButton floating onClick={dismissDay} aria-label="Volver a Mi Agenda"/>
-            <h2 id="agenda-day-title">{selected && shortDate(selected)}</h2><p>Detalles de tus reservas</p>
-            <div className="agenda-reservas">{selectedTurns.map(t=>{
-                const cover=photo(services,t.servicio_id,t.servicio)
-                return <button className="agenda-reserva" key={t.id} onClick={()=>onTurnoClick(t,selected)}>
-                    <span className="agenda-photo">{cover ? <img src={cover} alt="" loading="lazy"/> : <img className="agenda-placeholder" src="/assets/panel-nav/ant-design_product-outlined.svg" alt=""/>}
-                        <span className="agenda-extra-photos">{(t.extras || []).map((x,i)=>{
-                            const item=typeof x==="string"?{nombre:x}:x
-                            const url=item.imagen_url || photo(extras,item.extra_id || item.id,item.nombre)
-                            return url && <img key={i} src={url} alt={item.nombre || "Producto adicional"}/>
-                        })}</span>
-                    </span>
-                    <span className="agenda-reserva-body"><strong>{t.nombre} <time>{t.hora}</time></strong><strong>{t.servicio || "Turno"} {!!t.extras?.length && <small>+ extra</small>}</strong>
-                        {appointmentStatus(t) && <span>{appointmentStatus(t)}</span>}
-                        <span>Abonado: {AgendaPanel_formatMonto(t.monto_pagado)}</span><span>Debe pagar: {AgendaPanel_formatMonto(Math.max(0,t.precio_cobrado-t.monto_pagado))}</span>
-                    </span>
-                </button>
-            })}</div>
-            {!selectedTurns.length && <p>Sin reservas para este día.</p>}
-        </dialog>
-    </>
+        {visible.length === 0 ? <p className="agenda-empty-note" role="status">{pendingOnly ? "No hay turnos pendientes de revisión." : "No hay reservas para los próximos días."}</p>
+            : <ul className="agenda-appointment-list">
+                {visible.map(({ turno, fecha }) => <ReservaRow key={turno.id} turno={turno} fecha={fecha} showDate onClick={() => onTurnoClick(turno, fecha)} />)}
+            </ul>}
+    </section>
+}
+
+export function AgendaReservaDetalle({ turno, fecha, comprobante, onClose }: { turno: Turno; fecha: string; comprobante: Comprobante; onClose: () => void }) {
+    const dialog = React.useRef<HTMLDialogElement>(null)
+    const title = React.useId()
+    const finishClose = useNativeDialogExit(onClose)
+    React.useEffect(() => {
+        if (!dialog.current?.open) dialog.current?.showModal()
+    }, [])
+    return <dialog className="agenda-reservation-dialog" ref={dialog} aria-labelledby={title} onClose={finishClose}
+        onClick={event => {
+            if (event.target !== event.currentTarget) return
+            const bounds = event.currentTarget.getBoundingClientRect()
+            if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) event.currentTarget.close()
+        }}>
+        <header>
+            <div><h2 id={title}>{nameOf(turno)}</h2><p>{dateFormat.format(toDate(fecha))} · {turno.hora}</p></div>
+            <BackButton onClick={() => dialog.current?.close()} aria-label="Cerrar detalle de reserva" autoFocus />
+        </header>
+        <dl className="agenda-reservation-facts">
+            <div><dt>Servicio</dt><dd>{turno.servicio || "Reserva"}</dd></div>
+            {turno.equipo_nombre && <div><dt>Profesional</dt><dd>{turno.equipo_nombre}</dd></div>}
+            {statusOf(turno) && <div><dt>Estado</dt><dd>{statusOf(turno)}</dd></div>}
+            {turno.metodo_pago && turno.metodo_pago !== "none" && <div><dt>Medio de pago</dt><dd>{AgendaPanel_metodoPagoLabel(turno.metodo_pago)}</dd></div>}
+            <div><dt>Total</dt><dd>{AgendaPanel_formatMonto(turno.precio_cobrado)}</dd></div>
+            <div><dt>Abonado</dt><dd>{AgendaPanel_formatMonto(turno.monto_pagado)}</dd></div>
+            {turno.notas && <div><dt>Notas</dt><dd>{turno.notas}</dd></div>}
+        </dl>
+        {turno.metodo_pago === "transferencia" && <div className="agenda-proof">
+            <strong>Comprobante de transferencia</strong>
+            {comprobante.loading && <span role="status">Cargando comprobante…</span>}
+            {comprobante.error && <span role="status">{comprobante.error}</span>}
+            {comprobante.url && <a href={comprobante.url} target="_blank" rel="noopener noreferrer">Abrir comprobante</a>}
+        </div>}
+        <details className="agenda-receipt">
+            <summary>Comprobante de reserva</summary>
+            <BookingReceipt turno={{ ...turno, fecha, slug: AgendaPanel_getSlug(), servicio_nombre: turno.servicio }} />
+        </details>
+    </dialog>
 }

@@ -1,47 +1,67 @@
-.agenda-section .turnits-section-heading-subtitle {color:#171717!important}
-.agenda-board {display:flex;flex-direction:column;container-type:inline-size;position:relative;box-sizing:border-box;width:100%;padding:clamp(13px,2.8vw,28px);border:1px solid #dfe8dc;border-radius:clamp(16px,2vw,25px);background:#f6f9f5;color:#19291b}
-.agenda-day-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:16px}
-.agenda-day {border:1px solid #dfe8dd;border-radius:16px;min-width:0;background:#fff;box-shadow:0 4px 14px #17231908}
-.agenda-day header {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px 14px 12px;border-bottom:1px solid #edf1eb}
-.agenda-day[data-today=true] {border-color:#aacaab}
-.agenda-day[data-today=true] header {background:#e8f4e6;border-radius:15px 15px 0 0}
-.agenda-weekday {margin:0 0 4px;color:#4d654f;font-size:13px;font-weight:650;text-transform:capitalize}
-.agenda-day h3 {margin:0;line-height:1.1;font-size:clamp(22px,3cqw,29px);letter-spacing:-.045em}
-.agenda-day button {font:inherit;cursor:pointer;color:inherit}
-.agenda-day .agenda-view-day {border:1px solid #dce8da;border-radius:999px;background:#fff;color:#315536;padding:7px 10px;font-size:12px;font-weight:700;white-space:nowrap}
-.agenda-day .agenda-view-day:hover {border-color:#82b183;background:#f0f8ef}
-.agenda-day ol {list-style:none;margin:0;padding:5px 8px}
-.agenda-day li + li {border-top:1px solid #edf1eb}
-.agenda-appointment {display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;width:100%;text-align:left;border:0;background:transparent;border-radius:9px;padding:10px 6px}
-.agenda-appointment:hover {background:#f1f7ef}
-.agenda-appointment > time {align-self:start;background:#eff3ee;color:#415842;border-radius:6px;padding:4px 5px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
-.agenda-appointment-body {display:grid;gap:2px;align-self:center;overflow-wrap:anywhere}
-.agenda-appointment-body strong {font-size:14px}
-.agenda-appointment-body span {color:#586859;font-size:13px}
-.agenda-appointment-body small {width:fit-content;margin-top:2px;border-radius:5px;padding:3px 6px;background:#f3f2ee;color:#635933;font-size:11px;font-weight:700}
-.agenda-appointment-body small[data-status="Próximo turno"] {background:#e7f4e4;color:#216025}
-.agenda-appointment-body small[data-status="Reprogramación pendiente"] {background:#eaf2fc;color:#284f7f}
-.agenda-appointment-body small[data-status="Cancelado"] {background:#faeeee;color:#7b3434}
-.agenda-actions {display:flex;align-items:flex-end;justify-content:flex-end;gap:12px}
-.agenda-actions .negocio-field {flex:1 1 auto;max-width:320px;min-width:0;margin-right:auto}
-.agenda-actions select,.agenda-actions .agenda-add {box-sizing:border-box;min-height:42px}
-.agenda-actions .agenda-add {display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap;padding:9px 13px;border:1px solid #1b6b1a;border-radius:11px;background:#1b6b1a;color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
-.agenda-actions .agenda-add:hover {background:#145415}
-.agenda-empty-note {grid-column:1 / -1;padding:clamp(26px,6vw,54px) 16px;text-align:center;border:1px dashed #c9dac6;border-radius:14px;background:#fff}
-.agenda-empty-note strong {font-size:18px}
-.agenda-empty-note p {margin:6px 0 0;color:#586859;font-size:14px}
-@container(max-width:760px){.agenda-day-grid {grid-template-columns:repeat(2,minmax(0,1fr))}}
-@container(max-width:500px){.agenda-day-grid {grid-template-columns:1fr}}
-.agenda-day-dialog {box-sizing:border-box;width:min(86vw,1186px);max-width:none;height:82dvh;max-height:92dvh;padding:clamp(26px,4.9vw,68px);border:1px solid #bbb;border-radius:clamp(22px,3vw,45px);color:#101010;background:#fff;overflow:auto}
-.agenda-day-dialog::backdrop {background:#0005}
-.agenda-day-dialog h2 {margin:0;font-size:clamp(28px,4.8vw,50px);letter-spacing:-.04em}
-.agenda-day-dialog>p {margin:12px 0 26px}
-.agenda-reservas {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,215px),1fr));gap:14px;align-items:stretch}
-.agenda-reserva {width:100%;justify-self:start;display:flex;flex-direction:column;text-align:left;padding:0;overflow:hidden;border:1px solid #dce6dc;border-radius:13px;font:inherit;color:inherit;background:#fff;cursor:pointer}
-.agenda-photo {flex:none;width:100%;position:relative;display:grid;place-items:center;aspect-ratio:1.6;background:#f1f4ef}
-.agenda-photo>img {width:100%;height:100%;object-fit:cover}.agenda-photo>img.agenda-placeholder {width:22%;height:auto;opacity:.4}
-.agenda-extra-photos {position:absolute;right:5%;top:6%;display:flex;flex-wrap:wrap;justify-content:end;gap:4px;max-width:90%}
-.agenda-extra-photos img {width:clamp(24px,3vw,44px);aspect-ratio:1;object-fit:contain;background:white;border-radius:50%}
-.agenda-reserva-body {display:grid;gap:2px;padding:8px 10px;font-size:clamp(13px,1.2vw,17px);overflow-wrap:anywhere}
-.agenda-reserva-body>span:first-child,.agenda-reserva-body strong {font-size:1.25em}.agenda-reserva-body small {font-size:.6em}.agenda-reserva-body>span:last-child {color:#595959}
-@media(max-width:650px){.agenda-day-dialog {width:94vw;padding:38px 16px 24px}.agenda-reservas {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
+.agenda-board { container-type:inline-size; min-width:0; width:100%; }
+.agenda-actions { display:flex; align-items:flex-end; justify-content:flex-end; flex-wrap:wrap; gap:12px; }
+.agenda-actions .negocio-field { flex:1 1 170px; max-width:320px; min-width:0; margin-right:auto; }
+.agenda-actions select,.agenda-actions .agenda-add { box-sizing:border-box; min-height:42px; }
+.agenda-actions .agenda-add { display:inline-flex;align-items:center;gap:7px;white-space:nowrap;padding:9px 13px;border:0;border-radius:11px;background:#1b6b1a;color:white;font:inherit;font-size:14px;font-weight:700;cursor:pointer; }
+.agenda-actions .agenda-add:hover { background:#145415; }
+.agenda-calendar-layout { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr); gap:16px; align-items:start; }
+.agenda-calendar,.agenda-day-reservations,.agenda-turn-list,.agenda-membership-payments { min-width:0; padding:clamp(12px,2cqw,22px); background:white; border:1px solid #dfe8dd; border-radius:18px; box-shadow:0 5px 16px #17231908; }
+.agenda-calendar-head,.agenda-day-reservations header,.agenda-reservation-dialog header { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px 12px; margin-bottom:14px; }
+.agenda-calendar-head { align-items:center; }
+.agenda-calendar-head h2,.agenda-day-reservations h2,.agenda-reservation-dialog h2 { margin:0; color:#1c2b1d; font-size:clamp(17px,2.6cqw,24px); line-height:1.2; letter-spacing:-.035em; }
+.agenda-calendar-head h2,.agenda-day-reservations h2,.agenda-reservation-dialog header p { text-transform:capitalize; }
+.agenda-day-reservations header { flex-direction:column; }
+.agenda-day-reservations header p,.agenda-reservation-dialog header p { margin:0; color:#586859; font-size:14px; }
+.agenda-calendar-controls,.agenda-turn-filters { display:flex; gap:6px; flex-wrap:wrap; }
+.agenda-calendar-controls button,.agenda-turn-filters button { display:inline-flex; align-items:center; justify-content:center; min-width:36px; min-height:36px; padding:0 8px; color:#244629; background:white; border:1px solid #d7e5d5; border-radius:9px; font:inherit; font-size:13px; font-weight:650; cursor:pointer; }
+.agenda-calendar-controls button:disabled { opacity:.36; cursor:default; }
+.agenda-calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+.agenda-weekday { color:#586859; font-size:12px; font-weight:650; text-align:center; padding:4px 0 8px; }
+.agenda-calendar-day { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-start; gap:2px; min-width:0; min-height:66px; border:1px solid #e6eee3; border-radius:9px; padding:6px; background:#fafcf9; color:#203124; font:inherit; font-size:14px; font-weight:700; cursor:pointer; }
+.agenda-calendar-day:hover:not(:disabled),.agenda-calendar-controls button:hover:not(:disabled) { background:#eef6eb; border-color:#a5cba2; }
+.agenda-calendar-day:disabled { background:#f8f9f7; color:#727d72; cursor:default; }
+.agenda-calendar-day[aria-current=date] { border-color:#79aa78; }
+.agenda-calendar-day[aria-pressed=true] { color:#164e1a; background:#e3f2de; border-color:#79aa78; }
+.agenda-calendar-day small { padding:2px 4px; border-radius:5px; background:#e3f0df; font-size:10px; font-weight:750; }
+.agenda-calendar-day[aria-pressed=true] small { background:#1b6b1a; color:white; }
+.agenda-appointment-list { margin:0; padding:0; list-style:none; }
+.agenda-appointment-list li + li { border-top:1px solid #edf1eb; }
+.agenda-appointment { display:grid; grid-template-columns:minmax(54px,auto) minmax(0,1fr) auto; align-items:center; gap:10px; width:100%; text-align:left; border:0; background:transparent; border-radius:9px; padding:10px 6px; color:#1c2b1d; font:inherit; cursor:pointer; }
+.agenda-appointment:hover { background:#f1f7ef; }
+.agenda-appointment-time { display:grid; gap:3px; justify-items:start; color:#4b5d4c; font-size:12px; }
+.agenda-appointment-time time { background:#eff3ee; color:#415842; border-radius:6px; padding:4px 6px; font-weight:750; font-variant-numeric:tabular-nums; }
+.agenda-appointment-body { display:grid; gap:2px; overflow-wrap:anywhere; }
+.agenda-appointment-body strong { font-size:14px; }
+.agenda-appointment-body span { color:#586859; font-size:13px; }
+.agenda-status { border-radius:6px; padding:4px 6px; background:#edf5eb; color:#315a34; font-size:11px; font-weight:700; }
+.agenda-status[data-action=true] { background:#fff3d9; color:#745717; }
+.agenda-day-reservations .agenda-appointment { grid-template-columns:48px minmax(0,1fr); }
+.agenda-day-reservations .agenda-status { grid-column:2; justify-self:start; }
+.agenda-turn-filters { margin-bottom:12px; }
+.agenda-turn-filters button { gap:7px; padding-inline:12px; }
+.agenda-turn-filters button[aria-pressed=true] { background:#e8f4e6; border-color:#aacaab; color:#195821; }
+.agenda-turn-filters span { font-variant-numeric:tabular-nums; }
+.agenda-empty-note { padding:16px 6px; margin:0; color:#586859; font-size:14px; }
+.agenda-reservation-dialog { box-sizing:border-box; width:min(550px,calc(100% - 24px)); max-height:min(88dvh,780px); overflow:auto; padding:clamp(16px,4vw,26px); color:#1c2b1d; background:white; border:1px solid #dfe8dd; border-radius:20px; }
+.agenda-reservation-dialog::backdrop { background:#10221470; }
+.agenda-reservation-dialog header { flex-wrap:nowrap; }
+.agenda-reservation-dialog header p { margin-top:5px; }
+.agenda-reservation-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:14px; border-radius:12px; background:#f5f8f4; }
+.agenda-reservation-facts dt { color:#576957; font-size:13px; }
+.agenda-reservation-facts dd { margin:4px 0 0; font-weight:650; overflow-wrap:anywhere; }
+.agenda-proof { display:grid; gap:6px; padding:12px 0; font-size:14px; }
+.agenda-proof a { color:#196521; justify-self:start; }
+.agenda-receipt summary { padding:10px 0; font-size:14px; font-weight:700; cursor:pointer; }
+@container (max-width:830px) {
+    .agenda-calendar-layout { grid-template-columns:1fr; }
+}
+@container (max-width:530px) {
+    .agenda-calendar-day { min-height:46px; padding:3px; font-size:13px; }
+    .agenda-calendar-day small span { display:none; }
+    .agenda-turn-list .agenda-appointment { grid-template-columns:60px minmax(0,1fr); }
+    .agenda-turn-list .agenda-status { grid-column:2; justify-self:start; }
+}
+
+.agenda-mobile-views { display:flex; gap:8px; }
+.agenda-mobile-views button { min-height:42px; padding:8px 15px; color:#344837; background:white; border:1px solid #d7e5d5; border-radius:10px; font:inherit; cursor:pointer; }
+.agenda-mobile-views button[aria-current=page] { color:#1b5b21; background:#e8f4e6; border-color:#aacaab; font-weight:700; }

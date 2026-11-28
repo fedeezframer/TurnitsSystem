@@ -1,3 +1,4 @@
+import type { VistaAgenda } from "./agenda-dias"
 import { seccionesPagos, type VistaPagos } from "./secciones-pagos"
 import { useCatalogTransition } from "./catalog-motion"
 import { BackButton } from "../../components/BackButton"
@@ -89,6 +90,7 @@ function TurnitsPanel_Inner(props: any) {
     // ─── Estado de navegación (reemplaza las variantes de Framer) ─────────
     const [seccionActiva, setSeccionActiva] = React.useState<SeccionId>(() => {
         if (searchParams.get("onboarding") !== "mp" && (searchParams.get("seccion") === "pagos" || ["mp_success", "mp_error"].includes(searchParams.get("status") || ""))) return "pagos"
+        if (searchParams.get("seccion") === "agenda") return "agenda"
         if (searchParams.get("seccion") === "horarios") return "horarios"
         if (!branchAdmin && searchParams.get("seccion") === "perfil") return "perfil"
         if (searchParams.get("seccion") === "equipo") return "equipo"
@@ -103,7 +105,8 @@ function TurnitsPanel_Inner(props: any) {
     const [menuMobileAbierto, setMenuMobileAbierto] = React.useState(false)
     const [scheduleView,setScheduleView] = React.useState<"weekly"|"exceptions">("weekly")
     const vistaPagos = ["mp_success","mp_error"].includes(searchParams.get("status") || "") ? "metodos" : seccionesPagos.find(s => s.id === searchParams.get("vista"))?.id || "metodos"
-    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(["pagos", "equipo", "perfil", "horarios"].includes(seccionActiva) ? seccionActiva : null)
+    const vistaAgenda: VistaAgenda = searchParams.get("vista") === "turnos" ? "turnos" : "calendario"
+    const [menuExpandido, setMenuExpandido] = React.useState<SeccionId | null>(["pagos", "equipo", "perfil", "horarios", "agenda"].includes(seccionActiva) ? seccionActiva : null)
     const [serviciosVistaInicial, setServiciosVistaInicial] = React.useState<"servicios" | "extras" | "promociones" | "suscripciones" | "offers">("servicios")
     // ─── Pestaña "Equipo": función Básico (prueba gratis o activo).
     // Arranca oculta y solo se muestra si confirmamos que el plan es
@@ -151,16 +154,26 @@ function TurnitsPanel_Inner(props: any) {
 
     const publicaciones = searchParams.get("vista") === "publicaciones"
     const sucursales = !branchAdmin && searchParams.get("vista") === "sucursales"
-    const irA = (id: SeccionId, vista?: VistaPagos | "negocio" | "publicaciones" | "miembros" | "sucursales") => {
+    const irA = (id: SeccionId, vista?: VistaPagos | VistaAgenda | "negocio" | "publicaciones" | "miembros" | "sucursales") => {
         if (branchAdmin && !["inicio","servicios","clientes","agenda","horarios","finanzas","equipo"].includes(id)) return
         if (id === "consultas" && (!appConfig.quoteBookingEnabled || !quoteMode || !agendaConsultaPermitida)) return
         setSeccionActiva(id)
+        if (id === "agenda") setMenuExpandido("agenda")
         setSearchParams(previous => {
             const next = new URLSearchParams(previous)
             next.delete("nuevo")
             if (id === "pagos") {
                 next.set("seccion", "pagos")
                 next.set("vista", vista || vistaPagos)
+                next.delete("status")
+                next.delete("reason")
+                return next
+            }
+            if (id === "agenda") {
+                next.set("seccion", "agenda")
+                next.set("vista", vista === "turnos" ? "turnos" : "calendario")
+                next.delete("id")
+                next.delete("servicio_id")
                 next.delete("status")
                 next.delete("reason")
                 return next
@@ -250,7 +263,7 @@ function TurnitsPanel_Inner(props: any) {
         </button>
     }
 
-    const renderNavItems = () => navItemsVisibles.map((item) => (item.id === "servicios" || item.id === "horarios" || item.id === "pagos" || item.id === "perfil" || (item.id === "equipo" && !branchAdmin)) ? (
+    const renderNavItems = () => navItemsVisibles.map((item) => (item.id === "servicios" || item.id === "agenda" || item.id === "horarios" || item.id === "pagos" || item.id === "perfil" || (item.id === "equipo" && !branchAdmin)) ? (
         <div key={item.id} style={{width:"100%",padding:0,margin:0,background:"transparent"}}>
             <NavButton item={item} active={seccionActiva === item.id} accentColor={accentColor} onClick={() => setMenuExpandido(current => current === item.id ? null : item.id)} navIconos={navIconos} showChevron chevronDown={menuExpandido === item.id} />
             <AnimatePresence initial={false}>
@@ -270,6 +283,9 @@ function TurnitsPanel_Inner(props: any) {
                         </> : item.id === "equipo" ? <>
                             {renderSubsection("miembros", "Miembros", "/assets/panel-nav/streamline-ultimate_team-meeting-bold.svg", seccionActiva === "equipo" && !sucursales, () => irA("equipo", "miembros"))}
                             {renderSubsection("sucursales", "Sucursales", "/assets/panel-nav/famicons_storefront-outline.svg", seccionActiva === "equipo" && sucursales, () => irA("equipo", "sucursales"))}
+                        </> : item.id === "agenda" ? <>
+                            {renderSubsection("calendario", "Calendario", "/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "agenda" && vistaAgenda === "calendario", () => irA("agenda", "calendario"))}
+                            {renderSubsection("turnos", "Turnos", "/assets/panel-nav/hugeicons_time-quarter-02.svg", seccionActiva === "agenda" && vistaAgenda === "turnos", () => irA("agenda", "turnos"))}
                         </> : item.id === "pagos" ? seccionesPagos.map(({id,titulo,icono}) => renderSubsection(id,titulo,icono,seccionActiva === "pagos" && vistaPagos === id, () => irA("pagos",id))) : item.id==="horarios" ? <>
                             {renderSubsection("weekly","Horario semanal","/assets/panel-nav/hugeicons_time-quarter-02.svg", seccionActiva === "horarios" && scheduleView === "weekly", () => {setScheduleView("weekly");irA("horarios")})}
                             {renderSubsection("exceptions","Excepciones laborales","/assets/panel-nav/fa7-regular_calendar-alt.svg", seccionActiva === "horarios" && scheduleView === "exceptions", () => {setScheduleView("exceptions");irA("horarios")})}
@@ -645,7 +661,7 @@ function TurnitsPanel_Inner(props: any) {
                 onToggle={() => setMostrarNotificaciones((v) => !v)}
                 onClose={() => setMostrarNotificaciones(false)}
                 iconosNotif={iconosNotificaciones}
-                onNavigate={(seccion) => irA(seccion as SeccionId)}
+                onNavigate={seccion => irA(seccion as SeccionId, seccion === "agenda" ? "turnos" : undefined)}
                 messageSlot={appConfig.quoteBookingEnabled && quoteMode && agendaConsultaPermitida && !branchAdmin && seccionActiva !== "consultas" ? (
                     <button className="panel-message-fab" type="button" onClick={() => irA("consultas")} aria-label={mensajesSinLeer ? `Mensajes, ${mensajesSinLeer} sin leer` : "Abrir mensajes"} title="Mensajes">
                         <ChatIcon name="chat" size={21} />
@@ -824,19 +840,25 @@ function TurnitsPanel_Inner(props: any) {
                         }}
                     >
                         <SeccionHeader
-                            title="Mi Agenda"
-                            subtitle="Consultá tus próximos turnos y revisá las solicitudes de reprogramación."
+                            title={vistaAgenda === "calendario" ? "Calendario" : "Turnos"}
+                            subtitle={vistaAgenda === "calendario" ? "Elegí un día para ver sus reservas." : "Revisá tus reservas, solicitudes de reprogramación y cobros de suscripciones."}
                             isMobile={isMobile}
                         />
+                        {isMobile && <nav className="agenda-mobile-views" aria-label="Vistas de Agenda">
+                            <button type="button" aria-current={vistaAgenda === "calendario" ? "page" : undefined} onClick={() => irA("agenda", "calendario")}>Calendario</button>
+                            <button type="button" aria-current={vistaAgenda === "turnos" ? "page" : undefined} onClick={() => irA("agenda", "turnos")}>Turnos</button>
+                        </nav>}
                         <SectionLoadingBoundary>
-                        {!branchAdmin && <React.Suspense fallback={<LoadingRunner card />}><MembershipPaymentReview api={baseUrl} /></React.Suspense>}
-                        <AgendaPanel
-                            baseUrl={baseUrl}
-                            accentColor={accentColor}
-                            iconoReprogramacion={
-                                iconosNotificaciones.reprogramacion
-                            }
-                        />
+                            <AgendaPanel key={vistaAgenda}
+                                vista={vistaAgenda}
+                                baseUrl={baseUrl}
+                                accentColor={accentColor}
+                                iconoReprogramacion={iconosNotificaciones.reprogramacion}
+                            />
+                            {vistaAgenda === "turnos" && !branchAdmin &&
+                                <section className="agenda-membership-payments" aria-label="Cobros de suscripciones">
+                                    <React.Suspense fallback={<LoadingRunner card />}><MembershipPaymentReview api={baseUrl} /></React.Suspense>
+                                </section>}
                         </SectionLoadingBoundary>
                     </div>
                 )}
